@@ -88,9 +88,9 @@ In any OpenCode session, type `/aristotle` to trigger reflection:
 
 ### What Happens
 
-1. **Coordinator** (main session) — collects target session ID, project directory, user language, then fires a background `task()`
+1. **Coordinator** (main session) — collects target session ID, project directory, user language, then fires a background `task()`. Immediately prints the Reflector's session ID — **you can switch over at any time**, no need to wait for a notification.
 2. **Reflector** (isolated subagent) — reads the session transcript, detects error-correction patterns, performs 5-Why analysis, generates draft rules
-3. **User Review** — switch to the Reflector session (`opencode -s <id>`) to confirm, revise, or reject each rule
+3. **User Review** — switch to the Reflector session (`opencode -s <id>`) to confirm, revise, or reject each rule. The main session will also send a one-line reminder when the analysis finishes, but you don't have to wait for it.
 4. **Persistence** — confirmed rules are appended to learnings files
 
 ```
