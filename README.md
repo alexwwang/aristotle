@@ -146,6 +146,55 @@ rm -rf ~/.claude/skills/aristotle
 rm -f ~/.config/opencode/aristotle-learnings.md
 ```
 
+## Why `~/.claude/skills/`? — Skill Discovery Investigation
+
+You might wonder why this skill must be installed under `~/.claude/skills/` rather than `~/.config/opencode/skills/` or other seemingly more natural locations. Here's what we found.
+
+### How OpenCode Discovers Skills (v1.3.15)
+
+OpenCode's skill discovery scans directories in the following order:
+
+1. **`EXTERNAL_DIRS`** — globally scans `~/.claude/` and `~/.agents/` (hardcoded in source as `[".claude", ".agents"]`), looking for `skills/**/SKILL.md`
+2. **`EXTERNAL_DIRS` at project level** — scans `<project>/.claude/` and `<project>/.agents/`
+3. **`configDirs`** — scans `~/.config/opencode/` with pattern `{skill,skills}/**/SKILL.md`
+4. **`skills.paths`** — reads custom paths from `opencode.json` config
+5. **`skills.urls`** — fetches skills from remote URLs
+
+### Paths We Tested
+
+| Path | Discovery | Notes |
+|------|-----------|-------|
+| `~/.claude/skills/` | ✅ Works | The only reliably working path in v1.3.15 |
+| `~/.agents/skills/` | ❌ Not found | Listed in `EXTERNAL_DIRS` but does not work in practice |
+| `~/.config/opencode/skills/` | ❌ Not found | `configDirs` scan should find it but has a bug |
+| `skills.paths` in `opencode.json` | ❌ Not found | Configured but not picked up by discovery |
+
+### Root Cause
+
+The `EXTERNAL_DIRS` scanning for `.claude` is the only fully functional discovery path in OpenCode v1.3.15. The `.agents` directory scan and `configDirs` scan appear to have implementation gaps — multiple GitHub issues ([#16524](https://github.com/anomalyco/opencode/issues/16524), [#10986](https://github.com/anomalyco/opencode/issues/10986), [#12741](https://github.com/anomalyco/opencode/issues/12741)) report similar problems.
+
+This means `~/.claude/skills/` is the only path that reliably works today, even though `.claude` is nominally a Claude Code directory. If OpenCode fixes skill discovery in a future release, we'll update the install paths accordingly.
+
+### ⚠️ Pitfall: Don't Symlink the Skills Directory
+
+OpenCode's internal glob traversal does **not follow directory symlinks**. If `~/.claude/skills/` (or the project-level `.claude/skills/`) is a symlink — e.g., pointing to a git submodule or a shared directory — OpenCode will silently find **zero skills**, even though `ls` shows everything is there.
+
+This is particularly insidious in **git worktree sandbox** environments (e.g., OpenCode Desktop), where the sandbox session's skill scan operates on a copy of the repo and the symlink target may not resolve correctly.
+
+**Do this:**
+```bash
+# ✅ Real directory — always works
+git clone https://github.com/alexwwang/aristotle.git ~/.claude/skills/aristotle
+```
+
+**Don't do this:**
+```bash
+# ❌ Symlink — silently fails
+ln -s /some/shared/skills ~/.claude/skills
+```
+
+See [issue #18848](https://github.com/anomalyco/opencode/issues/18848) for the full analysis.
+
 ## License
 
 MIT

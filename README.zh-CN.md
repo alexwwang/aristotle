@@ -146,6 +146,55 @@ rm -rf ~/.claude/skills/aristotle
 rm -f ~/.config/opencode/aristotle-learnings.md
 ```
 
+## 为什么是 `~/.claude/skills/`？—— Skill 发现机制调查
+
+你可能会好奇，为什么这个技能必须安装到 `~/.claude/skills/`，而不是看起来更自然的 `~/.config/opencode/skills/` 等位置。以下是我们调查的结果。
+
+### OpenCode 的 Skill 发现机制（v1.3.15）
+
+OpenCode 的 skill 发现按以下顺序扫描目录：
+
+1. **`EXTERNAL_DIRS`** — 全局扫描 `~/.claude/` 和 `~/.agents/`（源码中硬编码为 `[".claude", ".agents"]`），匹配 `skills/**/SKILL.md`
+2. **`EXTERNAL_DIRS` 项目级** — 扫描 `<项目>/.claude/` 和 `<项目>/.agents/`
+3. **`configDirs`** — 扫描 `~/.config/opencode/`，匹配 `{skill,skills}/**/SKILL.md`
+4. **`skills.paths`** — 从 `opencode.json` 配置读取自定义路径
+5. **`skills.urls`** — 从远程 URL 获取 skill
+
+### 测试过的路径
+
+| 路径 | 发现结果 | 说明 |
+|------|----------|------|
+| `~/.claude/skills/` | ✅ 有效 | v1.3.15 中唯一可靠工作的路径 |
+| `~/.agents/skills/` | ❌ 未发现 | 虽在 `EXTERNAL_DIRS` 列表中，但实际不工作 |
+| `~/.config/opencode/skills/` | ❌ 未发现 | `configDirs` 扫描理论上应能发现，但存在 bug |
+| `opencode.json` 中的 `skills.paths` | ❌ 未发现 | 已配置但未被识别 |
+
+### 根因
+
+`EXTERNAL_DIRS` 对 `.claude` 的扫描是 OpenCode v1.3.15 中唯一完全正常工作的发现路径。`.agents` 目录扫描和 `configDirs` 扫描均存在实现缺陷 — 多个 GitHub issue（[#16524](https://github.com/anomalyco/opencode/issues/16524)、[#10986](https://github.com/anomalyco/opencode/issues/10986)、[#12741](https://github.com/anomalyco/opencode/issues/12741)）报告了类似问题。
+
+因此 `~/.claude/skills/` 是目前唯一可靠可用的路径，尽管 `.claude` 名义上是 Claude Code 的目录。如果 OpenCode 在未来版本修复了 skill 发现机制，我们会同步更新安装路径。
+
+### ⚠️ 避坑：不要对 skills 目录使用符号链接
+
+OpenCode 内部的 glob 遍历**不会跟随目录符号链接**。如果 `~/.claude/skills/`（或项目级 `.claude/skills/`）是一个符号链接——例如指向 git submodule 或共享目录——OpenCode 会静默地发现**零个 skill**，尽管 `ls` 看起来一切正常。
+
+这个问题在 **git worktree sandbox** 环境（如 OpenCode Desktop）中尤为隐蔽——sandbox 会话的 skill 扫描运行在 repo 的副本上，符号链接目标可能无法正确解析。
+
+**正确做法：**
+```bash
+# ✅ 真实目录 — 始终有效
+git clone https://github.com/alexwwang/aristotle.git ~/.claude/skills/aristotle
+```
+
+**错误做法：**
+```bash
+# ❌ 符号链接 — 静默失败
+ln -s /some/shared/skills ~/.claude/skills
+```
+
+详见 [issue #18848](https://github.com/anomalyco/opencode/issues/18848) 的完整分析。
+
 ## 许可证
 
 MIT
