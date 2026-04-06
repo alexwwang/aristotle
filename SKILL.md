@@ -369,4 +369,3 @@ Aristotle's SKILL.md description includes error-correction trigger keywords (e.g
 - ❌ Block the current session waiting for analysis
 - ❌ Dump lengthy analysis reports into the main conversation
 - ❌ Auto-commit rules without user confirmation
-- ❌ Auto-activate from Stop hook (only suggests)
