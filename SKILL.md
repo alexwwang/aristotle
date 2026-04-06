@@ -1,6 +1,6 @@
 ---
 name: aristotle
-description: Aristotle — error reflection & learning agent. Activate with /aristotle. Spawns an isolated subagent to analyze sessions for model mistakes, perform 5-Why root-cause analysis, write preventive rules, then lets you switch to the subagent session to review, confirm, or request revisions before rules are finalized.
+description: Aristotle — error reflection & learning agent. Activate with /aristotle. Triggers when the user says you were wrong, made a mistake, gave incorrect output, or corrects your work (e.g. "that's wrong", "not right", "you made an error", "不对", "搞错了", "错了", "纠正"). Spawns an isolated subagent to analyze sessions for model mistakes, perform 5-Why root-cause analysis, write preventive rules, then lets you switch to the subagent session to review, confirm, or request revisions before rules are finalized.
 metadata:
   emoji: "🦉"
   category: "meta-learning"
@@ -203,7 +203,7 @@ Based on the user's response:
 ### STEP R6: WRITE CONFIRMED RULES TO FILES
 
 #### 6a. User-Level Rules (ALWAYS write)
-Append to ~/.claude/rules/aristotle-learnings.md:
+Append to ~/.config/opencode/aristotle-learnings.md:
 
 If the file doesn't exist, create it with this header first:
 # Aristotle Learnings (User-Level)
@@ -220,7 +220,7 @@ Then append for EACH confirmed reflection:
 ---
 
 #### 6b. Project-Level Rules (if project_directory is set)
-Append to .claude/rules/aristotle-project-learnings.md in the project root:
+Append to .opencode/aristotle-project-learnings.md in the project root:
 
 ## [DATE] [ERROR_CATEGORY] — [SHORT_TITLE]
 **Context**: [Project-specific situation]
@@ -239,10 +239,10 @@ Append to .claude/rules/aristotle-project-learnings.md in the project root:
 ✅ Rules written successfully!
 
 Files updated:
-  • ~/.claude/rules/aristotle-learnings.md (+N entries)
-  • .claude/rules/aristotle-project-learnings.md (+N entries)
+  • ~/.config/opencode/aristotle-learnings.md (+N entries)
+  • .opencode/aristotle-project-learnings.md (+N entries)
 
-These rules will be automatically injected into future sessions via the rules-injector hook.
+These rules will be automatically loaded as context in future sessions.
 
 To return to your main session, run:
   opencode -s ${main_session_id}
@@ -350,31 +350,9 @@ That's it. Do NOT dump the full analysis into the current session.
 
 ---
 
-## Auto-Trigger via Stop Hook
+## Auto-Trigger
 
-The companion `aristotle-reflector.sh` script can be configured as a Claude Code `Stop` hook. When it detects error-correction patterns in the session transcript, it injects a brief prompt suggesting the user run `/aristotle`.
-
-Configure in `~/.claude/settings.json`:
-
-```json
-{
-  "hooks": {
-    "Stop": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.config/opencode/skills/aristotle/hooks/aristotle-reflector.sh"
-          }
-        ]
-      }
-    ]
-  }
-}
-```
-
-The Stop hook only injects a one-line suggestion. It does NOT trigger the subagent automatically — the user must confirm by typing `/aristotle`.
+Aristotle's SKILL.md description includes error-correction trigger keywords (e.g. "wrong", "mistake", "incorrect", "不对", "搞错了"). When the skill system detects these patterns in conversation, Aristotle will be auto-loaded and the AI can suggest running `/aristotle` to reflect on the errors detected. This is automatic and requires no configuration.
 
 ## Manual Invocation
 

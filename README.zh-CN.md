@@ -14,8 +14,8 @@
 - **5-Why 根因分析** — 8 大错误分类结构化分析（需求误解、上下文假设、模式违反、幻觉、分析不充分、工具选错、过度简化、语法/API 错误）
 - **草稿→确认工作流** — 规则先生成 DRAFT，用户逐一确认/修改/驳回后才写入
 - **双语支持** — 同时检测英文和中文（zh-CN）的错误纠正模式
-- **双层输出** — 用户级规则（`~/.claude/rules/aristotle-learnings.md`）全局生效；项目级规则（`.claude/rules/aristotle-project-learnings.md`）按项目生效
-- **Stop Hook** — 自动检测会话中的错误纠正模式，建议运行 `/aristotle`（需手动开启，绝不自动触发）
+- **双层输出** — 用户级规则（`~/.config/opencode/aristotle-learnings.md`）全局生效；项目级规则（`.opencode/aristotle-project-learnings.md`）按项目生效
+- **自动建议** — 技能描述中包含错误纠正关键词；当对话中出现这些模式时，AI 会自动建议运行 `/aristotle`（无需配置）
 
 ## 安装
 
@@ -45,34 +45,6 @@ powershell -ExecutionPolicy Bypass -File install.ps1
 
 ```bash
 opencode plugin https://github.com/alexwwang/aristotle
-```
-
-### 安装后：启用 Stop Hook（可选）
-
-安装脚本可自动配置。如需手动配置，在 `~/.claude/settings.json` 中添加：
-
-```json
-{
-  "hooks": {
-    "Stop": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.config/opencode/skills/aristotle/hooks/aristotle-reflector.sh"
-          }
-        ]
-      }
-    ]
-  }
-}
-```
-
-Windows 使用 PowerShell 版本：
-
-```json
-"command": "powershell -ExecutionPolicy Bypass -File \"$HOME\.config\opencode\skills\aristotle\hooks\aristotle-reflector.ps1\""
 ```
 
 ## 使用方法
@@ -115,7 +87,7 @@ Windows 使用 PowerShell 版本：
 bash test.sh
 ```
 
-37 个断言，覆盖文件结构、SKILL.md 内容、hook 逻辑、错误模式检测（英文/中文/阈值）和架构保证。
+37 个断言，覆盖文件结构、SKILL.md 内容、错误模式检测（英文/中文/阈值）和架构保证。
 
 ### E2E 实时测试（需要 opencode 会话）
 
@@ -131,11 +103,6 @@ bash test/live-test.sh --model <provider/model>
 .
 ├── .gitignore
 ├── SKILL.md                          # 技能定义（LLM 提示词与协议）
-├── README.md                         # 英文说明
-├── README.zh-CN.md                   # 中文说明（本文件）
-├── hooks/
-│   ├── aristotle-reflector.sh        # Stop hook（bash，跨平台）
-│   └── aristotle-reflector.ps1       # Stop hook（Windows PowerShell）
 ├── install.sh                        # 安装脚本（macOS/Linux）
 ├── install.ps1                       # 安装脚本（Windows）
 ├── test.sh                           # 静态测试套件（37 断言）
@@ -155,8 +122,7 @@ bash test/live-test.sh --model <provider/model>
 
 ### 中优先级
 
-- **`APPEND ONLY` 仅靠提示词约束** — SKILL.md Step R6c 声明了追加写入和禁止重复规则，但无程序化强制执行。需要写入后的验证 hook 扫描重复项。
-- **Windows hook JSON 解析** — `aristotle-reflector.sh` 使用 `python3` 解析 JSON，但 Windows 自带的 `python3` 是不可用的应用商店占位符。当前回退到 `sed` 正则。应在真实 Windows Python 环境上测试，并考虑纯 bash JSON 解析器。
+- **`APPEND ONLY` 仅靠提示词约束** — SKILL.md Step R6c 声明了追加写入和禁止重复规则，但无程序化强制执行。需要写入后的验证步骤扫描重复项。
 - **多模型 E2E 测试** — 实时测试仅验证用户指定的模型。应跨多个提供商/模型测试以验证可移植性。
 
 ### 锦上添花
@@ -173,7 +139,7 @@ bash test/live-test.sh --model <provider/model>
 rm -rf ~/.config/opencode/skills/aristotle
 
 # 移除用户级学习规则（可选）
-rm -f ~/.claude/rules/aristotle-learnings.md
+rm -f ~/.config/opencode/aristotle-learnings.md
 ```
 
 ## 许可证

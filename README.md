@@ -14,8 +14,8 @@ Activate with `/aristotle` to spawn an isolated subagent that analyzes your sess
 - **5-Why Root-Cause Analysis** — Structured error categorization across 8 categories (MISUNDERSTOOD_REQUIREMENT, ASSUMED_CONTEXT, PATTERN_VIOLATION, HALLUCINATION, INCOMPLETE_ANALYSIS, WRONG_TOOL_CHOICE, OVERSIMPLIFICATION, SYNTAX_API_ERROR)
 - **Draft → Confirm Workflow** — Rules are presented as DRAFTS first; user confirms, revises, or rejects before anything is written to disk
 - **Bilingual** — Detects error-correction patterns in English and Chinese (zh-CN)
-- **Two-Tier Output** — User-level rules (`~/.claude/rules/aristotle-learnings.md`) apply globally; project-level rules (`.claude/rules/aristotle-project-learnings.md`) apply per-project
-- **Stop Hook** — Auto-detects error-correction patterns in transcripts and suggests running `/aristotle` (opt-in, never auto-triggers)
+- **Two-Tier Output** — User-level rules (`~/.config/opencode/aristotle-learnings.md`) apply globally; project-level rules (`.opencode/aristotle-project-learnings.md`) apply per-project
+- **Auto-Suggestion** — Skill description includes error-correction keywords; when detected in conversation, the AI can suggest running `/aristotle` (automatic, no configuration needed)
 
 ## Installation
 
@@ -45,34 +45,6 @@ powershell -ExecutionPolicy Bypass -File install.ps1
 
 ```bash
 opencode plugin https://github.com/alexwwang/aristotle
-```
-
-### Post-Install: Enable the Stop Hook (Optional)
-
-The installer can auto-configure this. To do it manually, add to `~/.claude/settings.json`:
-
-```json
-{
-  "hooks": {
-    "Stop": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.config/opencode/skills/aristotle/hooks/aristotle-reflector.sh"
-          }
-        ]
-      }
-    ]
-  }
-}
-```
-
-On Windows, use the PowerShell variant:
-
-```json
-"command": "powershell -ExecutionPolicy Bypass -File \"$HOME\.config\opencode\skills\aristotle\hooks\aristotle-reflector.ps1\""
 ```
 
 ## Usage
@@ -131,9 +103,6 @@ Creates a real session with known error patterns, triggers `/aristotle`, and ver
 .
 ├── .gitignore
 ├── SKILL.md                          # Skill definition (prompt & protocol)
-├── hooks/
-│   ├── aristotle-reflector.sh        # Stop hook (bash, cross-platform)
-│   └── aristotle-reflector.ps1       # Stop hook (Windows PowerShell)
 ├── install.sh                        # Installer (macOS/Linux)
 ├── install.ps1                       # Installer (Windows)
 ├── test.sh                           # Static test suite (37 assertions)
@@ -153,8 +122,7 @@ PRs welcome! Here are areas that need improvement:
 
 ### Medium Priority
 
-- **`APPEND ONLY` enforcement is prompt-only** — SKILL.md Step R6c declares append-only and no-duplicates as rules for the LLM, but there's no programmatic enforcement. A post-write validation hook that scans for duplicates would make this robust.
-- **Windows hook JSON parsing** — `aristotle-reflector.sh` uses `python3` for JSON parsing, but Windows ships a non-functional Store stub. Currently falls back to `sed` regex. Should test on real Windows Python installations and consider a pure-bash JSON parser.
+- **`APPEND ONLY` enforcement is prompt-only** — SKILL.md Step R6c declares append-only and no-duplicates as rules for the LLM, but there's no programmatic enforcement. A post-write validation step that scans for duplicates would make this robust.
 - **Multi-model E2E testing** — Live test only validates with the user-specified model. Should test across multiple providers/models to verify portability.
 
 ### Nice to Have
@@ -171,7 +139,7 @@ PRs welcome! Here are areas that need improvement:
 rm -rf ~/.config/opencode/skills/aristotle
 
 # Remove user-level learnings (optional)
-rm -f ~/.claude/rules/aristotle-learnings.md
+rm -f ~/.config/opencode/aristotle-learnings.md
 ```
 
 ## License

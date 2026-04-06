@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# test.sh — Aristotle Static Test Suite (file structure, content, hook logic)
+# test.sh — Aristotle Static Test Suite (file structure, content, pattern detection)
 # Usage: bash test.sh [--skip-cleanup]
 #
 # Works from both the source repo AND the installed location.
@@ -66,8 +66,6 @@ log ""; log "🦉 Aristotle Test Suite"; sep
 # ═══ T1: File Structure ═══
 info "T1: File Structure"; sep
 assert_exists "$ARISTOTLE_DIR/SKILL.md"
-assert_exists "$ARISTOTLE_DIR/hooks/aristotle-reflector.sh"
-assert_exists "$ARISTOTLE_DIR/hooks/aristotle-reflector.ps1"
 assert_exists "$ARISTOTLE_DIR/install.sh"
 assert_exists "$ARISTOTLE_DIR/install.ps1"
 assert_exists "$ARISTOTLE_DIR/test/live-test.sh"
@@ -89,6 +87,22 @@ assert_contains "$ARISTOTLE_DIR/SKILL.md" "CRITICAL ARCHITECTURE RULE" "architec
 assert_contains "$ARISTOTLE_DIR/SKILL.md" "session_read" "subagent reads session"
 assert_contains "$ARISTOTLE_DIR/SKILL.md" "5 Whys" "5-Why analysis"
 assert_contains "$ARISTOTLE_DIR/SKILL.md" "MISUNDERSTOOD_REQUIREMENT" "error categories"
+sep
+
+# ═══ T2b: SKILL.md Auto-Trigger Keywords ═══
+info "T2b: Auto-Trigger Keywords"; sep
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "wrong" "description includes 'wrong' trigger"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "mistake" "description includes 'mistake' trigger"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "incorrect" "description includes 'incorrect' trigger"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "不对" "description includes Chinese trigger"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "搞错" "description includes Chinese trigger"
+sep
+
+# ═══ T2c: SKILL.md Correct Paths ═══
+info "T2c: Correct OpenCode Paths"; sep
+assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "~/.claude/" "no ~/.claude/ references"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "~/.config/opencode" "uses ~/.config/opencode path"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" ".opencode/" "uses .opencode/ project path"
 sep
 
 # ═══ T3: Hook Pattern Detection ═══
@@ -159,43 +173,9 @@ V=$(count_matches "remember this|learn from this|记住|以后别" "$TEST_DIR/tr
 
 sep
 
-# ═══ T4: Hook Script Execution ═══
-info "T4: Hook Script Execution"; sep
-
-cat > "$TEST_DIR/transcripts/hook-test.txt" << 'EOF'
-User: write a function
-Assistant: here it is
-User: wrong, the function name is incorrect
-Assistant: sorry about that, let me fix
-User: remember this mistake
-EOF
-
-HOOK_OUT=$(echo "{\"transcript_path\":\"$TEST_DIR/transcripts/hook-test.txt\"}" | bash "$ARISTOTLE_DIR/hooks/aristotle-reflector.sh" 2>/dev/null || echo "")
-if echo "$HOOK_OUT" | grep -q "Aristotle"; then
-    pass "Hook outputs Aristotle suggestion"
-else
-    fail "Hook did not output suggestion (output: $(echo $HOOK_OUT | head -c 100))"
-fi
-
-cat > "$TEST_DIR/transcripts/hook-clean.txt" << 'EOF'
-User: hello
-Assistant: hi there
-User: thanks
-EOF
-
-HOOK_OUT=$(echo "{\"transcript_path\":\"$TEST_DIR/transcripts/hook-clean.txt\"}" | bash "$ARISTOTLE_DIR/hooks/aristotle-reflector.sh" 2>/dev/null || echo "")
-if [ -z "$HOOK_OUT" ] || ! echo "$HOOK_OUT" | grep -q "Aristotle"; then
-    pass "Hook silent on clean transcript"
-else
-    fail "Hook fired on clean transcript"
-fi
-
-sep
-
 # ═══ T5: Install Script Syntax ═══
 info "T5: Install Script Syntax"; sep
 bash -n "$ARISTOTLE_DIR/install.sh" 2>/dev/null && pass "install.sh syntax valid" || fail "install.sh syntax error"
-[ -x "$ARISTOTLE_DIR/hooks/aristotle-reflector.sh" ] && pass "reflector.sh is executable" || fail "reflector.sh not executable"
 sep
 
 # ═══ T6: SKILL.md Architecture Guarantees ═══
