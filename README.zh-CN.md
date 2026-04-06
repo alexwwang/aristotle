@@ -41,11 +41,15 @@ cd "$env:USERPROFILE\.config\opencode\skills\aristotle"
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
-### 方式三：通过 opencode plugin 安装
+### 方式三：直接克隆（跳过安装脚本）
+
+OpenCode 会自动发现 `~/.config/opencode/skills/` 下的 SKILL.md，无需安装脚本：
 
 ```bash
-opencode plugin https://github.com/alexwwang/aristotle
+git clone https://github.com/alexwwang/aristotle.git ~/.config/opencode/skills/aristotle
 ```
+
+> **注意：** 此方式跳过了方式一中的 learnings 文件初始化。首次运行时该文件会自动创建。
 
 ## 使用方法
 

@@ -41,11 +41,15 @@ cd "$env:USERPROFILE\.config\opencode\skills\aristotle"
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
-### Option 3: Install via opencode plugin
+### Option 3: One-Line Clone (no installer)
+
+OpenCode auto-discovers skills from `~/.config/opencode/skills/`. Just clone and it's ready:
 
 ```bash
-opencode plugin https://github.com/alexwwang/aristotle
+git clone https://github.com/alexwwang/aristotle.git ~/.config/opencode/skills/aristotle
 ```
+
+> **Note:** This skips the learnings file initialization from Option 1. The file will be auto-created on first run.
 
 ## Usage
 
