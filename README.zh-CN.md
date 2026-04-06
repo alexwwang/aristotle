@@ -23,8 +23,8 @@
 
 ```bash
 # 克隆仓库
-git clone https://github.com/alexwwang/aristotle.git ~/.config/opencode/skills/aristotle
-cd ~/.config/opencode/skills/aristotle
+git clone https://github.com/alexwwang/aristotle.git ~/.claude/skills/aristotle
+cd ~/.claude/skills/aristotle
 
 # 运行安装脚本
 bash install.sh
@@ -34,19 +34,19 @@ bash install.sh
 
 ```powershell
 # 克隆仓库
-git clone https://github.com/alexwwang/aristotle.git "$env:USERPROFILE\.config\opencode\skills\aristotle"
+git clone https://github.com/alexwwang/aristotle.git "$env:USERPROFILE\.claude\skills\aristotle"
 
 # 运行安装脚本
-cd "$env:USERPROFILE\.config\opencode\skills\aristotle"
+cd "$env:USERPROFILE\.claude\skills\aristotle"
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
 ### 方式三：直接克隆（跳过安装脚本）
 
-OpenCode 会自动发现 `~/.config/opencode/skills/` 下的 SKILL.md，无需安装脚本：
+OpenCode 会自动发现 `~/.claude/skills/` 下的 SKILL.md，无需安装脚本：
 
 ```bash
-git clone https://github.com/alexwwang/aristotle.git ~/.config/opencode/skills/aristotle
+git clone https://github.com/alexwwang/aristotle.git ~/.claude/skills/aristotle
 ```
 
 > **注意：** 此方式跳过了方式一中的 learnings 文件初始化。首次运行时该文件会自动创建。
@@ -140,7 +140,7 @@ bash test/live-test.sh --model <provider/model>
 
 ```bash
 # 移除技能
-rm -rf ~/.config/opencode/skills/aristotle
+rm -rf ~/.claude/skills/aristotle
 
 # 移除用户级学习规则（可选）
 rm -f ~/.config/opencode/aristotle-learnings.md

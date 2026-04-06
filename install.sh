@@ -7,7 +7,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SKILL_SRC="$SCRIPT_DIR"
 
-# Determine OpenCode config directory
+# Determine OpenCode skill discovery directory
+# OpenCode hardcodes ~/.claude/skills/ as a discovery path (EXTERNAL_DIRS).
+# This is the most reliable location — zero configuration needed.
+SKILL_BASE="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 OPENCODE_CONFIG="${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}"
 
 # Colors
@@ -21,8 +24,8 @@ echo "🦉 Aristotle — Error Reflection & Learning Agent"
 echo "══════════════════════════════════════════════════"
 echo ""
 
-# Step 1: Install skill to OpenCode skills directory
-SKILL_DEST="$OPENCODE_CONFIG/skills/aristotle"
+# Step 1: Install skill to ~/.claude/skills/ (reliable auto-discovery path)
+SKILL_DEST="$SKILL_BASE/skills/aristotle"
 echo -e "${BLUE}[1/3]${NC} Installing Aristotle skill to $SKILL_DEST..."
 
 mkdir -p "$SKILL_DEST"
@@ -73,7 +76,7 @@ echo ""
 echo "Usage:"
 echo "  • Type /aristotle in any OpenCode session to reflect on errors"
 echo "  • When error-correction patterns are detected, the AI will suggest running /aristotle"
-echo "  • Learnings are written to ~/.config/opencode/aristotle-learnings.md"
+echo "  • Learnings are written to $LEARNINGS_FILE"
 echo "  • Project-level learnings go to .opencode/aristotle-project-learnings.md"
 echo ""
 echo "To uninstall:"

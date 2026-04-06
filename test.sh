@@ -20,7 +20,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [ -f "$SCRIPT_DIR/SKILL.md" ]; then
     ARISTOTLE_DIR="$SCRIPT_DIR"
 else
-    ARISTOTLE_DIR="$HOME/.config/opencode/skills/aristotle"
+    ARISTOTLE_DIR="$HOME/.claude/skills/aristotle"
 fi
 
 TEST_DIR=$(mktemp -d)

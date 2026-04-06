@@ -6,6 +6,9 @@ $ErrorActionPreference = 'Stop'
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $SkillSrc = $ScriptDir
 
+# OpenCode hardcodes ~/.claude/skills/ as a discovery path (EXTERNAL_DIRS).
+# This is the most reliable location — zero configuration needed.
+$ClaudeBase = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $env:USERPROFILE '.claude' }
 $OpenCodeConfig = if ($env:OPENCODE_CONFIG_DIR) { $env:OPENCODE_CONFIG_DIR } else { Join-Path $env:USERPROFILE '.config\opencode' }
 
 Write-Host ""
@@ -13,8 +16,8 @@ Write-Host "🦉 Aristotle — Error Reflection & Learning Agent" -ForegroundCol
 Write-Host "══════════════════════════════════════════════════"
 Write-Host ""
 
-# Step 1: Install skill files
-$SkillDest = Join-Path $OpenCodeConfig 'skills\aristotle'
+# Step 1: Install skill files to ~/.claude/skills/ (reliable auto-discovery path)
+$SkillDest = Join-Path $ClaudeBase 'skills\aristotle'
 Write-Host "[1/3] Installing Aristotle skill to $SkillDest..." -ForegroundColor Cyan
 
 New-Item -ItemType Directory -Path $SkillDest -Force | Out-Null

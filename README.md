@@ -23,8 +23,8 @@ Activate with `/aristotle` to spawn an isolated subagent that analyzes your sess
 
 ```bash
 # Clone the repo
-git clone https://github.com/alexwwang/aristotle.git ~/.config/opencode/skills/aristotle
-cd ~/.config/opencode/skills/aristotle
+git clone https://github.com/alexwwang/aristotle.git ~/.claude/skills/aristotle
+cd ~/.claude/skills/aristotle
 
 # Run the installer
 bash install.sh
@@ -34,19 +34,19 @@ bash install.sh
 
 ```powershell
 # Clone the repo
-git clone https://github.com/alexwwang/aristotle.git "$env:USERPROFILE\.config\opencode\skills\aristotle"
+git clone https://github.com/alexwwang/aristotle.git "$env:USERPROFILE\.claude\skills\aristotle"
 
 # Run the installer
-cd "$env:USERPROFILE\.config\opencode\skills\aristotle"
+cd "$env:USERPROFILE\.claude\skills\aristotle"
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
 ### Option 3: One-Line Clone (no installer)
 
-OpenCode auto-discovers skills from `~/.config/opencode/skills/`. Just clone and it's ready:
+OpenCode auto-discovers skills from `~/.claude/skills/`. Just clone and it's ready:
 
 ```bash
-git clone https://github.com/alexwwang/aristotle.git ~/.config/opencode/skills/aristotle
+git clone https://github.com/alexwwang/aristotle.git ~/.claude/skills/aristotle
 ```
 
 > **Note:** This skips the learnings file initialization from Option 1. The file will be auto-created on first run.
@@ -140,7 +140,7 @@ PRs welcome! Here are areas that need improvement:
 
 ```bash
 # Remove the skill
-rm -rf ~/.config/opencode/skills/aristotle
+rm -rf ~/.claude/skills/aristotle
 
 # Remove user-level learnings (optional)
 rm -f ~/.config/opencode/aristotle-learnings.md
