@@ -6,13 +6,17 @@ English | [中文](./README.zh-CN.md)
 
 **Aristotle** is an [OpenCode](https://github.com/opencode-ai/opencode) skill — an error reflection and learning agent.
 
-Activate with `/aristotle` to spawn an isolated subagent that analyzes your session for model mistakes, performs 5-Why root-cause analysis, and writes preventive rules to durable files. You review, confirm, or revise before anything is written.
+Activate with `/aristotle` to spawn an isolated subagent that analyzes your session for model mistakes, performs 5-Why root-cause analysis, and generates DRAFT rules. You review, confirm, or revise before anything is written to disk.
 
 ## Features
 
+- **Progressive Disclosure Architecture** — Skill loads only what's needed: router (84 lines) → reflect (106 lines) → review (156 lines). Each phase loads on demand, never wasting context.
 - **Isolated Reflection** — Analysis runs in a separate background session; main session context is never polluted
 - **5-Why Root-Cause Analysis** — Structured error categorization across 8 categories (MISUNDERSTOOD_REQUIREMENT, ASSUMED_CONTEXT, PATTERN_VIOLATION, HALLUCINATION, INCOMPLETE_ANALYSIS, WRONG_TOOL_CHOICE, OVERSIMPLIFICATION, SYNTAX_API_ERROR)
-- **Draft → Confirm Workflow** — Rules are presented as DRAFTS first; user confirms, revises, or rejects before anything is written to disk
+- **DRAFT → Review → Confirm Workflow** — Rules are generated as DRAFTs with location metadata; user reviews in a dedicated session via `/aristotle review N`, confirms, revises, or rejects
+- **Precise Error Location** — `--focus` parameter targets specific parts of a session (last exchange, around message N, after a keyword, error-only scan, or full scan)
+- **Re-Reflection** — During review, user can request deeper analysis on a specific error. DRAFT metadata (session ID, message range, error excerpts) enables precise targeting without re-scanning the entire session.
+- **State Tracking** — `~/.config/opencode/aristotle-state.json` tracks all reflections with status (draft → confirmed → revised), enabling `/aristotle sessions` to list and manage history
 - **Bilingual** — Detects error-correction patterns in English and Chinese (zh-CN)
 - **Two-Tier Output** — User-level rules (`~/.config/opencode/aristotle-learnings.md`) apply globally; project-level rules (`.opencode/aristotle-project-learnings.md`) apply per-project
 - **Auto-Suggestion** — Skill description includes error-correction keywords; when detected in conversation, the AI can suggest running `/aristotle` (automatic, no configuration needed)
@@ -53,34 +57,69 @@ git clone https://github.com/alexwwang/aristotle.git ~/.claude/skills/aristotle
 
 ## Usage
 
-In any OpenCode session, type `/aristotle` to trigger reflection:
+### Commands
 
 | Command | Description |
 |---------|-------------|
-| `/aristotle` | Reflect on the current session |
-| `/aristotle last` | Reflect on the previous completed session |
-| `/aristotle session <id>` | Reflect on a specific session |
-| `/aristotle recent N` | Reflect on the last N sessions |
+| `/aristotle` | Reflect on the **current** session (focus on last exchange) |
+| `/aristotle last` | Reflect on the **previous** session (see Target Resolution below) |
+| `/aristotle session ses_xxx` | Reflect on a specific session by **OpenCode session ID** |
+| `/aristotle recent N` | Reflect on the **Nth** most recent session (N=1 is most recent, not current) |
+| `/aristotle --focus <hint>` | Target a specific area (see Focus Options below) |
+| `/aristotle --model <model>` | Override model for the Reflector |
+| `/aristotle sessions` | List all reflection records with status and sequence numbers |
+| `/aristotle review N` | Load DRAFT **#N** into current session for review (N is sequence number from `sessions`) |
 
-### What Happens
+### Target Resolution
 
-1. **Coordinator** (main session) — collects target session ID, project directory, user language, then fires a background `task()`. Immediately prints the Reflector's session ID — **you can switch over at any time**, no need to wait for a notification.
-2. **Reflector** (isolated subagent) — reads the session transcript, detects error-correction patterns, performs 5-Why analysis, generates draft rules
-3. **User Review** — switch to the Reflector session (`opencode -s <id>`) to confirm, revise, or reject each rule. The main session will also send a one-line reminder when the analysis finishes, but you don't have to wait for it.
-4. **Persistence** — confirmed rules are appended to learnings files
+Aristotle uses `session_list` to resolve session targets. The rules are:
+
+| Target | How It's Resolved |
+|--------|-------------------|
+| *(none)* | Current session — the session where `/aristotle` is running |
+| `last` | The session immediately before the current one in `session_list` output, regardless of whether it's "open" or "closed". OpenCode sessions don't have a completed/closed state — they're ordered by last activity time. |
+| `session ses_xxx` | Direct lookup by OpenCode session ID (format: `ses_` prefix + alphanumeric). This is the **target session's ID** (the session containing the errors), not the Reflector's session ID. |
+| `recent N` | The Nth entry from `session_list`, excluding the current session. `recent 1` = the session right before current, `recent 3` = the 3rd most recent. Fires **one** Reflector for that single session. |
+
+> **Note:** If you have multiple OpenCode instances open, all sessions appear in `session_list` sorted by last activity time. `last` and `recent N` simply pick from this list — they don't skip "open" sessions. If you want to reflect on a specific session regardless of ordering, use `session <id>`.
+
+### Focus Options
+
+Limit the Reflector's scan range within the target session:
+
+| Focus Hint | Behavior |
+|------------|----------|
+| `last` (default) | Last 50 messages in the target session |
+| `after "text"` | From first occurrence of "text" to end of session |
+| `around N` | Messages N-10 to N+10 (20-message window) |
+| `error` | Scan entire session, but only extract error-correction patterns (skip clean sections) |
+| `full` | Scan entire session (useful for short sessions or comprehensive review) |
+
+### Review Workflow
+
+1. **List reflections**: `/aristotle sessions` → shows numbered list with status
+2. **Pick one**: `/aristotle review 2` → loads DRAFT #2 into current session
+3. **Decide**: `confirm` / `revise 1: feedback` / `reject` / `re-reflect`
+4. **Iterate**: repeat for other reflections, or request re-reflection with deeper analysis
+
+> The sequence number (`N`) in `/aristotle review N` comes from the `#` column in `/aristotle sessions` output. It's **not** an OpenCode session ID — it's the position in the reflection records list.
 
 ```
-Main Session                         Reflector Session (isolated)
-─────────────                        ────────────────────────────
-User: /aristotle        ──────►      Read session transcript
-                                      Detect errors (5-Why)
-"🦉 launched. opencode -s xxx"        Generate DRAFT rules
-                                      Present to user ◄──────┐
-                                      WAIT for confirm/revise │
-                                      Write rules to files    │
-                          ◄──────     "✅ Rules written!"     │
-"🦉 done. opencode -s xxx"                                    │
-                                      (user switches here) ───┘
+Reflect Phase                    Review Phase
+─────────────                    ────────────
+/aristotle                       /aristotle review 1
+  │                                │
+  ├─ Load REFLECT.md               ├─ Load REVIEW.md
+  │  (106 lines)                   │  (156 lines)
+  │                                │
+  ├─ Fire Reflector ──────►        ├─ Read Reflector session
+  │  (background task)      DRAFT   │  Extract DRAFT report
+  │                         ──────► │
+  ├─ Update state file              ├─ Present DRAFT to user
+  ├─ One-line notification          ├─ Handle confirm/revise/reject
+  └─ STOP                          ├─ Write rules on confirm
+                                   └─ Re-reflect if requested
+                                      (loads REFLECT.md)
 ```
 
 ## Testing
@@ -91,7 +130,7 @@ User: /aristotle        ──────►      Read session transcript
 bash test.sh
 ```
 
-37 assertions covering file structure, SKILL.md content, hook logic, error pattern detection (English/Chinese/threshold), and architecture guarantees.
+63 assertions covering file structure, progressive disclosure, SKILL.md content, hook logic, error pattern detection (English/Chinese/threshold), and architecture guarantees.
 
 ### E2E Live Tests (requires opencode session)
 
@@ -105,36 +144,42 @@ Creates a real session with known error patterns, triggers `/aristotle`, and ver
 
 ```
 .
-├── .gitignore
-├── SKILL.md                          # Skill definition (prompt & protocol)
-├── install.sh                        # Installer (macOS/Linux)
-├── install.ps1                       # Installer (Windows)
-├── test.sh                           # Static test suite (37 assertions)
+├── SKILL.md              # Router — argument parsing, phase routing (84 lines)
+├── REFLECTOR.md          # Subagent protocol — error analysis, DRAFT generation
+├── REFLECT.md            # Coordinator reflect phase — fire subagent, state tracking
+├── REVIEW.md             # Coordinator review phase — DRAFT review, rule writing, revision
+├── install.sh            # Installer (macOS/Linux)
+├── install.ps1           # Installer (Windows)
+├── test.sh               # Static test suite (63 assertions)
 └── test/
-    └── live-test.sh                  # E2E live test (8 assertions)
+    └── live-test.sh      # E2E live test (8 assertions)
 ```
+
+## Architecture: Progressive Disclosure
+
+The skill is split into four files. Only `SKILL.md` (84 lines) is loaded on trigger. The other files are loaded on demand:
+
+| Scenario | Files Loaded | Lines |
+|----------|-------------|-------|
+| `/aristotle` (reflect) | SKILL.md + REFLECT.md | 190 |
+| `/aristotle sessions` | SKILL.md only | 84 |
+| `/aristotle review N` | SKILL.md + REVIEW.md | 240 |
+| Review + re-reflect | SKILL.md + REVIEW.md + REFLECT.md | 346 |
+| Subagent (internal) | REFLECTOR.md | ~170 |
 
 ## Known Issues & Contributing
 
 PRs welcome! Here are areas that need improvement:
 
-### High Priority
-
-- **Model compatibility** — The skill asks the user to select a model for the Reflector via `question` tool, but `opencode run` in non-interactive mode hangs at this prompt. The Reflector should proceed with a sensible default in non-interactive contexts.
-- **Subagent `session_read` access** — The Reflector subagent uses `session_read()` to read session content, but some model/provider combinations don't expose this tool. When unavailable, the skill falls back to analyzing directly in the main session (defeating isolation). Needs a graceful degradation path.
-- **Rules deduplication** — No check for whether a semantically similar rule already exists in `aristotle-learnings.md` before appending. Over time, repeated reflections on similar errors accumulate near-duplicate rules.
-
 ### Medium Priority
 
-- **`APPEND ONLY` enforcement is prompt-only** — SKILL.md Step R6c declares append-only and no-duplicates as rules for the LLM, but there's no programmatic enforcement. A post-write validation step that scans for duplicates would make this robust.
-- **Multi-model E2E testing** — Live test only validates with the user-specified model. Should test across multiple providers/models to verify portability.
+- **Subagent `session_read` access** — The Reflector subagent uses `session_read()` to read session content, but some model/provider combinations don't expose this tool. Needs a graceful degradation path.
+- **Multi-model E2E testing** — Live test only validates with the user-specified model. Should test across multiple providers/models.
 
 ### Nice to Have
 
-- **Session scope filtering** — `/aristotle recent N` pulls the N most recent sessions without filtering by date or relevance. Date-range or error-density filtering would reduce noise.
 - **Rule versioning and expiry** — Rules are append-only with no versioning. Some rules may become outdated as models improve. Adding timestamps and a pruning mechanism would help long-term maintenance.
 - **`count_matches` cross-platform testing** — The test suite's `count_matches` helper works on GNU grep but should be tested on Alpine (BusyBox), macOS (BSD grep), and other non-GNU environments.
-- **SKILL.md schema validation** — No automated check that SKILL.md frontmatter is correct or that referenced protocol steps exist. A lint step would catch drift.
 
 ## Uninstall
 
@@ -144,6 +189,9 @@ rm -rf ~/.claude/skills/aristotle
 
 # Remove user-level learnings (optional)
 rm -f ~/.config/opencode/aristotle-learnings.md
+
+# Remove state file (optional)
+rm -f ~/.config/opencode/aristotle-state.json
 ```
 
 ## Why `~/.claude/skills/`? — Skill Discovery Investigation
@@ -155,45 +203,23 @@ You might wonder why this skill must be installed under `~/.claude/skills/` rath
 OpenCode's skill discovery scans directories in the following order:
 
 1. **`EXTERNAL_DIRS`** — globally scans `~/.claude/` and `~/.agents/` (hardcoded in source as `[".claude", ".agents"]`), looking for `skills/**/SKILL.md`
-2. **`EXTERNAL_DIRS` at project level** — scans `<project>/.claude/` and `<project>/.agents/`
+2. **`EXTERNAL_DIRS`** at project level — scans `<project>/.claude/` and `<project>/.agents/`
 3. **`configDirs`** — scans `~/.config/opencode/` with pattern `{skill,skills}/**/SKILL.md`
 4. **`skills.paths`** — reads custom paths from `opencode.json` config
 5. **`skills.urls`** — fetches skills from remote URLs
 
-### Paths We Tested
-
-| Path | Discovery | Notes |
-|------|-----------|-------|
-| `~/.claude/skills/` | ✅ Works | The only reliably working path in v1.3.15 |
-| `~/.agents/skills/` | ❌ Not found | Listed in `EXTERNAL_DIRS` but does not work in practice |
-| `~/.config/opencode/skills/` | ❌ Not found | `configDirs` scan should find it but has a bug |
-| `skills.paths` in `opencode.json` | ❌ Not found | Configured but not picked up by discovery |
-
 ### Root Cause
 
-The `EXTERNAL_DIRS` scanning for `.claude` is the only fully functional discovery path in OpenCode v1.3.15. The `.agents` directory scan and `configDirs` scan appear to have implementation gaps — multiple GitHub issues ([#16524](https://github.com/anomalyco/opencode/issues/16524), [#10986](https://github.com/anomalyco/opencode/issues/10986), [#12741](https://github.com/anomalyco/opencode/issues/12741)) report similar problems.
-
-This means `~/.claude/skills/` is the only path that reliably works today, even though `.claude` is nominally a Claude Code directory. If OpenCode fixes skill discovery in a future release, we'll update the install paths accordingly.
+The `EXTERNAL_DIRS` scanning for `.claude` is the only fully functional discovery path in OpenCode v1.3.15. See [GitHub issues](https://github.com/anomalyco/opencode/issues/16524) for details.
 
 ### ⚠️ Pitfall: Don't Symlink the Skills Directory
 
-OpenCode's internal glob traversal does **not follow directory symlinks**. If `~/.claude/skills/` (or the project-level `.claude/skills/`) is a symlink — e.g., pointing to a git submodule or a shared directory — OpenCode will silently find **zero skills**, even though `ls` shows everything is there.
+OpenCode's internal glob traversal does **not follow directory symlinks**. Use a real directory:
 
-This is particularly insidious in **git worktree sandbox** environments (e.g., OpenCode Desktop), where the sandbox session's skill scan operates on a copy of the repo and the symlink target may not resolve correctly.
-
-**Do this:**
 ```bash
 # ✅ Real directory — always works
 git clone https://github.com/alexwwang/aristotle.git ~/.claude/skills/aristotle
 ```
-
-**Don't do this:**
-```bash
-# ❌ Symlink — silently fails
-ln -s /some/shared/skills ~/.claude/skills
-```
-
-See [issue #18848](https://github.com/anomalyco/opencode/issues/18848) for the full analysis.
 
 ## License
 

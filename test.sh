@@ -42,12 +42,12 @@ assert_exists() {
 }
 assert_contains() {
     local f="$1" p="$2" d="$3"
-    if [ -f "$f" ] && grep -q "$p" "$f" 2>/dev/null; then pass "$d"
+    if [ -f "$f" ] && grep -q -- "$p" "$f" 2>/dev/null; then pass "$d"
     else fail "$d (expected: $p)"; fi
 }
 assert_not_contains() {
     local f="$1" p="$2" d="$3"
-    if [ -f "$f" ] && grep -q "$p" "$f" 2>/dev/null; then fail "$d (should NOT contain: $p)"
+    if [ -f "$f" ] && grep -q -- "$p" "$f" 2>/dev/null; then fail "$d (should NOT contain: $p)"
     else pass "$d"; fi
 }
 
@@ -66,27 +66,24 @@ log ""; log "🦉 Aristotle Test Suite"; sep
 # ═══ T1: File Structure ═══
 info "T1: File Structure"; sep
 assert_exists "$ARISTOTLE_DIR/SKILL.md"
+assert_exists "$ARISTOTLE_DIR/REFLECTOR.md"
+assert_exists "$ARISTOTLE_DIR/REFLECT.md"
+assert_exists "$ARISTOTLE_DIR/REVIEW.md"
 assert_exists "$ARISTOTLE_DIR/install.sh"
 assert_exists "$ARISTOTLE_DIR/install.ps1"
 assert_exists "$ARISTOTLE_DIR/test/live-test.sh"
 sep
 
-# ═══ T2: SKILL.md Content ═══
-info "T2: SKILL.md Content"; sep
+# ═══ T2: SKILL.md Content (Router only) ═══
+info "T2: SKILL.md Content (Router)"; sep
 assert_contains "$ARISTOTLE_DIR/SKILL.md" "name: aristotle" "frontmatter: name"
 assert_contains "$ARISTOTLE_DIR/SKILL.md" "description:" "frontmatter: description"
-assert_contains "$ARISTOTLE_DIR/SKILL.md" "run_in_background" "delegates to background"
-assert_contains "$ARISTOTLE_DIR/SKILL.md" "opencode -s" "session switch instructions"
-assert_contains "$ARISTOTLE_DIR/SKILL.md" "DRAFT" "draft-then-confirm pattern"
-assert_contains "$ARISTOTLE_DIR/SKILL.md" "confirm" "confirm mechanism"
-assert_contains "$ARISTOTLE_DIR/SKILL.md" "revise" "revise mechanism"
-assert_contains "$ARISTOTLE_DIR/SKILL.md" "reject" "reject mechanism"
-assert_contains "$ARISTOTLE_DIR/SKILL.md" "APPEND ONLY" "append-only rule"
-assert_contains "$ARISTOTLE_DIR/SKILL.md" "NO DUPLICATES" "no-duplicates rule"
 assert_contains "$ARISTOTLE_DIR/SKILL.md" "CRITICAL ARCHITECTURE RULE" "architecture guard"
-assert_contains "$ARISTOTLE_DIR/SKILL.md" "session_read" "subagent reads session"
-assert_contains "$ARISTOTLE_DIR/SKILL.md" "5 Whys" "5-Why analysis"
-assert_contains "$ARISTOTLE_DIR/SKILL.md" "MISUNDERSTOOD_REQUIREMENT" "error categories"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "aristotle-state.json" "state file tracking"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "--model" "model override flag"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "/aristotle sessions" "sessions subcommand"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "REFLECT.md" "routes to REFLECT.md"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "REVIEW.md" "routes to REVIEW.md"
 sep
 
 # ═══ T2b: SKILL.md Auto-Trigger Keywords ═══
@@ -98,11 +95,26 @@ assert_contains "$ARISTOTLE_DIR/SKILL.md" "不对" "description includes Chinese
 assert_contains "$ARISTOTLE_DIR/SKILL.md" "搞错" "description includes Chinese trigger"
 sep
 
-# ═══ T2c: SKILL.md Correct Paths ═══
-info "T2c: Correct OpenCode Paths"; sep
-assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "~/.claude/" "no ~/.claude/ references"
-assert_contains "$ARISTOTLE_DIR/SKILL.md" "~/.config/opencode" "uses ~/.config/opencode path"
-assert_contains "$ARISTOTLE_DIR/SKILL.md" ".opencode/" "uses .opencode/ project path"
+# ═══ T2c: File Size Constraints (Progressive Disclosure) ═══
+info "T2c: File Size Constraints"; sep
+SKILL_LINES=$(wc -l < "$ARISTOTLE_DIR/SKILL.md" | tr -d ' ')
+if [ "$SKILL_LINES" -le 100 ]; then
+    pass "SKILL.md is $SKILL_LINES lines (≤100)"
+else
+    fail "SKILL.md is $SKILL_LINES lines (expected ≤100)"
+fi
+REFLECT_LINES=$(wc -l < "$ARISTOTLE_DIR/REFLECT.md" | tr -d ' ')
+if [ "$REFLECT_LINES" -le 120 ]; then
+    pass "REFLECT.md is $REFLECT_LINES lines (≤120)"
+else
+    fail "REFLECT.md is $REFLECT_LINES lines (expected ≤120)"
+fi
+REVIEW_LINES=$(wc -l < "$ARISTOTLE_DIR/REVIEW.md" | tr -d ' ')
+if [ "$REVIEW_LINES" -le 200 ]; then
+    pass "REVIEW.md is $REVIEW_LINES lines (≤200)"
+else
+    fail "REVIEW.md is $REVIEW_LINES lines (expected ≤200)"
+fi
 sep
 
 # ═══ T3: Hook Pattern Detection ═══
@@ -178,19 +190,50 @@ info "T5: Install Script Syntax"; sep
 bash -n "$ARISTOTLE_DIR/install.sh" 2>/dev/null && pass "install.sh syntax valid" || fail "install.sh syntax error"
 sep
 
-# ═══ T6: SKILL.md Architecture Guarantees ═══
+# ═══ T6: Architecture Guarantees ═══
 info "T6: Architecture Guarantees"; sep
-assert_contains "$ARISTOTLE_DIR/SKILL.md" "NEVER perform" "isolation guarantee"
-assert_contains "$ARISTOTLE_DIR/SKILL.md" "background" "background execution"
 
-R_STEP_COUNT=$(grep -c "STEP R" "$ARISTOTLE_DIR/SKILL.md" || echo "0")
-[ "$R_STEP_COUNT" -ge 4 ] && pass "Subagent has $R_STEP_COUNT steps" || fail "Only $R_STEP_COUNT subagent steps"
+# SKILL.md is router-only — no protocol details
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "NEVER.*perform" "isolation guarantee"
+assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "STEP R1" "router omits R1"
+assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "STEP F1" "router omits F1"
+assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "STEP V1" "router omits V1"
+assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "5 Whys Template" "router omits 5-Why template"
+assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "APPEND ONLY" "router delegates APPEND ONLY to REVIEW.md"
 
-assert_contains "$ARISTOTLE_DIR/SKILL.md" "STEP R5" "feedback processing step"
-assert_contains "$ARISTOTLE_DIR/SKILL.md" "STEP R5" "feedback processing step"
-assert_contains "$ARISTOTLE_DIR/SKILL.md" "STEP R6" "file writing step"
-assert_contains "$ARISTOTLE_DIR/SKILL.md" "WAIT for the user" "waits for user input"
-assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "auto.*commit" "no auto-commit"
+# Reflector protocol lives in REFLECTOR.md (subagent reads this)
+assert_contains "$ARISTOTLE_DIR/REFLECTOR.md" "STEP R1" "reflector: read session"
+assert_contains "$ARISTOTLE_DIR/REFLECTOR.md" "STEP R2" "reflector: detect errors"
+assert_contains "$ARISTOTLE_DIR/REFLECTOR.md" "STEP R3" "reflector: 5-Why analysis"
+assert_contains "$ARISTOTLE_DIR/REFLECTOR.md" "STEP R4" "reflector: draft rules"
+assert_not_contains "$ARISTOTLE_DIR/REFLECTOR.md" "STEP R5" "reflector has no R5 (non-interactive)"
+assert_not_contains "$ARISTOTLE_DIR/REFLECTOR.md" "STEP R6" "reflector has no R6 (non-interactive)"
+assert_contains "$ARISTOTLE_DIR/REFLECTOR.md" "DRAFT" "draft output format"
+assert_contains "$ARISTOTLE_DIR/REFLECTOR.md" "MISUNDERSTOOD_REQUIREMENT" "error categories"
+assert_contains "$ARISTOTLE_DIR/REFLECTOR.md" "5 Whys" "5-Why analysis"
+assert_contains "$ARISTOTLE_DIR/REFLECTOR.md" "session_read" "subagent reads session"
+assert_contains "$ARISTOTLE_DIR/REFLECTOR.md" "non-interactive" "non-interactive declaration"
+
+# Reflect protocol lives in REFLECT.md (coordinator fires subagent)
+assert_contains "$ARISTOTLE_DIR/REFLECT.md" "STEP F3" "reflect: fire subagent"
+assert_contains "$ARISTOTLE_DIR/REFLECT.md" "run_in_background" "reflect: background execution"
+assert_contains "$ARISTOTLE_DIR/REFLECT.md" "aristotle-state.json" "reflect: state update"
+assert_not_contains "$ARISTOTLE_DIR/REFLECT.md" "APPEND ONLY" "reflect: no file writing"
+
+# Review protocol lives in REVIEW.md (coordinator handles user interaction)
+assert_contains "$ARISTOTLE_DIR/REVIEW.md" "STEP V1" "review: load draft"
+assert_contains "$ARISTOTLE_DIR/REVIEW.md" "STEP V2" "review: user feedback"
+assert_contains "$ARISTOTLE_DIR/REVIEW.md" "STEP V3" "review: write rules"
+assert_contains "$ARISTOTLE_DIR/REVIEW.md" "STEP V4" "review: post-write revision"
+assert_contains "$ARISTOTLE_DIR/REVIEW.md" "STEP V5" "review: cross-session reflection"
+assert_contains "$ARISTOTLE_DIR/REVIEW.md" "STEP V6" "review: re-reflect"
+assert_contains "$ARISTOTLE_DIR/REVIEW.md" "REFLECT.md" "review: cross-loads REFLECT.md on re-reflect"
+assert_contains "$ARISTOTLE_DIR/REVIEW.md" "APPEND ONLY" "review: append-only rule"
+assert_contains "$ARISTOTLE_DIR/REVIEW.md" "NO DUPLICATES" "review: no-duplicates rule"
+assert_contains "$ARISTOTLE_DIR/REVIEW.md" "confirm" "review: confirm mechanism"
+assert_contains "$ARISTOTLE_DIR/REVIEW.md" "revise" "review: revise mechanism"
+assert_contains "$ARISTOTLE_DIR/REVIEW.md" "reject" "review: reject mechanism"
+assert_contains "$ARISTOTLE_DIR/REVIEW.md" "Revised:" "review: revision timestamp"
 
 # Summary
 sep

@@ -30,6 +30,9 @@ echo -e "${BLUE}[1/3]${NC} Installing Aristotle skill to $SKILL_DEST..."
 
 mkdir -p "$SKILL_DEST"
 cp "$SKILL_SRC/SKILL.md" "$SKILL_DEST/SKILL.md"
+cp "$SKILL_SRC/REFLECTOR.md" "$SKILL_DEST/REFLECTOR.md"
+cp "$SKILL_SRC/REFLECT.md" "$SKILL_DEST/REFLECT.md"
+cp "$SKILL_SRC/REVIEW.md" "$SKILL_DEST/REVIEW.md"
 echo -e "${GREEN}✓${NC} Skill files installed."
 
 # Step 2: Initialize the learnings file
@@ -55,6 +58,21 @@ ERRORS=0
 
 if [ ! -f "$SKILL_DEST/SKILL.md" ]; then
     echo -e "${YELLOW}✗${NC} SKILL.md not found at $SKILL_DEST"
+    ERRORS=$((ERRORS+1))
+fi
+
+if [ ! -f "$SKILL_DEST/REFLECTOR.md" ]; then
+    echo -e "${YELLOW}✗${NC} REFLECTOR.md not found at $SKILL_DEST"
+    ERRORS=$((ERRORS+1))
+fi
+
+if [ ! -f "$SKILL_DEST/REFLECT.md" ]; then
+    echo -e "${YELLOW}✗${NC} REFLECT.md not found at $SKILL_DEST"
+    ERRORS=$((ERRORS+1))
+fi
+
+if [ ! -f "$SKILL_DEST/REVIEW.md" ]; then
+    echo -e "${YELLOW}✗${NC} REVIEW.md not found at $SKILL_DEST"
     ERRORS=$((ERRORS+1))
 fi
 
