@@ -55,6 +55,14 @@ git clone https://github.com/alexwwang/aristotle.git ~/.claude/skills/aristotle
 
 > **Note:** This skips the learnings file initialization from Option 1. The file will be auto-created on first run.
 
+### Option 4: Self-Guided Install (paste into OpenCode)
+
+Copy and paste this prompt into any OpenCode session — it will install Aristotle for you:
+
+```
+Install the Aristotle skill from https://github.com/alexwwang/aristotle.git to ~/.claude/skills/aristotle by cloning the repo, then run the install script (install.sh on macOS/Linux, install.ps1 on Windows). Verify the installation by running bash test.sh from the cloned directory — all 63 assertions must pass. After that, delete the cloned source directory (the installed copy at ~/.claude/skills/aristotle is what matters).
+```
+
 ## Usage
 
 ### Commands
