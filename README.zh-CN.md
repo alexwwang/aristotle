@@ -130,6 +130,197 @@ Aristotle 通过 `session_list` 解析目标会话。规则如下：
                                      （加载 REFLECT.md）
 ```
 
+## Aristotle MCP Server
+
+Aristotle 附带一个可选的 MCP（Model Context Protocol）服务器，为学习规则增加 **Git 版本控制**。没有它，规则是扁平的 Markdown 文件——无历史、无回滚、无法跨机器同步。有了它，每条规则都有 YAML frontmatter、状态追踪和完整的 git 历史。
+
+### 为什么用 Git？
+
+扁平的 `aristotle-learnings.md` 只能追加，没有版本管理。如果一条规则后来发现是错的，你只能手动删掉，而且不记得它原来写了什么。MCP server 解决了这个问题：
+
+- **状态生命周期** — 规则经过 `pending → staging → verified`（或 `rejected`）的流转。没有经过显式 commit 的规则不会进入"生产环境"。
+- **原子读取** — 消费端（未来的 Agent L）通过 `git show HEAD:` 读取，永远不会碰到磁盘上写了一半的草稿。
+- **自愈机制** — 如果文件在磁盘上存在但没有 commit，系统会检测到这个缺口并重新触发提交流水线。
+- **被拒规则可恢复** — 拒绝的文件移到 `rejected/{scope}/`，保留完整的原始元数据，随时可以还原。
+
+### 架构
+
+```
+┌──────────────────────────────────────────────────┐
+│  OpenCode (宿主)                                  │
+│                                                   │
+│  ┌───────────┐     MCP (stdio)    ┌────────────┐ │
+│  │ Aristotle  │ ◄──────────────► │ aristotle   │ │
+│  │ Skill      │    JSON-RPC       │ -mcp        │ │
+│  └───────────┘                   └──────┬─────┘ │
+│                                         │        │
+│                              ┌──────────▼──────┐ │
+│                              │ Git 仓库         │ │
+│                              │                  │ │
+│                              │ user/*.md        │ │
+│                              │ projects/H/*.md  │ │
+│                              │ rejected/*/      │ │
+│                              └──────────────────┘ │
+└──────────────────────────────────────────────────┘
+```
+
+### 存储结构
+
+```
+~/.config/opencode/aristotle-repo/     ← Git 仓库（真相源）
+├── .git/
+├── .gitignore
+├── user/                               ← 用户级规则
+│   └── 2026-04-10_hallucination.md
+├── projects/                           ← 项目级规则
+│   └── a1b2c3d4/                       ← SHA256(项目路径)[:8]
+│       └── 2026-04-12_pattern_violation.md
+└── rejected/                           ← 与上方镜像的目录结构
+    ├── user/
+    └── projects/a1b2c3d4/
+```
+
+每条规则文件包含 YAML frontmatter：
+
+```yaml
+---
+id: "rec_1712743800"
+status: "verified"
+scope: "user"
+category: "HALLUCINATION"
+confidence: 0.85
+risk_level: "high"
+source_session: "ses_abc123"
+created_at: "2026-04-10T22:30:00+08:00"
+verified_at: "2026-04-10T22:35:00+08:00"
+verified_by: "auto"
+---
+
+## [2026-04-10] HALLUCINATION — 虚构的 API 方法
+**Context**: ...
+**Rule**: ...
+```
+
+### 规则状态生命周期
+
+```
+write_rule()
+     │
+     ▼
+┌──────────┐
+│ pending  │  磁盘上的未跟踪文件
+└────┬─────┘
+     │ stage_rule()
+     ▼
+┌──────────┐
+│ staging  │  锁定，等待审核
+└────┬─────┘
+   ┌─┴─┐
+   │   │
+commit   reject_rule()
+_rule()      │
+   │         ▼
+   ▼   ┌──────────┐
+verified rejected/  （保留 scope 和元数据）
+```
+
+### 7 个 MCP 工具
+
+| 工具 | 用途 |
+|------|------|
+| `init_repo` | 初始化 Git 仓库、创建目录结构、自动迁移现有扁平规则 |
+| `write_rule` | 创建新规则文件（status: `pending`），附带 YAML frontmatter |
+| `read_rules` | 按状态、类别、scope 查询，或对 frontmatter 值做正则匹配 |
+| `stage_rule` | 标记规则为 `staging`（审核中） |
+| `commit_rule` | 设置 status 为 `verified`，记录时间戳，执行 `git add && commit` |
+| `reject_rule` | 移到 `rejected/{scope}/`，记录原因，删除原文件，提交 |
+| `list_rules` | 轻量元数据列表（不加载规则正文） |
+
+### 流式 Frontmatter 检索
+
+`read_rules` 使用两阶段搜索，针对数百个规则文件做了优化：
+
+1. **阶段一（快）** — 只读每个文件的前 50 行，用正则匹配 frontmatter 的 KV 对。跳过不匹配的文件。不做 YAML 解析。
+2. **阶段二（完整）** — 只对匹配的文件做完整的 frontmatter 解析和正文加载。
+
+500 个文件的场景下，阶段一约 80ms 完成。总搜索时间（20 条命中）：约 180ms。
+
+### 安装
+
+#### 前置条件
+
+- Python 3.10+
+- [uv](https://docs.astral.sh/uv/)（推荐）或 pip/mamba
+
+#### 方式一：手动安装
+
+```bash
+# 克隆并进入仓库
+git clone https://github.com/alexwwang/aristotle.git ~/.claude/skills/aristotle
+cd ~/.claude/skills/aristotle
+
+# 用 uv 安装依赖（自动创建 .venv）
+uv sync
+```
+
+然后在 `opencode.json` 中添加：
+
+```jsonc
+{
+  "mcp": {
+    "aristotle": {
+      "type": "local",
+      "command": ["uv", "run", "--project", "~/.claude/skills/aristotle", "python", "-m", "aristotle_mcp.server"],
+      "enabled": true
+    }
+  }
+}
+```
+
+或使用绝对路径：
+
+```jsonc
+{
+  "mcp": {
+    "aristotle": {
+      "type": "local",
+      "command": ["uv", "run", "--project", "/path/to/aristotle", "python", "-m", "aristotle_mcp.server"],
+      "enabled": true
+    }
+  }
+}
+```
+
+通过环境变量 `ARISTOTLE_REPO_DIR` 自定义仓库位置（默认：`~/.config/opencode/aristotle-repo/`）。
+
+#### 方式二：自引导安装（粘贴到 OpenCode 对话中）
+
+将以下 prompt 粘贴到任意 OpenCode 会话中：
+
+```
+Install the Aristotle MCP server from https://github.com/alexwwang/aristotle.git:
+1. Clone to ~/.claude/skills/aristotle
+2. cd into the cloned directory
+3. Run `uv sync` to install Python dependencies
+4. Add MCP config to opencode.json: type "local", command ["uv", "run", "--project", "~/.claude/skills/aristotle", "python", "-m", "aristotle_mcp.server"], enabled true
+5. Verify by running `uv run python -c "from aristotle_mcp.server import mcp; print(len(mcp._tool_manager._tools), 'tools loaded')"`
+```
+
+### 迁移
+
+`init_repo` 首次运行时，会自动检测现有的 `aristotle-learnings.md` 文件并将其中的规则迁移到 Git 仓库。迁移默认值：
+
+| 字段 | 值 | 理由 |
+|------|---|------|
+| `id` | `mig_N`（递增序号） | 区分迁移规则与新生成规则 |
+| `status` | `verified` | 已有规则本质上都经过人工确认 |
+| `confidence` | `0.7` | 保守默认值 |
+| `risk_level` | 从 category 推导 | `HALLUCINATION` → high，`SYNTAX_API_ERROR` → medium，其余 → low |
+| `verified_by` | `"migration"` | 标记来源 |
+| `verified_at` | 等于 `created_at` | 从 Markdown 标题行解析 |
+
+迁移完成后，原文件重命名为 `.bak`。
+
 ## 测试
 
 ### 静态测试（无需会话）
@@ -139,6 +330,25 @@ bash test.sh
 ```
 
 63 个断言，覆盖文件结构、渐进披露、SKILL.md 内容、错误模式检测（英文/中文/阈值）和架构保证。
+
+### MCP Server 单元测试
+
+```bash
+uv run pytest test/test_mcp.py -v
+```
+
+54 个断言，覆盖全部 6 个模块：
+
+| 测试类 | 模块 | 断言数 | 测试内容 |
+|--------|------|--------|----------|
+| `TestConfig` | `config.py` | 10 | 路径解析、环境变量覆盖、RISK_MAP、项目哈希 |
+| `TestModels` | `models.py` | 7 | RuleMetadata 默认值、YAML 序列化往返、from_frontmatter_dict |
+| `TestGitOps` | `git_ops.py` | 8 | init、add+commit、show、log、status、边界情况（空提交、缺失文件） |
+| `TestFrontmatter` | `frontmatter.py` | 11 | 原子写入、原始读取、字段更新、流式过滤（status/category/keyword/limit）、跳过索引文件 |
+| `TestMigration` | `migration.py` | 7 | 扁平 Markdown 解析、仓库初始化、自动迁移并备份 |
+| `TestServerTools` | `server.py` | 11 | 完整生命周期（write → stage → commit → read）、拒绝流程、输入校验 |
+
+所有测试使用隔离的临时目录（`tmp_path` fixture），可安全反复运行。
 
 ### E2E 实时测试（需要 opencode 会话）
 
@@ -158,7 +368,16 @@ bash test/live-test.sh --model <provider/model>
 ├── REVIEW.md             # 协调器审核阶段 — DRAFT 审核、规则写入、修订
 ├── install.sh            # 安装脚本（macOS/Linux）
 ├── install.ps1           # 安装脚本（Windows）
+├── pyproject.toml        # MCP server 的 Python 依赖声明
 ├── test.sh               # 静态测试套件（63 断言）
+├── aristotle_mcp/        # MCP server（Git 支持的规则管理）
+│   ├── __init__.py
+│   ├── config.py         # 路径、常量、环境变量
+│   ├── models.py         # RuleMetadata 数据类、YAML 序列化
+│   ├── git_ops.py        # Git 抽象层（init、add+commit、show、log、status）
+│   ├── frontmatter.py    # 流式 frontmatter 检索、原子写入
+│   ├── migration.py      # 扁平 Markdown → Git 仓库迁移
+│   └── server.py         # FastMCP 入口，7 个工具
 └── test/
     └── live-test.sh      # E2E 实时测试（8 断言）
 ```
@@ -186,7 +405,7 @@ bash test/live-test.sh --model <provider/model>
 
 ### 锦上添花
 
-- **规则版本与过期** — 规则仅追加无版本管理。部分规则可能随模型改进而过时。添加时间戳和清理机制有助于长期维护。
+- ~~**规则版本与过期**~~ — 已由 MCP server（Git 版本控制）解决。规则现在有完整的 commit 历史，可以拒绝/恢复。过期清理机制仍有待实现。
 - **`count_matches` 跨平台测试** — 测试套件的 `count_matches` 辅助函数在 GNU grep 上工作，但应在 Alpine（BusyBox）、macOS（BSD grep）等非 GNU 环境上测试。
 
 ## 卸载
@@ -197,9 +416,16 @@ rm -rf ~/.claude/skills/aristotle
 
 # 移除用户级学习规则（可选）
 rm -f ~/.config/opencode/aristotle-learnings.md
+rm -f ~/.config/opencode/aristotle-learnings.md.bak
 
 # 移除状态文件（可选）
 rm -f ~/.config/opencode/aristotle-state.json
+
+# 移除 MCP 规则仓库（可选）
+rm -rf ~/.config/opencode/aristotle-repo
+
+# 从 opencode.json 中移除 MCP 配置（手动编辑）
+# 删除 "mcp" 部分中的 "aristotle" 条目
 ```
 
 ## 为什么是 `~/.claude/skills/`？—— Skill 发现机制调查
