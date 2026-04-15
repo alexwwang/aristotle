@@ -165,6 +165,94 @@ class TestModels:
         assert restored.category == original.category
         assert restored.confidence == original.confidence
 
+    def test_rule_metadata_gasc2_fields(self):
+        from aristotle_mcp.models import RuleMetadata
+
+        m = RuleMetadata(
+            id="g1",
+            intent_tags={"domain": "text_analysis", "task_goal": "extract_entity"},
+            failed_skill="pdf_parser_v2",
+            error_summary="Unable to identify tables in multi-column layout",
+        )
+        assert m.intent_tags == {
+            "domain": "text_analysis",
+            "task_goal": "extract_entity",
+        }
+        assert m.failed_skill == "pdf_parser_v2"
+        assert m.error_summary is not None
+        assert len(m.error_summary) > 0
+
+    def test_to_frontmatter_intent_tags_nested(self):
+        from aristotle_mcp.models import RuleMetadata, to_frontmatter_string
+
+        m = RuleMetadata(
+            id="fm_intent",
+            intent_tags={"domain": "database", "task_goal": "connection_pool"},
+            failed_skill="prisma",
+            error_summary="P2024 connection timeout",
+        )
+        s = to_frontmatter_string(m)
+        assert "intent_tags:" in s
+        assert "domain:" in s
+        assert "database" in s
+        assert "task_goal:" in s
+        assert "connection_pool" in s
+        assert "failed_skill: prisma" in s
+        assert "error_summary:" in s
+        assert "P2024" in s
+
+    def test_to_frontmatter_intent_tags_null(self):
+        from aristotle_mcp.models import RuleMetadata, to_frontmatter_string
+
+        m = RuleMetadata(id="no_intent")
+        s = to_frontmatter_string(m)
+        assert "intent_tags" not in s  # None values omitted
+
+    def test_to_frontmatter_intent_tags_empty_dict(self):
+        from aristotle_mcp.models import RuleMetadata, to_frontmatter_string
+
+        m = RuleMetadata(id="empty_intent", intent_tags={})
+        s = to_frontmatter_string(m)
+        assert "intent_tags: null" in s
+
+    def test_from_frontmatter_gasc2_fields(self):
+        from aristotle_mcp.models import from_frontmatter_dict
+
+        data = {
+            "id": "g2",
+            "intent_tags": {"domain": "api", "task_goal": "auth"},
+            "failed_skill": "jwt_lib",
+            "error_summary": "Token expired without refresh",
+        }
+        m = from_frontmatter_dict(data)
+        assert m.intent_tags == {"domain": "api", "task_goal": "auth"}
+        assert m.failed_skill == "jwt_lib"
+        assert m.error_summary == "Token expired without refresh"
+
+    def test_roundtrip_with_gasc2_fields(self):
+        from aristotle_mcp.models import (
+            RuleMetadata,
+            to_frontmatter_string,
+            from_frontmatter_dict,
+        )
+        import yaml
+
+        original = RuleMetadata(
+            id="rt_gasc",
+            status="verified",
+            category="HALLUCINATION",
+            intent_tags={"domain": "file_ops", "task_goal": "atomic_write"},
+            failed_skill="pathlib",
+            error_summary="Race condition on rename",
+        )
+        fm_str = to_frontmatter_string(original)
+        inner = fm_str.split("\n", 1)[1].rsplit("\n---", 1)[0]
+        parsed = yaml.safe_load(inner)
+        restored = from_frontmatter_dict(parsed)
+        assert restored.intent_tags == original.intent_tags
+        assert restored.failed_skill == original.failed_skill
+        assert restored.error_summary == original.error_summary
+
     def test_tool_return(self):
         from aristotle_mcp.models import ToolReturn
 
@@ -397,6 +485,167 @@ class TestFrontmatter:
         fm = read_frontmatter_raw(target)
         assert fm["id"] == "n1"
         assert "project_hash" not in fm or fm.get("project_hash") is None
+
+    def test_stream_filter_by_intent_domain(self, tmp_path):
+        from aristotle_mcp.frontmatter import write_rule_file, stream_filter_rules
+
+        write_rule_file(
+            tmp_path / "a.md",
+            {
+                "id": "a",
+                "status": "verified",
+                "category": "TEST",
+                "intent_tags": {"domain": "database", "task_goal": "migration"},
+            },
+            "body",
+        )
+        write_rule_file(
+            tmp_path / "b.md",
+            {
+                "id": "b",
+                "status": "verified",
+                "category": "TEST",
+                "intent_tags": {"domain": "frontend", "task_goal": "rendering"},
+            },
+            "body",
+        )
+        result = stream_filter_rules(
+            tmp_path, status_filter="verified", intent_domain="database"
+        )
+        assert len(result) == 1
+        assert result[0].name == "a.md"
+
+    def test_stream_filter_by_intent_task_goal(self, tmp_path):
+        from aristotle_mcp.frontmatter import write_rule_file, stream_filter_rules
+
+        write_rule_file(
+            tmp_path / "a.md",
+            {
+                "id": "a",
+                "status": "verified",
+                "category": "TEST",
+                "intent_tags": {"domain": "database", "task_goal": "connection_pool"},
+            },
+            "body",
+        )
+        result = stream_filter_rules(
+            tmp_path, status_filter="verified", intent_task_goal="pool"
+        )
+        assert len(result) == 1
+
+    def test_stream_filter_by_failed_skill(self, tmp_path):
+        from aristotle_mcp.frontmatter import write_rule_file, stream_filter_rules
+
+        write_rule_file(
+            tmp_path / "a.md",
+            {
+                "id": "a",
+                "status": "verified",
+                "category": "TEST",
+                "failed_skill": "prisma_client",
+            },
+            "body",
+        )
+        write_rule_file(
+            tmp_path / "b.md",
+            {
+                "id": "b",
+                "status": "verified",
+                "category": "TEST",
+                "failed_skill": "playwright",
+            },
+            "body",
+        )
+        result = stream_filter_rules(
+            tmp_path, status_filter="verified", failed_skill="prisma"
+        )
+        assert len(result) == 1
+        assert result[0].name == "a.md"
+
+    def test_stream_filter_by_error_summary(self, tmp_path):
+        from aristotle_mcp.frontmatter import write_rule_file, stream_filter_rules
+
+        write_rule_file(
+            tmp_path / "a.md",
+            {
+                "id": "a",
+                "status": "verified",
+                "category": "TEST",
+                "error_summary": "P2024 connection pool timeout",
+            },
+            "body",
+        )
+        result = stream_filter_rules(
+            tmp_path, status_filter="verified", error_summary="timeout"
+        )
+        assert len(result) == 1
+
+    def test_stream_filter_multi_dimension_combined(self, tmp_path):
+        from aristotle_mcp.frontmatter import write_rule_file, stream_filter_rules
+
+        write_rule_file(
+            tmp_path / "a.md",
+            {
+                "id": "a",
+                "status": "verified",
+                "category": "HALLUCINATION",
+                "intent_tags": {"domain": "database", "task_goal": "migration"},
+                "failed_skill": "prisma",
+                "error_summary": "Pool exhaustion",
+            },
+            "body",
+        )
+        write_rule_file(
+            tmp_path / "b.md",
+            {
+                "id": "b",
+                "status": "verified",
+                "category": "HALLUCINATION",
+                "intent_tags": {"domain": "database", "task_goal": "seeding"},
+                "failed_skill": "prisma",
+                "error_summary": "Unique constraint",
+            },
+            "body",
+        )
+        result = stream_filter_rules(
+            tmp_path,
+            status_filter="verified",
+            intent_domain="database",
+            intent_task_goal="migration",
+        )
+        assert len(result) == 1
+        assert result[0].name == "a.md"
+
+    def test_stream_filter_no_intent_tags_field(self, tmp_path):
+        from aristotle_mcp.frontmatter import write_rule_file, stream_filter_rules
+
+        write_rule_file(
+            tmp_path / "legacy.md",
+            {"id": "leg", "status": "verified", "category": "TEST"},
+            "body",
+        )
+        result = stream_filter_rules(
+            tmp_path, status_filter="verified", intent_domain="anything"
+        )
+        assert len(result) == 0
+
+    def test_write_and_read_intent_tags_via_serialize(self, tmp_path):
+        from aristotle_mcp.frontmatter import write_rule_file, read_frontmatter_raw
+
+        target = tmp_path / "tags.md"
+        meta = {
+            "id": "t1",
+            "status": "verified",
+            "intent_tags": {"domain": "api", "task_goal": "auth"},
+            "failed_skill": "jwt",
+            "error_summary": "Expired token",
+        }
+        write_rule_file(target, meta, "body")
+        fm = read_frontmatter_raw(target)
+        assert fm["intent_tags"]["domain"] == "api"
+        assert fm["intent_tags"]["task_goal"] == "auth"
+        assert fm["failed_skill"] == "jwt"
+        assert fm["error_summary"] == "Expired token"
 
 
 # ═══════════════════════════════════════════════════════
@@ -637,3 +886,129 @@ class TestServerTools:
         r = read_rules(status="verified", category="HALLUCINATION")
         assert r["count"] == 1
         assert r["rules"][0]["metadata"]["status"] == "verified"
+
+    def test_write_rule_with_gasc2_fields(self, tmp_repo):
+        from aristotle_mcp.server import init_repo_tool, write_rule, read_rules
+        from aristotle_mcp.frontmatter import read_frontmatter_raw
+
+        init_repo_tool()
+        w = write_rule(
+            content="GASC2 test",
+            category="HALLUCINATION",
+            intent_domain="database",
+            intent_task_goal="connection_pool",
+            failed_skill="prisma",
+            error_summary="P2024 pool timeout",
+        )
+        assert w["success"]
+
+        fm = read_frontmatter_raw(Path(w["file_path"]))
+        assert fm["intent_tags"]["domain"] == "database"
+        assert fm["intent_tags"]["task_goal"] == "connection_pool"
+        assert fm["failed_skill"] == "prisma"
+        assert fm["error_summary"] == "P2024 pool timeout"
+
+        r = read_rules(status="pending", intent_domain="database")
+        assert r["count"] == 1
+
+    def test_write_rule_with_intent_domain_only(self, tmp_repo):
+        from aristotle_mcp.server import init_repo_tool, write_rule
+        from aristotle_mcp.frontmatter import read_frontmatter_raw
+
+        init_repo_tool()
+        w = write_rule(content="partial intent", intent_domain="file_ops")
+        assert w["success"]
+
+        fm = read_frontmatter_raw(Path(w["file_path"]))
+        assert fm["intent_tags"]["domain"] == "file_ops"
+        assert "task_goal" not in fm["intent_tags"]
+
+    def test_read_rules_multi_dimension_search(self, tmp_repo):
+        from aristotle_mcp.server import init_repo_tool, write_rule, read_rules
+
+        init_repo_tool()
+        write_rule(
+            content="db error",
+            category="HALLUCINATION",
+            intent_domain="database",
+            failed_skill="prisma",
+            error_summary="pool exhaustion",
+        )
+        write_rule(
+            content="api error",
+            category="SYNTAX_API_ERROR",
+            intent_domain="api",
+            failed_skill="express",
+            error_summary="CORS blocked",
+        )
+
+        r1 = read_rules(status="pending", intent_domain="database")
+        assert r1["count"] == 1
+        assert "db error" in r1["rules"][0]["content"]
+
+        r2 = read_rules(status="pending", failed_skill="express")
+        assert r2["count"] == 1
+        assert "api error" in r2["rules"][0]["content"]
+
+        r3 = read_rules(status="pending", error_summary="pool")
+        assert r3["count"] == 1
+
+        r4 = read_rules(status="pending", intent_domain="nonexistent")
+        assert r4["count"] == 0
+
+    def test_restore_rule(self, tmp_repo):
+        from aristotle_mcp.server import (
+            init_repo_tool,
+            write_rule,
+            reject_rule,
+            restore_rule,
+            read_rules,
+        )
+        from aristotle_mcp.frontmatter import read_frontmatter_raw
+
+        init_repo_tool()
+        w = write_rule(content="restore me", category="HALLUCINATION")
+        rej = reject_rule(w["file_path"], reason="test rejection")
+        assert rej["success"]
+        rejected_path = rej["new_path"]
+
+        rest = restore_rule(rejected_path)
+        assert rest["success"]
+        assert "user" in rest["new_path"]
+        assert "rejected" not in rest["new_path"]
+
+        assert not Path(rejected_path).exists()
+
+        fm = read_frontmatter_raw(Path(rest["new_path"]))
+        assert fm["status"] == "pending"
+        assert fm["rejected_at"] is None
+        assert fm["rejected_reason"] is None
+        assert fm["rejected_at"] is None or fm.get("rejected_at") is None
+
+    def test_restore_rule_not_in_rejected(self, tmp_repo):
+        from aristotle_mcp.server import init_repo_tool, write_rule, restore_rule
+
+        init_repo_tool()
+        w = write_rule(content="not rejected", category="TEST")
+        r = restore_rule(w["file_path"])
+        assert not r["success"]
+        assert "not in the rejected directory" in r["message"]
+
+    def test_restore_rule_nonexistent(self, tmp_repo):
+        from aristotle_mcp.server import restore_rule
+
+        r = restore_rule("/nonexistent/path.md")
+        assert not r["success"]
+
+    def test_check_git_available(self):
+        from aristotle_mcp.migration import check_git_available
+
+        r = check_git_available()
+        assert r["success"]
+        assert "git" in r["version"].lower()
+
+    def test_init_repo_git_check_passes(self, tmp_repo):
+        from aristotle_mcp.migration import init_repo
+
+        r = init_repo(tmp_repo)
+        assert r["success"]
