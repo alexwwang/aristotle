@@ -87,6 +87,10 @@ def write_rule(
     source_session: str | None = None,
     message_range: str | None = None,
     project_path: str | None = None,
+    intent_domain: str | None = None,
+    intent_task_goal: str | None = None,
+    failed_skill: str | None = None,
+    error_summary: str | None = None,
 ) -> dict:
     """Write a new rule file to the repository.
 
@@ -97,6 +101,10 @@ def write_rule(
         source_session: OpenCode session ID where the error was found
         message_range: Message range in the source session
         project_path: Required when scope is "project"
+        intent_domain: Domain tag for intent classification (e.g. "text_analysis")
+        intent_task_goal: Task goal tag for intent classification (e.g. "extract_entity")
+        failed_skill: Associated skill ID that triggered the error
+        error_summary: Concise error context summary
 
     Returns dict with success, message, file_path, rule_id.
     """
@@ -124,6 +132,14 @@ def write_rule(
 
     target_dir.mkdir(parents=True, exist_ok=True)
 
+    intent_tags = None
+    if intent_domain or intent_task_goal:
+        intent_tags = {}
+        if intent_domain:
+            intent_tags["domain"] = intent_domain
+        if intent_task_goal:
+            intent_tags["task_goal"] = intent_task_goal
+
     now = _now_iso()
     date_prefix = now[:10]
     cat_suffix = category.lower() if category else "general"
@@ -141,6 +157,9 @@ def write_rule(
         source_session=source_session,
         message_range=message_range,
         created_at=now,
+        intent_tags=intent_tags,
+        failed_skill=failed_skill,
+        error_summary=error_summary,
     )
 
     result = write_rule_file(file_path, metadata.__dict__, content)
@@ -168,6 +187,10 @@ def read_rules(
     keyword: str | None = None,
     project_path: str | None = None,
     limit: int = 50,
+    intent_domain: str | None = None,
+    intent_task_goal: str | None = None,
+    failed_skill: str | None = None,
+    error_summary: str | None = None,
 ) -> dict:
     """Read rules by querying frontmatter with regex matching.
 
@@ -181,6 +204,10 @@ def read_rules(
         keyword: Regex pattern to match against frontmatter values
         project_path: Required when scope is "project"
         limit: Maximum number of results
+        intent_domain: Regex match against intent_tags.domain
+        intent_task_goal: Regex match against intent_tags.task_goal
+        failed_skill: Regex match against failed_skill field
+        error_summary: Regex match against error_summary field
 
     Returns dict with success, count, rules (list of {path, metadata, content}).
     """
@@ -226,6 +253,10 @@ def read_rules(
             keyword=keyword,
             category=category,
             limit=remaining,
+            intent_domain=intent_domain,
+            intent_task_goal=intent_task_goal,
+            failed_skill=failed_skill,
+            error_summary=error_summary,
         )
         for p in paths:
             data = load_rule_file(p)
@@ -247,6 +278,10 @@ def read_rules(
                     keyword=keyword,
                     category=category,
                     limit=remaining,
+                    intent_domain=intent_domain,
+                    intent_task_goal=intent_task_goal,
+                    failed_skill=failed_skill,
+                    error_summary=error_summary,
                 )
                 for p in paths:
                     data = load_rule_file(p)
@@ -394,6 +429,80 @@ def reject_rule(file_path: str, reason: str = "") -> dict:
         "success": True,
         "message": f"Rule {rule_id} rejected and moved to {rejected_path}",
         "new_path": str(rejected_path),
+    }
+
+
+@mcp.tool()
+def restore_rule(file_path: str, new_status: str = "pending") -> dict:
+    """Restore a rejected rule back to the active directory.
+
+    Moves the file from rejected/{scope}/ back to the active directory,
+    clears rejection metadata, and sets the new status.
+
+    Args:
+        file_path: Path to the rejected rule file (relative to repo root or absolute)
+        new_status: Status to set after restore (default: "pending")
+
+    Returns dict with success, message, new_path.
+    """
+    path = _resolve_path(file_path)
+    if not path.exists():
+        return {
+            "success": False,
+            "message": f"File not found: {path}",
+            "new_path": None,
+        }
+
+    data = load_rule_file(path)
+    metadata = data["metadata"]
+    content = data["content"]
+
+    repo_path = resolve_repo_dir()
+
+    try:
+        rel = path.relative_to(repo_path)
+    except ValueError:
+        return {"success": False, "message": "File is outside repo", "new_path": None}
+
+    parts = rel.parts
+    if parts[0] != "rejected":
+        return {
+            "success": False,
+            "message": "File is not in the rejected directory",
+            "new_path": None,
+        }
+
+    if len(parts) >= 3 and parts[1] == "user":
+        active_rel = Path("user") / parts[2]
+    elif len(parts) >= 4 and parts[1] == "projects":
+        active_rel = Path("projects") / parts[2] / parts[3]
+    else:
+        active_rel = Path(parts[-1])
+
+    active_path = repo_path / active_rel
+    active_path.parent.mkdir(parents=True, exist_ok=True)
+
+    stem = active_path.stem
+    active_path = _unique_filename(active_path.parent, stem)
+
+    metadata["status"] = new_status
+    metadata["rejected_at"] = None
+    metadata["rejected_reason"] = None
+
+    write_result = write_rule_file(active_path, metadata, content)
+    if not write_result["success"]:
+        return {"success": False, "message": write_result["message"], "new_path": None}
+
+    path.unlink()
+
+    rule_id = metadata.get("id", "unknown")
+    commit_msg = f"rule: restore {rule_id}"
+    git_add_and_commit(repo_path, ".", commit_msg)
+
+    return {
+        "success": True,
+        "message": f"Rule {rule_id} restored to {active_path}",
+        "new_path": str(active_path),
     }
 
 

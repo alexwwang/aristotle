@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import subprocess
 from pathlib import Path
 
 from aristotle_mcp.config import (
@@ -50,7 +51,25 @@ def parse_learnings_file(file_path: Path) -> list[dict]:
     return entries
 
 
+def check_git_available() -> dict:
+    try:
+        result = subprocess.run(
+            ["git", "--version"], capture_output=True, text=True, timeout=10
+        )
+        if result.returncode == 0:
+            return {"success": True, "version": result.stdout.strip()}
+        return {"success": False, "message": f"git check failed: {result.stderr}"}
+    except FileNotFoundError:
+        return {"success": False, "message": "git is not installed or not in PATH"}
+    except subprocess.TimeoutExpired:
+        return {"success": False, "message": "git --version timed out"}
+
+
 def init_repo(repo_path: Path) -> dict:
+    git_check = check_git_available()
+    if not git_check["success"]:
+        return git_check
+
     repo_path.mkdir(parents=True, exist_ok=True)
 
     for subdir in REPO_DIR_STRUCTURE:
@@ -117,6 +136,9 @@ def migrate_learnings(repo_path: Path, project_path: str | None = None) -> dict:
             verified_by="migration",
             rejected_at=None,
             rejected_reason=None,
+            intent_tags=None,
+            failed_skill=None,
+            error_summary=None,
         )
 
         body = (

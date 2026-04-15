@@ -20,6 +20,10 @@ def stream_filter_rules(
     category: str | None = None,
     scope: str | None = None,
     limit: int = 50,
+    intent_domain: str | None = None,
+    intent_task_goal: str | None = None,
+    failed_skill: str | None = None,
+    error_summary: str | None = None,
 ) -> list[Path]:
     results: list[Path] = []
     keyword_re = re.compile(keyword, re.IGNORECASE) if keyword else None
@@ -71,6 +75,50 @@ def stream_filter_rules(
             if not keyword_re.search(values):
                 continue
 
+        needs_intent_filter = (
+            intent_domain or intent_task_goal or failed_skill or error_summary
+        )
+        if needs_intent_filter:
+            parsed = None
+            try:
+                parsed = yaml.safe_load(fm_text)
+            except yaml.YAMLError:
+                pass
+
+            if isinstance(parsed, dict):
+                intent_tags_dict = parsed.get("intent_tags") or {}
+                if intent_domain:
+                    val = str(intent_tags_dict.get("domain", ""))
+                    if not re.search(intent_domain, val, re.IGNORECASE):
+                        continue
+                if intent_task_goal:
+                    val = str(intent_tags_dict.get("task_goal", ""))
+                    if not re.search(intent_task_goal, val, re.IGNORECASE):
+                        continue
+                if failed_skill:
+                    val = str(parsed.get("failed_skill", ""))
+                    if not re.search(failed_skill, val, re.IGNORECASE):
+                        continue
+                if error_summary:
+                    val = str(parsed.get("error_summary", ""))
+                    if not re.search(error_summary, val, re.IGNORECASE):
+                        continue
+            else:
+                if intent_domain and not re.search(
+                    intent_domain, fm_text, re.IGNORECASE
+                ):
+                    continue
+                if intent_task_goal and not re.search(
+                    intent_task_goal, fm_text, re.IGNORECASE
+                ):
+                    continue
+                if failed_skill and not re.search(failed_skill, fm_text, re.IGNORECASE):
+                    continue
+                if error_summary and not re.search(
+                    error_summary, fm_text, re.IGNORECASE
+                ):
+                    continue
+
         results.append(path)
         if len(results) >= limit:
             break
@@ -112,6 +160,13 @@ def _serialize(val: object) -> str:
         return "true" if val else "false"
     if isinstance(val, (int, float)):
         return str(val)
+    if isinstance(val, dict):
+        if not val:
+            return "null"
+        lines = []
+        for k, v in val.items():
+            lines.append(f"  {k}: {_serialize(v)}")
+        return "\n" + "\n".join(lines)
     s = str(val)
     if any(ch in s for ch in (":", "#", "{", "}", '"', "'")):
         escaped = s.replace('"', '\\"')

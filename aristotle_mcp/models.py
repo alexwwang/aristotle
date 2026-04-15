@@ -65,6 +65,9 @@ class RuleMetadata:
     verified_by: str | None = None
     rejected_at: str | None = None
     rejected_reason: str | None = None
+    intent_tags: dict | None = None  # {"domain": "...", "task_goal": "..."}
+    failed_skill: str | None = None  # 关联故障技能 ID
+    error_summary: str | None = None  # 错误现场精简总结
 
 
 @dataclass
@@ -72,6 +75,13 @@ class RuleFile:
     path: Path
     metadata: RuleMetadata
     content: str
+
+
+def _yaml_dict_value(d: dict) -> str:
+    nested_lines = []
+    for k, v in d.items():
+        nested_lines.append(f"  {k}: {_yaml_value(v)}")
+    return "\n" + "\n".join(nested_lines)
 
 
 def to_frontmatter_string(metadata: RuleMetadata) -> str:
@@ -91,10 +101,19 @@ def to_frontmatter_string(metadata: RuleMetadata) -> str:
         "verified_by": metadata.verified_by,
         "rejected_at": metadata.rejected_at,
         "rejected_reason": metadata.rejected_reason,
+        "intent_tags": metadata.intent_tags,
+        "failed_skill": metadata.failed_skill,
+        "error_summary": metadata.error_summary,
     }
     for key, value in md.items():
         if value is not None:
-            lines.append(f"{key}: {_yaml_value(value)}")
+            if isinstance(value, dict):
+                if value:
+                    lines.append(f"{key}:{_yaml_dict_value(value)}")
+                else:
+                    lines.append(f"{key}: null")
+            else:
+                lines.append(f"{key}: {_yaml_value(value)}")
     lines.append("---")
     return "\n".join(lines)
 
@@ -115,6 +134,9 @@ def from_frontmatter_dict(data: dict) -> RuleMetadata:
         verified_by=data.get("verified_by"),
         rejected_at=data.get("rejected_at"),
         rejected_reason=data.get("rejected_reason"),
+        intent_tags=data.get("intent_tags"),
+        failed_skill=data.get("failed_skill"),
+        error_summary=data.get("error_summary"),
     )
 
 
