@@ -190,6 +190,15 @@ scope: "user"
 category: "HALLUCINATION"
 confidence: 0.85
 risk_level: "high"
+
+# GEAR 2.0 retrieval dimensions
+intent_tags:
+  domain: "database_operations"
+  task_goal: "connection_pool_management"
+failed_skill: "prisma_client"
+error_summary: "P2024 connection pool timeout in serverless"
+
+# Standard fields
 source_session: "ses_abc123"
 created_at: "2026-04-10T22:30:00+08:00"
 verified_at: "2026-04-10T22:35:00+08:00"
@@ -224,16 +233,17 @@ _rule()      │
 verified rejected/  （保留 scope 和元数据）
 ```
 
-### 7 个 MCP 工具
+### 8 个 MCP 工具
 
 | 工具 | 用途 |
 |------|------|
 | `init_repo` | 初始化 Git 仓库、创建目录结构、自动迁移现有扁平规则 |
-| `write_rule` | 创建新规则文件（status: `pending`），附带 YAML frontmatter |
-| `read_rules` | 按状态、类别、scope 查询，或对 frontmatter 值做正则匹配 |
+| `write_rule` | 创建新规则文件（status: `pending`），附带 YAML frontmatter 和 GEAR 2.0 字段 |
+| `read_rules` | 按状态、类别、scope 查询，或对 frontmatter 值做多维度正则匹配 |
 | `stage_rule` | 标记规则为 `staging`（审核中） |
 | `commit_rule` | 设置 status 为 `verified`，记录时间戳，执行 `git add && commit` |
 | `reject_rule` | 移到 `rejected/{scope}/`，记录原因，删除原文件，提交 |
+| `restore_rule` | 从 rejected 目录恢复规则到正式目录，设置新状态 |
 | `list_rules` | 轻量元数据列表（不加载规则正文） |
 
 ### 流式 Frontmatter 检索
@@ -321,6 +331,24 @@ Install the Aristotle MCP server from https://github.com/alexwwang/aristotle.git
 
 迁移完成后，原文件重命名为 `.bak`。
 
+## 设计：GEAR 2.0
+
+Aristotle 是 **[GEAR（Git-backed Error Analysis & Reflection）](./GEAR.md)** 协议的一个实现——一个 AI agent 错误反思、学习与预防的协议。不再是扁平的追加写入文件，规则经过状态机流转，带有 schema 校验、意图驱动检索和基于进化模型的审核级别。
+
+**GEAR 角色 → Aristotle 映射：**
+
+| GEAR 角色 | Aristotle 实现 | 状态 |
+|-----------|---------------|------|
+| **O**（统筹者） | `SKILL.md` + `REFLECT.md` + `REVIEW.md` | ✅ 已实现 |
+| **R**（生产者） | `REFLECTOR.md`（子代理） | ✅ 已实现 |
+| **C**（审计者） | `REVIEW.md` STEP V2b（schema 校验） | ✅ 已实现 |
+| **L**（学习者） | 未来的 `LEARN.md` | 🔲 计划中 |
+| **S**（检索者） | O 内的函数调用 | 🔲 计划中 |
+
+GEAR 协议操作映射到 Aristotle 的 MCP 工具：`produce` → `write_rule`、`stage` → `stage_rule`、`verify` → `commit_rule`、`reject` → `reject_rule`、`restore` → `restore_rule`、`search` → `read_rules`。
+
+完整的协议规范——状态机、frontmatter schema、Δ 决策因子和一致性要求——详见 **[GEAR.md](./GEAR.md)**。
+
 ## 测试
 
 ### 静态测试（无需会话）
@@ -337,16 +365,16 @@ bash test.sh
 uv run pytest test/test_mcp.py -v
 ```
 
-54 个断言，覆盖全部 6 个模块：
+75 个断言，覆盖全部 6 个模块：
 
 | 测试类 | 模块 | 断言数 | 测试内容 |
 |--------|------|--------|----------|
 | `TestConfig` | `config.py` | 10 | 路径解析、环境变量覆盖、RISK_MAP、项目哈希 |
-| `TestModels` | `models.py` | 7 | RuleMetadata 默认值、YAML 序列化往返、from_frontmatter_dict |
+| `TestModels` | `models.py` | 16 | RuleMetadata 默认值、YAML 序列化往返、from_frontmatter_dict、GEAR 2.0 字段测试 |
 | `TestGitOps` | `git_ops.py` | 8 | init、add+commit、show、log、status、边界情况（空提交、缺失文件） |
-| `TestFrontmatter` | `frontmatter.py` | 11 | 原子写入、原始读取、字段更新、流式过滤（status/category/keyword/limit）、跳过索引文件 |
+| `TestFrontmatter` | `frontmatter.py` | 19 | 原子写入、原始读取、字段更新、流式过滤（status/category/keyword/limit）、跳过索引文件、多维度搜索测试 |
 | `TestMigration` | `migration.py` | 7 | 扁平 Markdown 解析、仓库初始化、自动迁移并备份 |
-| `TestServerTools` | `server.py` | 11 | 完整生命周期（write → stage → commit → read）、拒绝流程、输入校验 |
+| `TestServerTools` | `server.py` | 21 | 完整生命周期（write → stage → commit → read）、拒绝流程、restore_rule、输入校验、GEAR 2.0 字段、git 检查测试 |
 
 所有测试使用隔离的临时目录（`tmp_path` fixture），可安全反复运行。
 
@@ -377,7 +405,7 @@ bash test/live-test.sh --model <provider/model>
 │   ├── git_ops.py        # Git 抽象层（init、add+commit、show、log、status）
 │   ├── frontmatter.py    # 流式 frontmatter 检索、原子写入
 │   ├── migration.py      # 扁平 Markdown → Git 仓库迁移
-│   └── server.py         # FastMCP 入口，7 个工具
+│   └── server.py         # FastMCP 入口，8 个工具
 └── test/
     └── live-test.sh      # E2E 实时测试（8 断言）
 ```

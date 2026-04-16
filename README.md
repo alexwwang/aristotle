@@ -190,6 +190,15 @@ scope: "user"
 category: "HALLUCINATION"
 confidence: 0.85
 risk_level: "high"
+
+# GEAR 2.0 retrieval dimensions
+intent_tags:
+  domain: "database_operations"
+  task_goal: "connection_pool_management"
+failed_skill: "prisma_client"
+error_summary: "P2024 connection pool timeout in serverless"
+
+# Standard fields
 source_session: "ses_abc123"
 created_at: "2026-04-10T22:30:00+08:00"
 verified_at: "2026-04-10T22:35:00+08:00"
@@ -224,16 +233,17 @@ _rule()      │
 verified rejected/  (preserves scope + metadata)
 ```
 
-### 7 MCP Tools
+### 8 MCP Tools
 
 | Tool | Purpose |
 |------|---------|
 | `init_repo` | Initialize the Git repo, create directory structure, migrate existing flat rules |
-| `write_rule` | Create a new rule file (status: `pending`) with YAML frontmatter |
-| `read_rules` | Query rules by status, category, scope, or regex keyword against frontmatter values |
+| `write_rule` | Create a new rule file (status: `pending`) with YAML frontmatter and GEAR 2.0 fields |
+| `read_rules` | Query rules by status, category, scope, or multi-dimension regex against frontmatter |
 | `stage_rule` | Mark a rule as `staging` (under review) |
 | `commit_rule` | Set status to `verified`, record timestamp, `git add && commit` |
 | `reject_rule` | Move to `rejected/{scope}/` with reason, delete original, commit |
+| `restore_rule` | Restore a rejected rule back to active directory with new status |
 | `list_rules` | Lightweight metadata-only listing (no rule bodies loaded) |
 
 ### Streaming Frontmatter Search
@@ -321,6 +331,24 @@ When `init_repo` runs for the first time, it automatically detects existing `ari
 
 After migration, the original file is renamed to `.bak`.
 
+## Design: GEAR 2.0
+
+Aristotle is an implementation of **[GEAR (Git-backed Error Analysis & Reflection)](./GEAR.md)** — a protocol for AI agent error reflection, learning, and prevention. Instead of a flat append-only file, rules flow through a state machine with schema validation, intent-driven retrieval, and evolution-based audit levels.
+
+**GEAR role → Aristotle mapping:**
+
+| GEAR Role | Aristotle Implementation | Status |
+|-----------|-------------------------|--------|
+| **O** (Orchestrator) | `SKILL.md` + `REFLECT.md` + `REVIEW.md` | ✅ Active |
+| **R** (Resource Creator) | `REFLECTOR.md` (subagent) | ✅ Active |
+| **C** (Checker) | `REVIEW.md` STEP V2b (schema validation) | ✅ Active |
+| **L** (Learner) | Future `LEARN.md` | 🔲 Planned |
+| **S** (Searcher) | Function within O | 🔲 Planned |
+
+GEAR protocol operations map to Aristotle's MCP tools: `produce` → `write_rule`, `stage` → `stage_rule`, `verify` → `commit_rule`, `reject` → `reject_rule`, `restore` → `restore_rule`, `search` → `read_rules`.
+
+The full protocol specification — state machine, frontmatter schema, Δ decision factor, and conformance requirements — is documented in **[GEAR.md](./GEAR.md)**.
+
 ## Testing
 
 ### Static Tests (no session required)
@@ -337,16 +365,16 @@ bash test.sh
 uv run pytest test/test_mcp.py -v
 ```
 
-54 assertions covering all 6 modules:
+75 assertions covering all 6 modules:
 
 | Test Class | Module | Assertions | What It Tests |
 |------------|--------|------------|---------------|
 | `TestConfig` | `config.py` | 10 | Path resolution, env override, RISK_MAP, project hash |
-| `TestModels` | `models.py` | 7 | RuleMetadata defaults, YAML serialization roundtrip, from_frontmatter_dict |
+| `TestModels` | `models.py` | 16 | RuleMetadata defaults, YAML serialization roundtrip, from_frontmatter_dict, GEAR 2.0 field tests |
 | `TestGitOps` | `git_ops.py` | 8 | init, add+commit, show, log, status, edge cases (empty commit, missing file) |
-| `TestFrontmatter` | `frontmatter.py` | 11 | Atomic write, raw read, field update, stream filter (status/category/keyword/limit), index skip |
+| `TestFrontmatter` | `frontmatter.py` | 19 | Atomic write, raw read, field update, stream filter (status/category/keyword/limit), index skip, multi-dimension search tests |
 | `TestMigration` | `migration.py` | 7 | Flat Markdown parsing, repo init, auto-migration with backup |
-| `TestServerTools` | `server.py` | 11 | Full lifecycle (write → stage → commit → read), reject flow, input validation |
+| `TestServerTools` | `server.py` | 21 | Full lifecycle (write → stage → commit → read), reject flow, restore_rule, input validation, GEAR 2.0 fields, git check tests |
 
 All tests use isolated temp directories (`tmp_path` fixture) and are safe to run repeatedly.
 
@@ -377,7 +405,7 @@ Creates a real session with known error patterns, triggers `/aristotle`, and ver
 │   ├── git_ops.py        # Git abstraction (init, add+commit, show, log, status)
 │   ├── frontmatter.py    # Streaming frontmatter search, atomic writes
 │   ├── migration.py      # Flat Markdown → Git repo migration
-│   └── server.py         # FastMCP entry point, 7 tools
+│   └── server.py         # FastMCP entry point, 8 tools
 └── test/
     └── live-test.sh      # E2E live test (8 assertions)
 ```
