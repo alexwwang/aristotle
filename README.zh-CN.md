@@ -191,7 +191,7 @@ category: "HALLUCINATION"
 confidence: 0.85
 risk_level: "high"
 
-# GEAR 2.0 retrieval dimensions
+# GEAR Design 2.0 retrieval dimensions
 intent_tags:
   domain: "database_operations"
   task_goal: "connection_pool_management"
@@ -233,7 +233,7 @@ _rule()      │
 verified rejected/  （保留 scope 和元数据）
 ```
 
-### 8 个 MCP 工具
+### 10 个 MCP 工具
 
 | 工具 | 用途 |
 |------|------|
@@ -245,6 +245,8 @@ verified rejected/  （保留 scope 和元数据）
 | `reject_rule` | 移到 `rejected/{scope}/`，记录原因，删除原文件，提交 |
 | `restore_rule` | 从 rejected 目录恢复规则到正式目录，设置新状态 |
 | `list_rules` | 轻量元数据列表（不加载规则正文） |
+| `check_sync_status` | 检测磁盘上存在但未提交到 git 的 verified 规则 |
+| `sync_rules` | 将未同步的 verified 规则提交到 git（自动检测或指定文件） |
 
 ### 流式 Frontmatter 检索
 
@@ -339,13 +341,13 @@ Aristotle 是 **[GEAR（Git-backed Error Analysis & Reflection）](./GEAR.md)** 
 
 | GEAR 角色 | Aristotle 实现 | 状态 |
 |-----------|---------------|------|
-| **O**（统筹者） | `SKILL.md` + `REFLECT.md` + `REVIEW.md` | ✅ 已实现 |
+| **O**（统筹者） | `SKILL.md` + `REFLECT.md` + `REVIEW.md` + `LEARN.md` | ✅ 已实现 |
 | **R**（生产者） | `REFLECTOR.md`（子代理） | ✅ 已实现 |
 | **C**（审计者） | `REVIEW.md` STEP V2b（schema 校验） | ✅ 已实现 |
-| **L**（学习者） | 未来的 `LEARN.md` | 🔲 计划中 |
-| **S**（检索者） | O 内的函数调用 | 🔲 计划中 |
+| **L**（学习者） | `LEARN.md` | ✅ 已实现 |
+| **S**（检索者） | O 内的函数调用（LEARN.md STEP L3） | ✅ 已实现 |
 
-GEAR 协议操作映射到 Aristotle 的 MCP 工具：`produce` → `write_rule`、`stage` → `stage_rule`、`verify` → `commit_rule`、`reject` → `reject_rule`、`restore` → `restore_rule`、`search` → `read_rules`。
+GEAR 协议操作映射到 Aristotle 的 MCP 工具：`produce` → `write_rule`、`stage` → `stage_rule`、`verify` → `commit_rule`、`reject` → `reject_rule`、`restore` → `restore_rule`、`search` → `read_rules`、`sync` → `check_sync_status` + `sync_rules`。
 
 完整的协议规范——状态机、frontmatter schema、Δ 决策因子和一致性要求——详见 **[GEAR.md](./GEAR.md)**。
 
@@ -365,16 +367,17 @@ bash test.sh
 uv run pytest test/test_mcp.py -v
 ```
 
-75 个断言，覆盖全部 6 个模块：
+82 个断言，覆盖全部 7 个模块：
 
 | 测试类 | 模块 | 断言数 | 测试内容 |
 |--------|------|--------|----------|
 | `TestConfig` | `config.py` | 10 | 路径解析、环境变量覆盖、RISK_MAP、项目哈希 |
 | `TestModels` | `models.py` | 16 | RuleMetadata 默认值、YAML 序列化往返、from_frontmatter_dict、GEAR 2.0 字段测试 |
-| `TestGitOps` | `git_ops.py` | 8 | init、add+commit、show、log、status、边界情况（空提交、缺失文件） |
+| `TestGitOps` | `git_ops.py` | 9 | init、add+commit、show、log、status、git_show_exists、边界情况 |
 | `TestFrontmatter` | `frontmatter.py` | 19 | 原子写入、原始读取、字段更新、流式过滤（status/category/keyword/limit）、跳过索引文件、多维度搜索测试 |
 | `TestMigration` | `migration.py` | 7 | 扁平 Markdown 解析、仓库初始化、自动迁移并备份 |
 | `TestServerTools` | `server.py` | 21 | 完整生命周期（write → stage → commit → read）、拒绝流程、restore_rule、输入校验、GEAR 2.0 字段、git 检查测试 |
+| `TestSyncTools` | `server.py` | 7 | check_sync_status（干净/脏数据/无仓库）、sync_rules（自动/指定文件/无待同步）、git_show_exists |
 
 所有测试使用隔离的临时目录（`tmp_path` fixture），可安全反复运行。
 
@@ -390,10 +393,11 @@ bash test/live-test.sh --model <provider/model>
 
 ```
 .
-├── SKILL.md              # 路由器 — 参数解析、阶段路由（84 行）
+├── SKILL.md              # 路由器 — 参数解析、阶段路由（90 行）
 ├── REFLECTOR.md          # 子代理协议 — 错误分析、DRAFT 生成
-├── REFLECT.md            # 协调器反思阶段 — 启动子代理、状态追踪
+├── REFLECT.md            # 协调器反思阶段 — 启动子代理、状态追踪、被动触发
 ├── REVIEW.md             # 协调器审核阶段 — DRAFT 审核、规则写入、修订
+├── LEARN.md              # 协调器学习阶段 — 意图提取、查询构造、结果过滤
 ├── install.sh            # 安装脚本（macOS/Linux）
 ├── install.ps1           # 安装脚本（Windows）
 ├── pyproject.toml        # MCP server 的 Python 依赖声明
@@ -402,25 +406,26 @@ bash test/live-test.sh --model <provider/model>
 │   ├── __init__.py
 │   ├── config.py         # 路径、常量、环境变量
 │   ├── models.py         # RuleMetadata 数据类、YAML 序列化
-│   ├── git_ops.py        # Git 抽象层（init、add+commit、show、log、status）
+│   ├── git_ops.py        # Git 抽象层（init、add+commit、show、log、status、show_exists）
 │   ├── frontmatter.py    # 流式 frontmatter 检索、原子写入
 │   ├── migration.py      # 扁平 Markdown → Git 仓库迁移
-│   └── server.py         # FastMCP 入口，8 个工具
+│   └── server.py         # FastMCP 入口，10 个工具
 └── test/
     └── live-test.sh      # E2E 实时测试（8 断言）
 ```
 
 ## 架构：渐进披露
 
-技能拆分为四个文件。触发时仅加载 `SKILL.md`（84 行），其余按需加载：
+技能拆分为五个文件。触发时仅加载 `SKILL.md`（90 行），其余按需加载：
 
 | 场景 | 加载文件 | 行数 |
 |------|---------|------|
-| `/aristotle`（反思） | SKILL.md + REFLECT.md | 190 |
-| `/aristotle sessions` | SKILL.md | 84 |
-| `/aristotle review N`（审核） | SKILL.md + REVIEW.md | 240 |
-| 审核 + 二次反思 | SKILL.md + REVIEW.md + REFLECT.md | 346 |
-| 子代理（内部） | REFLECTOR.md | ~170 |
+| `/aristotle`（反思） | SKILL.md + REFLECT.md | 218 |
+| `/aristotle sessions` | 仅 SKILL.md | 90 |
+| `/aristotle review N` | SKILL.md + REVIEW.md | 278 |
+| `/aristotle learn` | SKILL.md + LEARN.md | 304 |
+| 审核 + 二次反思 | SKILL.md + REVIEW.md + REFLECT.md | 406 |
+| 子代理（内部） | REFLECTOR.md | ~195 |
 
 ## 已知问题与贡献方向
 

@@ -161,7 +161,7 @@ When generating the three new fields, follow these inference rules:
   - `"deployment"` — CI/CD, hosting, configuration errors
   - `"general"` — none of the above clearly applies
 
-- **`intent_tags.task_goal`**: Infer from the user's original request or task intent. Use a short phrase describing what the user was trying to accomplish (e.g., `"add dark mode toggle"`, `"fix database connection pool"`, `"refactor auth middleware"`).
+- **`intent_tags.task_goal`** (required): Every error exists because an expected outcome was not met — the user had a goal. Infer what the user was trying to accomplish from the original request or task context. Use a short phrase describing the intended outcome (e.g., `"add dark mode toggle"`, `"configure connection pool"`, `"refactor auth middleware"`). Must describe the user's intent, not the error.
 
 - **`failed_skill`**: Identify the specific tool or skill involved in the error. Examples: `"grep_tool"`, `"edit_tool"`, `"playwright"`, `"prisma"`, `"ast_grep"`, `"lsp_rename"`. Use `null` if no specific tool/skill caused the error (e.g., a reasoning mistake rather than a tool failure).
 

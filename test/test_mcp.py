@@ -1012,3 +1012,124 @@ class TestServerTools:
 
         r = init_repo(tmp_repo)
         assert r["success"]
+
+
+# ═══════════════════════════════════════════════════════
+# sync tools (P3.4)
+# ═══════════════════════════════════════════════════════
+class TestSyncTools:
+    def test_check_sync_status_clean(self, tmp_repo):
+        from aristotle_mcp.server import (
+            init_repo_tool,
+            write_rule,
+            stage_rule,
+            commit_rule,
+            check_sync_status,
+        )
+
+        init_repo_tool()
+        w = write_rule(content="sync test", category="HALLUCINATION")
+        stage_rule(w["file_path"])
+        commit_rule(w["file_path"])
+
+        status = check_sync_status()
+        assert status["success"]
+        assert status["total_verified"] == 1
+        assert status["unsynced_count"] == 0
+        assert status["unsynced_files"] == []
+
+    def test_check_sync_status_dirty(self, tmp_repo):
+        from aristotle_mcp.server import (
+            init_repo_tool,
+            write_rule,
+            check_sync_status,
+        )
+        from aristotle_mcp.frontmatter import update_frontmatter_field
+        from pathlib import Path
+
+        init_repo_tool()
+        w = write_rule(content="unsynced rule", category="HALLUCINATION")
+        update_frontmatter_field(Path(w["file_path"]), "status", "verified")
+
+        status = check_sync_status()
+        assert status["success"]
+        assert status["unsynced_count"] == 1
+        assert status["unsynced_files"][0]["rule_id"] == w["rule_id"]
+
+    def test_sync_rules_auto(self, tmp_repo):
+        from aristotle_mcp.server import (
+            init_repo_tool,
+            write_rule,
+            check_sync_status,
+            sync_rules,
+        )
+        from aristotle_mcp.frontmatter import update_frontmatter_field
+        from aristotle_mcp.git_ops import git_show_exists
+
+        init_repo_tool()
+        w = write_rule(content="auto sync rule", category="PATTERN_VIOLATION")
+        update_frontmatter_field(Path(w["file_path"]), "status", "verified")
+
+        before = check_sync_status()
+        assert before["unsynced_count"] == 1
+
+        result = sync_rules()
+        assert result["success"]
+        assert result["synced_count"] == 1
+        assert result["commit_hash"] is not None
+
+        after = check_sync_status()
+        assert after["unsynced_count"] == 0
+
+    def test_sync_rules_specific_files(self, tmp_repo):
+        from aristotle_mcp.server import (
+            init_repo_tool,
+            write_rule,
+            sync_rules,
+            check_sync_status,
+        )
+        from aristotle_mcp.frontmatter import update_frontmatter_field
+        from pathlib import Path
+
+        init_repo_tool()
+        w1 = write_rule(content="rule A", category="HALLUCINATION")
+        w2 = write_rule(content="rule B", category="PATTERN_VIOLATION")
+        update_frontmatter_field(Path(w1["file_path"]), "status", "verified")
+        update_frontmatter_field(Path(w2["file_path"]), "status", "verified")
+
+        rel1 = str(Path(w1["file_path"]).relative_to(tmp_repo))
+        result = sync_rules(file_paths=[rel1])
+        assert result["success"]
+        assert result["synced_count"] == 1
+
+        status = check_sync_status()
+        assert status["unsynced_count"] == 1
+
+    def test_sync_rules_nothing_to_sync(self, tmp_repo):
+        from aristotle_mcp.server import (
+            init_repo_tool,
+            sync_rules,
+        )
+
+        init_repo_tool()
+        result = sync_rules()
+        assert result["success"]
+        assert result["synced_count"] == 0
+
+    def test_check_sync_status_no_repo(self, tmp_repo):
+        from aristotle_mcp.server import check_sync_status
+
+        status = check_sync_status()
+        assert not status["success"]
+        assert "not initialized" in status["message"]
+
+    def test_git_show_exists(self, tmp_repo):
+        from aristotle_mcp.git_ops import git_init, git_add_and_commit, git_show_exists
+
+        git_init(tmp_repo)
+        (tmp_repo / "user").mkdir()
+        (tmp_repo / "user" / "test.md").write_text("hello")
+        git_add_and_commit(tmp_repo, "user/test.md", "add test")
+
+        assert git_show_exists(tmp_repo, "user/test.md") is True
+        assert git_show_exists(tmp_repo, "user/nonexistent.md") is False

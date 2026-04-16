@@ -233,7 +233,7 @@ _rule()      │
 verified rejected/  (preserves scope + metadata)
 ```
 
-### 8 MCP Tools
+### 10 MCP Tools
 
 | Tool | Purpose |
 |------|---------|
@@ -245,6 +245,8 @@ verified rejected/  (preserves scope + metadata)
 | `reject_rule` | Move to `rejected/{scope}/` with reason, delete original, commit |
 | `restore_rule` | Restore a rejected rule back to active directory with new status |
 | `list_rules` | Lightweight metadata-only listing (no rule bodies loaded) |
+| `check_sync_status` | Detect verified rules on disk that are not committed to git |
+| `sync_rules` | Commit unsynced verified rules to git (auto-detect or specify files) |
 
 ### Streaming Frontmatter Search
 
@@ -339,13 +341,13 @@ Aristotle is an implementation of **[GEAR (Git-backed Error Analysis & Reflectio
 
 | GEAR Role | Aristotle Implementation | Status |
 |-----------|-------------------------|--------|
-| **O** (Orchestrator) | `SKILL.md` + `REFLECT.md` + `REVIEW.md` | ✅ Active |
+| **O** (Orchestrator) | `SKILL.md` + `REFLECT.md` + `REVIEW.md` + `LEARN.md` | ✅ Active |
 | **R** (Resource Creator) | `REFLECTOR.md` (subagent) | ✅ Active |
 | **C** (Checker) | `REVIEW.md` STEP V2b (schema validation) | ✅ Active |
-| **L** (Learner) | Future `LEARN.md` | 🔲 Planned |
-| **S** (Searcher) | Function within O | 🔲 Planned |
+| **L** (Learner) | `LEARN.md` | ✅ Active |
+| **S** (Searcher) | Function within O (LEARN.md STEP L3) | ✅ Active |
 
-GEAR protocol operations map to Aristotle's MCP tools: `produce` → `write_rule`, `stage` → `stage_rule`, `verify` → `commit_rule`, `reject` → `reject_rule`, `restore` → `restore_rule`, `search` → `read_rules`.
+GEAR protocol operations map to Aristotle's MCP tools: `produce` → `write_rule`, `stage` → `stage_rule`, `verify` → `commit_rule`, `reject` → `reject_rule`, `restore` → `restore_rule`, `search` → `read_rules`, `sync` → `check_sync_status` + `sync_rules`.
 
 The full protocol specification — state machine, frontmatter schema, Δ decision factor, and conformance requirements — is documented in **[GEAR.md](./GEAR.md)**.
 
@@ -365,16 +367,17 @@ bash test.sh
 uv run pytest test/test_mcp.py -v
 ```
 
-75 assertions covering all 6 modules:
+82 assertions covering all 7 modules:
 
 | Test Class | Module | Assertions | What It Tests |
 |------------|--------|------------|---------------|
 | `TestConfig` | `config.py` | 10 | Path resolution, env override, RISK_MAP, project hash |
 | `TestModels` | `models.py` | 16 | RuleMetadata defaults, YAML serialization roundtrip, from_frontmatter_dict, GEAR 2.0 field tests |
-| `TestGitOps` | `git_ops.py` | 8 | init, add+commit, show, log, status, edge cases (empty commit, missing file) |
+| `TestGitOps` | `git_ops.py` | 9 | init, add+commit, show, log, status, git_show_exists, edge cases |
 | `TestFrontmatter` | `frontmatter.py` | 19 | Atomic write, raw read, field update, stream filter (status/category/keyword/limit), index skip, multi-dimension search tests |
 | `TestMigration` | `migration.py` | 7 | Flat Markdown parsing, repo init, auto-migration with backup |
 | `TestServerTools` | `server.py` | 21 | Full lifecycle (write → stage → commit → read), reject flow, restore_rule, input validation, GEAR 2.0 fields, git check tests |
+| `TestSyncTools` | `server.py` | 7 | check_sync_status (clean/dirty/no repo), sync_rules (auto/specific/nothing), git_show_exists |
 
 All tests use isolated temp directories (`tmp_path` fixture) and are safe to run repeatedly.
 
@@ -390,10 +393,11 @@ Creates a real session with known error patterns, triggers `/aristotle`, and ver
 
 ```
 .
-├── SKILL.md              # Router — argument parsing, phase routing (84 lines)
+├── SKILL.md              # Router — argument parsing, phase routing (90 lines)
 ├── REFLECTOR.md          # Subagent protocol — error analysis, DRAFT generation
-├── REFLECT.md            # Coordinator reflect phase — fire subagent, state tracking
+├── REFLECT.md            # Coordinator reflect phase — fire subagent, state tracking, passive trigger
 ├── REVIEW.md             # Coordinator review phase — DRAFT review, rule writing, revision
+├── LEARN.md              # Coordinator learn phase — intent extraction, query construction, result filtering
 ├── install.sh            # Installer (macOS/Linux)
 ├── install.ps1           # Installer (Windows)
 ├── pyproject.toml        # Python dependencies for MCP server
@@ -402,25 +406,26 @@ Creates a real session with known error patterns, triggers `/aristotle`, and ver
 │   ├── __init__.py
 │   ├── config.py         # Paths, constants, env vars
 │   ├── models.py         # RuleMetadata dataclass, YAML serialization
-│   ├── git_ops.py        # Git abstraction (init, add+commit, show, log, status)
+│   ├── git_ops.py        # Git abstraction (init, add+commit, show, log, status, show_exists)
 │   ├── frontmatter.py    # Streaming frontmatter search, atomic writes
 │   ├── migration.py      # Flat Markdown → Git repo migration
-│   └── server.py         # FastMCP entry point, 8 tools
+│   └── server.py         # FastMCP entry point, 10 tools
 └── test/
     └── live-test.sh      # E2E live test (8 assertions)
 ```
 
 ## Architecture: Progressive Disclosure
 
-The skill is split into four files. Only `SKILL.md` (84 lines) is loaded on trigger. The other files are loaded on demand:
+The skill is split into five files. Only `SKILL.md` (90 lines) is loaded on trigger. The other files are loaded on demand:
 
 | Scenario | Files Loaded | Lines |
 |----------|-------------|-------|
-| `/aristotle` (reflect) | SKILL.md + REFLECT.md | 190 |
-| `/aristotle sessions` | SKILL.md only | 84 |
-| `/aristotle review N` | SKILL.md + REVIEW.md | 240 |
-| Review + re-reflect | SKILL.md + REVIEW.md + REFLECT.md | 346 |
-| Subagent (internal) | REFLECTOR.md | ~170 |
+| `/aristotle` (reflect) | SKILL.md + REFLECT.md | 218 |
+| `/aristotle sessions` | SKILL.md only | 90 |
+| `/aristotle review N` | SKILL.md + REVIEW.md | 278 |
+| `/aristotle learn` | SKILL.md + LEARN.md | 304 |
+| Review + re-reflect | SKILL.md + REVIEW.md + REFLECT.md | 406 |
+| Subagent (internal) | REFLECTOR.md | ~195 |
 
 ## Known Issues & Contributing
 

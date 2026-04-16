@@ -53,6 +53,12 @@ def git_add_and_commit(repo_path: Path, file_pattern: str, message: str) -> dict
     }
 
 
+def git_show_exists(repo_path: Path, rel_path: str) -> bool:
+    """Check if a file exists in git HEAD (committed)."""
+    result = _run(repo_path, ["show", f"HEAD:{rel_path}"])
+    return result.returncode == 0
+
+
 def git_show(repo_path: Path, ref: str, file_path: str) -> dict:
     result = _run(repo_path, ["show", f"{ref}:{file_path}"])
     if result.returncode != 0:

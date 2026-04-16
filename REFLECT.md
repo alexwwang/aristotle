@@ -15,6 +15,7 @@ Gather what the subagent needs — do NOT read session content yourself:
   - `last` → `session_list(limit=2)`, take the first one that isn't the current session
   - `session ses_xxx` → use `ses_xxx` directly (this is the target session's OpenCode ID, not the Reflector's)
   - `recent N` → `session_list(limit=N+1)`, exclude current session, take the Nth entry
+  - **Passive trigger (P3.3)** → current session ID, `focus_hint: "last"`, `target_label: "passive-trigger"`
 - `project_directory` — Current working directory (for project-level rules)
 - `user_language` — Detect from user's messages (zh-CN / en-US)
 - `focus_hint` (optional) — User-specified focus area. Can be:
@@ -24,6 +25,17 @@ Gather what the subagent needs — do NOT read session content yourself:
   - `error` — Focus on error-correction patterns only (skip clean sections)
   - `full` — Scan entire session (for short sessions or comprehensive review)
   - Unspecified → defaults to `last`
+
+### Passive Trigger (P3.3)
+
+When Aristotle is activated by multi-agent error detection (not an explicit `/aristotle` command):
+
+1. `target_session_id` = current session (the session containing the detected error)
+2. `focus_hint` = `"last"` (focus on the most recent exchange where the error was detected)
+3. `target_label` = `"passive-trigger"`
+4. Proceed to F3 as normal — the Reflector will analyze the error context
+
+This handles the scenario where agent B reviews agent A's work and detects errors. Aristotle auto-activates to capture the mistake.
 
 ### How to Determine focus_hint
 
@@ -105,6 +117,12 @@ When the system sends a background task completion notification, output a ONE-LI
 
 ```
 🦉 Aristotle done [${target_label}]. Review: /aristotle review N
+```
+
+If `target_label` is `"passive-trigger"`, use this format instead:
+
+```
+🦉 Aristotle done [auto-detected error]. Review: /aristotle review N
 ```
 
 **That's it.** Do NOT call `background_output`. Do NOT dump any analysis content.

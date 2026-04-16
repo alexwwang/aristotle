@@ -104,10 +104,10 @@ else
     fail "SKILL.md is $SKILL_LINES lines (expected ≤100)"
 fi
 REFLECT_LINES=$(wc -l < "$ARISTOTLE_DIR/REFLECT.md" | tr -d ' ')
-if [ "$REFLECT_LINES" -le 120 ]; then
-    pass "REFLECT.md is $REFLECT_LINES lines (≤120)"
+if [ "$REFLECT_LINES" -le 140 ]; then
+    pass "REFLECT.md is $REFLECT_LINES lines (≤140)"
 else
-    fail "REFLECT.md is $REFLECT_LINES lines (expected ≤120)"
+    fail "REFLECT.md is $REFLECT_LINES lines (expected ≤140)"
 fi
 REVIEW_LINES=$(wc -l < "$ARISTOTLE_DIR/REVIEW.md" | tr -d ' ')
 if [ "$REVIEW_LINES" -le 200 ]; then
