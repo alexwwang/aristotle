@@ -147,7 +147,7 @@ Prepare the rules in memory. Present them as DRAFTS.
 🦉 DRAFT COMPLETE. Awaiting Coordinator to present to user for review.
 ```
 
-### GASC 2.0 Field Inference Guide
+### GEAR Field Inference Guide
 
 When generating the three new fields, follow these inference rules:
 

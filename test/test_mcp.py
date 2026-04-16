@@ -165,7 +165,7 @@ class TestModels:
         assert restored.category == original.category
         assert restored.confidence == original.confidence
 
-    def test_rule_metadata_gasc2_fields(self):
+    def test_rule_metadata_gear2_fields(self):
         from aristotle_mcp.models import RuleMetadata
 
         m = RuleMetadata(
@@ -215,7 +215,7 @@ class TestModels:
         s = to_frontmatter_string(m)
         assert "intent_tags: null" in s
 
-    def test_from_frontmatter_gasc2_fields(self):
+    def test_from_frontmatter_gear2_fields(self):
         from aristotle_mcp.models import from_frontmatter_dict
 
         data = {
@@ -229,7 +229,7 @@ class TestModels:
         assert m.failed_skill == "jwt_lib"
         assert m.error_summary == "Token expired without refresh"
 
-    def test_roundtrip_with_gasc2_fields(self):
+    def test_roundtrip_with_gear2_fields(self):
         from aristotle_mcp.models import (
             RuleMetadata,
             to_frontmatter_string,
@@ -238,7 +238,7 @@ class TestModels:
         import yaml
 
         original = RuleMetadata(
-            id="rt_gasc",
+            id="rt_gear",
             status="verified",
             category="HALLUCINATION",
             intent_tags={"domain": "file_ops", "task_goal": "atomic_write"},
@@ -887,13 +887,13 @@ class TestServerTools:
         assert r["count"] == 1
         assert r["rules"][0]["metadata"]["status"] == "verified"
 
-    def test_write_rule_with_gasc2_fields(self, tmp_repo):
+    def test_write_rule_with_gear2_fields(self, tmp_repo):
         from aristotle_mcp.server import init_repo_tool, write_rule, read_rules
         from aristotle_mcp.frontmatter import read_frontmatter_raw
 
         init_repo_tool()
         w = write_rule(
-            content="GASC2 test",
+            content="GEAR2 test",
             category="HALLUCINATION",
             intent_domain="database",
             intent_task_goal="connection_pool",
