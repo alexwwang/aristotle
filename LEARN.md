@@ -7,6 +7,9 @@ This file defines the learning retrieval protocol: O receives L's natural-langua
 
 **Core constraint: context isolation.** L's context must stay focused on the user's primary task. L never learns about GEAR, MCP, `read_rules`, frontmatter, or any reflection infrastructure.
 
+**Tunable parameter:**
+- `MAX_LEARN_RESULTS` — Maximum number of rule bodies loaded into O's context (default: **5**). Controls context budget. Increase for broad queries, decrease for focused tasks.
+
 ---
 
 ## STEP L1: RECEIVE LEARNING REQUEST
@@ -92,7 +95,7 @@ if error_context non-empty:
   params.keyword = extract_keywords(error_context)
 ```
 
-All parameters are AND-combined → `read_rules(**params)`
+All parameters are AND-combined.
 
 ### L3b. Keyword Extraction Strategy
 
@@ -104,29 +107,56 @@ From `error_context`, extract core technical nouns:
 
 Use `|` to join for regex OR matching. Keep to 2-4 terms.
 
-### L3c. Execute MCP Call
+### L3c. Round 1: Lightweight Metadata Query
 
-Call `read_rules` with the constructed parameters. Returns 0–N rule objects (each with metadata + content).
+Call `list_rules(**params)` — returns paths + frontmatter only, **no content bodies**. This keeps O's context small even if many rules match. Collect all candidate paths and metadata.
 
-After receiving results, O may optionally call `check_sync_status` to detect verified rules that exist on disk but are not committed to git. If unsynced files are found, call `sync_rules()` to commit them. This is an internal self-healing mechanism — L is never informed of sync issues.
+### L3d. Round 2: Parallel Subagent Scoring
+
+O does NOT read rule content itself. Instead, O spawns one subagent per candidate rule (via `task()` with `run_in_background=true`). Each subagent receives:
+
+1. **Query context**: the original learning request (natural language or structured intent_tags)
+2. **Rule path**: the file path to read
+3. **Scoring instructions**: evaluate how relevant this rule is to the query
+
+Each subagent:
+1. Reads ONE rule file's full content (frontmatter + markdown body) via `load_rule_file`
+2. Evaluates relevance by comparing the rule's Context, Rule, and Example against the query context
+3. Returns a score (1–10) and a one-line relevance justification
+
+```
+Subagent prompt template:
+  "Score this rule's relevance to the query: {query_context}
+   Rule file: {rule_path}
+   Read the file, then score 1-10 based on:
+   - Does the rule's Context match the current task scenario? (most important)
+   - Would the Example's correct approach prevent the current type of error?
+   - Is the error scene similar to what the user is about to do?
+   Return JSON: {score: N, reason: 'one-line justification'}"
+```
+
+### L3e. Collect and Rank
+
+O collects all subagent results (background task completion notifications), sorts by score descending, and takes the top `MAX_LEARN_RESULTS` (default: 5).
+
+Rules scoring below 3 are discarded — unlikely to be helpful.
+
+O may optionally call `check_sync_status` to detect verified rules on disk not committed to git. If unsynced, call `sync_rules()`. This is internal self-healing — L is never informed.
 
 ---
 
-## STEP L4: FILTER AND COMPRESS (O's Role)
+## STEP L4: COMPRESS AND FORMAT (O's Role)
 
-O performs post-retrieval filtering on the raw results from S.
+O now has the top-N rule bodies from the scoring subagents. O compresses them into minimal summaries for L. O reads the content **returned by subagents in their score results**, not from files directly.
 
-### L4a. Relevance Filtering
+### L4a. Dedup
 
-1. **Domain + task_goal match first**: Rules where task_goal matches the request rank higher
-2. **Dedup**: Within the same category, if multiple rules have similar error_summaries, keep the most specific one
-3. **Quantity control**: Return at most 5 rules. If >5, sort by relevance (domain match > category match > keyword match) and truncate
+Within the same category, if multiple rules have similar `error_summary`, keep the most specific one.
 
 ### L4b. Summary Compression
 
-For each retained rule, extract only the essentials. Do NOT return the full rule body.
+For each retained rule, extract only the essentials:
 
-Compression source fields per rule:
 - `metadata.error_summary` → one-line error description
 - `content` → extract the **Rule** section (core constraint)
 - `content` → extract the **Example** section (correct/wrong behavior)

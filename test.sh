@@ -69,6 +69,7 @@ assert_exists "$ARISTOTLE_DIR/SKILL.md"
 assert_exists "$ARISTOTLE_DIR/REFLECTOR.md"
 assert_exists "$ARISTOTLE_DIR/REFLECT.md"
 assert_exists "$ARISTOTLE_DIR/REVIEW.md"
+assert_exists "$ARISTOTLE_DIR/CHECKER.md"
 assert_exists "$ARISTOTLE_DIR/install.sh"
 assert_exists "$ARISTOTLE_DIR/install.ps1"
 assert_exists "$ARISTOTLE_DIR/test/live-test.sh"
@@ -110,10 +111,10 @@ else
     fail "REFLECT.md is $REFLECT_LINES lines (expected ≤140)"
 fi
 REVIEW_LINES=$(wc -l < "$ARISTOTLE_DIR/REVIEW.md" | tr -d ' ')
-if [ "$REVIEW_LINES" -le 200 ]; then
-    pass "REVIEW.md is $REVIEW_LINES lines (≤200)"
+if [ "$REVIEW_LINES" -le 180 ]; then
+    pass "REVIEW.md is $REVIEW_LINES lines (≤180)"
 else
-    fail "REVIEW.md is $REVIEW_LINES lines (expected ≤200)"
+    fail "REVIEW.md is $REVIEW_LINES lines (expected ≤180)"
 fi
 sep
 

@@ -244,7 +244,7 @@ verified rejected/  （保留 scope 和元数据）
 | `commit_rule` | 设置 status 为 `verified`，记录时间戳，执行 `git add && commit` |
 | `reject_rule` | 移到 `rejected/{scope}/`，记录原因，删除原文件，提交 |
 | `restore_rule` | 从 rejected 目录恢复规则到正式目录，设置新状态 |
-| `list_rules` | 轻量元数据列表（不加载规则正文） |
+| `list_rules` | 轻量元数据列表，支持全部搜索维度（不加载规则正文）。用于相关性评分后再选择性读取内容 |
 | `check_sync_status` | 检测磁盘上存在但未提交到 git 的 verified 规则 |
 | `sync_rules` | 将未同步的 verified 规则提交到 git（自动检测或指定文件） |
 
@@ -256,6 +256,26 @@ verified rejected/  （保留 scope 和元数据）
 2. **阶段二（完整）** — 只对匹配的文件做完整的 frontmatter 解析和正文加载。
 
 500 个文件的场景下，阶段一约 80ms 完成。总搜索时间（20 条命中）：约 180ms。
+
+### 两轮查询架构（学习阶段）
+
+学习阶段（`/aristotle learn`）使用上下文高效的两轮查询，避免大量规则正文撑爆 O 的上下文：
+
+```
+Round 1: list_rules(params) → 候选路径 + 元数据（不含正文）
+                ↓
+Round 2: O 启动 N 个并行评分子代理
+          subagent_i(查询, 规则路径) → 读取 1 条规则 → 打分 1-10 → 返回 {score, reason}
+                ↓
+O 收集打分 → 排序 → 取 Top MAX_LEARN_RESULTS（默认: 5）
+                ↓
+O 压缩 Top-N 为最小摘要 → 注入 L 的上下文
+```
+
+- **O 永远不直接读取规则正文**——只做编排（启动、收集、排序、压缩）
+- **每个子代理上下文极小**——一条查询 + 一条规则文件
+- **评分依赖完整 markdown 正文**——Context、Rule 和 Example 部分都参与相关性判断
+- **`list_rules` 和 `read_rules` 共享同一搜索引擎**——`stream_filter_rules()`——但返回不同重量的结果
 
 ### 安装
 
@@ -397,6 +417,7 @@ bash test/live-test.sh --model <provider/model>
 ├── REFLECTOR.md          # 子代理协议 — 错误分析、DRAFT 生成
 ├── REFLECT.md            # 协调器反思阶段 — 启动子代理、状态追踪、被动触发
 ├── REVIEW.md             # 协调器审核阶段 — DRAFT 审核、规则写入、修订
+├── CHECKER.md            # 审核者协议 — schema + 内容校验（仅确认时加载）
 ├── LEARN.md              # 协调器学习阶段 — 意图提取、查询构造、结果过滤
 ├── install.sh            # 安装脚本（macOS/Linux）
 ├── install.ps1           # 安装脚本（Windows）
@@ -416,15 +437,16 @@ bash test/live-test.sh --model <provider/model>
 
 ## 架构：渐进披露
 
-技能拆分为五个文件。触发时仅加载 `SKILL.md`（90 行），其余按需加载：
+技能拆分为六个文件。触发时仅加载 `SKILL.md`（90 行），其余按需加载：
 
 | 场景 | 加载文件 | 行数 |
 |------|---------|------|
 | `/aristotle`（反思） | SKILL.md + REFLECT.md | 218 |
 | `/aristotle sessions` | 仅 SKILL.md | 90 |
-| `/aristotle review N` | SKILL.md + REVIEW.md | 278 |
-| `/aristotle learn` | SKILL.md + LEARN.md | 304 |
-| 审核 + 二次反思 | SKILL.md + REVIEW.md + REFLECT.md | 406 |
+| `/aristotle review N` | SKILL.md + REVIEW.md | 257 |
+| `/aristotle review N`（确认时） | SKILL.md + REVIEW.md + CHECKER.md | 317 |
+| `/aristotle learn` | SKILL.md + LEARN.md | 346 |
+| 审核 + 二次反思 | SKILL.md + REVIEW.md + REFLECT.md | 385 |
 | 子代理（内部） | REFLECTOR.md | ~195 |
 
 ## 已知问题与贡献方向

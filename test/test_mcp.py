@@ -861,6 +861,61 @@ class TestServerTools:
         assert result["success"]
         assert result["count"] == 2
 
+    def test_list_rules_multi_dimension_search(self, tmp_repo):
+        from aristotle_mcp.server import init_repo_tool, write_rule, list_rules
+
+        init_repo_tool()
+        write_rule(
+            content="db rule",
+            category="HALLUCINATION",
+            intent_domain="database",
+            intent_task_goal="connection_pool",
+            failed_skill="prisma",
+            error_summary="pool exhaustion",
+        )
+        write_rule(
+            content="api rule",
+            category="SYNTAX_API_ERROR",
+            intent_domain="api",
+            intent_task_goal="cors_setup",
+            failed_skill="express",
+            error_summary="CORS blocked",
+        )
+        write_rule(
+            content="build rule",
+            category="PATTERN_VIOLATION",
+            intent_domain="build_system",
+            intent_task_goal="webpack_config",
+        )
+
+        r1 = list_rules(status_filter="pending", intent_domain="database")
+        assert r1["count"] == 1
+        assert r1["rules"][0]["metadata"]["intent_tags"]["domain"] == "database"
+
+        r2 = list_rules(status_filter="pending", failed_skill="express")
+        assert r2["count"] == 1
+        assert "api rule" not in r2["rules"][0].get("content", "")
+
+        r3 = list_rules(status_filter="pending", error_summary="pool")
+        assert r3["count"] == 1
+
+        r4 = list_rules(status_filter="pending", intent_domain="nonexistent")
+        assert r4["count"] == 0
+
+    def test_list_rules_returns_no_content(self, tmp_repo):
+        from aristotle_mcp.server import init_repo_tool, write_rule, list_rules
+
+        init_repo_tool()
+        write_rule(
+            content="This is a long rule body that should NOT appear in list_rules results",
+            category="HALLUCINATION",
+            intent_domain="database",
+        )
+        result = list_rules(status_filter="pending", intent_domain="database")
+        assert result["count"] == 1
+        assert "content" not in result["rules"][0]
+        assert "long rule body" not in str(result["rules"][0])
+
     def test_read_rules_keyword(self, tmp_repo):
         from aristotle_mcp.server import init_repo_tool, write_rule, read_rules
 

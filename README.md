@@ -244,7 +244,7 @@ verified rejected/  (preserves scope + metadata)
 | `commit_rule` | Set status to `verified`, record timestamp, `git add && commit` |
 | `reject_rule` | Move to `rejected/{scope}/` with reason, delete original, commit |
 | `restore_rule` | Restore a rejected rule back to active directory with new status |
-| `list_rules` | Lightweight metadata-only listing (no rule bodies loaded) |
+| `list_rules` | Lightweight metadata-only listing with full search dimensions (no rule bodies loaded). Used for relevance scoring before selective content read |
 | `check_sync_status` | Detect verified rules on disk that are not committed to git |
 | `sync_rules` | Commit unsynced verified rules to git (auto-detect or specify files) |
 
@@ -256,6 +256,26 @@ verified rejected/  (preserves scope + metadata)
 2. **Phase 2 (full)** — For matching files only, parse the complete frontmatter and load the Markdown body.
 
 For ~500 files, Phase 1 completes in ~80ms. Total search with 20 matches: ~180ms.
+
+### Two-Round Query Architecture (Learn Phase)
+
+The Learn phase (`/aristotle learn`) uses a context-efficient two-round query to avoid flooding O's context with rule content:
+
+```
+Round 1: list_rules(params) → candidate paths + metadata (no content)
+                ↓
+Round 2: O spawns N parallel scoring subagents
+          subagent_i(query, rule_path) → reads 1 rule → scores 1-10 → returns {score, reason}
+                ↓
+O collects scores → sorts → takes Top MAX_LEARN_RESULTS (default: 5)
+                ↓
+O compresses Top-N into minimal summaries → injects into L's context
+```
+
+- **O never reads rule content directly** — only orchestrates scoring and compression
+- **Each subagent has minimal context** — one query + one rule file
+- **Scoring depends on full markdown body** — Context, Rule, and Example sections all participate in relevance evaluation
+- **`list_rules` and `read_rules` share the same search engine** — `stream_filter_rules()` — but return different result weights
 
 ### Installation
 
@@ -397,6 +417,7 @@ Creates a real session with known error patterns, triggers `/aristotle`, and ver
 ├── REFLECTOR.md          # Subagent protocol — error analysis, DRAFT generation
 ├── REFLECT.md            # Coordinator reflect phase — fire subagent, state tracking, passive trigger
 ├── REVIEW.md             # Coordinator review phase — DRAFT review, rule writing, revision
+├── CHECKER.md            # Checker protocol — schema + content validation (loaded on confirm only)
 ├── LEARN.md              # Coordinator learn phase — intent extraction, query construction, result filtering
 ├── install.sh            # Installer (macOS/Linux)
 ├── install.ps1           # Installer (Windows)
@@ -416,15 +437,16 @@ Creates a real session with known error patterns, triggers `/aristotle`, and ver
 
 ## Architecture: Progressive Disclosure
 
-The skill is split into five files. Only `SKILL.md` (90 lines) is loaded on trigger. The other files are loaded on demand:
+The skill is split into six files. Only `SKILL.md` (90 lines) is loaded on trigger. The other files are loaded on demand:
 
 | Scenario | Files Loaded | Lines |
 |----------|-------------|-------|
 | `/aristotle` (reflect) | SKILL.md + REFLECT.md | 218 |
 | `/aristotle sessions` | SKILL.md only | 90 |
-| `/aristotle review N` | SKILL.md + REVIEW.md | 278 |
-| `/aristotle learn` | SKILL.md + LEARN.md | 304 |
-| Review + re-reflect | SKILL.md + REVIEW.md + REFLECT.md | 406 |
+| `/aristotle review N` | SKILL.md + REVIEW.md | 257 |
+| `/aristotle review N` (confirm) | SKILL.md + REVIEW.md + CHECKER.md | 317 |
+| `/aristotle learn` | SKILL.md + LEARN.md | 346 |
+| Review + re-reflect | SKILL.md + REVIEW.md + REFLECT.md | 385 |
 | Subagent (internal) | REFLECTOR.md | ~195 |
 
 ## Known Issues & Contributing

@@ -661,16 +661,30 @@ def list_rules(
     status_filter: str = "all",
     project_path: str | None = None,
     limit: int = 100,
+    intent_domain: str | None = None,
+    intent_task_goal: str | None = None,
+    failed_skill: str | None = None,
+    error_summary: str | None = None,
+    category: str | None = None,
+    keyword: str | None = None,
 ) -> dict:
-    """List all rules with their status and metadata.
+    """List rules with metadata only (no content bodies).
 
-    Lighter than read_rules — returns metadata only, no content bodies.
+    Supports the same search dimensions as read_rules but returns
+    lightweight results — paths and frontmatter only. Use this for
+    relevance scoring before selectively reading content.
 
     Args:
         scope: "user", "project", or "all"
         status_filter: Filter by status
         project_path: Required for project scope
         limit: Maximum results
+        intent_domain: Regex match against intent_tags.domain
+        intent_task_goal: Regex match against intent_tags.task_goal
+        failed_skill: Regex match against failed_skill field
+        error_summary: Regex match against error_summary field
+        category: Exact match on error category
+        keyword: Regex pattern to match against frontmatter values
 
     Returns dict with success, count, rules (list of {path, metadata}).
     """
@@ -712,6 +726,12 @@ def list_rules(
             base_dir,
             status_filter=fm_status,
             limit=remaining,
+            intent_domain=intent_domain,
+            intent_task_goal=intent_task_goal,
+            failed_skill=failed_skill,
+            error_summary=error_summary,
+            category=category,
+            keyword=keyword,
         )
         for p in paths:
             fm = read_frontmatter_raw(p)
@@ -725,6 +745,12 @@ def list_rules(
                     rejected_dir,
                     status_filter="rejected",
                     limit=remaining,
+                    intent_domain=intent_domain,
+                    intent_task_goal=intent_task_goal,
+                    failed_skill=failed_skill,
+                    error_summary=error_summary,
+                    category=category,
+                    keyword=keyword,
                 )
                 for p in paths:
                     fm = read_frontmatter_raw(p)
