@@ -34,6 +34,61 @@ GEAR defines five roles that coordinate through git operations and a query inter
 | **L** (Learner) | Pre-task learning, error feedback |
 | **S** (Searcher) | Converts intent to query conditions, returns results |
 
+### Interaction Diagram
+
+```
+                    ┌─────────────────────────────────────────────────────┐
+                    │                    O (Orchestrator)                  │
+                    │  Routes scenes · Decides audit level · Knowledge svc │
+                    └───┬──────────┬──────────┬──────────┬───────────────┘
+                        │          │          │          │
+            reflect     │  confirm │  learn   │  error   │  search
+            scene       │  request │  request │ feedback │  delegation
+                        ▼          ▼          │          ▼
+                 ┌──────────┐ ┌──────────┐   │    ┌──────────┐
+                 │ R        │ │ C        │   │    │ S        │
+                 │ Resource │ │ Checker  │   │    │ Searcher │
+                 │ Creator  │ │          │   │    │          │
+                 └────┬─────┘ └────┬─────┘   │    └────┬─────┘
+                      │            │          │         │
+                      │ pending    │ verified │         │ metadata
+                      │ rules      │ status   │         │ + scored
+                      ▼            ▼          │         │ results
+                 ┌────────────────────────┐   │         │
+                 │    Git Rule Store      │   │         │
+                 │  (frontmatter + body)  │◄──┘         │
+                 └────────────┬───────────┘             │
+                              │                         │
+                    verified  │  ◄───── Round 1 ────────┘
+                    rules     │        list_rules (metadata only)
+                              │         ┌─────────────────┐
+                              │         │ Scoring Subagents│
+                              │         │ (Round 2: read   │
+                              │         │  full content,   │
+                              │         │  score 1-10)     │
+                              │         └────────┬────────┘
+                              │                  │
+                              ▼                  ▼
+                        ┌──────────┐     Top-N scored rules
+                        │ L        │     (compressed summaries)
+                        │ Learner  │
+                        │          │
+                        └────┬─────┘
+                             │
+                    error    │  "applied rules, still failed"
+                    feedback │
+                             └──────────► O (triggers new R → C cycle)
+```
+
+**Key flows:**
+
+| Flow | Path | Description |
+|------|------|-------------|
+| **Reflect** | O → R → C → Git | Error detected → R produces rule → C validates → Git commit |
+| **Learn** | L → O → S → Git → L | L requests lessons → O delegates S → two-round scoring → compressed summaries to L |
+| **Error feedback** | L → O → R → C | L applied rules but still erred → O triggers new reflection cycle |
+| **Review** | O → C | User reviews DRAFT → C validates schema + content → commit or reject |
+
 ### O — Orchestrator
 
 **Core capabilities:**
