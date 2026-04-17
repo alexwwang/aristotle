@@ -23,29 +23,43 @@ Activate with `/aristotle` to spawn an isolated subagent that analyzes your sess
 
 ## Installation
 
+Aristotle has two components: the **Skill** (protocol files loaded by OpenCode) and the **MCP Server** (Git-backed rule management). Both are installed from the same repo.
+
 ### Option 1: Manual Install (macOS / Linux)
 
 ```bash
-# Clone the repo
+# 1. Clone the repo
 git clone https://github.com/alexwwang/aristotle.git ~/.claude/skills/aristotle
 cd ~/.claude/skills/aristotle
 
-# Run the installer
+# 2. Run the installer (initializes learnings file)
 bash install.sh
+
+# 3. Install MCP server dependencies
+uv sync
+
+# 4. Add MCP config to opencode.json
+# See "MCP Configuration" section below for the JSON snippet
 ```
 
 ### Option 2: Manual Install (Windows)
 
 ```powershell
-# Clone the repo
+# 1. Clone the repo
 git clone https://github.com/alexwwang/aristotle.git "$env:USERPROFILE\.claude\skills\aristotle"
 
-# Run the installer
+# 2. Run the installer
 cd "$env:USERPROFILE\.claude\skills\aristotle"
 powershell -ExecutionPolicy Bypass -File install.ps1
+
+# 3. Install MCP server dependencies
+uv sync
+
+# 4. Add MCP config to opencode.json
+# See "MCP Configuration" section below for the JSON snippet
 ```
 
-### Option 3: One-Line Clone (no installer)
+### Option 3: One-Line Clone (skill only, no MCP)
 
 OpenCode auto-discovers skills from `~/.claude/skills/`. Just clone and it's ready:
 
@@ -53,15 +67,53 @@ OpenCode auto-discovers skills from `~/.claude/skills/`. Just clone and it's rea
 git clone https://github.com/alexwwang/aristotle.git ~/.claude/skills/aristotle
 ```
 
-> **Note:** This skips the learnings file initialization from Option 1. The file will be auto-created on first run.
+> **Note:** This gives you the basic skill without MCP server. You won't get Git version control, Δ audit decisions, or rule status management. Run `uv sync` and add the MCP config (see below) to enable the full feature set. The learnings file will be auto-created on first run.
 
 ### Option 4: Self-Guided Install (paste into OpenCode)
 
 Copy and paste this prompt into any OpenCode session — it will install Aristotle for you:
 
 ```
-Install the Aristotle skill from https://github.com/alexwwang/aristotle.git to ~/.claude/skills/aristotle by cloning the repo, then run the install script (install.sh on macOS/Linux, install.ps1 on Windows). Verify the installation by running bash test.sh from the cloned directory — all 63 assertions must pass. After that, delete the cloned source directory (the installed copy at ~/.claude/skills/aristotle is what matters).
+Install the Aristotle skill with MCP server from https://github.com/alexwwang/aristotle.git:
+1. Clone to ~/.claude/skills/aristotle
+2. cd into the cloned directory, run `bash install.sh` (macOS/Linux) or `powershell -File install.ps1` (Windows)
+3. Run `uv sync` to install Python dependencies for the MCP server
+4. Verify: run `bash test.sh` — all assertions must pass
+5. Add MCP config to opencode.json: { "mcp": { "aristotle": { "type": "local", "command": ["uv", "run", "--project", "~/.claude/skills/aristotle", "python", "-m", "aristotle_mcp.server"], "enabled": true } } }
+6. Verify MCP: run `uv run python -c "from aristotle_mcp.server import mcp; print(len(mcp._tool_manager._tools), 'tools loaded')"` — should print "11 tools loaded"
 ```
+
+### MCP Configuration
+
+Add this to your `opencode.json` to enable the MCP server:
+
+```jsonc
+{
+  "mcp": {
+    "aristotle": {
+      "type": "local",
+      "command": ["uv", "run", "--project", "~/.claude/skills/aristotle", "python", "-m", "aristotle_mcp.server"],
+      "enabled": true
+    }
+  }
+}
+```
+
+Or with absolute path:
+
+```jsonc
+{
+  "mcp": {
+    "aristotle": {
+      "type": "local",
+      "command": ["uv", "run", "--project", "/path/to/aristotle", "python", "-m", "aristotle_mcp.server"],
+      "enabled": true
+    }
+  }
+}
+```
+
+Customize the rule repo location with the `ARISTOTLE_REPO_DIR` environment variable (default: `~/.config/opencode/aristotle-repo/`).
 
 ## Usage
 
@@ -278,66 +330,12 @@ O compresses Top-N into minimal summaries → injects into L's context
 - **Scoring depends on full markdown body** — Context, Rule, and Example sections all participate in relevance evaluation
 - **`list_rules` and `read_rules` share the same search engine** — `stream_filter_rules()` — but return different result weights
 
-### Installation
-
-#### Prerequisites
+### MCP Prerequisites
 
 - Python 3.10+
 - [uv](https://docs.astral.sh/uv/) (recommended) or pip/mamba
 
-#### Option A: Manual Setup
-
-```bash
-# Clone and enter the repo
-git clone https://github.com/alexwwang/aristotle.git ~/.claude/skills/aristotle
-cd ~/.claude/skills/aristotle
-
-# Install dependencies with uv (creates .venv)
-uv sync
-```
-
-Then add to your `opencode.json`:
-
-```jsonc
-{
-  "mcp": {
-    "aristotle": {
-      "type": "local",
-      "command": ["uv", "run", "--project", "~/.claude/skills/aristotle", "python", "-m", "aristotle_mcp.server"],
-      "enabled": true
-    }
-  }
-}
-```
-
-Or with absolute path:
-
-```jsonc
-{
-  "mcp": {
-    "aristotle": {
-      "type": "local",
-      "command": ["uv", "run", "--project", "/path/to/aristotle", "python", "-m", "aristotle_mcp.server"],
-      "enabled": true
-    }
-  }
-}
-```
-
-Customize the repo location with the `ARISTOTLE_REPO_DIR` environment variable (default: `~/.config/opencode/aristotle-repo/`).
-
-#### Option B: Self-Guided Install (paste into OpenCode)
-
-Copy and paste this prompt into any OpenCode session:
-
-```
-Install the Aristotle MCP server from https://github.com/alexwwang/aristotle.git:
-1. Clone to ~/.claude/skills/aristotle
-2. cd into the cloned directory
-3. Run `uv sync` to install Python dependencies
-4. Add MCP config to opencode.json: type "local", command ["uv", "run", "--project", "~/.claude/skills/aristotle", "python", "-m", "aristotle_mcp.server"], enabled true
-5. Verify by running `uv run python -c "from aristotle_mcp.server import mcp; print(len(mcp._tool_manager._tools), 'tools loaded')"`
-```
+> The MCP configuration JSON is shown in the top-level "Installation" section above. This section covers technical details only.
 
 ### Migration
 
