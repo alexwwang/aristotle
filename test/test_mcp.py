@@ -2,10 +2,6 @@
 
 from __future__ import annotations
 
-import os
-import shutil
-import tempfile
-import time
 from pathlib import Path
 
 import pytest
@@ -1109,7 +1105,6 @@ class TestServerTools:
             write_rule,
             reject_rule,
             restore_rule,
-            read_rules,
         )
         from aristotle_mcp.frontmatter import read_frontmatter_raw
 
@@ -1211,7 +1206,6 @@ class TestSyncTools:
             sync_rules,
         )
         from aristotle_mcp.frontmatter import update_frontmatter_field
-        from aristotle_mcp.git_ops import git_show_exists
 
         init_repo_tool()
         w = write_rule(content="auto sync rule", category="PATTERN_VIOLATION")

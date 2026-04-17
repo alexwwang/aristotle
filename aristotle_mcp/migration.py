@@ -14,7 +14,7 @@ from aristotle_mcp.config import (
 )
 from aristotle_mcp.frontmatter import write_rule_file
 from aristotle_mcp.git_ops import git_add_and_commit, git_init
-from aristotle_mcp.models import RuleMetadata, to_frontmatter_string
+from aristotle_mcp.models import RuleMetadata
 
 _ENTRY_RE = re.compile(r"\[(\d{4}-\d{2}-\d{2})\]\s+(\w+)\s+—\s+(.+)")
 
