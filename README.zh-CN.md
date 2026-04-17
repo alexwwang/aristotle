@@ -388,7 +388,7 @@ bash test.sh
 uv run pytest test/test_mcp.py -v
 ```
 
-104 个断言，覆盖全部 9 个模块/测试类：
+111 个断言，覆盖全部 10 个模块/测试类：
 
 | 测试类 | 模块 | 断言数 | 测试内容 |
 |--------|------|--------|----------|
@@ -401,6 +401,7 @@ uv run pytest test/test_mcp.py -v
 | `TestServerTools` | `server.py` | 21 | 完整生命周期（write → stage → commit → read）、拒绝流程、restore_rule、输入校验、GEAR 2.0 字段、git 检查测试 |
 | `TestSyncTools` | `server.py` | 7 | check_sync_status（干净/脏数据/无仓库）、sync_rules（自动/指定文件/无待同步）、git_show_exists |
 | `TestDeltaDecision` | `server.py` + `evolution.py` | 8 | get_audit_decision（auto/semi/manual）、write_rule confidence（默认/自定义）、Δ 影响审核级别 |
+| `TestPathTraversal` | `server.py` | 7 | 路径包含检查（stage/commit/reject/restore/get_audit_decision）、绝对路径+相对路径遍历、合法路径正常工作 |
 
 所有测试使用隔离的临时目录（`tmp_path` fixture），可安全反复运行。
 
@@ -434,7 +435,7 @@ bash test/live-test.sh --model <provider/model>
 │   ├── frontmatter.py    # 流式 frontmatter 搜索、原子写入
 │   ├── evolution.py      # Δ 决策引擎（compute_delta、decide_audit_level）
 │   ├── migration.py      # 扁平 Markdown → Git 仓库迁移
-│   └── server.py         # FastMCP 入口，10 个工具
+│   └── server.py         # FastMCP 入口，11 个工具
 └── test/
     └── live-test.sh      # E2E 实时测试（8 断言）
 ```

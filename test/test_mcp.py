@@ -1349,9 +1349,10 @@ class TestDeltaDecision:
         assert r["delta"] <= 0.4
 
     def test_get_audit_decision_file_not_found(self, tmp_repo):
-        from aristotle_mcp.server import get_audit_decision
+        from aristotle_mcp.server import init_repo_tool, get_audit_decision
 
-        r = get_audit_decision("/nonexistent/path.md")
+        init_repo_tool()
+        r = get_audit_decision("nonexistent.md")
         assert not r["success"]
         assert "not found" in r["message"].lower()
 
@@ -1414,3 +1415,58 @@ class TestDeltaDecision:
         assert r_low["audit_level"] == "manual"
 
         assert r_high["delta"] > r_low["delta"]
+
+
+# ═══════════════════════════════════════════════════════
+# Security: path traversal
+# ═══════════════════════════════════════════════════════
+class TestPathTraversal:
+    def test_absolute_path_outside_repo(self, tmp_repo):
+        from aristotle_mcp.server import stage_rule
+
+        r = stage_rule("/etc/passwd")
+        assert not r["success"]
+        assert "escapes repo" in r["message"]
+
+    def test_relative_path_traversal(self, tmp_repo):
+        from aristotle_mcp.server import stage_rule
+
+        r = stage_rule("../../etc/passwd")
+        assert not r["success"]
+        assert "escapes repo" in r["message"]
+
+    def test_commit_rule_traversal(self, tmp_repo):
+        from aristotle_mcp.server import commit_rule
+
+        r = commit_rule("/etc/shadow")
+        assert not r["success"]
+        assert "escapes repo" in r["message"]
+
+    def test_reject_rule_traversal(self, tmp_repo):
+        from aristotle_mcp.server import reject_rule
+
+        r = reject_rule("/tmp/evil.md", reason="test")
+        assert not r["success"]
+        assert "escapes repo" in r["message"]
+
+    def test_restore_rule_traversal(self, tmp_repo):
+        from aristotle_mcp.server import restore_rule
+
+        r = restore_rule("/etc/hosts")
+        assert not r["success"]
+        assert "escapes repo" in r["message"]
+
+    def test_get_audit_decision_traversal(self, tmp_repo):
+        from aristotle_mcp.server import get_audit_decision
+
+        r = get_audit_decision("/etc/passwd")
+        assert not r["success"]
+        assert "escapes repo" in r["message"]
+
+    def test_legitimate_path_still_works(self, tmp_repo):
+        from aristotle_mcp.server import init_repo_tool, write_rule, stage_rule
+
+        init_repo_tool()
+        w = write_rule(content="legit", category="TEST")
+        r = stage_rule(w["file_path"])
+        assert r["success"]

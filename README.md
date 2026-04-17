@@ -388,7 +388,7 @@ bash test.sh
 uv run pytest test/test_mcp.py -v
 ```
 
-104 assertions covering all 8 modules:
+111 assertions covering all 10 modules/test classes:
 
 | Test Class | Module | Assertions | What It Tests |
 |------------|--------|------------|---------------|
@@ -401,6 +401,7 @@ uv run pytest test/test_mcp.py -v
 | `TestServerTools` | `server.py` | 21 | Full lifecycle (write → stage → commit → read), reject flow, restore_rule, input validation, GEAR 2.0 fields, git check tests |
 | `TestSyncTools` | `server.py` | 7 | check_sync_status (clean/dirty/no repo), sync_rules (auto/specific/nothing), git_show_exists |
 | `TestDeltaDecision` | `server.py` + `evolution.py` | 8 | get_audit_decision (auto/semi/manual), write_rule confidence (default/custom), Δ affects audit level |
+| `TestPathTraversal` | `server.py` | 7 | Path containment for stage/commit/reject/restore/get_audit_decision, absolute + relative traversal, legitimate paths still work |
 
 All tests use isolated temp directories (`tmp_path` fixture) and are safe to run repeatedly.
 
@@ -434,7 +435,7 @@ Creates a real session with known error patterns, triggers `/aristotle`, and ver
 │   ├── frontmatter.py    # Streaming frontmatter search, atomic writes
 │   ├── evolution.py      # Δ decision engine (compute_delta, decide_audit_level)
 │   ├── migration.py      # Flat Markdown → Git repo migration
-│   └── server.py         # FastMCP entry point, 10 tools
+│   └── server.py         # FastMCP entry point, 11 tools
 └── test/
     └── live-test.sh      # E2E live test (8 assertions)
 ```
@@ -447,10 +448,10 @@ The skill is split into six files. Only `SKILL.md` (90 lines) is loaded on trigg
 |----------|-------------|-------|
 | `/aristotle` (reflect) | SKILL.md + REFLECT.md | 218 |
 | `/aristotle sessions` | SKILL.md only | 90 |
-| `/aristotle review N` | SKILL.md + REVIEW.md | 257 |
-| `/aristotle review N` (confirm) | SKILL.md + REVIEW.md + CHECKER.md | 317 |
-| `/aristotle learn` | SKILL.md + LEARN.md | 346 |
-| Review + re-reflect | SKILL.md + REVIEW.md + REFLECT.md | 385 |
+| `/aristotle review N` | SKILL.md + REVIEW.md | 268 |
+| `/aristotle review N` (confirm) | SKILL.md + REVIEW.md + CHECKER.md | 332 |
+| `/aristotle learn` | SKILL.md + LEARN.md | 336 |
+| Review + re-reflect | SKILL.md + REVIEW.md + REFLECT.md | 396 |
 | Subagent (internal) | REFLECTOR.md | ~195 |
 
 ## Known Issues & Contributing

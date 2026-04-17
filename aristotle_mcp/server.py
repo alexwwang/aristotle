@@ -37,8 +37,21 @@ def _now_iso() -> str:
 def _resolve_path(file_path: str) -> Path:
     p = Path(file_path)
     if p.is_absolute():
-        return p
-    return resolve_repo_dir() / p
+        resolved = p.resolve()
+    else:
+        resolved = (resolve_repo_dir() / p).resolve()
+
+    repo_root = resolve_repo_dir().resolve()
+    if not resolved.is_relative_to(repo_root):
+        raise ValueError(f"Path escapes repo: {file_path}")
+    return resolved
+
+
+def _safe_resolve(file_path: str) -> tuple[Path | None, dict | None]:
+    try:
+        return _resolve_path(file_path), None
+    except ValueError as e:
+        return None, {"success": False, "message": str(e)}
 
 
 def _unique_filename(directory: Path, base_name: str) -> Path:
@@ -66,7 +79,9 @@ def get_audit_decision(file_path: str) -> dict:
 
     Returns dict with delta, audit_level, thresholds.
     """
-    path = _resolve_path(file_path)
+    path, err = _safe_resolve(file_path)
+    if err:
+        return err
     if not path.exists():
         return {"success": False, "message": f"File not found: {path}"}
 
@@ -352,7 +367,9 @@ def stage_rule(file_path: str) -> dict:
 
     Returns dict with success, message.
     """
-    path = _resolve_path(file_path)
+    path, err = _safe_resolve(file_path)
+    if err:
+        return err
     if not path.exists():
         return {"success": False, "message": f"File not found: {path}"}
 
@@ -376,7 +393,9 @@ def commit_rule(file_path: str, message: str | None = None) -> dict:
 
     Returns dict with success, message, commit_hash.
     """
-    path = _resolve_path(file_path)
+    path, err = _safe_resolve(file_path)
+    if err:
+        return {**err, "commit_hash": None}
     if not path.exists():
         return {
             "success": False,
@@ -427,7 +446,9 @@ def reject_rule(file_path: str, reason: str = "") -> dict:
 
     Returns dict with success, message, new_path.
     """
-    path = _resolve_path(file_path)
+    path, err = _safe_resolve(file_path)
+    if err:
+        return {**err, "new_path": None}
     if not path.exists():
         return {
             "success": False,
@@ -491,7 +512,9 @@ def restore_rule(file_path: str, new_status: str = "pending") -> dict:
 
     Returns dict with success, message, new_path.
     """
-    path = _resolve_path(file_path)
+    path, err = _safe_resolve(file_path)
+    if err:
+        return {**err, "new_path": None}
     if not path.exists():
         return {
             "success": False,
@@ -661,14 +684,12 @@ def sync_rules(file_paths: list[str] | None = None) -> dict:
                 "message": f"File not found: {rel_path}",
             }
 
-    if file_paths is not None:
-        from aristotle_mcp.git_ops import _run as _git_run
+    from aristotle_mcp.git_ops import _run as _git_run
 
+    if file_paths is not None:
         for rel_path in targets:
             _git_run(repo_path, ["add", rel_path])
     else:
-        from aristotle_mcp.git_ops import _run as _git_run
-
         _git_run(repo_path, ["add", "."])
 
     commit_env = {
