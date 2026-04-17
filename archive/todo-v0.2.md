@@ -1,6 +1,10 @@
 # Aristotle Skill — Development TODO
 
-> **已归档。** 内容已合并到 `ROADMAP.md`，本文件不再更新。
+> **归档版本 v0.2** — 2026-04-10
+> Superseded by ROADMAP.md
+>
+> 本文档记录 v0.1 方案实施后的架构改进待办（context 污染、session 管理、模型选择）。
+> 后续开发计划见 `ROADMAP.md`。
 
 ## Architecture Improvements
 

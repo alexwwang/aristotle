@@ -1,8 +1,10 @@
 # Aristotle Skill 改造方案 v1
 
-> **已归档。** 内容已合并到 `ROADMAP.md`，本文件不再更新。
-> 生成日期: 2026-04-10
-> 状态: Superseded by ROADMAP.md
+> **归档版本 v0.1** — 2026-04-10
+> Superseded by ROADMAP.md
+>
+> 本文档记录 Aristotle 最初四项架构改进方案（SKILL.md 瘦身、完成通知优化、
+> session 管理、模型选择），大部分已实施。后续开发计划见 `ROADMAP.md`。
 
 ## 一、待办1：SKILL.md 瘦身
 

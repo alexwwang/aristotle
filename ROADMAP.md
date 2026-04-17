@@ -96,14 +96,16 @@
 
 ---
 
-## Done (P1–P4)
+## Done
 
-| Phase | Content | Status |
-|-------|---------|--------|
-| P1 | Schema 升级 & MCP 工具补齐（8 tools, frontmatter, multi-dimension search） | ✅ |
-| P2 | Skill 层集成（REVIEW.md MCP 化, REFLECTOR.md 输出扩展, C 角色 schema 校验） | ✅ |
-| P3 | L + S 增量学习服务（LEARN.md, 被动触发, sync 自愈, 10 tools） | ✅ |
-| P4 | Δ 决策因子（evolution.py, get_audit_decision, V3c 动态审核） | ✅ |
+| Version | Phase | Content | Archive |
+|---------|-------|---------|---------|
+| v0.1 | — | 架构改进方案（SKILL.md 瘦身、session 管理、模型选择） | `archive/plan-v0.1.md` |
+| v0.2 | — | 架构改进待办清单（context 污染、session 注册、模型对话框） | `archive/todo-v0.2.md` |
+| v1.0 | P1 | Schema 升级 & MCP 工具补齐（8 tools, frontmatter, multi-dimension search） | `archive/progress-v1.0.md` |
+| v1.0 | P2 | Skill 层集成（REVIEW.md MCP 化, REFLECTOR.md 输出扩展, C 角色 schema 校验） | `archive/progress-v1.0.md` |
+| v1.0 | P3 | L + S 增量学习服务（LEARN.md, 被动触发, sync 自愈, 10 tools） | `archive/progress-v1.0.md` |
+| v1.0 | P4 | Δ 决策因子（evolution.py, get_audit_decision, V3c 动态审核, 11 tools, 104 tests） | `archive/progress-v1.0.md` |
 
 ---
 
