@@ -1,6 +1,6 @@
 ---
 name: aristotle
-description: Aristotle — error reflection & learning agent. Activate with /aristotle. Triggers when the user says you were wrong, made a mistake, gave incorrect output, or corrects your work (e.g. "that's wrong", "not right", "you made an error", "不对", "搞错了", "错了", "纠正"). Spawns an isolated subagent to analyze sessions for model mistakes, perform 5-Why root-cause analysis, write preventive rules, then lets you review, confirm, or request revisions before rules are finalized.
+description: Aristotle — error reflection & learning agent. Activate with /aristotle. Triggers when the user says you were wrong, made a mistake, gave incorrect output, or corrects your work (e.g. "that's wrong", "not right", "you made an error", "不对", "搞错了", "错了", "纠正"). Also triggers in multi-agent scenarios when one agent detects errors in another agent's work during code review or task verification (e.g. "found an issue in", "this has a bug", "incorrect implementation", "this approach won't work", "this is wrong because", "review found errors in", "发现一个问题", "这里有个 bug", "实现有误", "这个方案不行", "检查发现了问题"). Spawns an isolated subagent to analyze sessions for model mistakes, perform 5-Why root-cause analysis, write preventive rules, then lets you review, confirm, or request revisions before rules are finalized.
 metadata:
   emoji: "🦉"
   category: "meta-learning"
@@ -14,9 +14,10 @@ You are **Aristotle**, a meta-learning agent with progressive disclosure archite
 
 | Phase | Command | Loads | Purpose |
 |-------|---------|-------|---------|
-| **Route** | `/aristotle` | This file only | Parse args, route to reflect/review/sessions |
+| **Route** | `/aristotle` | This file only | Parse args, route to reflect/review/learn/sessions |
 | **Reflect** | `/aristotle [target]` | This file + `REFLECT.md` | Fire background Reflector subagent |
 | **Review** | `/aristotle review N` | This file + `REVIEW.md` | Load DRAFT, confirm/revise/reject rules |
+| **Learn** | `/aristotle learn` | This file + `LEARN.md` | Retrieve related lessons from past sessions |
 
 ## ⚠️ CRITICAL ARCHITECTURE RULES
 
@@ -44,8 +45,12 @@ You are **Aristotle**, a meta-learning agent with progressive disclosure archite
 /aristotle recent N                 → REFLECT: Nth most recent session (N=1 is closest to current)
 /aristotle --model <model> [...]    → REFLECT: override model (combine with above)
 /aristotle --focus <hint> [...]     → REFLECT: focus area (last/after "text"/around N/error/full)
+/aristotle learn [intent]           → LEARN: 检索历史教训（自然语言描述任务或领域）
+/aristotle learn --domain X --goal Y → LEARN: 指定 domain/task_goal 检索
+/aristotle learn --domain X         → LEARN: 仅指定 domain 检索
 /aristotle sessions                 → LIST: show all reflection records with sequence numbers
 /aristotle review N                 → REVIEW: load DRAFT #N for review (N = sequence number from sessions)
+(passive trigger, no args)          → REFLECT: current session, auto-detected from multi-agent error signal
 ```
 
 Parse `--model` and `--focus` from anywhere in the argument list.
@@ -56,6 +61,7 @@ Parse `--model` and `--focus` from anywhere in the argument list.
 |---------|--------|
 | `sessions` | Read `~/.config/opencode/aristotle-state.json`, display table → STOP |
 | `review N` | Read `${SKILL_DIR}/REVIEW.md`, then execute review protocol |
+| `learn [...]` | Read `${SKILL_DIR}/LEARN.md`, then execute learn protocol |
 | reflect (default) | Read `${SKILL_DIR}/REFLECT.md`, then execute reflect protocol |
 
 ---

@@ -13,3 +13,8 @@ Thumbs.db
 test-output.log
 tmp/
 *.tmp
+
+# Python
+.venv/
+__pycache__/
+*.egg-info/

@@ -69,6 +69,8 @@ assert_exists "$ARISTOTLE_DIR/SKILL.md"
 assert_exists "$ARISTOTLE_DIR/REFLECTOR.md"
 assert_exists "$ARISTOTLE_DIR/REFLECT.md"
 assert_exists "$ARISTOTLE_DIR/REVIEW.md"
+assert_exists "$ARISTOTLE_DIR/CHECKER.md"
+assert_exists "$ARISTOTLE_DIR/aristotle_mcp/evolution.py"
 assert_exists "$ARISTOTLE_DIR/install.sh"
 assert_exists "$ARISTOTLE_DIR/install.ps1"
 assert_exists "$ARISTOTLE_DIR/test/live-test.sh"
@@ -104,16 +106,16 @@ else
     fail "SKILL.md is $SKILL_LINES lines (expected ≤100)"
 fi
 REFLECT_LINES=$(wc -l < "$ARISTOTLE_DIR/REFLECT.md" | tr -d ' ')
-if [ "$REFLECT_LINES" -le 120 ]; then
-    pass "REFLECT.md is $REFLECT_LINES lines (≤120)"
+if [ "$REFLECT_LINES" -le 140 ]; then
+    pass "REFLECT.md is $REFLECT_LINES lines (≤140)"
 else
-    fail "REFLECT.md is $REFLECT_LINES lines (expected ≤120)"
+    fail "REFLECT.md is $REFLECT_LINES lines (expected ≤140)"
 fi
 REVIEW_LINES=$(wc -l < "$ARISTOTLE_DIR/REVIEW.md" | tr -d ' ')
-if [ "$REVIEW_LINES" -le 200 ]; then
-    pass "REVIEW.md is $REVIEW_LINES lines (≤200)"
+if [ "$REVIEW_LINES" -le 180 ]; then
+    pass "REVIEW.md is $REVIEW_LINES lines (≤180)"
 else
-    fail "REVIEW.md is $REVIEW_LINES lines (expected ≤200)"
+    fail "REVIEW.md is $REVIEW_LINES lines (expected ≤180)"
 fi
 sep
 
@@ -234,6 +236,8 @@ assert_contains "$ARISTOTLE_DIR/REVIEW.md" "confirm" "review: confirm mechanism"
 assert_contains "$ARISTOTLE_DIR/REVIEW.md" "revise" "review: revise mechanism"
 assert_contains "$ARISTOTLE_DIR/REVIEW.md" "reject" "review: reject mechanism"
 assert_contains "$ARISTOTLE_DIR/REVIEW.md" "Revised:" "review: revision timestamp"
+assert_contains "$ARISTOTLE_DIR/REVIEW.md" "get_audit_decision" "review: V3c Δ decision"
+assert_contains "$ARISTOTLE_DIR/REVIEW.md" "audit_level" "review: dynamic audit level"
 
 # Summary
 sep

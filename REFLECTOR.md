@@ -123,6 +123,9 @@ Prepare the rules in memory. Present them as DRAFTS.
 - **Error Excerpt**: [1-2 sentence quote of what the model got wrong]
 - **Correction Excerpt**: [1-2 sentence quote of how the user corrected it]
 - **5-Why Root Cause**: [chain of 5 whys, concise]
+- **Intent Tags**: domain="[inferred domain]", task_goal="[inferred task goal]"
+- **Failed Skill**: [skill/tool ID involved, or null]
+- **Error Summary**: [≤100 char concise summary of the error scene]
 - **Proposed Rule**: [Specific, actionable prevention rule]
 - **Context**: [When this rule applies]
 - **Example**: ✅ [correct behavior] ❌ [wrong behavior]
@@ -134,15 +137,35 @@ Prepare the rules in memory. Present them as DRAFTS.
 
 ## Draft Rules Summary
 
-| # | Severity | Category | Location | Proposed Rule |
-|---|----------|----------|----------|---------------|
-| 1 | HIGH     | ...      | msg N-M  | ...           |
-| 2 | MEDIUM   | ...      | msg N-M  | ...           |
+| # | Severity | Category | Intent Domain | Location | Proposed Rule |
+|---|----------|----------|---------------|----------|---------------|
+| 1 | HIGH     | ...      | ...           | msg N-M  | ...           |
+| 2 | MEDIUM   | ...      | ...           | msg N-M  | ...           |
 
 ---
 
 🦉 DRAFT COMPLETE. Awaiting Coordinator to present to user for review.
 ```
+
+### GEAR Field Inference Guide
+
+When generating the three new fields, follow these inference rules:
+
+- **`intent_tags.domain`**: Infer from error context. Common values:
+  - `"file_operations"` — file read/write/edit/delete errors
+  - `"api_integration"` — API calls, HTTP requests, external service interactions
+  - `"database_operations"` — database queries, ORM, migration errors
+  - `"code_generation"` — syntax errors, wrong code output
+  - `"build_system"` — compilation, bundling, dependency issues
+  - `"testing"` — test failures, assertion errors
+  - `"deployment"` — CI/CD, hosting, configuration errors
+  - `"general"` — none of the above clearly applies
+
+- **`intent_tags.task_goal`** (required): Every error exists because an expected outcome was not met — the user had a goal. Infer what the user was trying to accomplish from the original request or task context. Use a short phrase describing the intended outcome (e.g., `"add dark mode toggle"`, `"configure connection pool"`, `"refactor auth middleware"`). Must describe the user's intent, not the error.
+
+- **`failed_skill`**: Identify the specific tool or skill involved in the error. Examples: `"grep_tool"`, `"edit_tool"`, `"playwright"`, `"prisma"`, `"ast_grep"`, `"lsp_rename"`. Use `null` if no specific tool/skill caused the error (e.g., a reasoning mistake rather than a tool failure).
+
+- **`error_summary`**: Compress the Error Excerpt into ≤100 characters. Focus on **what** went wrong, not why. Example: `"Edit tool failed: oldString not found due to whitespace mismatch"`.
 
 **Key metadata fields for re-reflection:**
 - `Session` — allows re-reading the same session
