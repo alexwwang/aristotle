@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main, git-mcp]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: uv sync --python ${{ matrix.python-version }}
+
+      - name: Run pytest
+        run: uv run pytest test/test_mcp.py -v --tb=short
+
+      - name: Run static tests
+        run: bash test.sh
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --python 3.12
+
+      - name: Ruff check
+        run: uv run --with ruff ruff check aristotle_mcp/ test/
+
+      - name: Ruff format check
+        run: uv run --with ruff ruff format --check aristotle_mcp/ test/

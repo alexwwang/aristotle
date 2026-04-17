@@ -1,0 +1,57 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --python 3.12
+
+      - name: Run pytest
+        run: uv run pytest test/test_mcp.py -v --tb=short
+
+      - name: Run static tests
+        run: bash test.sh
+
+  release:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          PREV_TAG=$(git tag --sort=-version:refname | head -2 | tail -1)
+          if [ -z "$PREV_TAG" ]; then
+            BODY=$(git log --pretty=format:"- %s" HEAD)
+          else
+            BODY=$(git log --pretty=format:"- %s" "${PREV_TAG}..HEAD")
+          fi
+          echo "body<<EOFMARKER" >> "$GITHUB_OUTPUT"
+          echo "$BODY" >> "$GITHUB_OUTPUT"
+          echo "EOFMARKER" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          body: ${{ steps.notes.outputs.body }}
