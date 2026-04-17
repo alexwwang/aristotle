@@ -1,5 +1,11 @@
 # Aristotle 🦉
 
+[![CI](https://github.com/alexwwang/aristotle/actions/workflows/ci.yml/badge.svg)](https://github.com/alexwwang/aristotle/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/alexwwang/aristotle?include_prereleases)](https://github.com/alexwwang/aristotle/releases)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
+[![Tests](https://img.shields.io/badge/tests-111%20pytest%20%2B%2067%20static-brightgreen)](./test/test_mcp.py)
+
 English | [中文](./README.zh-CN.md)
 
 > *Knowing yourself is the beginning of all wisdom.* — Aristotle

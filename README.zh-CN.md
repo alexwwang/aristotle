@@ -1,5 +1,11 @@
 # Aristotle 🦉
 
+[![CI](https://github.com/alexwwang/aristotle/actions/workflows/ci.yml/badge.svg)](https://github.com/alexwwang/aristotle/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/alexwwang/aristotle?include_prereleases)](https://github.com/alexwwang/aristotle/releases)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
+[![Tests](https://img.shields.io/badge/tests-111%20pytest%20%2B%2067%20static-brightgreen)](./test/test_mcp.py)
+
 **[English](./README.md)** | 中文
 
 > *认识自己，是一切智慧的开端。* — 亚里士多德
