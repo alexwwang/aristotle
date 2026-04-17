@@ -7,6 +7,7 @@ from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 
 from aristotle_mcp.config import (
+    AUDIT_THRESHOLDS,
     DEFAULT_RISK_LEVEL,
     RISK_MAP,
     VALID_SCOPES,
@@ -14,6 +15,7 @@ from aristotle_mcp.config import (
     project_hash,
     resolve_repo_dir,
 )
+from aristotle_mcp.evolution import compute_delta, decide_audit_level
 from aristotle_mcp.frontmatter import (
     load_rule_file,
     read_frontmatter_raw,
@@ -52,6 +54,48 @@ def _unique_filename(directory: Path, base_name: str) -> Path:
 
 
 @mcp.tool()
+def get_audit_decision(file_path: str) -> dict:
+    """Compute Δ and return audit level decision for a staging rule.
+
+    Reads the rule's confidence and risk_level from frontmatter,
+    computes Δ = confidence × (1 - risk_weight), and maps to
+    auto / semi / manual.
+
+    Args:
+        file_path: Path to the rule file (relative to repo root or absolute)
+
+    Returns dict with delta, audit_level, thresholds.
+    """
+    path = _resolve_path(file_path)
+    if not path.exists():
+        return {"success": False, "message": f"File not found: {path}"}
+
+    data = load_rule_file(path)
+    metadata = data["metadata"]
+
+    confidence = metadata.get("confidence", 0.7)
+    risk_level = metadata.get("risk_level", DEFAULT_RISK_LEVEL)
+
+    try:
+        delta = compute_delta(confidence, risk_level)
+    except ValueError as e:
+        return {"success": False, "message": str(e)}
+
+    audit_level = decide_audit_level(delta)
+
+    return {
+        "success": True,
+        "rule_id": metadata.get("id", "unknown"),
+        "delta": round(delta, 4),
+        "audit_level": audit_level,
+        "confidence": confidence,
+        "risk_level": risk_level,
+        "risk_weight": RISK_MAP.get(metadata.get("category", ""), risk_level),
+        "thresholds": AUDIT_THRESHOLDS,
+    }
+
+
+@mcp.tool()
 def init_repo_tool() -> dict:
     """Initialize the Aristotle rule repository with Git version control.
 
@@ -87,6 +131,7 @@ def write_rule(
     source_session: str | None = None,
     message_range: str | None = None,
     project_path: str | None = None,
+    confidence: float = 0.7,
     intent_domain: str | None = None,
     intent_task_goal: str | None = None,
     failed_skill: str | None = None,
@@ -105,6 +150,7 @@ def write_rule(
         intent_task_goal: Task goal tag for intent classification (e.g. "extract_entity")
         failed_skill: Associated skill ID that triggered the error
         error_summary: Concise error context summary
+        confidence: R's confidence score (0.0-1.0). Default 0.7
 
     Returns dict with success, message, file_path, rule_id.
     """
@@ -152,7 +198,7 @@ def write_rule(
         scope=scope,
         project_hash=p_hash,
         category=category,
-        confidence=0.7,
+        confidence=confidence,
         risk_level=risk_level,
         source_session=source_session,
         message_range=message_range,

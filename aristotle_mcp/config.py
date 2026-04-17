@@ -38,6 +38,17 @@ RISK_MAP: dict[str, str] = {
 
 DEFAULT_RISK_LEVEL = "medium"
 
+RISK_WEIGHTS: dict[str, float] = {
+    "high": 0.8,
+    "medium": 0.5,
+    "low": 0.2,
+}
+
+AUDIT_THRESHOLDS: dict[str, float] = {
+    "auto": 0.7,
+    "semi": 0.4,
+}
+
 VALID_STATUSES: tuple[str, ...] = ("pending", "staging", "verified", "rejected")
 
 VALID_SCOPES: tuple[str, ...] = ("user", "project")

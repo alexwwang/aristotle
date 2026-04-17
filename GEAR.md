@@ -322,7 +322,7 @@ These dimensions work together. Domain provides broad relevance. Task goal targe
 
 ## The Δ Decision Factor
 
-GEAR's evolution model determines when rules get promoted through audit levels automatically.
+GEAR's audit routing uses a per-rule quality score to determine how much human oversight is required.
 
 ```
 Δ = confidence × (1 − risk_weight)
@@ -348,15 +348,15 @@ Higher risk weight means lower Δ, requiring more scrutiny before promotion.
 | 0.4 < Δ ≤ 0.7 | semi | Show diff, wait for user confirmation |
 | Δ ≤ 0.4 | manual | Mandatory human review |
 
-### Evolution Levels
+### Evolution Levels (Deferred)
 
-The system tracks success rates across all rules. Based on accumulated statistics:
+The protocol defines promotion rules (Apprentice → Peer → Expert) based on accumulated success rates. This mechanism is **deferred** in the current Aristotle implementation pending resolution of foundational questions:
 
-| Condition | Action |
-|-----------|--------|
-| Success rate > 95% and 50 consecutive verified | Apprentice → Peer (Δ threshold drops 0.1) |
-| Success rate > 98% and 100 consecutive verified | Peer → Expert (Δ threshold drops another 0.1) |
-| Success rate < 80% | Demote one level |
+1. **Evolution target** — All GEAR agents are stateless protocol executors. Adjusting thresholds does not improve any agent's capability; it only reduces human oversight. What should actually evolve?
+2. **Feedback signal** — `verified/(verified+rejected)` ratio reflects user behavior patterns, not system quality. A reliable feedback signal source has not been identified.
+3. **C's learning path** — C cannot learn from history because it does not read the rule library. True evolution for C would require a separate "audit lesson" rule category.
+
+These questions must be answered before implementing evolution levels. The Δ decision engine itself is implemented and operational.
 
 ---
 

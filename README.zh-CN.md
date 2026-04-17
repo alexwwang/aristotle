@@ -233,12 +233,12 @@ _rule()      │
 verified rejected/  （保留 scope 和元数据）
 ```
 
-### 10 个 MCP 工具
+### 11 个 MCP 工具
 
 | 工具 | 用途 |
 |------|------|
 | `init_repo` | 初始化 Git 仓库、创建目录结构、自动迁移现有扁平规则 |
-| `write_rule` | 创建新规则文件（status: `pending`），附带 YAML frontmatter 和 GEAR 2.0 字段 |
+| `write_rule` | 创建新规则文件（status: `pending`），附带 YAML frontmatter、GEAR 2.0 字段和置信度 |
 | `read_rules` | 按状态、类别、scope 查询，或对 frontmatter 值做多维度正则匹配 |
 | `stage_rule` | 标记规则为 `staging`（审核中） |
 | `commit_rule` | 设置 status 为 `verified`，记录时间戳，执行 `git add && commit` |
@@ -247,6 +247,7 @@ verified rejected/  （保留 scope 和元数据）
 | `list_rules` | 轻量元数据列表，支持全部搜索维度（不加载规则正文）。用于相关性评分后再选择性读取内容 |
 | `check_sync_status` | 检测磁盘上存在但未提交到 git 的 verified 规则 |
 | `sync_rules` | 将未同步的 verified 规则提交到 git（自动检测或指定文件） |
+| `get_audit_decision` | 计算当前 staging 规则的 Δ = confidence × (1 − risk_weight)，返回审核级别（auto/semi/manual） |
 
 ### 流式 Frontmatter 检索
 
@@ -367,7 +368,7 @@ Aristotle 是 **[GEAR（Git-backed Error Analysis & Reflection）](./GEAR.md)** 
 | **L**（学习者） | `LEARN.md` | ✅ 已实现 |
 | **S**（检索者） | O 内的函数调用（LEARN.md STEP L3） | ✅ 已实现 |
 
-GEAR 协议操作映射到 Aristotle 的 MCP 工具：`produce` → `write_rule`、`stage` → `stage_rule`、`verify` → `commit_rule`、`reject` → `reject_rule`、`restore` → `restore_rule`、`search` → `read_rules`、`sync` → `check_sync_status` + `sync_rules`。
+GEAR 协议操作映射到 Aristotle 的 MCP 工具：`produce` → `write_rule`、`stage` → `stage_rule`、`verify` → `commit_rule`、`reject` → `reject_rule`、`restore` → `restore_rule`、`search` → `read_rules`、`sync` → `check_sync_status` + `sync_rules`、`audit_decision` → `get_audit_decision`。
 
 完整的协议规范——状态机、frontmatter schema、Δ 决策因子和一致性要求——详见 **[GEAR.md](./GEAR.md)**。
 
@@ -387,17 +388,19 @@ bash test.sh
 uv run pytest test/test_mcp.py -v
 ```
 
-82 个断言，覆盖全部 7 个模块：
+104 个断言，覆盖全部 9 个模块/测试类：
 
 | 测试类 | 模块 | 断言数 | 测试内容 |
 |--------|------|--------|----------|
-| `TestConfig` | `config.py` | 10 | 路径解析、环境变量覆盖、RISK_MAP、项目哈希 |
+| `TestConfig` | `config.py` | 12 | 路径解析、环境变量覆盖、RISK_MAP、RISK_WEIGHTS、AUDIT_THRESHOLDS、项目哈希 |
+| `TestEvolution` | `evolution.py` | 10 | compute_delta（所有 risk_level、边界值、输入校验）、decide_audit_level（auto/semi/manual）、集成测试 |
 | `TestModels` | `models.py` | 16 | RuleMetadata 默认值、YAML 序列化往返、from_frontmatter_dict、GEAR 2.0 字段测试 |
 | `TestGitOps` | `git_ops.py` | 9 | init、add+commit、show、log、status、git_show_exists、边界情况 |
 | `TestFrontmatter` | `frontmatter.py` | 19 | 原子写入、原始读取、字段更新、流式过滤（status/category/keyword/limit）、跳过索引文件、多维度搜索测试 |
 | `TestMigration` | `migration.py` | 7 | 扁平 Markdown 解析、仓库初始化、自动迁移并备份 |
 | `TestServerTools` | `server.py` | 21 | 完整生命周期（write → stage → commit → read）、拒绝流程、restore_rule、输入校验、GEAR 2.0 字段、git 检查测试 |
 | `TestSyncTools` | `server.py` | 7 | check_sync_status（干净/脏数据/无仓库）、sync_rules（自动/指定文件/无待同步）、git_show_exists |
+| `TestDeltaDecision` | `server.py` + `evolution.py` | 8 | get_audit_decision（auto/semi/manual）、write_rule confidence（默认/自定义）、Δ 影响审核级别 |
 
 所有测试使用隔离的临时目录（`tmp_path` fixture），可安全反复运行。
 
@@ -425,10 +428,11 @@ bash test/live-test.sh --model <provider/model>
 ├── test.sh               # 静态测试套件（63 断言）
 ├── aristotle_mcp/        # MCP server（Git 支持的规则管理）
 │   ├── __init__.py
-│   ├── config.py         # 路径、常量、环境变量
+│   ├── config.py         # 路径、常量、环境变量、RISK_WEIGHTS、AUDIT_THRESHOLDS
 │   ├── models.py         # RuleMetadata 数据类、YAML 序列化
 │   ├── git_ops.py        # Git 抽象层（init、add+commit、show、log、status、show_exists）
-│   ├── frontmatter.py    # 流式 frontmatter 检索、原子写入
+│   ├── frontmatter.py    # 流式 frontmatter 搜索、原子写入
+│   ├── evolution.py      # Δ 决策引擎（compute_delta、decide_audit_level）
 │   ├── migration.py      # 扁平 Markdown → Git 仓库迁移
 │   └── server.py         # FastMCP 入口，10 个工具
 └── test/

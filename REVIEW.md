@@ -60,20 +60,31 @@ Returns: `rule_id`, `file_path`, `status="pending"`
 
 For each written rule, call `stage_rule(file_path)` → status becomes `"staging"`.
 
-### V3c. Audit Level Decision
+### V3c. Audit Level Decision (Δ Dynamic)
 
-(P4 will add Δ factor; P2 uses fixed semi mode)
+For each staging rule, call `get_audit_decision(file_path)` → returns `{delta, audit_level, confidence, risk_level, thresholds}`.
 
 ```
-IF category risk_level is "low" (PATTERN_VIOLATION, OVERSIMPLIFICATION, SYNTAX_API_ERROR):
+IF audit_level is "auto":
   → Auto-call commit_rule(file_path) without user confirmation
-ELSE:
-  → Present rule diff to user, wait for final "commit" confirmation
-  → On confirm: call commit_rule(file_path)
-  → On reject: call reject_rule(file_path, reason="user rejected after review")
+  → Output: "✅ Rule auto-committed (Δ={delta}, {confidence} confidence, {risk_level} risk)"
+
+IF audit_level is "semi":
+  → Present rule diff to user, wait for "commit" / "reject"
+  → Show: "📋 Review required (Δ={delta}, {confidence} confidence, {risk_level} risk)"
+  → On "commit": call commit_rule(file_path)
+  → On "reject": call reject_rule(file_path, reason="user rejected after review")
+
+IF audit_level is "manual":
+  → Mandatory detailed review with CHECKER.md validation
+  → Present full rule content + diff + risk assessment
+  → Require explicit "confirm" + "commit" from user
+  → Output: "⚠️ Manual review required (Δ={delta}, {confidence} confidence, {risk_level} risk)"
+  → On confirm + commit: call commit_rule(file_path)
+  → On reject: call reject_rule(file_path, reason="user rejected after manual review")
 ```
 
-Risk level mapping: HALLUCINATION→high, MISUNDERSTOOD_REQUIREMENT→high, INCOMPLETE_ANALYSIS→medium, WRONG_TOOL_CHOICE→medium, ASSUMED_CONTEXT→medium, SYNTAX_API_ERROR→medium, PATTERN_VIOLATION→low, OVERSIMPLIFICATION→low.
+Δ = confidence × (1 − risk_weight). Risk weight: high→0.8, medium→0.5, low→0.2. Thresholds: auto > 0.7, semi > 0.4, manual ≤ 0.4.
 
 ### V3d. Update State File
 

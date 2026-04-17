@@ -70,6 +70,7 @@ assert_exists "$ARISTOTLE_DIR/REFLECTOR.md"
 assert_exists "$ARISTOTLE_DIR/REFLECT.md"
 assert_exists "$ARISTOTLE_DIR/REVIEW.md"
 assert_exists "$ARISTOTLE_DIR/CHECKER.md"
+assert_exists "$ARISTOTLE_DIR/aristotle_mcp/evolution.py"
 assert_exists "$ARISTOTLE_DIR/install.sh"
 assert_exists "$ARISTOTLE_DIR/install.ps1"
 assert_exists "$ARISTOTLE_DIR/test/live-test.sh"
@@ -235,6 +236,8 @@ assert_contains "$ARISTOTLE_DIR/REVIEW.md" "confirm" "review: confirm mechanism"
 assert_contains "$ARISTOTLE_DIR/REVIEW.md" "revise" "review: revise mechanism"
 assert_contains "$ARISTOTLE_DIR/REVIEW.md" "reject" "review: reject mechanism"
 assert_contains "$ARISTOTLE_DIR/REVIEW.md" "Revised:" "review: revision timestamp"
+assert_contains "$ARISTOTLE_DIR/REVIEW.md" "get_audit_decision" "review: V3c Δ decision"
+assert_contains "$ARISTOTLE_DIR/REVIEW.md" "audit_level" "review: dynamic audit level"
 
 # Summary
 sep

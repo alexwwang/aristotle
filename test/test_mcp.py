@@ -83,6 +83,98 @@ class TestConfig:
 
         assert set(VALID_STATUSES) == {"pending", "staging", "verified", "rejected"}
 
+    def test_risk_weights(self):
+        from aristotle_mcp.config import RISK_WEIGHTS
+
+        assert RISK_WEIGHTS == {"high": 0.8, "medium": 0.5, "low": 0.2}
+
+    def test_audit_thresholds(self):
+        from aristotle_mcp.config import AUDIT_THRESHOLDS
+
+        assert AUDIT_THRESHOLDS["auto"] == 0.7
+        assert AUDIT_THRESHOLDS["semi"] == 0.4
+        assert AUDIT_THRESHOLDS["auto"] > AUDIT_THRESHOLDS["semi"]
+
+
+# ═══════════════════════════════════════════════════════
+# evolution
+# ═══════════════════════════════════════════════════════
+class TestEvolution:
+    def test_compute_delta_high_risk(self):
+        from aristotle_mcp.evolution import compute_delta
+
+        assert compute_delta(1.0, "high") == pytest.approx(0.2)
+        assert compute_delta(0.5, "high") == pytest.approx(0.1)
+
+    def test_compute_delta_medium_risk(self):
+        from aristotle_mcp.evolution import compute_delta
+
+        assert compute_delta(1.0, "medium") == pytest.approx(0.5)
+        assert compute_delta(0.8, "medium") == pytest.approx(0.4)
+
+    def test_compute_delta_low_risk(self):
+        from aristotle_mcp.evolution import compute_delta
+
+        assert compute_delta(1.0, "low") == pytest.approx(0.8)
+        assert compute_delta(0.5, "low") == pytest.approx(0.4)
+
+    def test_compute_delta_zero_confidence(self):
+        from aristotle_mcp.evolution import compute_delta
+
+        assert compute_delta(0.0, "high") == 0.0
+        assert compute_delta(0.0, "low") == 0.0
+
+    def test_compute_delta_invalid_risk_level(self):
+        from aristotle_mcp.evolution import compute_delta
+
+        with pytest.raises(ValueError, match="Unknown risk_level"):
+            compute_delta(0.5, "critical")
+
+    def test_compute_delta_invalid_confidence(self):
+        from aristotle_mcp.evolution import compute_delta
+
+        with pytest.raises(ValueError, match="confidence must be between"):
+            compute_delta(1.5, "high")
+        with pytest.raises(ValueError, match="confidence must be between"):
+            compute_delta(-0.1, "low")
+
+    def test_decide_audit_level_auto(self):
+        from aristotle_mcp.evolution import decide_audit_level
+
+        assert decide_audit_level(0.75) == "auto"
+        assert decide_audit_level(0.7 + 0.001) == "auto"
+        assert decide_audit_level(1.0) == "auto"
+
+    def test_decide_audit_level_semi(self):
+        from aristotle_mcp.evolution import decide_audit_level
+
+        assert decide_audit_level(0.5) == "semi"
+        assert decide_audit_level(0.7) == "semi"
+        assert decide_audit_level(0.4 + 0.001) == "semi"
+
+    def test_decide_audit_level_manual(self):
+        from aristotle_mcp.evolution import decide_audit_level
+
+        assert decide_audit_level(0.4) == "manual"
+        assert decide_audit_level(0.3) == "manual"
+        assert decide_audit_level(0.0) == "manual"
+
+    def test_delta_audit_integration(self):
+        """End-to-end: confidence + risk → Δ → audit level."""
+        from aristotle_mcp.evolution import compute_delta, decide_audit_level
+
+        # Low risk, high confidence → auto
+        d = compute_delta(0.95, "low")
+        assert decide_audit_level(d) == "auto"
+
+        # High risk, moderate confidence → manual
+        d = compute_delta(0.4, "high")
+        assert decide_audit_level(d) == "manual"
+
+        # Medium risk, high confidence → semi
+        d = compute_delta(0.9, "medium")
+        assert decide_audit_level(d) == "semi"
+
 
 # ═══════════════════════════════════════════════════════
 # models
@@ -1188,3 +1280,137 @@ class TestSyncTools:
 
         assert git_show_exists(tmp_repo, "user/test.md") is True
         assert git_show_exists(tmp_repo, "user/nonexistent.md") is False
+
+
+# ═══════════════════════════════════════════════════════
+# P4: Δ decision + confidence
+# ═══════════════════════════════════════════════════════
+class TestDeltaDecision:
+    def test_get_audit_decision_auto(self, tmp_repo):
+        from aristotle_mcp.server import (
+            init_repo_tool,
+            write_rule,
+            stage_rule,
+            get_audit_decision,
+        )
+
+        init_repo_tool()
+        # Low risk + high confidence → auto
+        w = write_rule(
+            content="auto test",
+            category="PATTERN_VIOLATION",
+            confidence=0.95,
+        )
+        stage_rule(w["file_path"])
+        r = get_audit_decision(w["file_path"])
+        assert r["success"]
+        assert r["audit_level"] == "auto"
+        assert r["delta"] > 0.7
+
+    def test_get_audit_decision_semi(self, tmp_repo):
+        from aristotle_mcp.server import (
+            init_repo_tool,
+            write_rule,
+            stage_rule,
+            get_audit_decision,
+        )
+
+        init_repo_tool()
+        # Medium risk + default confidence (0.7) → semi
+        w = write_rule(
+            content="semi test",
+            category="INCOMPLETE_ANALYSIS",
+            confidence=0.7,
+        )
+        stage_rule(w["file_path"])
+        r = get_audit_decision(w["file_path"])
+        assert r["success"]
+        assert r["audit_level"] == "semi"
+
+    def test_get_audit_decision_manual(self, tmp_repo):
+        from aristotle_mcp.server import (
+            init_repo_tool,
+            write_rule,
+            stage_rule,
+            get_audit_decision,
+        )
+
+        init_repo_tool()
+        # High risk + low confidence → manual
+        w = write_rule(
+            content="manual test",
+            category="HALLUCINATION",
+            confidence=0.3,
+        )
+        stage_rule(w["file_path"])
+        r = get_audit_decision(w["file_path"])
+        assert r["success"]
+        assert r["audit_level"] == "manual"
+        assert r["delta"] <= 0.4
+
+    def test_get_audit_decision_file_not_found(self, tmp_repo):
+        from aristotle_mcp.server import get_audit_decision
+
+        r = get_audit_decision("/nonexistent/path.md")
+        assert not r["success"]
+        assert "not found" in r["message"].lower()
+
+    def test_get_audit_decision_includes_thresholds(self, tmp_repo):
+        from aristotle_mcp.server import (
+            init_repo_tool,
+            write_rule,
+            stage_rule,
+            get_audit_decision,
+        )
+
+        init_repo_tool()
+        w = write_rule(content="thresholds test", category="TEST", confidence=0.5)
+        stage_rule(w["file_path"])
+        r = get_audit_decision(w["file_path"])
+        assert r["success"]
+        assert "thresholds" in r
+        assert r["thresholds"]["auto"] == 0.7
+        assert r["thresholds"]["semi"] == 0.4
+
+    def test_write_rule_default_confidence(self, tmp_repo):
+        from aristotle_mcp.server import init_repo_tool, write_rule
+        from aristotle_mcp.frontmatter import read_frontmatter_raw
+
+        init_repo_tool()
+        w = write_rule(content="default confidence", category="TEST")
+        fm = read_frontmatter_raw(Path(w["file_path"]))
+        assert fm["confidence"] == 0.7
+
+    def test_write_rule_custom_confidence(self, tmp_repo):
+        from aristotle_mcp.server import init_repo_tool, write_rule
+        from aristotle_mcp.frontmatter import read_frontmatter_raw
+
+        init_repo_tool()
+        w = write_rule(content="custom confidence", category="TEST", confidence=0.95)
+        fm = read_frontmatter_raw(Path(w["file_path"]))
+        assert fm["confidence"] == 0.95
+
+    def test_write_rule_confidence_affects_delta(self, tmp_repo):
+        """Same category, different confidence → different audit levels."""
+        from aristotle_mcp.server import (
+            init_repo_tool,
+            write_rule,
+            stage_rule,
+            get_audit_decision,
+        )
+
+        init_repo_tool()
+
+        w_high = write_rule(
+            content="high conf", category="PATTERN_VIOLATION", confidence=0.95
+        )
+        stage_rule(w_high["file_path"])
+        r_high = get_audit_decision(w_high["file_path"])
+        assert r_high["audit_level"] == "auto"
+
+        w_low = write_rule(content="low conf", category="HALLUCINATION", confidence=0.3)
+        stage_rule(w_low["file_path"])
+        r_low = get_audit_decision(w_low["file_path"])
+        assert r_low["audit_level"] == "manual"
+
+        assert r_high["delta"] > r_low["delta"]

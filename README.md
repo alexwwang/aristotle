@@ -233,12 +233,12 @@ _rule()      │
 verified rejected/  (preserves scope + metadata)
 ```
 
-### 10 MCP Tools
+### 11 MCP Tools
 
 | Tool | Purpose |
 |------|---------|
 | `init_repo` | Initialize the Git repo, create directory structure, migrate existing flat rules |
-| `write_rule` | Create a new rule file (status: `pending`) with YAML frontmatter and GEAR 2.0 fields |
+| `write_rule` | Create a new rule file (status: `pending`) with YAML frontmatter, GEAR 2.0 fields, and confidence score |
 | `read_rules` | Query rules by status, category, scope, or multi-dimension regex against frontmatter |
 | `stage_rule` | Mark a rule as `staging` (under review) |
 | `commit_rule` | Set status to `verified`, record timestamp, `git add && commit` |
@@ -247,6 +247,7 @@ verified rejected/  (preserves scope + metadata)
 | `list_rules` | Lightweight metadata-only listing with full search dimensions (no rule bodies loaded). Used for relevance scoring before selective content read |
 | `check_sync_status` | Detect verified rules on disk that are not committed to git |
 | `sync_rules` | Commit unsynced verified rules to git (auto-detect or specify files) |
+| `get_audit_decision` | Compute Δ = confidence × (1 − risk_weight) for a staging rule, return audit level (auto/semi/manual) |
 
 ### Streaming Frontmatter Search
 
@@ -367,7 +368,7 @@ Aristotle is an implementation of **[GEAR (Git-backed Error Analysis & Reflectio
 | **L** (Learner) | `LEARN.md` | ✅ Active |
 | **S** (Searcher) | Function within O (LEARN.md STEP L3) | ✅ Active |
 
-GEAR protocol operations map to Aristotle's MCP tools: `produce` → `write_rule`, `stage` → `stage_rule`, `verify` → `commit_rule`, `reject` → `reject_rule`, `restore` → `restore_rule`, `search` → `read_rules`, `sync` → `check_sync_status` + `sync_rules`.
+GEAR protocol operations map to Aristotle's MCP tools: `produce` → `write_rule`, `stage` → `stage_rule`, `verify` → `commit_rule`, `reject` → `reject_rule`, `restore` → `restore_rule`, `search` → `read_rules`, `sync` → `check_sync_status` + `sync_rules`, `audit_decision` → `get_audit_decision`.
 
 The full protocol specification — state machine, frontmatter schema, Δ decision factor, and conformance requirements — is documented in **[GEAR.md](./GEAR.md)**.
 
@@ -387,17 +388,19 @@ bash test.sh
 uv run pytest test/test_mcp.py -v
 ```
 
-82 assertions covering all 7 modules:
+104 assertions covering all 8 modules:
 
 | Test Class | Module | Assertions | What It Tests |
 |------------|--------|------------|---------------|
-| `TestConfig` | `config.py` | 10 | Path resolution, env override, RISK_MAP, project hash |
+| `TestConfig` | `config.py` | 12 | Path resolution, env override, RISK_MAP, RISK_WEIGHTS, AUDIT_THRESHOLDS, project hash |
+| `TestEvolution` | `evolution.py` | 10 | compute_delta (all risk levels, edge cases, validation), decide_audit_level (auto/semi/manual), integration |
 | `TestModels` | `models.py` | 16 | RuleMetadata defaults, YAML serialization roundtrip, from_frontmatter_dict, GEAR 2.0 field tests |
 | `TestGitOps` | `git_ops.py` | 9 | init, add+commit, show, log, status, git_show_exists, edge cases |
 | `TestFrontmatter` | `frontmatter.py` | 19 | Atomic write, raw read, field update, stream filter (status/category/keyword/limit), index skip, multi-dimension search tests |
 | `TestMigration` | `migration.py` | 7 | Flat Markdown parsing, repo init, auto-migration with backup |
 | `TestServerTools` | `server.py` | 21 | Full lifecycle (write → stage → commit → read), reject flow, restore_rule, input validation, GEAR 2.0 fields, git check tests |
 | `TestSyncTools` | `server.py` | 7 | check_sync_status (clean/dirty/no repo), sync_rules (auto/specific/nothing), git_show_exists |
+| `TestDeltaDecision` | `server.py` + `evolution.py` | 8 | get_audit_decision (auto/semi/manual), write_rule confidence (default/custom), Δ affects audit level |
 
 All tests use isolated temp directories (`tmp_path` fixture) and are safe to run repeatedly.
 
@@ -425,10 +428,11 @@ Creates a real session with known error patterns, triggers `/aristotle`, and ver
 ├── test.sh               # Static test suite (63 assertions)
 ├── aristotle_mcp/        # MCP server (Git-backed rule management)
 │   ├── __init__.py
-│   ├── config.py         # Paths, constants, env vars
+│   ├── config.py         # Paths, constants, env vars, RISK_WEIGHTS, AUDIT_THRESHOLDS
 │   ├── models.py         # RuleMetadata dataclass, YAML serialization
 │   ├── git_ops.py        # Git abstraction (init, add+commit, show, log, status, show_exists)
 │   ├── frontmatter.py    # Streaming frontmatter search, atomic writes
+│   ├── evolution.py      # Δ decision engine (compute_delta, decide_audit_level)
 │   ├── migration.py      # Flat Markdown → Git repo migration
 │   └── server.py         # FastMCP entry point, 10 tools
 └── test/
