@@ -327,7 +327,7 @@ Implementations MUST support these frontmatter fields:
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `id` | string | always | Unique identifier |
-| `status` | enum | always | One of: `pending`, `staging`, `verified`, `rejected` |
+| `status` | enum | always | One of: `pending`, `staging`, `verified`, `rejected`, `needs_sync` (anomaly state) |
 | `scope` | enum | always | One of: `user`, `project` |
 | `category` | string | always | Error category from the implementation's taxonomy |
 | `confidence` | float | always | Confidence score 0–1 |
