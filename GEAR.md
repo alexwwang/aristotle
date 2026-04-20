@@ -179,6 +179,11 @@ GEAR defines five roles that MUST coordinate through git operations and a query 
 - Convert intent descriptions into structured query conditions
 - Execute queries with dimension filters against the rule store
 - Rank results by relevance across retrieval dimensions
+- Execute a two-round retrieval process: Round 1 returns metadata-only candidates
+  via `list_rules` to minimize context overhead; Round 2 spawns parallel scoring
+  subagents that each read one rule's full content and score relevance (1-10). This
+  separation avoids loading hundreds of full rule bodies into the orchestrator's
+  context window.
 
 **Triggers:**
 - O delegates knowledge service requests from L
@@ -239,7 +244,7 @@ Rule failed audit. MUST be moved to a `rejected/` directory mirroring the origin
 
 ### needs_sync
 
-Anomaly state. Detected when a file exists on disk but `git show HEAD:file` fails — the file was not committed through the proper pipeline.
+Anomaly state. Detected when a file exists on disk but `git show HEAD:file` fails — the file was not committed through the proper pipeline. Common triggers include: C crashing after writing a file but before committing, or manual edits to the rule store bypassing the protocol.
 
 **Resolution:** O detects the signal, C performs a supplementary commit.
 
@@ -491,7 +496,7 @@ O MUST coordinate the sequencing of all protocol operations. R and C MUST NOT in
 
 A system claiming GEAR conformance MUST satisfy the following requirements:
 
-1. **Role separation.** Production (R), audit (C), and consumption (L) MUST be handled by distinct agents or processes. No single agent MUST perform two roles simultaneously on the same rule.
+1. **Role separation.** Production (R), audit (C), and consumption (L) MUST be handled by distinct agents or processes. A single agent MUST NOT simultaneously act as both producer (R) and auditor (C) for the same rule.
 
 2. **Git-backed storage.** All verified rules MUST be committed to a git repository. Consumers MUST read via `git show HEAD:` or equivalent atomic-read mechanism. Uncommitted files on disk MUST NOT be visible to L.
 
