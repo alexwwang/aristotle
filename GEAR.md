@@ -1,6 +1,6 @@
 # GEAR: Git-backed Error Analysis & Reflection
 
-**Version:** 1.0-draft
+**Version:** 1.1
 
 GEAR is a protocol for AI agent error reflection, learning, and prevention. It defines how agents capture mistakes, structure them as rules, validate quality, and apply lessons to future tasks.
 
@@ -8,9 +8,29 @@ It solves the problem that corrections made in one session vanish in the next. B
 
 ---
 
+## Scope and Non-Goals
+
+### In Scope
+
+- Structured error reflection with lifecycle management
+- Git-backed persistent rule storage with atomic reads
+- Intent-driven rule retrieval via metadata filtering
+- Confidence-based audit routing (Δ decision factor)
+- Feedback signal tracking through rule application outcomes
+
+### Explicitly Out of Scope
+
+- **Agent runtime implementation** — GEAR does not specify how agents execute tasks, call tools, or manage their context windows.
+- **LLM invocation protocols** — How R generates rule content or how L applies it is implementation-defined.
+- **Vector-based semantic retrieval** — GEAR specifies metadata filtering only. Implementations MAY add vector search as a complementary layer.
+- **Multi-agent coordination** — GEAR assumes a single orchestration context. Distributed agent networks are out of scope.
+- **Rule content format beyond frontmatter** — The Markdown body structure (Context, Rule, Example sections) is an Aristotle convention, not a GEAR conformance requirement.
+
+---
+
 ## The Production-Audit-Consumption Model
 
-GEAR separates learning into three decoupled phases. This separation prevents feedback loops and ensures each phase can operate independently.
+GEAR separates learning into three decoupled phases. This separation MUST prevent feedback loops and ensure each phase operates independently.
 
 **Production:** The Resource Creator (R) writes reflection rules with structured intent tags. These rules capture what went wrong and how to fix it. R doesn't decide whether rules are good enough — it just produces them.
 
@@ -24,7 +44,7 @@ Why separate them? Production without audit accumulates noise. Consumption witho
 
 ## Five Roles
 
-GEAR defines five roles that coordinate through git operations and a query interface.
+GEAR defines five roles that MUST coordinate through git operations and a query interface.
 
 | Role | Responsibility |
 |------|---------------|
@@ -126,7 +146,7 @@ GEAR defines five roles that coordinate through git operations and a query inter
 - Validate frontmatter schema compliance
 - Execute status transitions (`pending` → `staging` → `verified`)
 - Create git commits with structured messages
-- Reject malformed or incorrect rules
+- Reject malformed or incorrect rules. C MUST reject any rule that fails schema validation.
 
 **Triggers:**
 - O completes audit-level decision
@@ -143,7 +163,7 @@ GEAR defines five roles that coordinate through git operations and a query inter
 - Generate intent tags pre-task based on current context
 - Retrieve relevant rules via O → S delegation
 - Apply rules during task execution
-- Report errors when rules fail to prevent recurrence
+- Report errors when rules fail to prevent recurrence. L MUST send an error report to O when a previously applied rule did not prevent the error.
 
 **Triggers:**
 - Task initiation
@@ -170,7 +190,7 @@ GEAR defines five roles that coordinate through git operations and a query inter
 
 ## Rule Lifecycle (State Machine)
 
-Rules move through five states. Status is stored in each file's YAML frontmatter `status` field.
+A rule MUST transition through exactly five states. Status is stored in each file's YAML frontmatter `status` field.
 
 ```
   produce            stage              verify
@@ -191,7 +211,7 @@ Plus `needs_sync` as the anomaly state.
 
 ### pending
 
-Rule has been created by R but not yet reviewed. File exists on disk but is not committed to git.
+Rule has been created by R but not yet reviewed. File exists on disk but MUST NOT be committed to git in this state.
 
 **Who can see:** R (creator), C (for validation), O.
 **Transitions:** `stage` → staging, or `reject` → rejected.
@@ -205,21 +225,21 @@ Rule is locked for review by C. Status field updated to `staging`.
 
 ### verified
 
-Rule has passed audit and is committed to git. This is the terminal state — the only state visible to L.
+Rule has passed audit and is committed to git. This is the terminal state — the only state L MAY read.
 
 **Who can see:** All roles. L reads via `git show HEAD:` to guarantee atomic reads of committed content.
 **Transitions:** None (terminal).
 
 ### rejected
 
-Rule failed audit. Moved to a `rejected/` directory mirroring the original structure. Original metadata preserved.
+Rule failed audit. MUST be moved to a `rejected/` directory mirroring the original structure. Original metadata MUST be preserved.
 
 **Who can see:** All roles.
 **Transitions:** `restore` → pending.
 
 ### needs_sync
 
-Anomaly state. Detected when a file exists on disk but `git show HEAD:file` fails — the file wasn't committed through the proper pipeline.
+Anomaly state. Detected when a file exists on disk but `git show HEAD:file` fails — the file was not committed through the proper pipeline.
 
 **Resolution:** O detects the signal, C performs a supplementary commit.
 
@@ -227,7 +247,7 @@ Anomaly state. Detected when a file exists on disk but `git show HEAD:file` fail
 
 ## Data Protocol: Frontmatter Schema
 
-Every rule file contains YAML frontmatter with structured metadata. This schema drives intent-driven retrieval and rule validation.
+Every rule file MUST contain YAML frontmatter with structured metadata. This schema drives intent-driven retrieval and rule validation.
 
 ```yaml
 ---
@@ -282,12 +302,22 @@ verified_by: "auto"
 rejected_at: null
 rejected_reason: null
 # Rejection metadata — only set when status is "rejected"
+
+# --- Feedback Signal ---
+
+success_rate: null        # float 0-1, ratio of successful applications by L
+failure_rate: null        # float 0-1, ratio of failed applications by L
+sample_size: 0            # int, total number of times L applied this rule
+
+# --- Rule Relations ---
+
+conflicts_with: null      # list[string], IDs of rules that contradict this rule
 ---
 ```
 
 ### Required Fields
 
-Implementations must support these frontmatter fields:
+Implementations MUST support these frontmatter fields:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -305,6 +335,10 @@ Implementations must support these frontmatter fields:
 | `verified_by` | string | on verify | Who/what approved the rule |
 | `rejected_at` | ISO 8601 | on reject | Rejection timestamp |
 | `rejected_reason` | string | on reject | Reason for rejection |
+| `success_rate` | float | on feedback | Ratio of successful applications (0–1). Set by C after L reports outcome. |
+| `failure_rate` | float | on feedback | Ratio of failed applications (0–1). `failure_rate = 1 - success_rate` by convention. |
+| `sample_size` | int | on feedback | Total number of times L applied this rule. `sample_size = 0` means untested. |
+| `conflicts_with` | list | optional | Rule IDs that contradict this rule. Implementations SHOULD declare known conflicts. |
 
 ### Three Retrieval Dimensions
 
@@ -316,7 +350,7 @@ The `intent_tags`, `failed_skill`, and `error_summary` fields enable multi-dimen
 
 3. **Failed Skill** (`failed_skill`) + **Error Summary** (`error_summary`): Cross-references tools that missed an error, and provides concise error descriptions for quick scanning.
 
-These dimensions work together. Domain provides broad relevance. Task goal targets specific problems. Failed skill identifies gaps in existing knowledge. Queries can combine any subset for AND matching.
+These dimensions work together. Domain provides broad relevance. Task goal targets specific problems. Failed skill identifies gaps in existing knowledge. Queries MAY combine any subset for AND matching.
 
 ---
 
@@ -325,10 +359,25 @@ These dimensions work together. Domain provides broad relevance. Task goal targe
 GEAR's audit routing uses a per-rule quality score to determine how much human oversight is required.
 
 ```
-Δ = confidence × (1 − risk_weight)
+Δ_raw = confidence × (1 − risk_weight)
+Δ = Δ_raw × normalize(log(sample_size + 1))
+
+where normalize(x) = x / log(MAX_SAMPLES + 1)
+      MAX_SAMPLES = 20 (default)
 ```
 
-Confidence ranges from 0 to 1. Risk weight is determined by rule category.
+Confidence ranges from 0 to 1. Risk weight is determined by rule category. The log normalization factor scales Δ by evidence strength — rules with more application data receive higher trust.
+
+### Sample Size Effect
+
+| sample_size | log(N+1) | normalize | Effect |
+|-------------|----------|-----------|--------|
+| 0 | 0 | 0.00 | New rule, Δ = 0, always manual |
+| 1 | 0.69 | 0.23 | ~77% discount |
+| 3 | 1.39 | 0.46 | ~54% discount |
+| 5 | 1.79 | 0.59 | ~41% discount |
+| 10 | 2.40 | 0.79 | ~21% discount |
+| 20 | 3.04 | 1.00 | No discount |
 
 ### Risk Weight Table
 
@@ -348,15 +397,7 @@ Higher risk weight means lower Δ, requiring more scrutiny before promotion.
 | 0.4 < Δ ≤ 0.7 | semi | Show diff, wait for user confirmation |
 | Δ ≤ 0.4 | manual | Mandatory human review |
 
-### Evolution Levels (Deferred)
-
-The protocol defines promotion rules (Apprentice → Peer → Expert) based on accumulated success rates. This mechanism is **deferred** in the current Aristotle implementation pending resolution of foundational questions:
-
-1. **Evolution target** — All GEAR agents are stateless protocol executors. Adjusting thresholds does not improve any agent's capability; it only reduces human oversight. What should actually evolve?
-2. **Feedback signal** — `verified/(verified+rejected)` ratio reflects user behavior patterns, not system quality. A reliable feedback signal source has not been identified.
-3. **C's learning path** — C cannot learn from history because it does not read the rule library. True evolution for C would require a separate "audit lesson" rule category.
-
-These questions must be answered before implementing evolution levels. The Δ decision engine itself is implemented and operational.
+> When `sample_size = 0`, the normalization factor is 0, forcing Δ = 0 regardless of confidence or risk level. This ensures new rules always require at least one human review cycle.
 
 ---
 
@@ -385,16 +426,45 @@ L reads returned rules, applies lessons to current task, and executes.
 
 ### Step 5: Error Reporting
 
-If L still encounters errors, it sends an error report to O containing:
+If L still encounters errors, it MUST send an error report to O containing:
 - What rule(s) were applied
 - What error occurred
 - Context where rules failed
 
 ### Step 6: O Triggers New Reflection Cycle
 
-O analyzes error report, routes scene to R for new rule creation, then to C for validation. New rule enters pending state, completes audit, and becomes available for future L queries.
+O MUST analyze the error report, route the scene to R for new rule creation, then to C for validation. The new rule enters pending state, completes audit, and becomes available for future L queries.
 
 The loop closes. Each failure creates new knowledge. Each session benefits from all previous sessions.
+
+---
+
+## Open Problems
+
+The following design questions remain unresolved in GEAR 1.1.
+Implementations SHOULD NOT attempt to address these without community consensus.
+
+### OP-1: Evolution Target
+
+All GEAR agents are stateless protocol executors. Adjusting audit thresholds
+does not improve any agent's capability; it only reduces human oversight.
+What should actually evolve remains an open question.
+
+### OP-2: Reliable Feedback Signal
+
+The `success_rate`/`failure_rate`/`sample_size` fields introduced in v1.1
+provide a foundation for rule quality measurement. However, whether this
+signal is sufficient for automated evolution decisions requires empirical
+validation. Open questions include: what sample_size threshold constitutes
+reliable signal, how to handle conflicting feedback across contexts, and
+whether success_rate alone captures rule quality or if qualitative feedback
+is also needed.
+
+### OP-3: Checker Learning Path
+
+C cannot learn from history because it does not read the rule library.
+True evolution for C would require a separate "audit lesson" rule category,
+which raises questions about the rule taxonomy and C's scope.
 
 ---
 
@@ -413,27 +483,31 @@ GEAR defines eight abstract operations mapped to roles and lifecycle transitions
 | `restore` | C | Restore rejected rule to active store with new status |
 | `list` | O / L | Lightweight metadata listing (no rule bodies loaded) |
 
-O orchestrates the workflow by delegating operations to appropriate roles. R and C do not invoke operations directly — O coordinates the sequencing.
+O MUST coordinate the sequencing of all protocol operations. R and C MUST NOT invoke operations directly — O is the sole coordinator.
 
 ---
 
 ## Conformance
 
-A system claiming GEAR conformance must satisfy:
+A system claiming GEAR conformance MUST satisfy the following requirements:
 
-1. **Role separation.** Production (R), audit (C), and consumption (L) are handled by distinct agents or processes. No single agent performs two roles simultaneously on the same rule.
+1. **Role separation.** Production (R), audit (C), and consumption (L) MUST be handled by distinct agents or processes. No single agent MUST perform two roles simultaneously on the same rule.
 
-2. **Git-backed storage.** All verified rules are committed to a git repository. Consumers read via `git show HEAD:` or equivalent atomic-read mechanism. Uncommitted files on disk are never visible to L.
+2. **Git-backed storage.** All verified rules MUST be committed to a git repository. Consumers MUST read via `git show HEAD:` or equivalent atomic-read mechanism. Uncommitted files on disk MUST NOT be visible to L.
 
-3. **State machine enforcement.** Rules transition only through the defined states: `pending` → `staging` → `verified` or `rejected`. Skipping states (e.g. `pending` → `verified`) is not allowed.
+3. **State machine enforcement.** Rules MUST transition only through the defined states: `pending` → `staging` → `verified` or `rejected`. Implementations MUST NOT skip states (e.g. `pending` → `verified`).
 
-4. **Frontmatter schema.** Every rule file includes YAML frontmatter with at minimum: `id`, `status`, `scope`, `category`, `confidence`, `risk_level`, `intent_tags`, `created_at`.
+4. **Frontmatter schema.** Every rule file MUST include YAML frontmatter with at minimum: `id`, `status`, `scope`, `category`, `confidence`, `risk_level`, `intent_tags`, `created_at`.
 
-5. **Intent-driven retrieval.** The system supports querying rules by at least `intent_tags.domain` and `intent_tags.task_goal`, in addition to `status` and `category`.
+5. **Intent-driven retrieval.** The system MUST support querying rules by at least `intent_tags.domain` and `intent_tags.task_goal`, in addition to `status` and `category`.
 
-6. **Rejected rule preservation.** Rejected rules retain their original metadata (scope, project identifier, category). They can be restored to `pending` state without data loss.
+6. **Rejected rule preservation.** Rejected rules MUST retain their original metadata (scope, project identifier, category). They MUST be restorable to `pending` state without data loss.
 
-7. **Atomic writes.** Rule files are written atomically (write to temp file, then rename). Partial writes must never be visible to other agents.
+7. **Atomic writes.** Rule files MUST be written atomically (write to temp file, then rename). Partial writes MUST NOT be visible to other agents.
+
+8. **Feedback signal tracking.** Implementations MUST support tracking rule application outcomes via `success_rate`, `failure_rate`, and `sample_size` fields. These fields MUST be initially null/zero and MUST be updated when the Learner reports application results.
+
+9. **Conflict declaration.** Implementations SHOULD support the `conflicts_with` field to declare known contradictions between rules. When conflicts are detected, implementations MUST surface both rules to the Orchestrator for resolution.
 
 ---
 
@@ -441,4 +515,5 @@ A system claiming GEAR conformance must satisfy:
 
 | Version | Date | Milestone |
 |---------|------|-----------|
+| 1.1 | 2026-04-19 | Feedback signal fields (`success_rate`, `failure_rate`, `sample_size`), conflict declaration (`conflicts_with`), Δ log-normalization, RFC 2119 language, Scope/Non-Goals, Open Problems. |
 | 1.0-draft | 2026-04-16 | Initial protocol specification: five roles, state machine, frontmatter schema, Δ decision factor, conformance requirements. First implementation: Aristotle (P1 + P2). |
