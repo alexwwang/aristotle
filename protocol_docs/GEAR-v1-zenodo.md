@@ -280,8 +280,8 @@ A rule MUST transition through exactly five states. Status is stored in each fil
                       │ reject
                       ▼
                 ┌──────────┐
-                 │ rejected │ ──► restore ──► pending
-                 └──────────┘
+                │ rejected │ ──► restore ──► pending
+                └──────────┘
 ```
 
 *Normal lifecycle flow. The anomaly state `needs_sync` (§7.5) is triggered when a file exists on disk but was not committed through the proper pipeline.*
@@ -399,7 +399,7 @@ Implementations MUST support these frontmatter fields:
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `id` | string | always | Unique identifier |
-| `status` | enum | always | One of: `pending`, `staging`, `verified`, `rejected` |
+| `status` | enum | always | One of: `pending`, `staging`, `verified`, `rejected`, `needs_sync (anomaly state)` |
 | `scope` | enum | always | One of: `user`, `project` |
 | `category` | string | always | Error category from the implementation's taxonomy |
 | `confidence` | float | always | Confidence score 0–1 |
@@ -493,9 +493,15 @@ L analyzes current context and generates intent tags:
 - `task_goal`: derived from user's stated goal
 - `failed_skill`: populated if a previous skill attempt failed
 
-### Step 3: O Delegates to S
+### Step 3: O Delegates to S, Filters, and Injects
 
-L sends intent tags to O via knowledge service. O delegates to S, which constructs a query filtering rules by the three retrieval dimensions. S executes the query, O filters results by relevance, and returns ranked rules to L.
+L sends intent tags to O via knowledge service. O delegates to S, which executes
+a two-round retrieval: Round 1 returns metadata-only candidates via `list_rules`
+to minimize context overhead; Round 2 spawns parallel scoring subagents that each
+read one rule's full content and score relevance (1–10). S returns all scored
+results to O. O selects the Top-N rules, compresses them into summaries, and
+injects the result into L's context. O is the sole actor responsible for context
+injection — S scores, O decides and delivers.
 
 ### Step 4: L Learns and Executes
 
@@ -535,7 +541,15 @@ O MUST coordinate the sequencing of all protocol operations. R and C MUST NOT in
 
 ---
 
-## 12. Conformance
+## 12. Reference Implementation
+
+Aristotle is the reference implementation of GEAR, deployed as a skill for the Claude Code / OpenCode agent environment. It implements all nine conformance requirements through 11 MCP (Model Context Protocol) tools: `init_repo`, `write_rule`, `read_rules`, `stage_rule`, `commit_rule`, `reject_rule`, `restore_rule`, `list_rules`, `check_sync_status`, `sync_rules`, and `get_audit_decision`. The implementation uses a progressive disclosure architecture where only the router (84 lines) loads on trigger; reflect (106 lines), review (156 lines), and learn phases load on demand. The test suite includes 111 MCP unit tests and 63 static assertions covering all five roles, the state machine, and the Δ decision engine. All nine conformance requirements are satisfied. Conformance requirement 9 (conflict declaration) is implemented at the schema level — the `conflicts_with` field is written and preserved — but automated conflict detection and Orchestrator surfacing are not yet triggered at runtime; conflict resolution currently requires manual invocation. This is a known partial implementation and is tracked as a future milestone.
+
+Source code: https://github.com/alexwwang/aristotle
+
+---
+
+## 13. Conformance
 
 A system claiming GEAR conformance MUST satisfy the following requirements:
 
@@ -559,7 +573,7 @@ A system claiming GEAR conformance MUST satisfy the following requirements:
 
 ---
 
-## 13. Open Problems
+## 14. Open Problems
 
 The following design questions remain unresolved in GEAR 1.1.
 Implementations SHOULD NOT attempt to address these without community consensus.
@@ -595,10 +609,7 @@ difficulties:
    these metrics alone capture rule quality, or whether qualitative feedback is
    also needed, remains an open question.
 
-4. **Cold start problem** — New rules have `sample_size = 0`, forcing `Δ = 0`
-   and mandatory human review. While this is conservative by design, the rate at
-   which rules accumulate enough data for reliable Δ calculation depends on usage
-   frequency, which varies across implementations.
+4. **Cold start problem** — See OP-4.
 
 These questions are left for community discussion and empirical investigation.
 
@@ -608,13 +619,21 @@ C cannot learn from history because it does not read the rule library.
 True evolution for C would require a separate "audit lesson" rule category,
 which raises questions about the rule taxonomy and C's scope.
 
----
+### OP-4: Cold Start Accumulation Rate
 
-## 14. Reference Implementation
+New rules enter with `sample_size = 0`, forcing `Δ = 0` and mandatory human
+review by design. However, the rate at which a rule accumulates sufficient
+`sample_size` to exit the cold start regime depends entirely on usage frequency:
+a rule scoped to a rare error category may remain at `sample_size < 3` indefinitely,
+permanently requiring manual review regardless of its actual quality.
 
-Aristotle is the reference implementation of GEAR, deployed as a skill for the Claude Code / OpenCode agent environment. It implements all nine conformance requirements through 11 MCP (Model Context Protocol) tools: `init_repo`, `write_rule`, `read_rules`, `stage_rule`, `commit_rule`, `reject_rule`, `restore_rule`, `list_rules`, `check_sync_status`, `sync_rules`, and `get_audit_decision`. The implementation uses a progressive disclosure architecture where only the router (84 lines) loads on trigger; reflect (106 lines), review (156 lines), and learn phases load on demand. The test suite includes 111 MCP unit tests and 63 static assertions covering all five roles, the state machine, and the Δ decision engine.
-
-Source code: https://github.com/alexwwang/aristotle
+This is structurally distinct from parameter calibration (OP-2): OP-2 asks what
+the right thresholds are; OP-4 asks how rules reach those thresholds at all.
+Potential directions include: decay-weighted sample counting (recent applications
+count more), rule merging across similar error categories to pool sample sizes, or
+a separate "provisional auto" audit tier for rules that have passed multiple manual
+reviews but have low sample counts. These approaches involve trade-offs between
+conservative oversight and operational usability that require community input.
 
 ---
 
@@ -638,7 +657,7 @@ Source code: https://github.com/alexwwang/aristotle
    Human-In-The-Loop Guidance." arXiv:2507.17131, 2025.
 
 6. Deng, Y., Liu, X., Zhang, Y., Yang, G., and Yang, S. "Your Code Agent Can Grow
-   Alongside you with Structured Memory." arXiv:2603.13258, 2026.
+   Alongside You with Structured Memory." arXiv:2603.13258, 2026.
 
 7. Ge, Y., Romeo, S., Cai, J., Sunkara, M., and Zhang, Y. "SAMULE: Self-Learning
    Agents Enhanced by Multi-level Reflection." In *Proceedings of EMNLP 2025*,
