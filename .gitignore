@@ -9,10 +9,16 @@ Thumbs.db
 .vscode/
 .idea/
 
+# Design docs (cross-branch reference, not tracked)
+design_plan/
+
 # Test artifacts
 test-output.log
 tmp/
 *.tmp
+
+# Dependencies
+node_modules/
 
 # Python
 .venv/
