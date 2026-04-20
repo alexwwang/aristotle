@@ -57,47 +57,54 @@ GEAR defines five roles that MUST coordinate through git operations and a query 
 ### Interaction Diagram
 
 ```
-                    ┌─────────────────────────────────────────────────────┐
-                    │                    O (Orchestrator)                  │
-                    │  Routes scenes · Decides audit level · Knowledge svc │
-                    └───┬──────────┬──────────┬──────────┬───────────────┘
-                        │          │          │          │
-            reflect     │  confirm │  learn   │  error   │  search
-            scene       │  request │  request │ feedback │  delegation
-                        ▼          ▼          │          ▼
-                 ┌──────────┐ ┌──────────┐   │    ┌──────────┐
-                 │ R        │ │ C        │   │    │ S        │
-                 │ Resource │ │ Checker  │   │    │ Searcher │
-                 │ Creator  │ │          │   │    │          │
-                 └────┬─────┘ └────┬─────┘   │    └────┬─────┘
-                      │            │          │         │
-                      │ pending    │ verified │         │ metadata
-                      │ rules      │ status   │         │ + scored
-                      ▼            ▼          │         │ results
-                 ┌────────────────────────┐   │         │
-                 │    Git Rule Store      │   │         │
-                 │  (frontmatter + body)  │◄──┘         │
-                 └────────────┬───────────┘             │
-                              │                         │
-                    verified  │  ◄───── Round 1 ────────┘
-                    rules     │        list_rules (metadata only)
-                              │         ┌─────────────────┐
-                              │         │ Scoring Subagents│
-                              │         │ (Round 2: read   │
-                              │         │  full content,   │
-                              │         │  score 1-10)     │
-                              │         └────────┬────────┘
-                              │                  │
-                              ▼                  ▼
-                        ┌──────────┐     Top-N scored rules
-                        │ L        │     (compressed summaries)
-                        │ Learner  │
-                        │          │
-                        └────┬─────┘
-                             │
-                    error    │  "applied rules, still failed"
-                    feedback │
-                             └──────────► O (triggers new R → C cycle)
+                   ┌─────────────────────────────────────────────────────┐
+                   │                    O (Orchestrator)                  │
+                   │  Routes scenes · Decides audit level · Knowledge svc │
+                   └───┬──────────┬──────────┬──────────┬───────────────┘
+                       │          │          │          │
+           reflect     │  confirm │  learn   │  error   │  search
+           scene       │  request │  request │ feedback │  delegation
+                       ▼          ▼          │          ▼
+                ┌──────────┐ ┌──────────┐   │    ┌──────────┐
+                │ R        │ │ C        │   │    │ S        │
+                │ Resource │ │ Checker  │   │    │ Searcher │
+                │ Creator  │ │          │   │    │          │
+                └────┬─────┘ └────┬─────┘   │    └────┬─────┘
+                     │            │          │         │
+                     │ pending    │ verified │         │ Round 1:
+                     │ rules      │ status   │         │ list_rules
+                     ▼            ▼          │         │ (metadata only)
+                ┌────────────────────────┐   │         ▼
+                │    Git Rule Store      │   │  ┌─────────────────┐
+                │  (frontmatter + body)  │◄──┘  │ Scoring Subagts │
+                └────────────┬───────────┘      │ Round 2: read   │
+                             │                  │ full content,   │
+                             │ verified rules   │ score 1-10      │
+                             └─────────────────►│                 │
+                                                └────────┬────────┘
+                                                         │
+                                                         │ scored results
+                                                         ▼
+                                                  ┌──────────┐
+                                                  │ O: Top-N │
+                                                  │ filter · │
+                                                  │ compress │
+                                                  │ · inject │
+                                                  └────┬─────┘
+                                                       │
+                                                       │ compressed
+                                                       │ summaries
+                                                       ▼
+                                                 ┌──────────┐
+                                                 │ L        │
+                                                 │ Learner  │
+                                                 │          │
+                                                 └────┬─────┘
+                                                      │
+                                             error    │  "applied rules,
+                                             feedback │   still failed"
+                                                      └──────► O (triggers
+                                                               new R → C cycle)
 ```
 
 **Key flows:**
@@ -421,9 +428,15 @@ L analyzes current context and generates intent tags:
 - `task_goal`: derived from user's stated goal
 - `failed_skill`: populated if a previous skill attempt failed
 
-### Step 3: O Delegates to S
+### Step 3: O Delegates to S, Filters, and Injects
 
-L sends intent tags to O via knowledge service. O delegates to S, which constructs a query filtering rules by the three retrieval dimensions. S executes the query, O filters results by relevance, and returns ranked rules to L.
+L sends intent tags to O via knowledge service. O delegates to S, which executes
+a two-round retrieval: Round 1 returns metadata-only candidates via `list_rules`
+to minimize context overhead; Round 2 spawns parallel scoring subagents that each
+read one rule's full content and score relevance (1–10). S returns all scored
+results to O. O selects the Top-N rules, compresses them into summaries, and
+injects the result into L's context. O is the sole actor responsible for context
+injection — S scores, O decides and delivers.
 
 ### Step 4: L Learns and Executes
 
@@ -455,21 +468,56 @@ All GEAR agents are stateless protocol executors. Adjusting audit thresholds
 does not improve any agent's capability; it only reduces human oversight.
 What should actually evolve remains an open question.
 
-### OP-2: Reliable Feedback Signal
+### OP-2: Parameter Calibration and Reliable Feedback Signal
 
-The `success_rate`/`failure_rate`/`sample_size` fields introduced in v1.1
-provide a foundation for rule quality measurement. However, whether this
-signal is sufficient for automated evolution decisions requires empirical
-validation. Open questions include: what sample_size threshold constitutes
-reliable signal, how to handle conflicting feedback across contexts, and
-whether success_rate alone captures rule quality or if qualitative feedback
-is also needed.
+The Δ decision factor uses several parameters (`risk_weight` values of 0.8/0.5/0.2,
+`MAX_SAMPLES = 20`, audit thresholds of 0.4/0.7) that are empirically derived from
+the Aristotle implementation. Their optimality has not been systematically validated.
+
+Calibrating these parameters requires measuring error reduction rates across
+different task domains after rules are applied. However, this faces several
+difficulties:
+
+1. **Attribution ambiguity** — When an error does not recur after applying a rule,
+   it is difficult to determine whether the rule prevented the error or the task
+   context simply changed. Constructing controlled experiments with equivalent
+   control groups is non-trivial in real agent workflows.
+
+2. **Domain-dependent optima** — Different task domains (code generation, data
+   analysis, document writing) may exhibit different error distributions and risk
+   patterns. A single set of parameters may not be globally optimal; per-domain
+   tuning may be necessary.
+
+3. **Feedback signal reliability** — The `success_rate`/`failure_rate`/`sample_size`
+   fields introduced in v1.1 provide a foundation for measurement, but whether
+   these metrics alone capture rule quality, or whether qualitative feedback is
+   also needed, remains an open question.
+
+4. **Cold start problem** — See OP-4.
+
+These questions are left for community discussion and empirical investigation.
 
 ### OP-3: Checker Learning Path
 
 C cannot learn from history because it does not read the rule library.
 True evolution for C would require a separate "audit lesson" rule category,
 which raises questions about the rule taxonomy and C's scope.
+
+### OP-4: Cold Start Accumulation Rate
+
+New rules enter with `sample_size = 0`, forcing `Δ = 0` and mandatory human
+review by design. However, the rate at which a rule accumulates sufficient
+`sample_size` to exit the cold start regime depends entirely on usage frequency:
+a rule scoped to a rare error category may remain at `sample_size < 3` indefinitely,
+permanently requiring manual review regardless of its actual quality.
+
+This is structurally distinct from parameter calibration (OP-2): OP-2 asks what
+the right thresholds are; OP-4 asks how rules reach those thresholds at all.
+Potential directions include: decay-weighted sample counting (recent applications
+count more), rule merging across similar error categories to pool sample sizes, or
+a separate "provisional auto" audit tier for rules that have passed multiple manual
+reviews but have low sample counts. These approaches involve trade-offs between
+conservative oversight and operational usability that require community input.
 
 ---
 
