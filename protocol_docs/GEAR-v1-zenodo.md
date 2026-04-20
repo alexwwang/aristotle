@@ -67,16 +67,16 @@ Memory for code agents and multi-level reflection present two additional threads
 
 GEAR's contribution is the combination, not any single mechanism. Git-backed storage, audit role separation, intent-driven retrieval, and risk-based human intervention each exist in prior work, but they have not been integrated into a unified protocol for cross-session error learning. GEAR synthesizes these mechanisms into a cohesive system where each component addresses a specific failure mode in existing approaches.
 
-| Dimension | Reflexion | MPR | GCC | Lore | ARIA | MemCoder | SAMULE | GEAR |
-|---|---|---|---|---|---|---|---|---|
-| Cross-session persistence | ❌ | partial | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Git-backed storage | ❌ | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ |
-| Audit role separation | ❌ | ❌ | ❌ | ❌ | partial | ❌ | ❌ | ✅ |
-| Risk-driven human intervention | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
-| Structured metadata schema | ❌ | partial | partial | ✅ | ❌ | partial | ❌ | ✅ |
-| Intent-driven retrieval | ❌ | ❌ | ❌ | partial | ❌ | ✅ (AST) | ❌ | ✅ |
-| Requires model fine-tuning | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |
-| Learns from | errors | errors | context | decisions | gaps | successes | errors | errors |
+| Dimension                      | Reflexion | MPR     | GCC     | Lore      | ARIA    | MemCoder  | SAMULE | GEAR   |
+| ------------------------------ | --------- | ------- | ------- | --------- | ------- | --------- | ------ | ------ |
+| Cross-session persistence      | ❌         | partial | ✅       | ✅         | ✅       | ✅         | ✅      | ✅      |
+| Git-backed storage             | ❌         | ❌       | ✅       | ✅         | ❌       | ❌         | ❌      | ✅      |
+| Audit role separation          | ❌         | ❌       | ❌       | ❌         | partial | ❌         | ❌      | ✅      |
+| Risk-driven human intervention | ❌         | ❌       | ❌       | ❌         | ❌       | ❌         | ❌      | ✅      |
+| Structured metadata schema     | ❌         | partial | partial | ✅         | ❌       | partial   | ❌      | ✅      |
+| Intent-driven retrieval        | ❌         | ❌       | ❌       | partial   | ❌       | ✅ (AST)   | ❌      | ✅      |
+| Requires model fine-tuning     | ❌         | ❌       | ❌       | ❌         | ❌       | ❌         | ✅      | ❌      |
+| Learns from                    | errors    | errors  | context | decisions | gaps    | successes | errors | errors |
 
 ---
 
@@ -118,18 +118,21 @@ Why separate them? Production without audit accumulates noise. Consumption witho
 
 GEAR defines five roles that MUST coordinate through git operations and a query interface.
 
-| Role | Responsibility |
-|------|---------------|
-| **O** (Orchestrator) | Routes scenes, decides audit level, provides knowledge service |
-| **R** (Resource Creator) | Writes reflection rules with intent tags |
-| **C** (Checker) | Validates schema, executes status transitions, git commit |
-| **L** (Learner) | Pre-task learning, error feedback |
-| **S** (Searcher) | Converts intent to query conditions, returns results |
+| Role                     | Responsibility                                               |
+| ------------------------ | ------------------------------------------------------------ |
+| **O** (Orchestrator)     | Routes scenes, decides audit level, provides knowledge service |
+| **R** (Resource Creator) | Writes reflection rules with intent tags                     |
+| **C** (Checker)          | Validates schema, executes status transitions, git commit    |
+| **L** (Learner)          | Pre-task learning, error feedback                            |
+| **S** (Searcher)         | Converts intent to query conditions, returns results         |
+
+<div style="page-break-before: always;">
+
 
 ### Interaction Diagram
 
 ```
-                    ┌─────────────────────────────────────────────────────┐
+                   ┌─────────────────────────────────────────────────────┐
                     │                    O (Orchestrator)                  │
                     │  Routes scenes · Decides audit level · Knowledge svc │
                     └───┬──────────┬──────────┬──────────┬───────────────┘
@@ -143,56 +146,70 @@ GEAR defines five roles that MUST coordinate through git operations and a query 
                  │ Creator  │ │          │   │    │          │
                  └────┬─────┘ └────┬─────┘   │    └────┬─────┘
                       │            │          │         │
-                      │ pending    │ verified │         │ metadata
-                      │ rules      │ status   │         │ + scored
-                      ▼            ▼          │         │ results
-                 ┌────────────────────────┐   │         │
-                 │    Git Rule Store      │   │         │
-                 │  (frontmatter + body)  │◄──┘         │
-                 └────────────┬───────────┘             │
-                               │                         │
-                     verified  │  ◄───── Round 1 ────────┘
-                     rules     │        list_rules (metadata only)
-                               │         ┌─────────────────┐
-                               │         │ Scoring Subagents│
-                               │         │ (Round 2: read   │
-                               │         │  full content,   │
-                               │         │  score 1-10)     │
-                               │         └────────┬────────┘
-                               │                  │
-                               ▼                  ▼
-                         ┌──────────┐     Top-N scored rules
-                         │ L        │     (compressed summaries)
-                         │ Learner  │
-                         │          │
-                         └────┬─────┘
-                              │
-                     error    │  "applied rules, still failed"
-                     feedback │
-                              └──────────► O (triggers new R → C cycle)
+                      │ pending    │ verified │         │ Round 1:
+                      │ rules      │ status   │         │ list_rules
+                      ▼            ▼          │         │ (metadata only)
+                 ┌────────────────────────┐   │         ▼
+                 │    Git Rule Store      │   │  ┌─────────────────┐
+                 │  (frontmatter + body)  │◄──┘  │ Scoring Subagts │
+                 └────────────┬───────────┘      │ Round 2: read   │
+                              │                  │ full content,   │
+                              │ verified rules   │ score 1-10      │
+                              └─────────────────►│                 │
+                                                 └────────┬────────┘
+                                                          │
+                                                          │ scored results
+                                                          ▼
+                                                   ┌──────────┐
+                                                   │ O: Top-N │
+                                                   │ filter · │
+                                                   │ compress │
+                                                   │ · inject │
+                                                   └────┬─────┘
+                                                        │
+                                                        │ compressed
+                                                        │ summaries
+                                                        ▼
+                                                  ┌──────────┐
+                                                  │ L        │
+                                                  │ Learner  │
+                                                  │          │
+                                                  └────┬─────┘
+                                                       │
+                                              error    │  "applied rules,
+                                              feedback │   still failed"
+                                                       └──────► O (triggers
+                                                                new R → C cycle)
 ```
+
+</div>
+
+<div style="break-after: page;"></div>
 
 **Key flows:**
 
-| Flow | Path | Description |
-|------|------|-------------|
-| **Reflect** | O → R → C → Git | Error detected → R produces rule → C validates → Git commit |
-| **Learn** | L → O → S → Git → L | L requests lessons → O delegates S → two-round scoring → compressed summaries to L |
-| **Error feedback** | L → O → R → C | L applied rules but still erred → O triggers new reflection cycle |
-| **Review** | O → C | User reviews DRAFT → C validates schema + content → commit or reject |
+| Flow               | Path              | Description                                                  |
+| ------------------ | ----------------- | ------------------------------------------------------------ |
+| **Reflect**        | O → R → C → Git   | Error detected → R produces rule → C validates → Git commit  |
+| **Learn**          | L → O → S → O → L | L requests lessons → O delegates S → two-round scoring → S returns scored results to O → O filters Top-N, compresses, injects into L |
+| **Error feedback** | L → O → R → C     | L applied rules but still erred → O triggers new reflection cycle |
+| **Review**         | O → C             | User reviews DRAFT → C validates schema + content → commit or reject |
 
 ### O — Orchestrator
 
 **Core capabilities:**
+
 - Route scenes to appropriate agents based on error context
 - Decide audit level (Apprentice / Peer / Expert) based on confidence and risk
 - Provide knowledge service by delegating to S for rule retrieval
 
 **Triggers:**
+
 - User invocation (e.g. skill command, explicit request)
 - Unexpected events invoked from agent (e.g. error reports from L)
 
 **Produces:**
+
 - Audit level decisions
 - Routed agent sessions (R, C, or combined R → C)
 - Filtered rule search results from S
@@ -200,31 +217,37 @@ GEAR defines five roles that MUST coordinate through git operations and a query 
 ### R — Resource Creator
 
 **Core capabilities:**
+
 - Write reflection rules with structured frontmatter
 - Tag rules with intent tags for precise retrieval
 - Capture error context and corrective actions
 
 **Triggers:**
+
 - O routes scenes requiring new rules
 - Post-mortem sessions after persistent errors
 
 **Produces:**
+
 - Rule files in `pending` state
 - Frontmatter with `intent_tags`, `error_summary`, `failed_skill`
 
 ### C — Checker
 
 **Core capabilities:**
+
 - Validate frontmatter schema compliance
 - Execute status transitions (`pending` → `staging` → `verified`)
 - Create git commits with structured messages
 - Reject malformed or incorrect rules. C MUST reject any rule that fails schema validation.
 
 **Triggers:**
+
 - O completes audit-level decision
 - R produces a rule ready for validation
 
 **Produces:**
+
 - Git commits
 - Status transition records
 - Rejection messages with reasons
@@ -232,22 +255,26 @@ GEAR defines five roles that MUST coordinate through git operations and a query 
 ### L — Learner
 
 **Core capabilities:**
+
 - Generate intent tags pre-task based on current context
 - Retrieve relevant rules via O → S delegation
 - Apply rules during task execution
 - Report errors when rules fail to prevent recurrence. L MUST send an error report to O when a previously applied rule did not prevent the error.
 
 **Triggers:**
+
 - Task initiation
 - Task failure despite applying learned rules
 
 **Produces:**
+
 - Intent tag queries for pre-task learning
 - Error reports to O for new reflection cycles
 
 ### S — Searcher
 
 **Core capabilities:**
+
 - Convert intent descriptions into structured query conditions
 - Execute queries with dimension filters against the rule store
 - Rank results by relevance across retrieval dimensions
@@ -258,9 +285,11 @@ GEAR defines five roles that MUST coordinate through git operations and a query 
   context window.
 
 **Triggers:**
+
 - O delegates knowledge service requests from L
 
 **Produces:**
+
 - Filtered, ranked rule lists for L to consume
 
 ---
@@ -325,6 +354,8 @@ Anomaly state. Detected when a file exists on disk but `git show HEAD:file` fail
 ## 8. Data Protocol: Frontmatter Schema
 
 Every rule file MUST contain YAML frontmatter with structured metadata. This schema drives intent-driven retrieval and rule validation.
+
+<div style="break-after: page;"></div>
 
 ```yaml
 ---
@@ -396,26 +427,26 @@ conflicts_with: null      # list[string], IDs of rules that contradict this rule
 
 Implementations MUST support these frontmatter fields:
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `id` | string | always | Unique identifier |
-| `status` | enum | always | One of: `pending`, `staging`, `verified`, `rejected`, `needs_sync (anomaly state)` |
-| `scope` | enum | always | One of: `user`, `project` |
-| `category` | string | always | Error category from the implementation's taxonomy |
-| `confidence` | float | always | Confidence score 0–1 |
-| `risk_level` | enum | always | One of: `high`, `medium`, `low` |
-| `intent_tags` | dict | on creation | Nested `domain` and `task_goal` for retrieval |
-| `error_summary` | string | on creation | Concise error description (≤200 chars) |
-| `failed_skill` | string | optional | Tool/skill involved in the error |
-| `created_at` | ISO 8601 | always | Creation timestamp |
-| `verified_at` | ISO 8601 | on verify | Verification timestamp |
-| `verified_by` | string | on verify | Who/what approved the rule |
-| `rejected_at` | ISO 8601 | on reject | Rejection timestamp |
-| `rejected_reason` | string | on reject | Reason for rejection |
-| `success_rate` | float | on feedback | Ratio of successful applications (0–1). Set by C after L reports outcome. |
-| `failure_rate` | float | on feedback | Ratio of failed applications (0–1). `failure_rate = 1 - success_rate` by convention. |
-| `sample_size` | int | on feedback | Total number of times L applied this rule. `sample_size = 0` means untested. |
-| `conflicts_with` | list | optional | Rule IDs that contradict this rule. Implementations SHOULD declare known conflicts. |
+| Field             | Type     | Required    | Description                                                  |
+| ----------------- | -------- | ----------- | ------------------------------------------------------------ |
+| `id`              | string   | always      | Unique identifier                                            |
+| `status`          | enum     | always      | One of: `pending`, `staging`, `verified`, `rejected`, `needs_sync (anomaly state)` |
+| `scope`           | enum     | always      | One of: `user`, `project`                                    |
+| `category`        | string   | always      | Error category from the implementation's taxonomy            |
+| `confidence`      | float    | always      | Confidence score 0–1                                         |
+| `risk_level`      | enum     | always      | One of: `high`, `medium`, `low`                              |
+| `intent_tags`     | dict     | on creation | Nested `domain` and `task_goal` for retrieval                |
+| `error_summary`   | string   | on creation | Concise error description (≤200 chars)                       |
+| `failed_skill`    | string   | optional    | Tool/skill involved in the error                             |
+| `created_at`      | ISO 8601 | always      | Creation timestamp                                           |
+| `verified_at`     | ISO 8601 | on verify   | Verification timestamp                                       |
+| `verified_by`     | string   | on verify   | Who/what approved the rule                                   |
+| `rejected_at`     | ISO 8601 | on reject   | Rejection timestamp                                          |
+| `rejected_reason` | string   | on reject   | Reason for rejection                                         |
+| `success_rate`    | float    | on feedback | Ratio of successful applications (0–1). Set by C after L reports outcome. |
+| `failure_rate`    | float    | on feedback | Ratio of failed applications (0–1). `failure_rate = 1 - success_rate` by convention. |
+| `sample_size`     | int      | on feedback | Total number of times L applied this rule. `sample_size = 0` means untested. |
+| `conflicts_with`  | list     | optional    | Rule IDs that contradict this rule. Implementations SHOULD declare known conflicts. |
 
 ### Three Retrieval Dimensions
 
@@ -447,32 +478,32 @@ Confidence ranges from 0 to 1. Risk weight is determined by rule category. The l
 
 ### Sample Size Effect
 
-| sample_size | log(N+1) | normalize | Effect |
-|-------------|----------|-----------|--------|
-| 0 | 0 | 0.00 | New rule, Δ = 0, always manual |
-| 1 | 0.69 | 0.23 | ~77% discount |
-| 3 | 1.39 | 0.46 | ~54% discount |
-| 5 | 1.79 | 0.59 | ~41% discount |
-| 10 | 2.40 | 0.79 | ~21% discount |
-| 20 | 3.04 | 1.00 | No discount |
+| sample_size | log(N+1) | normalize | Effect                         |
+| ----------- | -------- | --------- | ------------------------------ |
+| 0           | 0        | 0.00      | New rule, Δ = 0, always manual |
+| 1           | 0.69     | 0.23      | ~77% discount                  |
+| 3           | 1.39     | 0.46      | ~54% discount                  |
+| 5           | 1.79     | 0.59      | ~41% discount                  |
+| 10          | 2.40     | 0.79      | ~21% discount                  |
+| 20          | 3.04     | 1.00      | No discount                    |
 
 ### Risk Weight Table
 
-| Risk Level | Weight | Description |
-|-----------|--------|-------------|
-| high | 0.8 | Critical errors: hallucinations, misunderstood requirements |
-| medium | 0.5 | Moderate errors: wrong tool choice, incomplete analysis |
-| low | 0.2 | Minor errors: pattern violations, oversimplification |
+| Risk Level | Weight | Description                                                 |
+| ---------- | ------ | ----------------------------------------------------------- |
+| high       | 0.8    | Critical errors: hallucinations, misunderstood requirements |
+| medium     | 0.5    | Moderate errors: wrong tool choice, incomplete analysis     |
+| low        | 0.2    | Minor errors: pattern violations, oversimplification        |
 
 Higher risk weight means lower Δ, requiring more scrutiny before promotion.
 
 ### Audit Level Table
 
-| Δ Value | Audit Level | Behavior |
-|---------|-------------|----------|
-| Δ > 0.7 | auto | Auto-commit, no human confirmation needed |
-| 0.4 < Δ ≤ 0.7 | semi | Show diff, wait for user confirmation |
-| Δ ≤ 0.4 | manual | Mandatory human review |
+| Δ Value       | Audit Level | Behavior                                  |
+| ------------- | ----------- | ----------------------------------------- |
+| Δ > 0.7       | auto        | Auto-commit, no human confirmation needed |
+| 0.4 < Δ ≤ 0.7 | semi        | Show diff, wait for user confirmation     |
+| Δ ≤ 0.4       | manual      | Mandatory human review                    |
 
 > When `sample_size = 0`, the normalization factor is 0, forcing Δ = 0 regardless of confidence or risk level. This ensures new rules always require at least one human review cycle.
 
@@ -489,6 +520,7 @@ User initiates a task. L is triggered to pre-learn relevant rules.
 ### Step 2: L Generates Intent Tags
 
 L analyzes current context and generates intent tags:
+
 - `domain`: inferred from task description
 - `task_goal`: derived from user's stated goal
 - `failed_skill`: populated if a previous skill attempt failed
@@ -510,6 +542,7 @@ L reads returned rules, applies lessons to current task, and executes.
 ### Step 5: Error Reporting
 
 If L still encounters errors, it MUST send an error report to O containing:
+
 - What rule(s) were applied
 - What error occurred
 - Context where rules failed
@@ -526,16 +559,16 @@ The loop closes. Each failure creates new knowledge. Each session benefits from 
 
 GEAR defines eight abstract operations mapped to roles and lifecycle transitions.
 
-| Operation | Role | Description |
-|-----------|------|-------------|
-| `init` | O | Initialize storage: create directory structure, git repo, migrate existing data |
-| `produce` | R | Create new rule file with frontmatter in `pending` state |
-| `search` | S | Query rules with multi-dimension filters (status, category, intent tags, error fields) |
-| `stage` | C | Transition rule from `pending` to `staging` |
-| `verify` | C | Transition rule from `staging` to `verified`, commit to git |
-| `reject` | C | Move rule to rejected store, record reason, commit |
-| `restore` | C | Restore rejected rule to active store with new status |
-| `list` | O / L | Lightweight metadata listing (no rule bodies loaded) |
+| Operation | Role  | Description                                                  |
+| --------- | ----- | ------------------------------------------------------------ |
+| `init`    | O     | Initialize storage: create directory structure, git repo, migrate existing data |
+| `produce` | R     | Create new rule file with frontmatter in `pending` state     |
+| `search`  | S     | Query rules with multi-dimension filters (status, category, intent tags, error fields) |
+| `stage`   | C     | Transition rule from `pending` to `staging`                  |
+| `verify`  | C     | Transition rule from `staging` to `verified`, commit to git  |
+| `reject`  | C     | Move rule to rejected store, record reason, commit           |
+| `restore` | C     | Restore rejected rule to active store with new status        |
+| `list`    | O / L | Lightweight metadata listing (no rule bodies loaded)         |
 
 O MUST coordinate the sequencing of all protocol operations. R and C MUST NOT invoke operations directly — O is the sole coordinator.
 
@@ -674,7 +707,7 @@ conservative oversight and operational usability that require community input.
 
 ## 16. Version History
 
-| Version | Date | Milestone |
-|---------|------|-----------|
-| 1.1 | 2026-04-19 | Feedback signal fields (`success_rate`, `failure_rate`, `sample_size`), conflict declaration (`conflicts_with`), Δ log-normalization, RFC 2119 language, Scope/Non-Goals, Open Problems. |
+| Version   | Date       | Milestone                                                    |
+| --------- | ---------- | ------------------------------------------------------------ |
+| 1.1       | 2026-04-19 | Feedback signal fields (`success_rate`, `failure_rate`, `sample_size`), conflict declaration (`conflicts_with`), Δ log-normalization, RFC 2119 language, Scope/Non-Goals, Open Problems. |
 | 1.0-draft | 2026-04-16 | Initial protocol specification: five roles, state machine, frontmatter schema, Δ decision factor, conformance requirements. First implementation: Aristotle (P1 + P2). |
