@@ -112,7 +112,7 @@ GEAR defines five roles that MUST coordinate through git operations and a query 
 | Flow | Path | Description |
 |------|------|-------------|
 | **Reflect** | O → R → C → Git | Error detected → R produces rule → C validates → Git commit |
-| **Learn** | L → O → S → Git → L | L requests lessons → O delegates S → two-round scoring → compressed summaries to L |
+| **Learn** | L → O → S → O → L | L requests lessons → O delegates S → two-round scoring → S returns scored results to O → O filters Top-N, compresses, injects into L |
 | **Error feedback** | L → O → R → C | L applied rules but still erred → O triggers new reflection cycle |
 | **Review** | O → C | User reviews DRAFT → C validates schema + content → commit or reject |
 
