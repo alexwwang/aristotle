@@ -5,6 +5,7 @@
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
 [![Tests](https://img.shields.io/badge/tests-111%20pytest%20%2B%2067%20static-brightgreen)](./test/test_mcp.py)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19660780.svg)](https://doi.org/10.5281/zenodo.19660780)
 
 English | [中文](./README.zh-CN.md)
 
