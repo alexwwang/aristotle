@@ -23,7 +23,7 @@ call MCP `orchestrate_on_event("o_done", {workflow_id, result})` → execute ret
 
 - `fire_o` → task(category="unspecified-low", run_in_background=true, prompt=o_prompt)
   Then: call MCP `orchestrate_on_event("o_fired", {workflow_id})` → execute returned action.
-- `notify` → show message to user → STOP
+- `notify` → Extract the `message` field from MCP response and display it to the user verbatim. Prefix with 🦉. → STOP
 - `done` → STOP
 
 ## Parse Arguments
