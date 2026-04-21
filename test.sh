@@ -254,7 +254,8 @@ assert_contains "$ARISTOTLE_DIR/SKILL.md" "orchestrate_on_event" "dispatcher cal
 assert_contains "$ARISTOTLE_DIR/SKILL.md" "fire_o" "dispatcher handles fire_o action"
 assert_contains "$ARISTOTLE_DIR/SKILL.md" "notify" "dispatcher handles notify action"
 assert_contains "$ARISTOTLE_DIR/SKILL.md" "ROUTE" "dispatcher has ROUTE section"
-assert_contains "$ARISTOTLE_DIR/SKILL.md" "EVENT LOOP" "dispatcher has EVENT LOOP section"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "ACTION EXECUTION" "dispatcher has ACTION EXECUTION section"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "If action is" "dispatcher uses conditional branch format"
 assert_contains "$ARISTOTLE_DIR/SKILL.md" "DO NOT load" "dispatcher has suppression guard"
 
 skill_mvp_lines=$(wc -l < "$ARISTOTLE_DIR/SKILL.md" | tr -d ' ')

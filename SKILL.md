@@ -14,17 +14,20 @@ metadata:
 
 Parse command → call MCP `orchestrate_start(command, args_json)` → execute returned action.
 
-## EVENT LOOP
+## ACTION EXECUTION
 
-On background task notification:
-call MCP `orchestrate_on_event("o_done", {workflow_id, result})` → execute returned action.
+### If action is `fire_o`:
+1. Call task(category="unspecified-low", run_in_background=true, prompt=o_prompt)
+2. When background task notification arrives, call MCP `orchestrate_on_event("o_done", {workflow_id, result})`
+3. Match the returned action and execute per this section
 
-## ACTIONS
+### If action is `notify`:
+1. Extract the `message` field from MCP response
+2. Display to user with 🦉 prefix
+3. STOP
 
-- `fire_o` → task(category="unspecified-low", run_in_background=true, prompt=o_prompt)
-  Then: call MCP `orchestrate_on_event("o_fired", {workflow_id})` → execute returned action.
-- `notify` → Extract the `message` field from MCP response and display it to the user verbatim. Prefix with 🦉. → STOP
-- `done` → STOP
+### If action is `done`:
+STOP
 
 ## Parse Arguments
 
