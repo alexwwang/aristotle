@@ -1107,11 +1107,16 @@ def orchestrate_start(command: str, args_json: str = "{}") -> dict:
     if command == "learn":
         query = args.get("query", "")
         if not query:
-            return {
-                "action": "notify",
-                "workflow_id": workflow_id,
-                "message": "🦉 Need a query to search. Usage: /aristotle learn <query>",
-            }
+            domain = args.get("domain", "")
+            goal = args.get("goal", "")
+            if domain and goal:
+                query = f"{domain} {goal}"
+            else:
+                return {
+                    "action": "notify",
+                    "workflow_id": workflow_id,
+                    "message": "🦉 Need a query to search. Usage: /aristotle learn <query>",
+                }
 
         domain = args.get("domain")
         goal = args.get("goal")
@@ -1176,6 +1181,11 @@ def orchestrate_on_event(event_type: str, data_json: str) -> dict:
 
     if event_type == "o_done" and workflow.get("phase") == "intent_extraction":
         result = data.get("result", {})
+        if isinstance(result, str):
+            try:
+                result = json.loads(result)
+            except (json.JSONDecodeError, TypeError):
+                result = {}
 
         intent_tags = result.get("intent_tags", {})
         keywords = result.get("keywords", "")

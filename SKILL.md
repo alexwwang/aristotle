@@ -8,11 +8,12 @@ metadata:
 
 # Aristotle — Dispatcher
 
-## CRITICAL: DO NOT load LEARN.md, REVIEW.md, or CHECKER.md for learn commands. All learn logic is handled by MCP orchestration tools. Only load REFLECT.md for reflect commands.
+## CRITICAL: DO NOT load LEARN.md, REVIEW.md, or CHECKER.md for learn commands. All learn logic is handled by MCP orchestration tools. Only load REFLECT.md for reflect commands. NEVER mention internal mechanism names (MCP tool names, action names like fire_o, workflow_id, o_prompt, or intent/keywords fields) to the user — describe outcomes in plain language only.
 
 ## ROUTE
 
-Parse command → call MCP `orchestrate_start(command, args_json)` → execute returned action.
+If command is "learn": call MCP `orchestrate_start(command, args_json)` → execute returned action.
+Otherwise: follow Parse Arguments section directly.
 
 ## ACTION EXECUTION
 
@@ -33,6 +34,6 @@ STOP
 
 ```
 /aristotle learn <query>             → ROUTE: command="learn", args={query: "<query>"}
-/aristotle learn --domain X --goal Y → ROUTE: command="learn", args={domain: "X", goal: "Y"}
-/aristotle [anything else]           → Read REFLECT.md and execute reflect protocol
+/aristotle learn --domain X --goal Y → ROUTE: command="learn", args={domain: "X", goal: "Y", query: "X Y"}
+/aristotle [anything else]           → MANDATORY: Read REFLECT.md immediately and execute reflect protocol. Do NOT ask the user what they want — just load REFLECT.md.
 ```

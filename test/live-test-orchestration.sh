@@ -193,7 +193,9 @@ if wait_for_output "🦉|没有找到|no.*result|I couldn't" "$RUN_TIMEOUT"; the
     fi
 
     # S1-P4: No protocol term leakage (V6)
-    if ! echo "$S1_OUTPUT" | grep -iqE "GEAR|Reflector|intent_extraction|5-Why|CRITICAL ARCHITECTURE|intent_tags"; then
+    # Exclude TUI-rendered tool call lines (⚙ │ └ ▣) — those are opencode's automatic rendering, not model output
+    S1_TEXT_ONLY=$(echo "$S1_OUTPUT" | grep -v "^⚙" | grep -v "^│" | grep -v "^└" | grep -v "^▣")
+    if ! echo "$S1_TEXT_ONLY" | grep -iqE "GEAR|Reflector|intent_extraction|5-Why|CRITICAL ARCHITECTURE|intent_tags|orchestrate_start|orchestrate_on_event|fire_o|o_prompt"; then
         pass_msg "S1-P4: No protocol term leakage"
     else
         fail_msg "S1-P4: Protocol terms leaked"
@@ -226,7 +228,7 @@ if wait_for_output "步骤|step|回顾|执行" 30; then
     S3_OUTPUT=$(capture_tmux)
 
     # S3-P1: No protocol-internal terms
-    if ! echo "$S3_OUTPUT" | grep -iqE "intent_extraction|GEAR|5-Why|root-cause|LEARN\.md|REFLECTOR\.md|phase.*search|list_rules|frontmatter|yaml"; then
+    if ! echo "$S3_OUTPUT" | grep -iqE "intent_extraction|GEAR|5-Why|root-cause|LEARN\.md|REFLECTOR\.md|phase.*search|list_rules|frontmatter|yaml|fire_o|orchestrate_start|orchestrate_on_event|workflow_id|o_prompt"; then
         pass_msg "S3-P1: No protocol-internal terms in recall"
     else
         fail_msg "S3-P1: Protocol-internal terms leaked in recall"
