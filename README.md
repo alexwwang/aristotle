@@ -4,7 +4,7 @@
 [![Release](https://img.shields.io/github/v/release/alexwwang/aristotle?include_prereleases)](https://github.com/alexwwang/aristotle/releases)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
-[![Tests](https://img.shields.io/badge/tests-111%20pytest%20%2B%2067%20static-brightgreen)](./test/test_mcp.py)
+[![Tests](https://img.shields.io/badge/tests-134%20pytest%20%2B%2067%20static-brightgreen)](./test/test_mcp.py)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19660780.svg)](https://doi.org/10.5281/zenodo.19660780)
 
 English | [中文](./README.zh-CN.md)
@@ -520,6 +520,53 @@ OpenCode's internal glob traversal does **not follow directory symlinks**. Use a
 # ✅ Real directory — always works
 git clone https://github.com/alexwwang/aristotle.git ~/.claude/skills/aristotle
 ```
+
+## Branch Status: `test-coverage`
+
+> This branch tracks test coverage improvements. Code changes are from the user-reported issue remediation (Issues #1–#8 + 2 discovered gaps).
+
+### Test Coverage History
+
+| Milestone | pytest | static (test.sh) | Commit |
+|-----------|--------|-------------------|--------|
+| Baseline (pre-remediation) | 111 | 67 | `35cc613` (main) |
+| Post-remediation | **134** | **67** | `96eed0d` |
+
+### Coverage by Module (134 pytest)
+
+| Test Class | Module | Assertions | What It Tests |
+|------------|--------|------------|---------------|
+| `TestConfig` | `config.py` | 12 | Path resolution, env override, RISK_MAP, RISK_WEIGHTS, AUDIT_THRESHOLDS, project hash |
+| `TestEvolution` | `evolution.py` | 10 | compute_delta (all risk levels, edge cases), decide_audit_level (auto/semi/manual) |
+| `TestModels` | `models.py` | 16 | RuleMetadata defaults, YAML serialization roundtrip, GEAR 2.0 fields |
+| `TestGitOps` | `git_ops.py` | 9 | init, add+commit, show, log, status, git_show_exists |
+| `TestFrontmatter` | `frontmatter.py` | 19 | Atomic write, raw read, field update, stream filter, multi-dimension search |
+| `TestMigration` | `migration.py` | 7 | Flat Markdown parsing, repo init, auto-migration |
+| `TestServerTools` | `server.py` | 21 | Full lifecycle (write→stage→commit→read), reject, restore, input validation, GEAR 2.0 |
+| `TestSyncTools` | `server.py` | 7 | check_sync_status, sync_rules (auto/specific/nothing) |
+| `TestDeltaDecision` | server+evolution | 8 | get_audit_decision (auto/semi/manual), confidence defaults |
+| `TestPathTraversal` | `server.py` | 7 | Path containment for stage/commit/reject/restore/get_audit_decision |
+| `TestPersistDraft` | `server.py` | 4 | Atomic write, content verification, overwrite |
+| `TestCreateReflectionRecord` | `server.py` | 9 | Sequence numbering, JSON state, 50-record pruning |
+| `TestCompleteReflectionRecord` | `server.py` | 8 | Status update, rules_count, error handling |
+
+### Coverage Gaps (Not Yet Implemented)
+
+**~95 test cases from three test plan documents remain unimplemented:**
+
+| Plan Document | Pending Tests | Priority |
+|---------------|--------------|----------|
+| LEARN 测试技术方案 | 43 (18 unit + 18 static + 7 E2E) | P0 |
+| 补充测试技术方案 | 51 (14+3 static+unit, 12 static, 12 static, 3+6 static+unit) | P0-P1 |
+| 项目主体测试方案 | Integration document for above | P1 |
+
+**Specific untested areas:**
+- `commit_rule` / `reject_rule`: ~80% error paths untested
+- 7 try/except exception paths untested
+- No E2E integration tests for O→R→C→review flow
+- CHECKER.md static assertions (14)
+- Focus Modes static assertions (12)
+- Install Script static + unit (9)
 
 ## License
 
