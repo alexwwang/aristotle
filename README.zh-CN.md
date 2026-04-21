@@ -86,7 +86,7 @@ Install the Aristotle skill with MCP server from https://github.com/alexwwang/ar
 3. Run `uv sync` to install Python dependencies for the MCP server
 4. Verify: run `bash test.sh` — all assertions must pass
 5. Add MCP config to opencode.json: { "mcp": { "aristotle": { "type": "local", "command": ["uv", "run", "--project", "~/.claude/skills/aristotle", "python", "-m", "aristotle_mcp.server"], "enabled": true } } }
-6. Verify MCP: run `uv run python -c "from aristotle_mcp.server import mcp; print(len(mcp._tool_manager._tools), 'tools loaded')"` — should print "11 tools loaded"
+6. Verify MCP: run `uv run python -c "from aristotle_mcp.server import mcp; print(len(mcp._tool_manager._tools), 'tools loaded')"` — should print "12 tools loaded"
 ```
 
 ### MCP 配置

@@ -26,19 +26,20 @@ echo ""
 
 # Step 1: Install skill to ~/.claude/skills/ (reliable auto-discovery path)
 SKILL_DEST="$SKILL_BASE/skills/aristotle"
-echo -e "${BLUE}[1/3]${NC} Installing Aristotle skill to $SKILL_DEST..."
+echo -e "${BLUE}[1/4]${NC} Installing Aristotle skill to $SKILL_DEST..."
 
 mkdir -p "$SKILL_DEST"
 cp "$SKILL_SRC/SKILL.md" "$SKILL_DEST/SKILL.md"
 cp "$SKILL_SRC/REFLECTOR.md" "$SKILL_DEST/REFLECTOR.md"
 cp "$SKILL_SRC/REFLECT.md" "$SKILL_DEST/REFLECT.md"
 cp "$SKILL_SRC/REVIEW.md" "$SKILL_DEST/REVIEW.md"
+cp "$SKILL_SRC/CHECKER.md" "$SKILL_DEST/CHECKER.md"
 echo -e "${GREEN}✓${NC} Skill files installed."
 
 # Step 2: Initialize the learnings file
 LEARNINGS_FILE="$OPENCODE_CONFIG/aristotle-learnings.md"
 if [ ! -f "$LEARNINGS_FILE" ]; then
-    echo -e "${BLUE}[2/3]${NC} Initializing learnings file at $LEARNINGS_FILE..."
+    echo -e "${BLUE}[2/4]${NC} Initializing learnings file at $LEARNINGS_FILE..."
     cat > "$LEARNINGS_FILE" << 'LEARNINGS_INIT'
 # Aristotle Learnings (User-Level)
 
@@ -48,11 +49,11 @@ if [ ! -f "$LEARNINGS_FILE" ]; then
 LEARNINGS_INIT
     echo -e "${GREEN}✓${NC} Learnings file created."
 else
-    echo -e "${BLUE}[2/3]${NC} Learnings file already exists at $LEARNINGS_FILE — preserving."
+    echo -e "${BLUE}[2/4]${NC} Learnings file already exists at $LEARNINGS_FILE — preserving."
 fi
 
 # Step 3: Verify installation
-echo -e "${BLUE}[3/3]${NC} Verifying installation..."
+echo -e "${BLUE}[3/4]${NC} Verifying installation..."
 
 ERRORS=0
 
@@ -76,6 +77,11 @@ if [ ! -f "$SKILL_DEST/REVIEW.md" ]; then
     ERRORS=$((ERRORS+1))
 fi
 
+if [ ! -f "$SKILL_DEST/CHECKER.md" ]; then
+    echo -e "${YELLOW}✗${NC} CHECKER.md not found at $SKILL_DEST"
+    ERRORS=$((ERRORS+1))
+fi
+
 if [ ! -f "$LEARNINGS_FILE" ]; then
     echo -e "${YELLOW}✗${NC} Learnings file not found"
     ERRORS=$((ERRORS+1))
@@ -85,6 +91,17 @@ if [ "$ERRORS" -eq 0 ]; then
     echo -e "${GREEN}✓${NC} All files verified."
 else
     echo -e "${YELLOW}⚠${NC} $ERRORS issues found. Check the paths above."
+fi
+
+# Step 4: Initialize the aristotle-repo
+echo -e "${BLUE}[4/4]${NC} Initializing rule repository..."
+if command -v uv &>/dev/null; then
+    uv run --project "$SCRIPT_DIR" python -c "from aristotle_mcp.server import init_repo_tool; print(init_repo_tool())"
+    echo -e "${GREEN}✓${NC} Rule repository initialized."
+else
+    echo -e "${YELLOW}⚠${NC} 'uv' not found — skipping rule repository initialization."
+    echo -e "${YELLOW}  Install uv (https://docs.astral.sh/uv/) then run:"
+    echo -e "${YELLOW}  uv run --project \"$SCRIPT_DIR\" python -c \"from aristotle_mcp.server import init_repo_tool; print(init_repo_tool())\""
 fi
 
 echo ""

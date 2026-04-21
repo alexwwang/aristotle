@@ -1,178 +1,180 @@
-# Aristotle Review Protocol
+# Aristotle Review Protocol (Post-Hoc Review)
 
-> Loaded only during the REVIEW phase. Do NOT load during REFLECT (unless user requests re-reflection).
+> Loaded only during the REVIEW phase. Do NOT load during REFLECT.
+> Review operates on already-committed rules. Rules were auto-committed by the Checker subagent.
 
-This file defines how to load DRAFT reports, process user feedback, write rules, handle revisions, and perform cross-session reflection.
+This file defines how to load DRAFT records and committed rules, present them to the user, and handle modifications, rejections, and re-reflections.
 
 ---
 
-## STEP V1: LOAD DRAFT REPORT
+## STEP V1: LOAD DRAFT AND RULES
 
 When the user runs `/aristotle review N`:
 
 1. Read `~/.config/opencode/aristotle-state.json`, find the N-th record (1-indexed)
 2. If not found: output `"🦉 Reflection #N not found. Run /aristotle sessions to list."` and STOP
-3. Use `session_read(session_id=<reflector_session_id>)` to read the Reflector's message history
-4. Extract the DRAFT report from the messages (look for the STEP R4 output — the structured reflection report)
-5. Present the DRAFT report to the user in the current session
-6. **WAIT** for user feedback in the current session
+3. Read the DRAFT file from the record's `draft_file_path` field
+4. If draft file not found:
+   a. Fallback: try `session_read(session_id=<reflector_session_id>)` to extract DRAFT from session
+   b. If session also unavailable: go to STEP V3
+5. Read committed rules by querying MCP: `read_rules(status="all", source_session=<target_session_id>)` or keyword matching against session ID
+6. Present both DRAFT and rules to the user
+
+### Presentation Format
+
+```
+🦉 Aristotle Review #N — [target_label]
+════════════════════════════════════════
+
+## DRAFT (Original Reflection Record)
+[Full DRAFT report from file]
+
+## Committed Rules
+[For each rule found:]
+  • Rule [rule_id]: [SHORT_TITLE]
+    Status: ✅ verified / 📋 staging / ❌ rejected
+    Scope: user / project
+    Δ: [delta value]
+    File: [file_path]
+
+## Options
+- "修改 N: feedback" — Revise rule N
+- "reject N" — Reject rule N
+- "confirm" — No changes needed
+- "re-reflect" — Fire new Reflector for deeper analysis
+```
+
+---
 
 ## STEP V2: PROCESS USER FEEDBACK
 
-**If "confirm" / "确认":** Read `${SKILL_DIR}/CHECKER.md`, execute validation → if all passed, go to STEP V3
+**If "confirm" / "确认":**
+No operation needed. Rules are already committed.
+Output: "✅ No changes. Rules remain as committed."
 
-**If "confirm 1,3" (partial confirm):** Read `${SKILL_DIR}/CHECKER.md`, validate specified rules only → if passed, go to STEP V3
+**If "修改 N: feedback" / "revise N: feedback":**
+1. Locate the target rule by N (1-indexed from the displayed list)
+2. Construct revised rule content based on user feedback
+3. Write revised rule via MCP:
+   a. Call `write_rule()` with updated content (creates new pending file)
+   b. Call `stage_rule()` (moves to staging)
+   c. Execute content validation (STEP V4 below)
+   d. If validation passes → call `commit_rule()` → output success
+   e. If validation finds issues → present issues to user for decision
 
-**If "revise N: feedback" / "修改 N: feedback":**
-- Adjust rule N based on feedback
-- Re-present updated draft
-- Loop back to waiting
+**If "reject N":**
+1. Locate the target rule
+2. Call `reject_rule(file_path, reason="user rejected")`
+3. Output: "❌ Rule [rule_id] rejected."
 
-**If "reject" / "放弃":** Update state status to `"rejected"` → STOP
+**If "re-reflect" / "重新反思":**
+1. Extract from DRAFT: target_session_id, scanned_range
+2. Read `${SKILL_DIR}/REFLECT.md` to load reflect protocol
+3. Fire NEW Reflector subagent with focus based on user's instruction
+4. Return to REFLECT.md flow
 
-**If natural language feedback:** Interpret, adjust, re-present → loop back
+**If natural language feedback:**
+Interpret, adjust, re-present → loop back to STEP V2
 
-**If "re-reflect" / "重新反思" / "re-analyze":**
-- Read `${SKILL_DIR}/REFLECT.md`
-- Fire a NEW Reflector task for the same target session
-- Return to waiting for completion (REFLECT.md handles the rest)
+---
 
-## STEP V3: WRITE RULES VIA MCP
+## STEP V3: HANDLE SESSION UNAVAILABLE
 
-Execute the rule write operation via MCP tool calls in the current session.
-
-### V3a. MCP Write Rule
-
-For each confirmed (and validated) reflection, call the `write_rule` MCP tool with:
-- `content`: The Proposed Rule + Context + Example formatted as Markdown body
-- `scope`: `"user"` (always) + `"project"` (if project_directory known)
-- `category`: From the Reflection's Category field
-- `source_session`: From DRAFT header Session field
-- `message_range`: From the Reflection's Location field
-- `intent_domain`: From the Reflection's Intent Tags domain
-- `intent_task_goal`: From the Reflection's Intent Tags task_goal
-- `failed_skill`: From the Reflection's Failed Skill field
-- `error_summary`: From the Reflection's Error Summary field
-
-Returns: `rule_id`, `file_path`, `status="pending"`
-
-### V3b. Stage Rule
-
-For each written rule, call `stage_rule(file_path)` → status becomes `"staging"`.
-
-### V3c. Audit Level Decision (Δ Dynamic)
-
-For each staging rule, call `get_audit_decision(file_path)` → returns `{delta, audit_level, confidence, risk_level, thresholds}`.
+If both DRAFT file and Reflector session are unavailable:
 
 ```
-IF audit_level is "auto":
-  → Auto-call commit_rule(file_path) without user confirmation
-  → Output: "✅ Rule auto-committed (Δ={delta}, {confidence} confidence, {risk_level} risk)"
+🦉 Reflection #N — Session Unavailable
 
-IF audit_level is "semi":
-  → Present rule diff to user, wait for "commit" / "reject"
-  → Show: "📋 Review required (Δ={delta}, {confidence} confidence, {risk_level} risk)"
-  → On "commit": call commit_rule(file_path)
-  → On "reject": call reject_rule(file_path, reason="user rejected after review")
+The DRAFT file and Reflector session for this record are no longer available.
 
-IF audit_level is "manual":
-  → Mandatory detailed review with CHECKER.md validation
-  → Present full rule content + diff + risk assessment
-  → Require explicit "confirm" + "commit" from user
-  → Output: "⚠️ Manual review required (Δ={delta}, {confidence} confidence, {risk_level} risk)"
-  → On confirm + commit: call commit_rule(file_path)
-  → On reject: call reject_rule(file_path, reason="user rejected after manual review")
+Options:
+1. Re-reflect — Fire a new Reflector on the same target session
+   Run: /aristotle --focus full session <target_session_id>
+2. Reject — Mark this record as discarded
+   Say: "reject"
 ```
 
-Δ = confidence × (1 − risk_weight). Risk weight: high→0.8, medium→0.5, low→0.2. Thresholds: auto > 0.7, semi > 0.4, manual ≤ 0.4.
+---
 
-### V3d. Update State File
+## STEP V4: POST-HOC VALIDATION (C Role for User Modifications)
 
-Update `~/.config/opencode/aristotle-state.json`:
-1. Read the current state file
-2. Find the record matching the reviewed reflection
-3. Update status to `"confirmed"` and set `rules_count` to the number of rules committed
-4. Write the updated state file back
+When the user modifies an already-committed rule, validate the modification:
 
-### V3e. Output Confirmation
+### Schema Validation
+- category is one of the 8 valid categories
+- intent_tags.domain and intent_tags.task_goal are non-empty
+- error_summary ≤ 200 characters
 
-```
-✅ Rules committed to Aristotle MCP repository!
-  • Rule rec_xxx: [SHORT_TITLE] → verified (scope: user)
-  • Rule rec_yyy: [SHORT_TITLE] → verified (scope: project)
+### Δ Audit Decision
+Call `get_audit_decision(file_path)` → returns `{delta, audit_level, thresholds}`.
+- `audit_level` "auto" → auto-commit without user confirmation
+- `audit_level` "semi" → present diff, wait for user commit/reject
+- `audit_level` "manual" → mandatory detailed review with full validation
 
-  Repository: ~/.config/opencode/aristotle-repo/
-  Use /aristotle sessions to view history.
-```
+### Content Validation
+1. **Consistency with original error** — Does the modified rule still address the error from the DRAFT?
+2. **No logical contradiction** — Does the proposed rule contradict the Error Excerpt or Correction Excerpt?
+3. **Rule quality** — Is the modified rule specific and actionable (not "be more careful")?
 
-## STEP V4: POST-WRITE REVISION (已写入规则的修订)
+### Outcome
+- ALL checks pass → auto-commit, output: "✅ Rule revised and committed."
+- Schema failure → auto-correct trivial issues, then commit
+- Content issue detected → present specific problem to user:
+  ```
+  ⚠️ Validation issue with revision:
+  - [specific problem description]
 
-When the user provides feedback on rules that have already been written (status is `confirmed` or `revised`):
+  Options: "force" (commit anyway) / "cancel" (keep original) / "修改: feedback"
+  ```
 
-1. **Locate the target rule** — Read the learnings file, match by title/date/category
-2. **Apply the revision** — Edit only the matched entry:
-   - Update the `Rule`, `Context`, `Why`, or `Example` fields as needed
-   - Append a revision timestamp: `_Revised: [DATE]_`
-   - Do NOT modify any other entries
-3. **Update state file** — Set status to `"revised"` for the matching record
-4. **Output confirmation**:
+Append `_Revised: [DATE]_` timestamp to modified rules. All writes are APPEND ONLY, NO DUPLICATES — MCP write_rule handles dedup via file naming.
 
-```
-🔄 Rule revised!
-  File: ~/.config/opencode/aristotle-learnings.md
-  Rule: [SHORT_TITLE] — Revised: [DATE]
-```
+---
 
-## STEP V5: CROSS-SESSION REFLECTION (跨 Session 联合反思)
+## STEP V5: UPDATE STATE FILE
 
-When the user explicitly asks to combine analysis from multiple reflections:
+After any modification or rejection:
 
-```
-/aristotle review 2 --cross 1
-> "结合 #1 的反思一起分析"
-```
+1. Read current state file
+2. Find the matching record
+3. Update:
+   - status: "revised" (if modified) or the existing status (if confirmed)
+   - rules_count: update if rules were added/removed
+4. Write back to state file
+5. Do NOT display state file content to user
 
-1. Load both DRAFT reports (from the two reflector sessions)
-2. Perform cross-session analysis:
-   - Identify recurring error patterns across both sessions
-   - Check for systemic repeated mistakes (same category, same root cause)
-   - Note if rules from a previous reflection should have prevented the current errors
-3. Generate merged/updated draft rules
-4. Present to user using the same confirm/revise/reject flow (Steps V2–V3)
+---
 
-## STEP V6: RE-REFLECT (审核中二次反思)
+## STEP V6: CROSS-SESSION REFLECTION AND RE-REFLECT
 
-When the user says "re-reflect", "重新反思", "re-analyze", or similar during review:
+When user requests cross-session analysis (`/aristotle review N --cross M`):
 
-1. Extract from the current DRAFT report:
-   - `target_session_id` (from Scan Context)
-   - `scanned_range` (from Scan Context)
-   - User's specific re-reflect instruction (e.g. "deeper analysis on error #2", "missed the API error at message 45")
-2. Read `${SKILL_DIR}/REFLECT.md` to load the reflect protocol
-3. Fire a NEW Reflector subagent with **enhanced focus**:
-   - Pass the original `target_session_id`
-   - Set `FOCUS_HINT` based on the user's instruction:
-     - User mentions a specific error → `around [message_number]` from that error's Location field
-     - User says "deeper analysis" → `around [scanned_range]` (re-analyze same window)
-     - User says "I think there's more" → expand beyond original `scanned_range`
-   - Include user's feedback as additional context in the prompt
-4. After completion, load the NEW DRAFT report (replacing the current one)
+1. Load both DRAFT reports from records N and M
+2. Cross-analyze: recurring patterns, systemic repeated mistakes, same category/root cause
+3. Check if rules from a previous reflection should have prevented the current errors
+4. Generate merged draft rules → return to STEP V2 for confirm/revise/reject
+
+When user says "re-reflect" during review:
+
+1. Extract from DRAFT: target_session_id, scanned_range
+2. Read `${SKILL_DIR}/REFLECT.md` to load reflect protocol
+3. Fire NEW Reflector subagent with **enhanced focus**:
+   - User mentions a specific error → `around [message_number]` from that error's Location field
+   - User says "deeper analysis" → `around [scanned_range]` (re-analyze same window)
+   - User says "I think there's more" → expand beyond original `scanned_range`
+4. After completion, load NEW DRAFT report (replacing current one)
 5. Return to STEP V2 for user feedback
-
-This creates a new reflector session and updates the state file with a new record.
-The DRAFT's Location metadata enables precise targeting — the new Reflector can jump directly to the relevant messages instead of re-scanning the entire session.
 
 ---
 
 ## Review Mode Permissions
 
 In Review mode, the Coordinator IS allowed to:
-- ✅ Read Reflector session content (to extract DRAFT reports)
-- ✅ Process user feedback (confirm/revise/reject)
-- ✅ Write confirmed rules to learnings files (APPEND ONLY, NO DUPLICATES — MCP write_rule handles dedup via file naming)
-- ✅ Validate rule schema before commit (C role)
-- ✅ Call MCP tools (write_rule, stage_rule, commit_rule, reject_rule)
-- ✅ Revise already-written rules (edit specific entries, append revision timestamp)
-- ✅ Cross-session reflection (combine analysis from multiple reflections)
-- ✅ Re-reflect (fire new Reflector for same target session)
-- ✅ Update state file (confirmed / revised / rejected)
+- ✅ Read DRAFT files from disk
+- ✅ Call MCP tools (read_rules, write_rule, stage_rule, commit_rule, reject_rule)
+- ✅ Present DRAFT and rules to user (user explicitly requested this)
+- ✅ Validate user modifications (C role for post-hoc changes)
+- ✅ Update state file
+- ✅ Fire new Reflector for re-reflect
+- ✅ Write rules (APPEND ONLY, NO DUPLICATES — MCP handles dedup via file naming)
+- ✅ Re-reflect with deeper analysis (loading REFLECT.md)

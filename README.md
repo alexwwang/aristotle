@@ -87,7 +87,7 @@ Install the Aristotle skill with MCP server from https://github.com/alexwwang/ar
 3. Run `uv sync` to install Python dependencies for the MCP server
 4. Verify: run `bash test.sh` — all assertions must pass
 5. Add MCP config to opencode.json: { "mcp": { "aristotle": { "type": "local", "command": ["uv", "run", "--project", "~/.claude/skills/aristotle", "python", "-m", "aristotle_mcp.server"], "enabled": true } } }
-6. Verify MCP: run `uv run python -c "from aristotle_mcp.server import mcp; print(len(mcp._tool_manager._tools), 'tools loaded')"` — should print "11 tools loaded"
+6. Verify MCP: run `uv run python -c "from aristotle_mcp.server import mcp; print(len(mcp._tool_manager._tools), 'tools loaded')"` — should print "12 tools loaded"
 ```
 
 ### MCP Configuration
@@ -292,7 +292,7 @@ _rule()      │
 verified rejected/  (preserves scope + metadata)
 ```
 
-### 11 MCP Tools
+### 12 MCP Tools
 
 | Tool | Purpose |
 |------|---------|
@@ -307,6 +307,7 @@ verified rejected/  (preserves scope + metadata)
 | `check_sync_status` | Detect verified rules on disk that are not committed to git |
 | `sync_rules` | Commit unsynced verified rules to git (auto-detect or specify files) |
 | `get_audit_decision` | Compute Δ = confidence × (1 − risk_weight) for a staging rule, return audit level (auto/semi/manual) |
+| `persist_draft` | Persist a DRAFT report to disk for later review and re-reflect (atomic write to `aristotle-drafts/`) |
 
 ### Streaming Frontmatter Search
 
@@ -440,7 +441,7 @@ Creates a real session with known error patterns, triggers `/aristotle`, and ver
 │   ├── frontmatter.py    # Streaming frontmatter search, atomic writes
 │   ├── evolution.py      # Δ decision engine (compute_delta, decide_audit_level)
 │   ├── migration.py      # Flat Markdown → Git repo migration
-│   └── server.py         # FastMCP entry point, 11 tools
+│   └── server.py         # FastMCP entry point, 12 tools
 └── test/
     └── live-test.sh      # E2E live test (8 assertions)
 ```

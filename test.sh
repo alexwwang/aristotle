@@ -208,7 +208,7 @@ assert_contains "$ARISTOTLE_DIR/REFLECTOR.md" "STEP R1" "reflector: read session
 assert_contains "$ARISTOTLE_DIR/REFLECTOR.md" "STEP R2" "reflector: detect errors"
 assert_contains "$ARISTOTLE_DIR/REFLECTOR.md" "STEP R3" "reflector: 5-Why analysis"
 assert_contains "$ARISTOTLE_DIR/REFLECTOR.md" "STEP R4" "reflector: draft rules"
-assert_not_contains "$ARISTOTLE_DIR/REFLECTOR.md" "STEP R5" "reflector has no R5 (non-interactive)"
+assert_contains "$ARISTOTLE_DIR/REFLECTOR.md" "STEP R5" "reflector: persist draft"
 assert_not_contains "$ARISTOTLE_DIR/REFLECTOR.md" "STEP R6" "reflector has no R6 (non-interactive)"
 assert_contains "$ARISTOTLE_DIR/REFLECTOR.md" "DRAFT" "draft output format"
 assert_contains "$ARISTOTLE_DIR/REFLECTOR.md" "MISUNDERSTOOD_REQUIREMENT" "error categories"
