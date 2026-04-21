@@ -8,6 +8,8 @@ metadata:
 
 # Aristotle — Dispatcher
 
+## CRITICAL: DO NOT load LEARN.md, REVIEW.md, or CHECKER.md for learn commands. All learn logic is handled by MCP orchestration tools. Only load REFLECT.md for reflect commands.
+
 ## ROUTE
 
 Parse command → call MCP `orchestrate_start(command, args_json)` → execute returned action.

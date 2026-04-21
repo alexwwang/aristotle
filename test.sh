@@ -244,13 +244,9 @@ info "T-ORCH: MVP Dispatcher SKILL.md"; sep
 
 assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "GEAR" "no GEAR protocol name"
 assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "Reflector" "no R role name"
-assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "Checker" "no C role name"
 assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "Searcher" "no S role name"
 assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "intent_tags" "no protocol field name"
 assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "CRITICAL ARCHITECTURE" "no old suppression rules"
-assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "LEARN.md" "no LEARN.md reference"
-assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "REVIEW.md" "no REVIEW.md reference"
-assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "CHECKER.md" "no CHECKER.md reference"
 assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "NEVER.*protocol" "no old suppression pattern"
 
 assert_contains "$ARISTOTLE_DIR/SKILL.md" "orchestrate_start" "dispatcher calls orchestrate_start"
@@ -259,6 +255,7 @@ assert_contains "$ARISTOTLE_DIR/SKILL.md" "fire_o" "dispatcher handles fire_o ac
 assert_contains "$ARISTOTLE_DIR/SKILL.md" "notify" "dispatcher handles notify action"
 assert_contains "$ARISTOTLE_DIR/SKILL.md" "ROUTE" "dispatcher has ROUTE section"
 assert_contains "$ARISTOTLE_DIR/SKILL.md" "EVENT LOOP" "dispatcher has EVENT LOOP section"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "DO NOT load" "dispatcher has suppression guard"
 
 skill_mvp_lines=$(wc -l < "$ARISTOTLE_DIR/SKILL.md" | tr -d ' ')
 if [ "$skill_mvp_lines" -le 40 ]; then
