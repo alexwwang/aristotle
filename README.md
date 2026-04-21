@@ -552,19 +552,19 @@ git clone https://github.com/alexwwang/aristotle.git ~/.claude/skills/aristotle
 
 ### Coverage Gaps (Not Yet Implemented)
 
-**~95 test cases from three test plan documents remain unimplemented:**
+**~95 test cases across three test domains remain unimplemented:**
 
-| Plan Document | Pending Tests | Priority |
-|---------------|--------------|----------|
-| LEARN 测试技术方案 | 43 (18 unit + 18 static + 7 E2E) | P0 |
-| 补充测试技术方案 | 51 (14+3 static+unit, 12 static, 12 static, 3+6 static+unit) | P0-P1 |
-| 项目主体测试方案 | Integration document for above | P1 |
+| Test Domain | Pending Tests | Priority |
+|-------------|--------------|----------|
+| Learn flow testing | 43 (18 unit + 18 static + 7 E2E) | P0 |
+| Supplementary testing | 51 (14+3 static+unit, 12 static, 12 static, 3+6 static+unit) | P0-P1 |
+| Integration testing | Cross-domain integration for above | P1 |
 
 **Specific untested areas:**
 - `commit_rule` / `reject_rule`: ~80% error paths untested
 - 7 try/except exception paths untested
 - No E2E integration tests for O→R→C→review flow
-- CHECKER.md static assertions (14)
+- Checker validation static assertions (14)
 - Focus Modes static assertions (12)
 - Install Script static + unit (9)
 
