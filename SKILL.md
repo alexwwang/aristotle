@@ -6,71 +6,28 @@ metadata:
   category: "meta-learning"
 ---
 
-# Aristotle — Error Reflection & Learning Agent
+# Aristotle — Dispatcher
 
-> "Knowing yourself is the beginning of all wisdom." — Aristotle
+## ROUTE
 
-You are **Aristotle**, a meta-learning agent with progressive disclosure architecture:
+Parse command → call MCP `orchestrate_start(command, args_json)` → execute returned action.
 
-| Phase | Command | Loads | Purpose |
-|-------|---------|-------|---------|
-| **Route** | `/aristotle` | This file only | Parse args, route to reflect/review/learn/sessions |
-| **Reflect** | `/aristotle [target]` | This file + `REFLECT.md` | Fire background Reflector subagent |
-| **Review** | `/aristotle review N` | This file + `REVIEW.md` | Load DRAFT, confirm/revise/reject rules |
-| **Learn** | `/aristotle learn` | This file + `LEARN.md` | Retrieve related lessons from past sessions |
+## EVENT LOOP
 
-## ⚠️ CRITICAL ARCHITECTURE RULES
+On background task notification:
+call MCP `orchestrate_on_event("o_done", {workflow_id, result})` → execute returned action.
 
-- **NEVER** perform reflection analysis in the current session. Always delegate to a subagent via `task()`.
-- **NEVER** call `background_output` with `full_session=true` for the Reflector task.
-- **NEVER** dump the Reflector's analysis into the current session.
-- **NEVER** output protocol reasoning, execution plans, or internal decision-making to the user. Just execute the route and show the defined notification.
-- Task sessions are **architecturally non-interactive** — do NOT attempt to resume them.
+## ACTIONS
 
----
+- `fire_o` → task(category="unspecified-low", run_in_background=true, prompt=o_prompt)
+  Then: call MCP `orchestrate_on_event("o_fired", {workflow_id})` → execute returned action.
+- `notify` → show message to user → STOP
+- `done` → STOP
 
-## PHASE 0: ROUTE
-
-### Resolve SKILL_DIR
-
-1. Try `~/.claude/skills/aristotle/`
-2. Try `~/.config/opencode/skills/aristotle/`
-3. If neither exists, use the directory containing this SKILL.md
-
-### Parse Arguments
+## Parse Arguments
 
 ```
-/aristotle                          → REFLECT: current session, focus on last exchange
-/aristotle last                     → REFLECT: previous session (session_list, exclude current)
-/aristotle session ses_xxx          → REFLECT: specific session by OpenCode session ID
-/aristotle recent N                 → REFLECT: Nth most recent session (N=1 is closest to current)
-/aristotle --model <model> [...]    → REFLECT: override model (combine with above)
-/aristotle --focus <hint> [...]     → REFLECT: focus area (last/after "text"/around N/error/full)
-/aristotle learn [intent]           → LEARN: 检索历史教训（自然语言描述任务或领域）
-/aristotle learn --domain X --goal Y → LEARN: 指定 domain/task_goal 检索
-/aristotle learn --domain X         → LEARN: 仅指定 domain 检索
-/aristotle sessions                 → LIST: show all reflection records with sequence numbers
-/aristotle review N                 → REVIEW: load DRAFT #N for review (N = sequence number from sessions)
-(passive trigger, no args)          → REFLECT: current session, auto-detected from multi-agent error signal
+/aristotle learn <query>             → ROUTE: command="learn", args={query: "<query>"}
+/aristotle learn --domain X --goal Y → ROUTE: command="learn", args={domain: "X", goal: "Y"}
+/aristotle [anything else]           → Read REFLECT.md and execute reflect protocol
 ```
-
-Parse `--model` and `--focus` from anywhere in the argument list.
-
-### Execute Route
-
-| Command | Action |
-|---------|--------|
-| `sessions` | Call `aristotle_list_reflection_records()` via MCP (or read state file), display table → STOP |
-| `review N` | Read `${SKILL_DIR}/REVIEW.md`, then execute review protocol |
-| `learn [...]` | Read `${SKILL_DIR}/LEARN.md`, then execute learn protocol |
-| reflect (default) | Read `${SKILL_DIR}/REFLECT.md`, then execute reflect protocol |
-
----
-
-## /aristotle sessions — List Reflection Sessions
-
-Display a formatted table of reflection records from `~/.config/opencode/aristotle-state.json`.
-
-Status icons: `⏳ processing` | `✅ auto_committed` | `🔄 revised` | `❌ rejected` | `📋 partial_commit`
-
-If no records exist: `🦉 No reflection sessions found. Run /aristotle to start.`

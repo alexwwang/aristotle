@@ -76,16 +76,16 @@ assert_exists "$ARISTOTLE_DIR/install.ps1"
 assert_exists "$ARISTOTLE_DIR/test/live-test.sh"
 sep
 
-# ═══ T2: SKILL.md Content (Router only) ═══
-info "T2: SKILL.md Content (Router)"; sep
+# ═══ T2: SKILL.md Content (Dispatcher) ═══
+info "T2: SKILL.md Content (Dispatcher)"; sep
 assert_contains "$ARISTOTLE_DIR/SKILL.md" "name: aristotle" "frontmatter: name"
 assert_contains "$ARISTOTLE_DIR/SKILL.md" "description:" "frontmatter: description"
-assert_contains "$ARISTOTLE_DIR/SKILL.md" "CRITICAL ARCHITECTURE RULE" "architecture guard"
-assert_contains "$ARISTOTLE_DIR/SKILL.md" "aristotle-state.json" "state file tracking"
-assert_contains "$ARISTOTLE_DIR/SKILL.md" "--model" "model override flag"
-assert_contains "$ARISTOTLE_DIR/SKILL.md" "/aristotle sessions" "sessions subcommand"
-assert_contains "$ARISTOTLE_DIR/SKILL.md" "REFLECT.md" "routes to REFLECT.md"
-assert_contains "$ARISTOTLE_DIR/SKILL.md" "REVIEW.md" "routes to REVIEW.md"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "orchestrate_start" "dispatcher calls MCP orchestrate_start"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "orchestrate_on_event" "dispatcher calls MCP orchestrate_on_event"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "fire_o" "dispatcher handles fire_o action"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "REFLECT.md" "dispatcher routes reflect to REFLECT.md"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "learn --domain" "dispatcher supports explicit learn params"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "learn <query>" "dispatcher supports natural language learn"
 sep
 
 # ═══ T2b: SKILL.md Auto-Trigger Keywords ═══
@@ -100,10 +100,10 @@ sep
 # ═══ T2c: File Size Constraints (Progressive Disclosure) ═══
 info "T2c: File Size Constraints"; sep
 SKILL_LINES=$(wc -l < "$ARISTOTLE_DIR/SKILL.md" | tr -d ' ')
-if [ "$SKILL_LINES" -le 100 ]; then
-    pass "SKILL.md is $SKILL_LINES lines (≤100)"
+if [ "$SKILL_LINES" -le 40 ]; then
+    pass "SKILL.md MVP is $SKILL_LINES lines (≤40)"
 else
-    fail "SKILL.md is $SKILL_LINES lines (expected ≤100)"
+    fail "SKILL.md MVP is $SKILL_LINES lines (expected ≤40)"
 fi
 REFLECT_LINES=$(wc -l < "$ARISTOTLE_DIR/REFLECT.md" | tr -d ' ')
 if [ "$REFLECT_LINES" -le 140 ]; then
@@ -195,9 +195,9 @@ sep
 # ═══ T6: Architecture Guarantees ═══
 info "T6: Architecture Guarantees"; sep
 
-# SKILL.md is router-only — no protocol details
-assert_contains "$ARISTOTLE_DIR/SKILL.md" "NEVER.*perform" "isolation guarantee"
-assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "STEP R1" "router omits R1"
+# SKILL.md is a thin dispatcher — no protocol details
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "Dispatcher" "dispatcher identity"
+assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "STEP R1" "dispatcher omits R1"
 assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "STEP F1" "router omits F1"
 assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "STEP V1" "router omits V1"
 assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "5 Whys Template" "router omits 5-Why template"
@@ -238,6 +238,35 @@ assert_contains "$ARISTOTLE_DIR/REVIEW.md" "reject" "review: reject mechanism"
 assert_contains "$ARISTOTLE_DIR/REVIEW.md" "Revised:" "review: revision timestamp"
 assert_contains "$ARISTOTLE_DIR/REVIEW.md" "get_audit_decision" "review: V3c Δ decision"
 assert_contains "$ARISTOTLE_DIR/REVIEW.md" "audit_level" "review: dynamic audit level"
+
+# ═══ T-ORCH: MVP Dispatcher SKILL.md static tests ═══
+info "T-ORCH: MVP Dispatcher SKILL.md"; sep
+
+assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "GEAR" "no GEAR protocol name"
+assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "Reflector" "no R role name"
+assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "Checker" "no C role name"
+assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "Searcher" "no S role name"
+assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "intent_tags" "no protocol field name"
+assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "CRITICAL ARCHITECTURE" "no old suppression rules"
+assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "LEARN.md" "no LEARN.md reference"
+assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "REVIEW.md" "no REVIEW.md reference"
+assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "CHECKER.md" "no CHECKER.md reference"
+assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "NEVER.*protocol" "no old suppression pattern"
+
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "orchestrate_start" "dispatcher calls orchestrate_start"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "orchestrate_on_event" "dispatcher calls orchestrate_on_event"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "fire_o" "dispatcher handles fire_o action"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "notify" "dispatcher handles notify action"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "ROUTE" "dispatcher has ROUTE section"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "EVENT LOOP" "dispatcher has EVENT LOOP section"
+
+skill_mvp_lines=$(wc -l < "$ARISTOTLE_DIR/SKILL.md" | tr -d ' ')
+if [ "$skill_mvp_lines" -le 40 ]; then
+    pass "SKILL.md MVP is $skill_mvp_lines lines (≤40)"
+else
+    fail "SKILL.md MVP is $skill_mvp_lines lines (expected ≤40)"
+fi
+sep
 
 # Summary
 sep

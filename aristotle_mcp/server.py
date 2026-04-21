@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import time
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -12,6 +14,7 @@ from aristotle_mcp.config import (
     RISK_MAP,
     VALID_SCOPES,
     VALID_STATUSES,
+    WORKFLOW_DIR_NAME,
     project_hash,
     resolve_repo_dir,
 )
@@ -980,6 +983,218 @@ def complete_reflection_record(
     )
 
     return {"success": True, "message": f"Record {target_id} updated to {status}"}
+
+
+# ═══════════════════════════════════════════════════════════
+# Orchestration Tools (Function-Call-O MVP)
+# ═══════════════════════════════════════════════════════════
+
+O_INTENT_PROMPT = """You are a semantic analysis agent. Extract structured intent from the user's learning query.
+
+USER QUERY: {query}
+
+Extract the following fields and return ONLY valid JSON (no markdown, no explanation):
+
+{{
+  "intent_tags": {{
+    "domain": "<one of: file_operations, api_integration, database_operations, code_generation, build_system, testing, deployment, general>",
+    "task_goal": "<short phrase describing the user's intended outcome>"
+  }},
+  "keywords": "<2-4 core technical terms joined by | for regex matching, e.g. prisma|timeout|pool>"
+}}
+
+Rules:
+- domain must be one of the listed values
+- task_goal should describe the user's intent, NOT the error
+- keywords should capture the most distinctive technical terms
+- Return ONLY the JSON object, nothing else
+"""
+
+
+def _workflow_dir() -> Path:
+    return resolve_repo_dir() / WORKFLOW_DIR_NAME
+
+
+def _save_workflow(workflow_id: str, state: dict) -> None:
+    d = _workflow_dir()
+    d.mkdir(parents=True, exist_ok=True)
+    path = d / f"{workflow_id}.json"
+    state["updated_at"] = _now_iso()
+    path.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def _load_workflow(workflow_id: str) -> dict | None:
+    path = _workflow_dir() / f"{workflow_id}.json"
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, ValueError, UnicodeDecodeError):
+        return None
+
+
+def _build_intent_extraction_prompt(query: str) -> str:
+    return O_INTENT_PROMPT.format(query=query)
+
+
+def _do_search_and_notify(workflow_id: str) -> dict:
+    """Execute list_rules with workflow's intent tags and return formatted notification."""
+    workflow = _load_workflow(workflow_id)
+    if not workflow:
+        return {"action": "notify", "workflow_id": workflow_id, "message": "🦉 Workflow state lost."}
+
+    intent = workflow.get("intent_tags", {})
+    keywords = workflow.get("keywords", "")
+
+    params: dict = {"status_filter": "verified"}
+    if intent.get("domain"):
+        params["intent_domain"] = intent["domain"]
+    if intent.get("task_goal"):
+        params["intent_task_goal"] = intent["task_goal"]
+    if keywords:
+        params["keyword"] = keywords
+
+    result = list_rules(**params)
+
+    # Mark workflow done
+    workflow["phase"] = "done"
+    workflow["result_count"] = result.get("count", 0)
+    _save_workflow(workflow_id, workflow)
+
+    count = result.get("count", 0)
+    if count == 0:
+        msg = "🦉 No relevant lessons found for this query."
+    else:
+        rules = result.get("rules", [])
+        lines = [f"🦉 Found {count} relevant lesson(s):"]
+        for i, r in enumerate(rules[:5], 1):
+            meta = r.get("metadata", {})
+            summary = meta.get("error_summary", "No summary")
+            cat = meta.get("category", "?")
+            lines.append(f"  {i}. [{cat}] {summary}")
+        msg = "\n".join(lines)
+
+    return {
+        "action": "notify",
+        "workflow_id": workflow_id,
+        "message": msg,
+        "result_count": count,
+    }
+
+
+@mcp.tool()
+def orchestrate_start(command: str, args_json: str = "{}") -> dict:
+    """Analyze command, initialize workflow state, return first action.
+
+    Args:
+        command: Command type ("learn", "reflect", "review")
+        args_json: JSON string with command parameters
+
+    Returns dict with action ("fire_o"|"notify"|"done"),
+        optional o_prompt, workflow_id, and optional message.
+    """
+    try:
+        args = json.loads(args_json)
+    except (json.JSONDecodeError, TypeError):
+        return {
+            "action": "notify",
+            "workflow_id": "",
+            "message": "🦉 Invalid arguments. Could not parse JSON.",
+        }
+
+    workflow_id = f"wf_{uuid.uuid4().hex[:8]}"
+
+    if command == "learn":
+        query = args.get("query", "")
+        if not query:
+            return {
+                "action": "notify",
+                "workflow_id": workflow_id,
+                "message": "🦉 Need a query to search. Usage: /aristotle learn <query>",
+            }
+
+        domain = args.get("domain")
+        goal = args.get("goal")
+
+        if domain and goal:
+            # Explicit params mode — skip O, go straight to search
+            _save_workflow(workflow_id, {
+                "phase": "search",
+                "command": "learn",
+                "query": query,
+                "intent_tags": {"domain": domain, "task_goal": goal},
+            })
+            return _do_search_and_notify(workflow_id)
+
+        # Natural language mode — need LLM to extract intent
+        _save_workflow(workflow_id, {
+            "phase": "intent_extraction",
+            "command": "learn",
+            "query": query,
+        })
+
+        o_prompt = _build_intent_extraction_prompt(query)
+        return {
+            "action": "fire_o",
+            "workflow_id": workflow_id,
+            "o_prompt": o_prompt,
+        }
+
+    elif command == "reflect":
+        return {
+            "action": "notify",
+            "workflow_id": workflow_id,
+            "message": "🦉 Reflect flow not yet implemented in MVP.",
+        }
+    else:
+        return {
+            "action": "notify",
+            "workflow_id": workflow_id,
+            "message": f"🦉 Unknown command: {command}",
+        }
+
+
+@mcp.tool()
+def orchestrate_on_event(event_type: str, data_json: str) -> dict:
+    """Receive event notification, update state, return next action.
+
+    Args:
+        event_type: "o_done" | "subagent_done" | "score_done"
+        data_json: JSON string with event data (must include workflow_id)
+
+    Returns dict with action, workflow_id, and optional fields.
+    """
+    try:
+        data = json.loads(data_json)
+    except (json.JSONDecodeError, TypeError):
+        return {"action": "notify", "message": "🦉 Invalid event data."}
+
+    workflow_id = data.get("workflow_id", "")
+    workflow = _load_workflow(workflow_id)
+    if not workflow:
+        return {"action": "notify", "message": f"🦉 Unknown workflow: {workflow_id}"}
+
+    if event_type == "o_done" and workflow.get("phase") == "intent_extraction":
+        result = data.get("result", {})
+
+        intent_tags = result.get("intent_tags", {})
+        keywords = result.get("keywords", "")
+
+        workflow["phase"] = "search"
+        workflow["intent_tags"] = intent_tags
+        workflow["keywords"] = keywords
+        _save_workflow(workflow_id, workflow)
+
+        return _do_search_and_notify(workflow_id)
+
+    if event_type == "o_done" and workflow.get("phase") != "intent_extraction":
+        return {
+            "action": "notify",
+            "workflow_id": workflow_id,
+            "message": f"🦉 Unexpected o_done in phase '{workflow.get('phase')}'.",
+        }
+
+    return {"action": "done", "workflow_id": workflow_id}
 
 
 def _rejected_dir_for(base_dir: Path, repo_path: Path) -> Path:
