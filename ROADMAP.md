@@ -1,6 +1,6 @@
 # Aristotle Roadmap
 
-> P1–P4 + GEAR 编排已完成（17 MCP tools, 218 pytest + 98 static）。本文档记录后续开发计划。
+> P1–P4 + GEAR 编排已完成（17 MCP tools, 227 pytest + 98 static）。本文档记录后续开发计划。
 
 ---
 

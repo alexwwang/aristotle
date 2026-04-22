@@ -17,7 +17,9 @@ from _orch_helpers import (
     _fire_r_done_event,
     _fire_c_done_event,
     _load_workflow,
+    init_repo_tool,
     orchestrate_start,
+    orchestrate_on_event,
 )
 
 
@@ -231,3 +233,74 @@ class TestOrchestrateOnEventReflect:
 
         wf = _load_workflow(wf_id)
         assert wf["phase"] == "done"
+
+
+# ═══════════════════════════════════════════════════════
+# TestExceptionReflect — OnEvent exception paths (§3.8.2)
+# ═══════════════════════════════════════════════════════
+class TestExceptionReflect:
+
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
+    def test_c_done_result_parse_failure(self):
+        """C 返回不可解析的 result → fallback 不崩溃。"""
+        start = _start_reflect_workflow("ses_tgt")
+        wf_id = start["workflow_id"]
+        _fire_r_done_event(wf_id)
+
+        result = _fire_c_done_event(wf_id, "This is not parseable at all!!!")
+
+        assert result["action"] == "notify"
+        wf = _load_workflow(wf_id)
+        assert wf["phase"] == "done"
+
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
+    def test_invalid_workflow_id_format(self):
+        """wf_ + 非十六进制字符 → action=notify 含 "Invalid"。"""
+        result = orchestrate_on_event("subagent_done", json.dumps({
+            "workflow_id": "wf_ZZZZZZZZZZZZZZZZ",
+            "session_id": "ses_test",
+            "result": "done",
+        }))
+
+        assert result["action"] == "notify"
+        assert "Invalid" in result["message"]
+
+
+# ═══════════════════════════════════════════════════════
+# TestExceptionStart — Start exception paths (§3.8.3, §3.8.4)
+# ═══════════════════════════════════════════════════════
+class TestExceptionStart:
+
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
+    def test_review_state_file_corrupted(self):
+        """aristotle-state.json 损坏 → action=notify 含 "corrupted"。"""
+        from aristotle_mcp.config import resolve_repo_dir
+        init_repo_tool()
+        state_path = resolve_repo_dir().parent / "aristotle-state.json"
+        state_path.parent.mkdir(parents=True, exist_ok=True)
+        state_path.write_text("{not valid json!!!", encoding="utf-8")
+
+        result = orchestrate_start("review", json.dumps({"sequence": 1}))
+        assert result["action"] == "notify"
+        assert "corrupted" in result["message"].lower()
+
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
+    def test_review_invalid_sequence_type(self):
+        """sequence="not_a_number" → action=notify 含 "Invalid sequence"。"""
+        init_repo_tool()
+        result = orchestrate_start("review", json.dumps({"sequence": "not_a_number"}))
+        assert result["action"] == "notify"
+        assert "invalid" in result["message"].lower()
+        assert "sequence" in result["message"].lower()
+
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
+    def test_sessions_state_file_corrupted(self):
+        """sessions 的 aristotle-state.json 损坏 → action=notify 含 "corrupted"。"""
+        from aristotle_mcp.config import resolve_repo_dir
+        state_path = resolve_repo_dir().parent / "aristotle-state.json"
+        state_path.parent.mkdir(parents=True, exist_ok=True)
+        state_path.write_text("BROKEN{{{}}}", encoding="utf-8")
+
+        result = orchestrate_start("sessions", "{}")
+        assert result["action"] == "notify"
+        assert "corrupted" in result["message"].lower()
