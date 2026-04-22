@@ -53,10 +53,13 @@ VALID_STATUSES: tuple[str, ...] = ("pending", "staging", "verified", "rejected")
 
 VALID_SCOPES: tuple[str, ...] = ("user", "project")
 
+WORKFLOW_DIR_NAME = ".workflows"
+
 GITIGNORE_CONTENT = """\
 *.tmp
 *.signal
 .interaction/
+.workflows/
 """
 
 REPO_DIR_STRUCTURE: tuple[str, ...] = (

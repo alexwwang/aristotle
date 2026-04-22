@@ -4,7 +4,7 @@
 [![Release](https://img.shields.io/github/v/release/alexwwang/aristotle?include_prereleases)](https://github.com/alexwwang/aristotle/releases)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
-[![Tests](https://img.shields.io/badge/tests-134%20pytest%20%2B%2067%20static-brightgreen)](./test/test_mcp.py)
+[![Tests](https://img.shields.io/badge/tests-166%20pytest%20%2B%2084%20static-brightgreen)](./test/test_mcp.py)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19660780.svg)](https://doi.org/10.5281/zenodo.19660780)
 
 English | [中文](./README.zh-CN.md)
@@ -530,9 +530,10 @@ git clone https://github.com/alexwwang/aristotle.git ~/.claude/skills/aristotle
 | Milestone | pytest | static (test.sh) | Commit |
 |-----------|--------|-------------------|--------|
 | Baseline (pre-remediation) | 111 | 67 | `35cc613` (main) |
-| Post-remediation | **134** | **67** | `96eed0d` |
+| Post-remediation | 134 | 67 | `96eed0d` |
+| Post-coroutine-O merge | **166** | **84** | `HEAD` (test-coverage) |
 
-### Coverage by Module (134 pytest)
+### Coverage by Module (166 pytest)
 
 | Test Class | Module | Assertions | What It Tests |
 |------------|--------|------------|---------------|
@@ -549,21 +550,26 @@ git clone https://github.com/alexwwang/aristotle.git ~/.claude/skills/aristotle
 | `TestPersistDraft` | `server.py` | 4 | Atomic write, content verification, overwrite |
 | `TestCreateReflectionRecord` | `server.py` | 9 | Sequence numbering, JSON state, 50-record pruning |
 | `TestCompleteReflectionRecord` | `server.py` | 8 | Status update, rules_count, error handling |
+| `TestOrchestrateStart` | `server.py` (orchestration) | 10 | Learn flow (fire_o, explicit params, empty query, invalid args, domain+goal, reflect, latency) |
+| `TestOrchestrateOnEvent` | `server.py` (orchestration) | 8 | o_done → search, string result, empty result, missing workflow_id, phase mismatch, invalid JSON |
+| `TestWorkflowStateManagement` | `server.py` (orchestration) | 6 | Workflow dir creation, JSON validity, timestamps, done phase, corrupted/missing workflow |
+| `TestIntegrationMockO` | `server.py` (orchestration) | 5 | Full learn flow (with/without results), explicit params, unique IDs, concurrent workflows |
+| `TestSearchParamMapping` | `server.py` (orchestration) | 2 | Intent tags → search params, empty intent handling |
 
 ### Coverage Gaps (Not Yet Implemented)
 
-**~95 test cases across three test domains remain unimplemented:**
+**~60 test cases across two test domains remain unimplemented:**
 
 | Test Domain | Pending Tests | Priority |
 |-------------|--------------|----------|
 | Learn flow testing | 43 (18 unit + 18 static + 7 E2E) | P0 |
-| Supplementary testing | 51 (14+3 static+unit, 12 static, 12 static, 3+6 static+unit) | P0-P1 |
-| Integration testing | Cross-domain integration for above | P1 |
+| Supplementary testing (Checker, Focus, Install) | ~17 | P0-P1 |
 
 **Specific untested areas:**
 - `commit_rule` / `reject_rule`: ~80% error paths untested
 - 7 try/except exception paths untested
-- No E2E integration tests for O→R→C→review flow
+- No E2E integration tests for O→R→C→review flow (pending GEAR workflow Phase 1)
+- `orchestrate_review_action` (pending GEAR workflow Phase 1 implementation)
 - Checker validation static assertions (14)
 - Focus Modes static assertions (12)
 - Install Script static + unit (9)

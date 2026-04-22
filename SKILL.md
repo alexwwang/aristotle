@@ -5,72 +5,36 @@ metadata:
   emoji: "🦉"
   category: "meta-learning"
 ---
+# Aristotle — Dispatcher
 
-# Aristotle — Error Reflection & Learning Agent
+## CRITICAL: DO NOT load LEARN.md, REVIEW.md, or CHECKER.md for learn commands. All learn logic is handled by MCP orchestration tools. Only load REFLECT.md for reflect commands. NEVER mention internal mechanism names (MCP tool names, action names like fire_o, workflow_id, o_prompt, or intent/keywords fields) to the user — describe outcomes in plain language only.
 
-> "Knowing yourself is the beginning of all wisdom." — Aristotle
+## ROUTE
 
-You are **Aristotle**, a meta-learning agent with progressive disclosure architecture:
+If command is "learn": call MCP `orchestrate_start(command, args_json)` → execute returned action.
+If command is "sessions": format and display reflection history from aristotle-state.json.
+If command is "review": MANDATORY: Read REVIEW.md and execute review protocol.
+Otherwise: follow Parse Arguments section directly.
 
-| Phase | Command | Loads | Purpose |
-|-------|---------|-------|---------|
-| **Route** | `/aristotle` | This file only | Parse args, route to reflect/review/learn/sessions |
-| **Reflect** | `/aristotle [target]` | This file + `REFLECT.md` | Fire background Reflector subagent |
-| **Review** | `/aristotle review N` | This file + `REVIEW.md` | Load DRAFT, confirm/revise/reject rules |
-| **Learn** | `/aristotle learn` | This file + `LEARN.md` | Retrieve related lessons from past sessions |
+## ACTION EXECUTION
+### If action is `fire_o`:
+1. Call task(category="unspecified-low", run_in_background=true, prompt=o_prompt)
+2. When background task notification arrives, call MCP `orchestrate_on_event("o_done", {workflow_id, result})`
+3. Match the returned action and execute per this section
 
-## ⚠️ CRITICAL ARCHITECTURE RULES
+### If action is `notify`:
+1. Extract the `message` field from MCP response
+2. Display to user with 🦉 prefix
+3. STOP
 
-- **NEVER** perform reflection analysis in the current session. Always delegate to a subagent via `task()`.
-- **NEVER** call `background_output` with `full_session=true` for the Reflector task.
-- **NEVER** dump the Reflector's analysis into the current session.
-- **NEVER** output protocol reasoning, execution plans, or internal decision-making to the user. Just execute the route and show the defined notification.
-- Task sessions are **architecturally non-interactive** — do NOT attempt to resume them.
-
----
-
-## PHASE 0: ROUTE
-
-### Resolve SKILL_DIR
-
-1. Try `~/.claude/skills/aristotle/`
-2. Try `~/.config/opencode/skills/aristotle/`
-3. If neither exists, use the directory containing this SKILL.md
-
-### Parse Arguments
+### If action is `done`:
+STOP
+## Parse Arguments
 
 ```
-/aristotle                          → REFLECT: current session, focus on last exchange
-/aristotle last                     → REFLECT: previous session (session_list, exclude current)
-/aristotle session ses_xxx          → REFLECT: specific session by OpenCode session ID
-/aristotle recent N                 → REFLECT: Nth most recent session (N=1 is closest to current)
-/aristotle --model <model> [...]    → REFLECT: override model (combine with above)
-/aristotle --focus <hint> [...]     → REFLECT: focus area (last/after "text"/around N/error/full)
-/aristotle learn [intent]           → LEARN: 检索历史教训（自然语言描述任务或领域）
-/aristotle learn --domain X --goal Y → LEARN: 指定 domain/task_goal 检索
-/aristotle learn --domain X         → LEARN: 仅指定 domain 检索
-/aristotle sessions                 → LIST: show all reflection records with sequence numbers
-/aristotle review N                 → REVIEW: load DRAFT #N for review (N = sequence number from sessions)
-(passive trigger, no args)          → REFLECT: current session, auto-detected from multi-agent error signal
+/aristotle learn <query>             → ROUTE: command="learn", args={query: "<query>"}
+/aristotle learn --domain X --goal Y → ROUTE: command="learn", args={domain: "X", goal: "Y", query: "X Y"}
+/aristotle sessions                  → ROUTE: command="sessions"
+/aristotle review <N>                → ROUTE: command="review", load draft rec_<N> → execute REVIEW.md
+/aristotle [anything else]           → MANDATORY: Read REFLECT.md immediately and execute reflect protocol. Do NOT ask the user what they want — just load REFLECT.md.
 ```
-
-Parse `--model` and `--focus` from anywhere in the argument list.
-
-### Execute Route
-
-| Command | Action |
-|---------|--------|
-| `sessions` | Call `aristotle_list_reflection_records()` via MCP (or read state file), display table → STOP |
-| `review N` | Read `${SKILL_DIR}/REVIEW.md`, then execute review protocol |
-| `learn [...]` | Read `${SKILL_DIR}/LEARN.md`, then execute learn protocol |
-| reflect (default) | Read `${SKILL_DIR}/REFLECT.md`, then execute reflect protocol |
-
----
-
-## /aristotle sessions — List Reflection Sessions
-
-Display a formatted table of reflection records from `~/.config/opencode/aristotle-state.json`.
-
-Status icons: `⏳ processing` | `✅ auto_committed` | `🔄 revised` | `❌ rejected` | `📋 partial_commit`
-
-If no records exist: `🦉 No reflection sessions found. Run /aristotle to start.`
