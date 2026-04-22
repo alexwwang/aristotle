@@ -145,11 +145,11 @@ class TestOrchestrateOnEvent:
 
     def test_unknown_workflow_returns_error(self):
         result = orchestrate_on_event("o_done", json.dumps({
-            "workflow_id": "wf_nonexistent",
+            "workflow_id": "wf_0000000000000000",
             "result": "{}",
         }))
         assert result["action"] == "notify"
-        assert result["action"] == "notify"
+        assert "Unknown workflow" in result.get("message", "")
 
     def test_o_done_updates_intent_in_state(self):
         start = _start_learn_workflow("Prisma pool timeout")
@@ -199,7 +199,9 @@ class TestOrchestrateOnEvent:
         assert result["action"] == "notify"
 
     def test_unknown_event_type_returns_notify(self):
-        result = orchestrate_on_event("unknown_event", json.dumps({"workflow_id": "wf_123"}))
+        start = _start_learn_workflow("test query")
+        wf_id = start["workflow_id"]
+        result = orchestrate_on_event("unknown_event", json.dumps({"workflow_id": wf_id}))
         assert result["action"] == "notify"
 
 
@@ -449,6 +451,7 @@ class TestHelperFunctions:
 
     @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="New APIs not yet implemented")
     def test_ensure_repo_already_initialized(self, tmp_repo):
+        init_repo_tool()
         git_dir = tmp_repo / ".git"
         assert git_dir.exists()
         _ensure_repo_initialized()

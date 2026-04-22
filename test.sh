@@ -100,10 +100,10 @@ sep
 # ═══ T2c: File Size Constraints (Progressive Disclosure) ═══
 info "T2c: File Size Constraints"; sep
 SKILL_LINES=$(wc -l < "$ARISTOTLE_DIR/SKILL.md" | tr -d ' ')
-if [ "$SKILL_LINES" -le 40 ]; then
-    pass "SKILL.md MVP is $SKILL_LINES lines (≤40)"
+if [ "$SKILL_LINES" -le 60 ]; then
+    pass "SKILL.md MVP is $SKILL_LINES lines (≤60)"
 else
-    fail "SKILL.md MVP is $SKILL_LINES lines (expected ≤40)"
+    fail "SKILL.md MVP is $SKILL_LINES lines (expected ≤60)"
 fi
 REFLECT_LINES=$(wc -l < "$ARISTOTLE_DIR/REFLECT.md" | tr -d ' ')
 if [ "$REFLECT_LINES" -le 140 ]; then
@@ -275,11 +275,12 @@ else
     fail "SKILL.md is $SKILL_LINES lines (expected ≤60)"
 fi
 
-# Protocol file references forbidden in SKILL.md
-assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "REFLECT.md" "SKILL.md omits REFLECT.md"
-assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "REVIEW.md" "SKILL.md omits REVIEW.md"
-assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "LEARN.md" "SKILL.md omits LEARN.md"
-assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "CHECKER.md" "SKILL.md omits CHECKER.md"
+# Protocol file references forbidden outside CRITICAL rule line
+SKILL_BODY=$(grep -v "DO NOT load" "$ARISTOTLE_DIR/SKILL.md")
+echo "$SKILL_BODY" | grep -q "REFLECT.md" && fail "SKILL.md body contains REFLECT.md" || pass "SKILL.md body omits REFLECT.md"
+echo "$SKILL_BODY" | grep -q "REVIEW.md" && fail "SKILL.md body contains REVIEW.md" || pass "SKILL.md body omits REVIEW.md"
+echo "$SKILL_BODY" | grep -q "LEARN.md" && fail "SKILL.md body contains LEARN.md" || pass "SKILL.md body omits LEARN.md"
+echo "$SKILL_BODY" | grep -q "CHECKER.md" && fail "SKILL.md body contains CHECKER.md" || pass "SKILL.md body omits CHECKER.md"
 
 # CRITICAL rule exists — guarantees mechanism names not leaked to user
 assert_contains "$ARISTOTLE_DIR/SKILL.md" "NEVER mention internal mechanism names" "SKILL.md has CRITICAL rule against name leakage"

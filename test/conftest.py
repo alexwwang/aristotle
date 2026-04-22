@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 
@@ -9,6 +11,10 @@ import pytest
 def tmp_repo(tmp_path, monkeypatch):
     """Redirect ARISTOTLE_REPO_DIR to a temp dir for every test."""
     monkeypatch.setenv("ARISTOTLE_REPO_DIR", str(tmp_path))
+    # Clean the shared state file to prevent cross-test sequence leakage
+    state_path = tmp_path.parent / "aristotle-state.json"
+    if state_path.exists():
+        state_path.unlink()
     return tmp_path
 
 

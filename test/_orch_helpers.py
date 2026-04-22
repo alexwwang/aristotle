@@ -73,10 +73,21 @@ def _fire_c_done_event(workflow_id: str, result: str = "Committed: 2, Staged: 0"
 # ── Review workflow helpers ──────────────────────────────────────────
 
 def _setup_reflection_record(sequence: int = 1, status: str = "auto_committed", **extra) -> None:
-    """Create a reflection record in aristotle-state.json."""
     from aristotle_mcp.config import resolve_repo_dir
     state_path = resolve_repo_dir().parent / "aristotle-state.json"
-    records = [{
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if state_path.exists():
+        try:
+            records = json.loads(state_path.read_text(encoding="utf-8"))
+            if not isinstance(records, list):
+                records = []
+        except (json.JSONDecodeError, ValueError):
+            records = []
+    else:
+        records = []
+
+    target_record = {
         "id": f"rec_{sequence}",
         "status": status,
         "target_label": extra.get("target_label", "current"),
@@ -85,10 +96,18 @@ def _setup_reflection_record(sequence: int = 1, status: str = "auto_committed", 
         "rules_count": extra.get("rules_count", 2),
         "launched_at": extra.get("launched_at", "2026-04-22T10:00:00+08:00"),
         "draft_file_path": str(resolve_repo_dir().parent / "aristotle-drafts" / f"rec_{sequence}.md"),
-    }]
+    }
     if "re_reflect_count" in extra:
-        records[0]["re_reflect_count"] = extra["re_reflect_count"]
-    state_path.parent.mkdir(parents=True, exist_ok=True)
+        target_record["re_reflect_count"] = extra["re_reflect_count"]
+
+    while len(records) < sequence:
+        records.append({})
+
+    existing = records[sequence - 1] if isinstance(records[sequence - 1], dict) else {}
+    if "re_reflect_count" in existing and "re_reflect_count" not in extra:
+        target_record["re_reflect_count"] = existing["re_reflect_count"]
+
+    records[sequence - 1] = target_record
     state_path.write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
 
 

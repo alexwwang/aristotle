@@ -332,3 +332,90 @@ class TestOrchestrateReviewAction:
 
         assert result["action"] == "notify"
         assert "not in review" in result["message"].lower()
+
+
+# ═══════════════════════════════════════════════════════
+# TestIntegrationReview — End-to-end review flows
+# ═══════════════════════════════════════════════════════
+class TestIntegrationReview:
+    """End-to-end: reflect → review → confirm, and reflect → review → revise → o_done."""
+
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
+    def test_full_review_confirm_flow(self):
+        init_repo_tool()
+        _setup_reflection_record(1)
+        _create_draft_file(1, "## DRAFT Report\nFound hallucination in API call.")
+        rule_path = _make_staging_rule("HALLUCINATION", source_session="ses_test123")
+
+        review_result = orchestrate_start("review", json.dumps({"sequence": 1}))
+        assert review_result["action"] == "notify"
+        wf_id = review_result["workflow_id"]
+
+        wf = _load_workflow(wf_id)
+        assert wf["phase"] == "review"
+        assert len(wf["displayed_rules"]) > 0
+        assert "DRAFT Report" in review_result["message"]
+
+        confirm_result = orchestrate_review_action(wf_id, "confirm")
+        assert confirm_result["action"] == "notify"
+        assert "confirmed" in confirm_result["message"].lower()
+        assert "committed" in confirm_result["message"].lower()
+
+        wf = _load_workflow(wf_id)
+        assert wf["phase"] == "done"
+
+        from aristotle_mcp.frontmatter import read_frontmatter_raw
+        fm = read_frontmatter_raw(Path(rule_path))
+        assert fm.get("status") == "verified"
+
+        from aristotle_mcp.config import resolve_repo_dir
+        state_path = resolve_repo_dir().parent / "aristotle-state.json"
+        records = json.loads(state_path.read_text(encoding="utf-8"))
+        assert records[0]["status"] == "auto_committed"
+
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
+    def test_full_review_revise_flow(self):
+        init_repo_tool()
+        _setup_reflection_record(1)
+        _create_draft_file(1, "## DRAFT Report\nPattern violation in error handling.")
+        rule_path = _make_staging_rule("PATTERN_VIOLATION", source_session="ses_test123")
+
+        review_result = orchestrate_start("review", json.dumps({"sequence": 1}))
+        wf_id = review_result["workflow_id"]
+
+        revise_result = orchestrate_review_action(
+            wf_id, "revise",
+            feedback="Add specific pattern example",
+            data_json=json.dumps({"rule_index": 1}),
+        )
+        assert revise_result["action"] == "fire_o"
+        assert "USER FEEDBACK: Add specific pattern example" in revise_result["o_prompt"]
+        assert "ORIGINAL RULE FILE" in revise_result["o_prompt"]
+
+        revised_content = (
+            f"FILE: {rule_path}\n"
+            "---\n"
+            'id: "rec_revised"\n'
+            'status: "staging"\n'
+            'scope: "user"\n'
+            'category: "PATTERN_VIOLATION"\n'
+            "confidence: 0.85\n"
+            'risk_level: "low"\n'
+            'created_at: "2026-04-22T10:00:00+08:00"\n'
+            "---\n"
+            "## Revised Rule\n"
+            "**Rule**: Always check return values before propagating"
+        )
+
+        o_done = orchestrate_on_event("o_done", json.dumps({
+            "workflow_id": wf_id,
+            "result": revised_content,
+        }))
+        assert o_done["action"] == "notify"
+        assert "revised" in o_done["message"].lower()
+
+        updated_content = Path(rule_path).read_text(encoding="utf-8")
+        assert "Always check return values" in updated_content
+
+        wf = _load_workflow(wf_id)
+        assert wf["phase"] == "done"

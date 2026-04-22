@@ -85,6 +85,49 @@ class TestOrchestrateStartReflect:
         focus_line = [l for l in prompt.split("\n") if l.startswith("FOCUS_HINT:")][0]
         assert len(focus_line.split("FOCUS_HINT: ")[1]) <= 200
 
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
+    def test_reflect_auto_init(self):
+        from aristotle_mcp.config import resolve_repo_dir
+        import shutil
+        repo = resolve_repo_dir()
+        git_dir = repo / ".git"
+        if git_dir.exists():
+            shutil.rmtree(git_dir)
+
+        result = _start_reflect_workflow("ses_auto_init")
+        assert result["action"] == "fire_sub"
+        assert git_dir.exists()
+
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
+    def test_reflect_invalid_args_json(self):
+        result = orchestrate_start("reflect", "not valid json {{{")
+        assert result["action"] == "notify"
+        assert "Invalid" in result["message"]
+
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
+    def test_reflect_with_explicit_session(self):
+        result = _start_reflect_workflow("ses_explicit_abc")
+        assert result["action"] == "fire_sub"
+
+        wf = _load_workflow(result["workflow_id"])
+        assert wf["target_session_id"] == "ses_explicit_abc"
+
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
+    def test_reflect_workflow_state_saved(self):
+        result = _start_reflect_workflow("ses_state_check")
+        assert result["action"] == "fire_sub"
+
+        from aristotle_mcp.config import resolve_repo_dir
+        wf_dir = resolve_repo_dir() / ".workflows"
+        wf_id = result["workflow_id"]
+        wf_file = wf_dir / f"{wf_id}.json"
+        assert wf_file.exists()
+
+        wf_data = json.loads(wf_file.read_text(encoding="utf-8"))
+        assert wf_data["phase"] == "reflecting"
+        assert wf_data["command"] == "reflect"
+        assert "updated_at" in wf_data
+
 
 # ═══════════════════════════════════════════════════════
 # TestOrchestrateOnEventReflect — TC-1-01, TC-1-02, TC-1-03, TC-1-06

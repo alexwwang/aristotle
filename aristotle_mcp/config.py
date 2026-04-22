@@ -72,3 +72,11 @@ REPO_DIR_STRUCTURE: tuple[str, ...] = (
 
 def project_hash(project_path: str) -> str:
     return hashlib.sha256(project_path.encode()).hexdigest()[:8]
+
+
+SKILL_DIR = Path(
+    os.environ.get(
+        "ARISTOTLE_SKILL_DIR",
+        str(Path(__file__).parent.parent),
+    )
+)

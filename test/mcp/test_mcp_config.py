@@ -8,6 +8,7 @@ import pytest
 
 
 class TestConfig:
+
     def test_resolve_repo_dir_env_override(self, tmp_repo):
         from aristotle_mcp.config import resolve_repo_dir
 
@@ -18,6 +19,24 @@ class TestConfig:
         from aristotle_mcp.config import resolve_repo_dir, DEFAULT_REPO_DIR
 
         assert resolve_repo_dir() == DEFAULT_REPO_DIR
+
+    def test_skill_dir_default(self, monkeypatch):
+        monkeypatch.delenv("ARISTOTLE_SKILL_DIR", raising=False)
+        from aristotle_mcp.config import SKILL_DIR
+
+        assert SKILL_DIR.name == "aristotle"
+
+    def test_skill_dir_env_override(self, monkeypatch, tmp_path):
+        override = str(tmp_path / "custom_skill")
+        monkeypatch.setenv("ARISTOTLE_SKILL_DIR", override)
+        # Re-import to pick up new env var
+        import importlib
+        import aristotle_mcp.config as cfg
+        importlib.reload(cfg)
+        assert str(cfg.SKILL_DIR) == override
+        # Restore
+        monkeypatch.delenv("ARISTOTLE_SKILL_DIR", raising=False)
+        importlib.reload(cfg)
 
     def test_resolve_state_file(self):
         from aristotle_mcp.config import resolve_state_file
