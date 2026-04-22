@@ -2,6 +2,11 @@
 .DS_Store
 Thumbs.db
 
+# Agent tooling
+.omc/
+.opencode/
+.sisyphus/
+
 # Editor
 *.swp
 *.swo

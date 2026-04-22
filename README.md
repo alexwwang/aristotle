@@ -4,7 +4,7 @@
 [![Release](https://img.shields.io/github/v/release/alexwwang/aristotle?include_prereleases)](https://github.com/alexwwang/aristotle/releases)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
-[![Tests](https://img.shields.io/badge/tests-166%20pytest%20%2B%2084%20static-brightgreen)](./test/test_mcp.py)
+[![Tests](https://img.shields.io/badge/tests-218%20pytest%20%2B%2098%20static-brightgreen)](./test/)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19660780.svg)](https://doi.org/10.5281/zenodo.19660780)
 
 English | [中文](./README.zh-CN.md)
@@ -17,7 +17,7 @@ Activate with `/aristotle` to spawn an isolated subagent that analyzes your sess
 
 ## Features
 
-- **Progressive Disclosure Architecture** — Skill loads only what's needed: router (84 lines) → reflect (106 lines) → review (156 lines). Each phase loads on demand, never wasting context.
+- **Progressive Disclosure Architecture** — Skill loads only what's needed: router (60 lines) → reflect (106 lines) → review (156 lines). Each phase loads on demand, never wasting context.
 - **Isolated Reflection** — Analysis runs in a separate background session; main session context is never polluted
 - **5-Why Root-Cause Analysis** — Structured error categorization across 8 categories (MISUNDERSTOOD_REQUIREMENT, ASSUMED_CONTEXT, PATTERN_VIOLATION, HALLUCINATION, INCOMPLETE_ANALYSIS, WRONG_TOOL_CHOICE, OVERSIMPLIFICATION, SYNTAX_API_ERROR)
 - **DRAFT → Review → Confirm Workflow** — Rules are generated as DRAFTs with location metadata; user reviews in a dedicated session via `/aristotle review N`, confirms, revises, or rejects
@@ -87,7 +87,7 @@ Install the Aristotle skill with MCP server from https://github.com/alexwwang/ar
 3. Run `uv sync` to install Python dependencies for the MCP server
 4. Verify: run `bash test.sh` — all assertions must pass
 5. Add MCP config to opencode.json: { "mcp": { "aristotle": { "type": "local", "command": ["uv", "run", "--project", "~/.claude/skills/aristotle", "python", "-m", "aristotle_mcp.server"], "enabled": true } } }
-6. Verify MCP: run `uv run python -c "from aristotle_mcp.server import mcp; print(len(mcp._tool_manager._tools), 'tools loaded')"` — should print "12 tools loaded"
+6. Verify MCP: run `uv run python -c "from aristotle_mcp.server import mcp; print(len(mcp._tool_manager._tools), 'tools loaded')"` — should print "17 tools loaded"
 ```
 
 ### MCP Configuration
@@ -292,7 +292,7 @@ _rule()      │
 verified rejected/  (preserves scope + metadata)
 ```
 
-### 12 MCP Tools
+### 17 MCP Tools
 
 | Tool | Purpose |
 |------|---------|
@@ -308,6 +308,11 @@ verified rejected/  (preserves scope + metadata)
 | `sync_rules` | Commit unsynced verified rules to git (auto-detect or specify files) |
 | `get_audit_decision` | Compute Δ = confidence × (1 − risk_weight) for a staging rule, return audit level (auto/semi/manual) |
 | `persist_draft` | Persist a DRAFT report to disk for later review and re-reflect (atomic write to `aristotle-drafts/`) |
+| `create_reflection_record` | Append a new reflection record to state file, auto-generate sequence, handle 50-record pruning |
+| `complete_reflection_record` | Update reflection record status after Checker completes |
+| `orchestrate_start` | Initialize workflow for learn/reflect/review/sessions commands, return first action |
+| `orchestrate_on_event` | Receive subagent completion events, update state machine, return next action |
+| `orchestrate_review_action` | Handle user review actions (confirm/reject/revise/re_reflect) |
 
 ### Streaming Frontmatter Search
 
@@ -386,19 +391,19 @@ The full protocol specification — state machine, frontmatter schema, Δ decisi
 bash test.sh
 ```
 
-63 assertions covering file structure, progressive disclosure, SKILL.md content, hook logic, error pattern detection (English/Chinese/threshold), and architecture guarantees.
+98 assertions covering file structure, progressive disclosure, SKILL.md content, hook logic, error pattern detection (English/Chinese/threshold), and architecture guarantees.
 
 ### MCP Server Unit Tests
 
 ```bash
-uv run pytest test/test_mcp.py -v
+uv run pytest test/ -v
 ```
 
-111 assertions covering all 10 modules/test classes:
+218 assertions covering all 17 modules/test classes:
 
 | Test Class | Module | Assertions | What It Tests |
 |------------|--------|------------|---------------|
-| `TestConfig` | `config.py` | 12 | Path resolution, env override, RISK_MAP, RISK_WEIGHTS, AUDIT_THRESHOLDS, project hash |
+| `TestConfig` | `config.py` | 14 | Path resolution, env override, RISK_MAP, RISK_WEIGHTS, AUDIT_THRESHOLDS, SKILL_DIR, project hash |
 | `TestEvolution` | `evolution.py` | 10 | compute_delta (all risk levels, edge cases, validation), decide_audit_level (auto/semi/manual), integration |
 | `TestModels` | `models.py` | 16 | RuleMetadata defaults, YAML serialization roundtrip, from_frontmatter_dict, GEAR 2.0 field tests |
 | `TestGitOps` | `git_ops.py` | 9 | init, add+commit, show, log, status, git_show_exists, edge cases |
@@ -408,6 +413,18 @@ uv run pytest test/test_mcp.py -v
 | `TestSyncTools` | `server.py` | 7 | check_sync_status (clean/dirty/no repo), sync_rules (auto/specific/nothing), git_show_exists |
 | `TestDeltaDecision` | `server.py` + `evolution.py` | 8 | get_audit_decision (auto/semi/manual), write_rule confidence (default/custom), Δ affects audit level |
 | `TestPathTraversal` | `server.py` | 7 | Path containment for stage/commit/reject/restore/get_audit_decision, absolute + relative traversal, legitimate paths still work |
+| `TestPersistDraft` | `server.py` | 4 | Atomic write, content verification, overwrite |
+| `TestCreateReflectionRecord` | `server.py` | 9 | Sequence numbering, JSON state, 50-record pruning |
+| `TestCompleteReflectionRecord` | `server.py` | 8 | Status update, rules_count, error handling |
+| `TestOrchestrateStart` | `server.py` (orchestration) | 11 | Learn flow (fire_o, explicit params, empty query, invalid args, domain+goal, reflect, latency, auto init, explicit session, workflow state) |
+| `TestOrchestrateOnEvent` | `server.py` (orchestration) | 10 | o_done → search, string result, empty result, missing workflow_id, phase mismatch, invalid JSON |
+| `TestOrchestrateStartReflect` | `_orch_start.py` + `_orch_state.py` | 8 | reflect command (basic, sequence increment, no target, focus hint, auto init, invalid args, explicit session, workflow state) |
+| `TestOrchestrateOnEventReflect` | `_orch_event.py` + `_orch_state.py` | 4 | Full reflect flow (R→C→done), reflection record creation, draft file path, partial commit status |
+| `TestOrchestrateStartSessions` | `_orch_start.py` | 9 | sessions formatting (basic, empty, no workflow, status icons parametrized) |
+| `TestHelperFunctions` | `_orch_state.py` | 12 | _next_sequence, _ensure_repo_initialized, _cleanup_stale_workflows (6 phase parametrized) |
+| `TestOrchestrateReviewAction` | `_orch_review.py` | 12 | confirm, reject, revise (prompt + index + o_done), re_reflect, wrong phase |
+| `TestReReflectCountPropagation` | `_orch_review.py` + `_orch_start.py` | 4 | Re-reflect count inheritance, cascade to max, zero not written |
+| `TestIntegrationReview` | full chain | 2 | End-to-end review→confirm, review→revise→o_done |
 
 All tests use isolated temp directories (`tmp_path` fixture) and are safe to run repeatedly.
 
@@ -432,32 +449,42 @@ Creates a real session with known error patterns, triggers `/aristotle`, and ver
 ├── install.sh            # Installer (macOS/Linux)
 ├── install.ps1           # Installer (Windows)
 ├── pyproject.toml        # Python dependencies for MCP server
-├── test.sh               # Static test suite (63 assertions)
-├── aristotle_mcp/        # MCP server (Git-backed rule management)
+├── test.sh               # Static test suite (98 assertions)
+├── aristotle_mcp/        # MCP server (Git-backed rule management + workflow orchestration)
 │   ├── __init__.py
-│   ├── config.py         # Paths, constants, env vars, RISK_WEIGHTS, AUDIT_THRESHOLDS
+│   ├── config.py         # Paths, constants, env vars, RISK_WEIGHTS, AUDIT_THRESHOLDS, SKILL_DIR
 │   ├── models.py         # RuleMetadata dataclass, YAML serialization
 │   ├── git_ops.py        # Git abstraction (init, add+commit, show, log, status, show_exists)
 │   ├── frontmatter.py    # Streaming frontmatter search, atomic writes
 │   ├── evolution.py      # Δ decision engine (compute_delta, decide_audit_level)
 │   ├── migration.py      # Flat Markdown → Git repo migration
-│   └── server.py         # FastMCP entry point, 12 tools
+│   ├── server.py         # FastMCP entry point, re-exports, tool registration
+│   ├── _utils.py         # Shared utility functions
+│   ├── _tools_rules.py   # 9 rule lifecycle tools
+│   ├── _tools_sync.py    # 2 sync tools
+│   ├── _tools_reflection.py  # 3 reflection state tools
+│   ├── _orch_prompts.py  # Prompt templates + builders
+│   ├── _orch_state.py    # Workflow persistence + state management
+│   ├── _orch_parsers.py  # Parsers + formatters
+│   ├── _orch_start.py    # orchestrate_start tool
+│   ├── _orch_event.py    # orchestrate_on_event tool
+│   └── _orch_review.py   # orchestrate_review_action tool
 └── test/
     └── live-test.sh      # E2E live test (8 assertions)
 ```
 
 ## Architecture: Progressive Disclosure
 
-The skill is split into six files. Only `SKILL.md` (90 lines) is loaded on trigger. The other files are loaded on demand:
+The skill is split into six files. Only `SKILL.md` (60 lines) is loaded on trigger. The other files are loaded on demand:
 
 | Scenario | Files Loaded | Lines |
 |----------|-------------|-------|
-| `/aristotle` (reflect) | SKILL.md + REFLECT.md | 218 |
-| `/aristotle sessions` | SKILL.md only | 90 |
-| `/aristotle review N` | SKILL.md + REVIEW.md | 268 |
-| `/aristotle review N` (confirm) | SKILL.md + REVIEW.md + CHECKER.md | 332 |
-| `/aristotle learn` | SKILL.md + LEARN.md | 336 |
-| Review + re-reflect | SKILL.md + REVIEW.md + REFLECT.md | 396 |
+| `/aristotle` (reflect) | SKILL.md + REFLECT.md | 194 |
+| `/aristotle sessions` | SKILL.md only | 60 |
+| `/aristotle review N` | SKILL.md + REVIEW.md | 244 |
+| `/aristotle review N` (confirm) | SKILL.md + REVIEW.md + CHECKER.md | 308 |
+| `/aristotle learn` | SKILL.md + LEARN.md | 312 |
+| Review + re-reflect | SKILL.md + REVIEW.md + REFLECT.md | 372 |
 | Subagent (internal) | REFLECTOR.md | ~195 |
 
 ## Known Issues & Contributing
@@ -523,7 +550,7 @@ git clone https://github.com/alexwwang/aristotle.git ~/.claude/skills/aristotle
 
 ## Branch Status: `test-coverage`
 
-> This branch tracks test coverage improvements. Code changes are from the user-reported issue remediation (Issues #1–#8 + 2 discovered gaps).
+> This branch tracks test coverage improvements. Code changes are from user-reported issue remediation (Issues #1–#8 + 2 discovered gaps) and GEAR orchestration (M1-M4).
 
 ### Test Coverage History
 
@@ -531,13 +558,14 @@ git clone https://github.com/alexwwang/aristotle.git ~/.claude/skills/aristotle
 |-----------|--------|-------------------|--------|
 | Baseline (pre-remediation) | 111 | 67 | `35cc613` (main) |
 | Post-remediation | 134 | 67 | `96eed0d` |
-| Post-coroutine-O merge | **166** | **84** | `HEAD` (test-coverage) |
+| Post-coroutine-O merge | 166 | 84 | `c0ffee5` |
+| GEAR Orchestration (M1-M4) | **218** | **98** | `a3ab41a` |
 
-### Coverage by Module (166 pytest)
+### Coverage by Module (218 pytest)
 
 | Test Class | Module | Assertions | What It Tests |
 |------------|--------|------------|---------------|
-| `TestConfig` | `config.py` | 12 | Path resolution, env override, RISK_MAP, RISK_WEIGHTS, AUDIT_THRESHOLDS, project hash |
+| `TestConfig` | `config.py` | 14 | Path resolution, env override, RISK_MAP, RISK_WEIGHTS, AUDIT_THRESHOLDS, SKILL_DIR, project hash |
 | `TestEvolution` | `evolution.py` | 10 | compute_delta (all risk levels, edge cases), decide_audit_level (auto/semi/manual) |
 | `TestModels` | `models.py` | 16 | RuleMetadata defaults, YAML serialization roundtrip, GEAR 2.0 fields |
 | `TestGitOps` | `git_ops.py` | 9 | init, add+commit, show, log, status, git_show_exists |
@@ -550,26 +578,27 @@ git clone https://github.com/alexwwang/aristotle.git ~/.claude/skills/aristotle
 | `TestPersistDraft` | `server.py` | 4 | Atomic write, content verification, overwrite |
 | `TestCreateReflectionRecord` | `server.py` | 9 | Sequence numbering, JSON state, 50-record pruning |
 | `TestCompleteReflectionRecord` | `server.py` | 8 | Status update, rules_count, error handling |
-| `TestOrchestrateStart` | `server.py` (orchestration) | 10 | Learn flow (fire_o, explicit params, empty query, invalid args, domain+goal, reflect, latency) |
-| `TestOrchestrateOnEvent` | `server.py` (orchestration) | 8 | o_done → search, string result, empty result, missing workflow_id, phase mismatch, invalid JSON |
-| `TestWorkflowStateManagement` | `server.py` (orchestration) | 6 | Workflow dir creation, JSON validity, timestamps, done phase, corrupted/missing workflow |
-| `TestIntegrationMockO` | `server.py` (orchestration) | 5 | Full learn flow (with/without results), explicit params, unique IDs, concurrent workflows |
-| `TestSearchParamMapping` | `server.py` (orchestration) | 2 | Intent tags → search params, empty intent handling |
+| `TestOrchestrateStart` | `server.py` (orchestration) | 11 | Learn flow (fire_o, explicit params, empty query, invalid args, domain+goal, reflect, latency, auto init, explicit session, workflow state) |
+| `TestOrchestrateOnEvent` | `server.py` (orchestration) | 10 | o_done → search, string result, empty result, missing workflow_id, phase mismatch, invalid JSON |
+| `TestOrchestrateStartReflect` | `_orch_start.py` + `_orch_state.py` | 8 | reflect command (basic, sequence increment, no target, focus hint, auto init, invalid args, explicit session, workflow state) |
+| `TestOrchestrateOnEventReflect` | `_orch_event.py` + `_orch_state.py` | 4 | Full reflect flow (R→C→done), reflection record creation, draft file path, partial commit status |
+| `TestOrchestrateStartSessions` | `_orch_start.py` | 9 | sessions formatting (basic, empty, no workflow, status icons parametrized) |
+| `TestHelperFunctions` | `_orch_state.py` | 12 | _next_sequence, _ensure_repo_initialized, _cleanup_stale_workflows (6 phase parametrized) |
+| `TestOrchestrateReviewAction` | `_orch_review.py` | 12 | confirm, reject, revise (prompt + index + o_done), re_reflect, wrong phase |
+| `TestReReflectCountPropagation` | `_orch_review.py` + `_orch_start.py` | 4 | Re-reflect count inheritance, cascade to max, zero not written |
+| `TestIntegrationReview` | full chain | 2 | End-to-end review→confirm, review→revise→o_done |
 
 ### Coverage Gaps (Not Yet Implemented)
 
-**~60 test cases across two test domains remain unimplemented:**
+**~35 test cases remain unimplemented:**
 
 | Test Domain | Pending Tests | Priority |
 |-------------|--------------|----------|
-| Learn flow testing | 43 (18 unit + 18 static + 7 E2E) | P0 |
+| Learn flow testing | 18 (unit) | P0 |
 | Supplementary testing (Checker, Focus, Install) | ~17 | P0-P1 |
 
 **Specific untested areas:**
-- `commit_rule` / `reject_rule`: ~80% error paths untested
-- 7 try/except exception paths untested
-- No E2E integration tests for O→R→C→review flow (pending GEAR workflow Phase 1)
-- `orchestrate_review_action` (pending GEAR workflow Phase 1 implementation)
+- Learn command full E2E integration (7)
 - Checker validation static assertions (14)
 - Focus Modes static assertions (12)
 - Install Script static + unit (9)

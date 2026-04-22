@@ -4,7 +4,7 @@
 [![Release](https://img.shields.io/github/v/release/alexwwang/aristotle?include_prereleases)](https://github.com/alexwwang/aristotle/releases)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
-[![Tests](https://img.shields.io/badge/tests-134%20pytest%20%2B%2067%20static-brightgreen)](./test/test_mcp.py)
+[![Tests](https://img.shields.io/badge/tests-218%20pytest%20%2B%2098%20static-brightgreen)](./test/test_mcp.py)
 
 **[English](./README.md)** | 中文
 
@@ -16,7 +16,7 @@
 
 ## 功能特性
 
-- **渐进披露架构** — 技能按需加载：路由器（84行）→ 反思（106行）→ 审核（156行）。每个阶段按需加载，不浪费上下文。
+- **渐进披露架构** — 技能按需加载：路由器（60行）→ 反思（106行）→ 审核（156行）。每个阶段按需加载，不浪费上下文。
 - **隔离式反思** — 分析在独立的后台会话中运行，主会话上下文零污染
 - **5-Why 根因分析** — 8 大错误分类结构化分析（需求误解、上下文假设、模式违反、幻觉、分析不充分、工具选错、过度简化、语法/API 错误）
 - **DRAFT → 审核 → 确认工作流** — 规则生成 DRAFT 草稿（含位置元数据）；用户在专用审核会话中通过 `/aristotle review N` 逐一确认、修改或驳回
@@ -86,7 +86,7 @@ Install the Aristotle skill with MCP server from https://github.com/alexwwang/ar
 3. Run `uv sync` to install Python dependencies for the MCP server
 4. Verify: run `bash test.sh` — all assertions must pass
 5. Add MCP config to opencode.json: { "mcp": { "aristotle": { "type": "local", "command": ["uv", "run", "--project", "~/.claude/skills/aristotle", "python", "-m", "aristotle_mcp.server"], "enabled": true } } }
-6. Verify MCP: run `uv run python -c "from aristotle_mcp.server import mcp; print(len(mcp._tool_manager._tools), 'tools loaded')"` — should print "12 tools loaded"
+6. Verify MCP: run `uv run python -c "from aristotle_mcp.server import mcp; print(len(mcp._tool_manager._tools), 'tools loaded')"` — should print "17 tools loaded"
 ```
 
 ### MCP 配置
@@ -291,7 +291,7 @@ _rule()      │
 verified rejected/  （保留 scope 和元数据）
 ```
 
-### 11 个 MCP 工具
+### 17 个 MCP 工具
 
 | 工具 | 用途 |
 |------|------|
@@ -306,6 +306,11 @@ verified rejected/  （保留 scope 和元数据）
 | `check_sync_status` | 检测磁盘上存在但未提交到 git 的 verified 规则 |
 | `sync_rules` | 将未同步的 verified 规则提交到 git（自动检测或指定文件） |
 | `get_audit_decision` | 计算当前 staging 规则的 Δ = confidence × (1 − risk_weight)，返回审核级别（auto/semi/manual） |
+| `create_reflection_record` | 向状态文件追加新的反思记录，自动生成序号，处理 50 条记录裁剪 |
+| `complete_reflection_record` | Checker 完成后更新反思记录状态 |
+| `orchestrate_start` | 初始化 learn/reflect/review/sessions 命令的工作流，返回首个动作 |
+| `orchestrate_on_event` | 接收子代理完成事件，更新状态机，返回下一个动作 |
+| `orchestrate_review_action` | 处理用户审核操作（确认/驳回/修改/重新反思） |
 
 ### 流式 Frontmatter 检索
 
@@ -384,19 +389,19 @@ GEAR 协议操作映射到 Aristotle 的 MCP 工具：`produce` → `write_rule`
 bash test.sh
 ```
 
-63 个断言，覆盖文件结构、渐进披露、SKILL.md 内容、错误模式检测（英文/中文/阈值）和架构保证。
+98 个断言，覆盖文件结构、渐进披露、SKILL.md 内容、错误模式检测（英文/中文/阈值）和架构保证。
 
 ### MCP Server 单元测试
 
 ```bash
-uv run pytest test/test_mcp.py -v
+uv run pytest test/ -v
 ```
 
-111 个断言，覆盖全部 10 个模块/测试类：
+218 个断言，覆盖全部 17 个模块/测试类：
 
 | 测试类 | 模块 | 断言数 | 测试内容 |
 |--------|------|--------|----------|
-| `TestConfig` | `config.py` | 12 | 路径解析、环境变量覆盖、RISK_MAP、RISK_WEIGHTS、AUDIT_THRESHOLDS、项目哈希 |
+| `TestConfig` | `config.py` | 14 | 路径解析、环境变量覆盖、RISK_MAP、RISK_WEIGHTS、AUDIT_THRESHOLDS、SKILL_DIR、项目哈希 |
 | `TestEvolution` | `evolution.py` | 10 | compute_delta（所有 risk_level、边界值、输入校验）、decide_audit_level（auto/semi/manual）、集成测试 |
 | `TestModels` | `models.py` | 16 | RuleMetadata 默认值、YAML 序列化往返、from_frontmatter_dict、GEAR 2.0 字段测试 |
 | `TestGitOps` | `git_ops.py` | 9 | init、add+commit、show、log、status、git_show_exists、边界情况 |
@@ -406,6 +411,14 @@ uv run pytest test/test_mcp.py -v
 | `TestSyncTools` | `server.py` | 7 | check_sync_status（干净/脏数据/无仓库）、sync_rules（自动/指定文件/无待同步）、git_show_exists |
 | `TestDeltaDecision` | `server.py` + `evolution.py` | 8 | get_audit_decision（auto/semi/manual）、write_rule confidence（默认/自定义）、Δ 影响审核级别 |
 | `TestPathTraversal` | `server.py` | 7 | 路径包含检查（stage/commit/reject/restore/get_audit_decision）、绝对路径+相对路径遍历、合法路径正常工作 |
+| `TestPersistDraft` | `server.py` | 4 | 原子写入、内容验证、覆盖 |
+| `TestCreateReflectionRecord` | `server.py` | 9 | 序列编号、JSON 状态、50 条记录裁剪 |
+| `TestCompleteReflectionRecord` | `server.py` | 8 | 状态更新、rules_count、错误处理 |
+| `TestOrchestrateStart` | `server.py` (orchestration) | 10 | Learn 流程（fire_o、显式参数、空查询、无效参数、domain+goal、reflect、延迟） |
+| `TestOrchestrateOnEvent` | `server.py` (orchestration) | 8 | o_done → search、字符串结果、空结果、缺少 workflow_id、阶段不匹配、无效 JSON |
+| `TestWorkflowStateManagement` | `server.py` (orchestration) | 6 | 工作流目录创建、JSON 有效性、时间戳、done 阶段、损坏/缺失的工作流 |
+| `TestIntegrationMockO` | `server.py` (orchestration) | 5 | 完整 learn 流程（带/不带结果）、显式参数、唯一 ID、并发工作流 |
+| `TestSearchParamMapping` | `server.py` (orchestration) | 2 | Intent tags → 搜索参数、空 intent 处理 |
 
 所有测试使用隔离的临时目录（`tmp_path` fixture），可安全反复运行。
 
@@ -421,7 +434,7 @@ bash test/live-test.sh --model <provider/model>
 
 ```
 .
-├── SKILL.md              # 路由器 — 参数解析、阶段路由（90 行）
+├── SKILL.md              # 路由器 — 参数解析、阶段路由（60 行）
 ├── REFLECTOR.md          # 子代理协议 — 错误分析、DRAFT 生成
 ├── REFLECT.md            # 协调器反思阶段 — 启动子代理、状态追踪、被动触发
 ├── REVIEW.md             # 协调器审核阶段 — DRAFT 审核、规则写入、修订
@@ -430,28 +443,38 @@ bash test/live-test.sh --model <provider/model>
 ├── install.sh            # 安装脚本（macOS/Linux）
 ├── install.ps1           # 安装脚本（Windows）
 ├── pyproject.toml        # MCP server 的 Python 依赖声明
-├── test.sh               # 静态测试套件（63 断言）
-├── aristotle_mcp/        # MCP server（Git 支持的规则管理）
+├── test.sh               # 静态测试套件（98 断言）
+├── aristotle_mcp/        # MCP server（Git 版本管理 + 工作流编排）
 │   ├── __init__.py
-│   ├── config.py         # 路径、常量、环境变量、RISK_WEIGHTS、AUDIT_THRESHOLDS
+│   ├── config.py         # 路径、常量、环境变量、RISK_WEIGHTS、AUDIT_THRESHOLDS、SKILL_DIR
 │   ├── models.py         # RuleMetadata 数据类、YAML 序列化
 │   ├── git_ops.py        # Git 抽象层（init、add+commit、show、log、status、show_exists）
 │   ├── frontmatter.py    # 流式 frontmatter 搜索、原子写入
 │   ├── evolution.py      # Δ 决策引擎（compute_delta、decide_audit_level）
 │   ├── migration.py      # 扁平 Markdown → Git 仓库迁移
-│   └── server.py         # FastMCP 入口，11 个工具
+│   ├── server.py         # FastMCP 入口，re-export，工具注册
+│   ├── _utils.py         # 共享工具函数
+│   ├── _tools_rules.py   # 9 个规则生命周期工具
+│   ├── _tools_sync.py    # 2 个同步工具
+│   ├── _tools_reflection.py  # 3 个反思状态工具
+│   ├── _orch_prompts.py  # Prompt 模板 + 构建器
+│   ├── _orch_state.py    # 工作流持久化 + 状态管理
+│   ├── _orch_parsers.py  # 解析器 + 格式化器
+│   ├── _orch_start.py    # orchestrate_start 工具
+│   ├── _orch_event.py    # orchestrate_on_event 工具
+│   └── _orch_review.py   # orchestrate_review_action 工具
 └── test/
     └── live-test.sh      # E2E 实时测试（8 断言）
 ```
 
 ## 架构：渐进披露
 
-技能拆分为六个文件。触发时仅加载 `SKILL.md`（90 行），其余按需加载：
+技能拆分为六个文件。触发时仅加载 `SKILL.md`（60 行），其余按需加载：
 
 | 场景 | 加载文件 | 行数 |
 |------|---------|------|
 | `/aristotle`（反思） | SKILL.md + REFLECT.md | 218 |
-| `/aristotle sessions` | 仅 SKILL.md | 90 |
+| `/aristotle sessions` | 仅 SKILL.md | 60 |
 | `/aristotle review N` | SKILL.md + REVIEW.md | 257 |
 | `/aristotle review N`（确认时） | SKILL.md + REVIEW.md + CHECKER.md | 317 |
 | `/aristotle learn` | SKILL.md + LEARN.md | 346 |
@@ -521,20 +544,22 @@ git clone https://github.com/alexwwang/aristotle.git ~/.claude/skills/aristotle
 
 ## 分支状态：`test-coverage`
 
-> 本分支跟踪测试覆盖率改进。代码变更来自用户反馈问题修复（Issue #1–#8 + 2 个发现的问题）。
+> 本分支跟踪测试覆盖率改进。代码变更来自用户反馈问题修复（Issue #1–#8 + 2 个发现的问题）以及 GEAR 编排工作流（M1-M4）实现。
 
 ### 测试覆盖率历史
 
 | 里程碑 | pytest | 静态测试 (test.sh) | 提交 |
 |--------|--------|-------------------|------|
 | 基线（修复前） | 111 | 67 | `35cc613` (main) |
-| 修复后 | **134** | **67** | `96eed0d` |
+| 修复后 | 134 | 67 | `96eed0d` |
+| 协程 O 合并后 | 166 | 84 | `HEAD` (test-coverage) |
+| GEAR 编排 (M1-M4) | **218** | **98** | `a3ab41a` |
 
-### 模块覆盖率（134 pytest）
+### 模块覆盖率（218 pytest）
 
 | 测试类 | 模块 | 断言数 | 测试内容 |
 |--------|------|--------|----------|
-| `TestConfig` | `config.py` | 12 | 路径解析、环境变量覆盖、RISK_MAP、RISK_WEIGHTS、AUDIT_THRESHOLDS、项目哈希 |
+| `TestConfig` | `config.py` | 14 | 路径解析、环境变量覆盖、RISK_MAP、RISK_WEIGHTS、AUDIT_THRESHOLDS、SKILL_DIR、项目哈希 |
 | `TestEvolution` | `evolution.py` | 10 | compute_delta（所有风险级别、边界情况）、decide_audit_level（auto/semi/manual） |
 | `TestModels` | `models.py` | 16 | RuleMetadata 默认值、YAML 序列化往返、GEAR 2.0 字段 |
 | `TestGitOps` | `git_ops.py` | 9 | init、add+commit、show、log、status、git_show_exists |
@@ -547,21 +572,24 @@ git clone https://github.com/alexwwang/aristotle.git ~/.claude/skills/aristotle
 | `TestPersistDraft` | `server.py` | 4 | 原子写入、内容验证、覆盖 |
 | `TestCreateReflectionRecord` | `server.py` | 9 | 序列编号、JSON 状态、50 条记录裁剪 |
 | `TestCompleteReflectionRecord` | `server.py` | 8 | 状态更新、rules_count、错误处理 |
+| `TestOrchestrateStart` | `server.py` (orchestration) | 10 | Learn 流程（fire_o、显式参数、空查询、无效参数、domain+goal、reflect、延迟） |
+| `TestOrchestrateOnEvent` | `server.py` (orchestration) | 8 | o_done → search、字符串结果、空结果、缺少 workflow_id、阶段不匹配、无效 JSON |
+| `TestWorkflowStateManagement` | `server.py` (orchestration) | 6 | 工作流目录创建、JSON 有效性、时间戳、done 阶段、损坏/缺失的工作流 |
+| `TestIntegrationMockO` | `server.py` (orchestration) | 5 | 完整 learn 流程（带/不带结果）、显式参数、唯一 ID、并发工作流 |
+| `TestSearchParamMapping` | `server.py` (orchestration) | 2 | Intent tags → 搜索参数、空 intent 处理 |
 
 ### 待覆盖的测试域（~95 条未实现）
 
-**三个测试域的用例尚未实现：**
+**两个测试域的用例尚未实现：**
 
 | 测试域 | 待实现用例 | 优先级 |
 |--------|-----------|--------|
 | Learn 测试 | 43（18 单元 + 18 静态 + 7 E2E） | P0 |
-| 补充测试 | 51（14+3 静态+单元，12 静态，12 静态，3+6 静态+单元） | P0-P1 |
-| 主体测试 | 跨域集成测试 | P1 |
+| 补充测试 | ~17 | P0-P1 |
 
 **具体未测试区域：**
 - `commit_rule` / `reject_rule`：~80% 错误路径未测试
 - 7 个 try/except 异常路径未测试
-- O→R→C→review 流程无 E2E 集成测试
 - Checker 验证静态断言（14 条）
 - Focus Modes 静态断言（12 条）
 - Install Script 静态 + 单元测试（9 条）

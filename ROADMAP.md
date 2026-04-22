@@ -1,6 +1,6 @@
 # Aristotle Roadmap
 
-> P1–P4 已完成（11 MCP tools, 104 tests）。本文档记录后续开发计划。
+> P1–P4 + GEAR 编排已完成（17 MCP tools, 218 pytest + 98 static）。本文档记录后续开发计划。
 
 ---
 
@@ -8,9 +8,9 @@
 
 ### V1.1a 触发关键词外置化
 
-**现状：** SKILL.md description 内嵌了 11 个错误检测关键词（英 6 + 中 5），只能通过编辑 SKILL.md 来修改。
+**现状：** SKILL.md 已重写为统一 MCP dispatcher（从 90 行精简到 60 行）。触发关键词仍保留在 SKILL.md description 中用于自动建议，但路由逻辑已改为基于 MCP 工具调用。
 
-**目标：** 将关键词提取到 `TRIGGERS.md`，SKILL.md 运行时读取，支持在使用中积累用户对错误的表达习惯。
+**目标：** 将关键词提取到 `TRIGGERS.md`，支持在使用中积累用户对错误的表达习惯。
 
 **方案要点：**
 - 新建 `TRIGGERS.md`：包含 reflect 触发词 + 多 agent 错误检测词，分语言/分场景
@@ -18,6 +18,8 @@
 - REFLECT.md STEP F1 的 Passive Trigger 部分从 TRIGGERS.md 读取完整列表
 
 **改动文件：** `TRIGGERS.md`（新建）、`SKILL.md`、`REFLECT.md`
+
+**注：** SKILL.md 调度器重写已完成（M2），但 TRIGGERS.md 外置化未实施。
 
 ### V1.1b Subagent session_read 兼容性
 
@@ -92,7 +94,7 @@
 
 **目标：** 父上下文最多一行状态提示，完整协议只传递给子代理。
 
-**已部分实现：** SKILL.md 已精简到 90 行（渐进式披露），但仍有优化空间。
+**已部分实现：** SKILL.md 已精简到 60 行（统一 MCP dispatcher），但仍有优化空间。
 
 ---
 
@@ -106,6 +108,10 @@
 | v1.0 | P2 | Skill 层集成（REVIEW.md MCP 化, REFLECTOR.md 输出扩展, C 角色 schema 校验） | `archive/progress-v1.0.md` |
 | v1.0 | P3 | L + S 增量学习服务（LEARN.md, 被动触发, sync 自愈, 10 tools） | `archive/progress-v1.0.md` |
 | v1.0 | P4 | Δ 决策因子（evolution.py, get_audit_decision, V3c 动态审核, 11 tools, 104 tests） | `archive/progress-v1.0.md` |
+| v1.1 | M1 | MCP 编排核心 — orchestrate_start, orchestrate_on_event, orchestrate_review_action, workflow 状态机 | `a3ab41a` |
+| v1.1 | M2 | SKILL 调度器重写 — 统一 MCP dispatcher（60 行），PRE-RESOLVE + REVIEW FEEDBACK | `a3ab41a` |
+| v1.1 | M3 | 子代理提示词模板 — REFLECTOR/CHECKER/REVISE prompt, SKILL_DIR 配置 | `a3ab41a` |
+| v1.1 | M4 | 测试方案 — reflect/review/sessions/端到端测试，218 pytest + 98 static | `a3ab41a` |
 
 ---
 
