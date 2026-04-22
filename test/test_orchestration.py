@@ -20,6 +20,24 @@ from aristotle_mcp.server import (
     write_rule,
 )
 
+# Conditional imports for M1 features
+try:
+    from aristotle_mcp import server
+    _has_orchestrate_review_action = hasattr(server, 'orchestrate_review_action')
+    _has_next_sequence = hasattr(server, '_next_sequence')
+    _has_ensure_repo_initialized = hasattr(server, '_ensure_repo_initialized')
+    _has_cleanup_stale_workflows = hasattr(server, '_cleanup_stale_workflows')
+    _NEW_APIS_AVAILABLE = _has_orchestrate_review_action and _has_next_sequence and _has_ensure_repo_initialized and _has_cleanup_stale_workflows
+    if _NEW_APIS_AVAILABLE:
+        from aristotle_mcp.server import (
+            orchestrate_review_action,
+            _next_sequence,
+            _ensure_repo_initialized,
+            _cleanup_stale_workflows,
+        )
+except (ImportError, AttributeError):
+    _NEW_APIS_AVAILABLE = False
+
 
 @pytest.fixture(autouse=True)
 def tmp_repo(tmp_path, monkeypatch):
@@ -432,3 +450,147 @@ class TestSearchParamMapping:
         assert result["action"] == "notify"
         wf = _load_workflow(wf_id)
         assert wf["phase"] == "done"
+
+
+# ════════════════════════════════════════════════════════════════════
+# TestOrchestrateStartSessions
+# ════════════════════════════════════════════════════════════════════
+class TestOrchestrateStartSessions:
+    """Test sessions command formatting output."""
+
+    def _setup_reflection_record_with_status(self, status: str = "auto_committed", sequence: int = 1):
+        """Helper: create a reflection record in aristotle-state.json."""
+        from aristotle_mcp.config import resolve_repo_dir
+        state_path = resolve_repo_dir().parent / "aristotle-state.json"
+        records = [{
+            "id": f"rec_{sequence}",
+            "status": status,
+            "target_label": "current",
+            "target_session_id": "ses_test123",
+            "reflector_session_id": "ses_r456",
+            "rules_count": 2,
+            "launched_at": "2026-04-22T10:00:00+08:00",
+            "draft_file_path": str(resolve_repo_dir().parent / "aristotle-drafts" / f"rec_{sequence}.md"),
+        }]
+        state_path.parent.mkdir(parents=True, exist_ok=True)
+        state_path.write_text(json.dumps(records), encoding="utf-8")
+
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="New APIs not yet implemented")
+    def test_sessions_basic(self):
+        """Sessions returns notify with "#1" and status icon."""
+        self._setup_reflection_record_with_status("auto_committed", 1)
+        result = orchestrate_start("sessions", "{}")
+        assert result["action"] == "notify"
+        assert "#1" in result["message"]
+        assert "✅" in result["message"]
+
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="New APIs not yet implemented")
+    def test_sessions_empty_state(self):
+        """No state file → 'No reflection records yet.' message."""
+        from aristotle_mcp.config import resolve_repo_dir
+        state_path = resolve_repo_dir().parent / "aristotle-state.json"
+        if state_path.exists():
+            state_path.unlink()
+        result = orchestrate_start("sessions", "{}")
+        assert result["action"] == "notify"
+        assert "No reflection records yet" in result["message"]
+
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="New APIs not yet implemented")
+    def test_sessions_no_workflow_created(self, tmp_repo):
+        """Sessions does not create .workflows/ file, no workflow_id."""
+        self._setup_reflection_record_with_status("auto_committed", 1)
+        result = orchestrate_start("sessions", "{}")
+        assert "workflow_id" not in result
+        wf_dir = tmp_repo / ".workflows"
+        assert not wf_dir.exists()
+
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="New APIs not yet implemented")
+    @pytest.mark.parametrize("status,icon", [
+        ("auto_committed", "✅"),
+        ("partial_commit", "📋"),
+        ("processing", "⏳"),
+        ("checker_failed", "❌"),
+        ("rejected", "❌"),
+    ])
+    def test_sessions_format_status_icons(self, status, icon):
+        """Each status maps to correct emoji icon."""
+        self._setup_reflection_record_with_status(status, 1)
+        result = orchestrate_start("sessions", "{}")
+        assert icon in result["message"]
+
+
+# ════════════════════════════════════════════════════════════════════
+# TestHelperFunctions
+# ════════════════════════════════════════════════════════════════════
+class TestHelperFunctions:
+    """Test M1 helper functions."""
+
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="New APIs not yet implemented")
+    def test_next_sequence_increments(self):
+        """Consecutive calls return 1, 2, 3."""
+        from aristotle_mcp.config import resolve_repo_dir
+        state_path = resolve_repo_dir().parent / "aristotle-state.json"
+        state_path.parent.mkdir(parents=True, exist_ok=True)
+        state_path.write_text(json.dumps([]), encoding="utf-8")
+
+        assert _next_sequence() == 1
+        state_path.write_text(json.dumps([{"id": "rec_1"}]), encoding="utf-8")
+        assert _next_sequence() == 2
+        state_path.write_text(json.dumps([{"id": "rec_1"}, {"id": "rec_2"}]), encoding="utf-8")
+        assert _next_sequence() == 3
+
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="New APIs not yet implemented")
+    def test_next_sequence_first(self):
+        """Empty state returns 1."""
+        from aristotle_mcp.config import resolve_repo_dir
+        state_path = resolve_repo_dir().parent / "aristotle-state.json"
+        state_path.parent.mkdir(parents=True, exist_ok=True)
+        state_path.write_text(json.dumps([]), encoding="utf-8")
+        assert _next_sequence() == 1
+
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="New APIs not yet implemented")
+    def test_ensure_repo_initialized(self, tmp_repo):
+        """Deleting .git → after call, .git is restored."""
+        git_dir = tmp_repo / ".git"
+        if git_dir.exists():
+            import shutil
+            shutil.rmtree(git_dir)
+        assert not git_dir.exists()
+
+        _ensure_repo_initialized()
+        assert git_dir.exists()
+
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="New APIs not yet implemented")
+    def test_ensure_repo_already_initialized(self, tmp_repo):
+        """Already has .git → no-op (no error)."""
+        git_dir = tmp_repo / ".git"
+        assert git_dir.exists()
+        _ensure_repo_initialized()
+        assert git_dir.exists()
+
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="New APIs not yet implemented")
+    def test_cleanup_stale_workflows_done(self, tmp_repo):
+        """Phase=done and >24h workflow files are deleted."""
+        from datetime import datetime, timezone, timedelta
+        wf_dir = tmp_repo / ".workflows"
+        wf_dir.mkdir(parents=True)
+        old_time = (datetime.now(timezone.utc) - timedelta(hours=25)).isoformat()
+        wf_file = wf_dir / "wf_old123.json"
+        wf_file.write_text(json.dumps({"phase": "done", "updated_at": old_time}), encoding="utf-8")
+
+        _cleanup_stale_workflows(max_age_hours=24)
+        assert not wf_file.exists()
+
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="New APIs not yet implemented")
+    @pytest.mark.parametrize("phase", ["reflecting", "checking", "review", "intent_extraction", "search", "init"])
+    def test_cleanup_stale_workflows_stuck(self, tmp_repo, phase):
+        """Phase in stuck states and >48h workflows are cleaned up."""
+        from datetime import datetime, timezone, timedelta
+        wf_dir = tmp_repo / ".workflows"
+        wf_dir.mkdir(parents=True)
+        old_time = (datetime.now(timezone.utc) - timedelta(hours=49)).isoformat()
+        wf_file = wf_dir / f"wf_stuck_{phase}.json"
+        wf_file.write_text(json.dumps({"phase": phase, "updated_at": old_time}), encoding="utf-8")
+
+        _cleanup_stale_workflows(max_age_hours=24)
+        assert not wf_file.exists()

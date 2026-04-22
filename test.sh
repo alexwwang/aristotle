@@ -264,6 +264,44 @@ assert_contains "$ARISTOTLE_DIR/SKILL.md" "REVIEW.md" "dispatcher loads REVIEW.m
 
 sep
 
+# ═══ T-M4: SKILL.md Post-Merge Constraints ═══
+info "T-M4: SKILL.md Post-Merge Constraints"; sep
+
+# Size constraint (updated from 40 to 60)
+SKILL_LINES=$(wc -l < "$ARISTOTLE_DIR/SKILL.md" | tr -d ' ')
+if [ "$SKILL_LINES" -le 60 ]; then
+    pass "SKILL.md is $SKILL_LINES lines (≤60)"
+else
+    fail "SKILL.md is $SKILL_LINES lines (expected ≤60)"
+fi
+
+# Protocol file references forbidden in SKILL.md
+assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "REFLECT.md" "SKILL.md omits REFLECT.md"
+assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "REVIEW.md" "SKILL.md omits REVIEW.md"
+assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "LEARN.md" "SKILL.md omits LEARN.md"
+assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "CHECKER.md" "SKILL.md omits CHECKER.md"
+
+# CRITICAL rule exists — guarantees mechanism names not leaked to user
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "NEVER mention internal mechanism names" "SKILL.md has CRITICAL rule against name leakage"
+# Parse Arguments 区不含机制名（用户可见区域）
+PA_START=$(grep -n "Parse Arguments" "$ARISTOTLE_DIR/SKILL.md" | head -1 | cut -d: -f1)
+PA_END=$(wc -l < "$ARISTOTLE_DIR/SKILL.md" | tr -d ' ')
+PA_BLOCK=$(tail -n +"$PA_START" "$ARISTOTLE_DIR/SKILL.md" | head -n $(($PA_END - $PA_START + 1)))
+echo "$PA_BLOCK" | grep -q "fire_o\b" && fail "Parse Arguments contains fire_o" || pass "Parse Arguments omits fire_o"
+echo "$PA_BLOCK" | grep -q "workflow_id\b" && fail "Parse Arguments contains workflow_id" || pass "Parse Arguments omits workflow_id"
+
+# Required MCP orchestration references
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "orchestrate_start" "SKILL.md references orchestrate_start"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "orchestrate_on_event" "SKILL.md references orchestrate_on_event"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "orchestrate_review_action" "SKILL.md references review action"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "REVIEW FEEDBACK" "SKILL.md has REVIEW FEEDBACK section"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "PRE-RESOLVE" "SKILL.md has PRE-RESOLVE section"
+
+# Config: SKILL_DIR constant exists
+assert_contains "$ARISTOTLE_DIR/aristotle_mcp/config.py" "SKILL_DIR" "config.py defines SKILL_DIR"
+
+sep
+
 # Summary
 sep
 echo ""
