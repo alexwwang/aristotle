@@ -14,17 +14,7 @@ If command is "review": call MCP `orchestrate_start("review", {sequence: N})` �
 Otherwise: run PRE-RESOLVE below, then call MCP `orchestrate_start("reflect", {target_session_id, focus, project_directory, user_language})` → execute returned action.
 ## PRE-RESOLVE (reflect only)
 Before calling MCP for reflect:
-1. Call session_list() to get sessions.
-2. Resolve target_session_id:
-   - No argument → current session (first in list, or last active)
-   - "last" → second entry in session_list
-   - "session ses_xxx" → ses_xxx directly
-   - "recent N" → entry at index N (1-based, excluding current)
-3. If session_list fails or is empty: display "🦉 Could not resolve target session. Use /aristotle session ses_xxx" and STOP.
-4. If "recent N" exceeds available: use closest available, display "🦉 Only M sessions available."
-5. Detect user_language from recent messages (default: "en-US").
-6. Get project_directory from current working directory.
-7. Extract focus from --focus flag (default: "last").
+1. Call session_list(). Resolve target_session_id: no argument→current; "last"→second; "session ses_xxx"→ses_xxx; "recent N"→index N. Handle edge cases: empty→STOP; N too large→closest. Detect user_language (en-US), project_directory, and --focus ("last").
 ## ACTION EXECUTION
 ### If action is `fire_o`:
 1. Call task(category="unspecified-low", run_in_background=true, prompt=o_prompt)
@@ -48,8 +38,7 @@ Choose an action:
 3. revise N — Revise rule #N (append feedback after colon, e.g. "revise 1: add example")
 4. re-reflect — Request deeper analysis
 ```
-Map user input: "confirm"→call MCP `orchestrate_review_action(workflow_id, "confirm")` | "reject"→call MCP `orchestrate_review_action(workflow_id, "reject")` | "revise N: feedback"→call MCP `orchestrate_review_action(workflow_id, "revise", feedback, {"rule_index": N})` | "re-reflect"→call MCP `orchestrate_review_action(workflow_id, "re_reflect")`.
-Execute the returned action per ACTION EXECUTION section.
+Map user input: "confirm"→call MCP `orchestrate_review_action(workflow_id, "confirm")` | "reject"→call MCP `orchestrate_review_action(workflow_id, "reject")` | "revise N: feedback"→call MCP `orchestrate_review_action(workflow_id, "revise", feedback, {"rule_index": N})` | "re-reflect"→call MCP `orchestrate_review_action(workflow_id, "re_reflect")`. Execute the returned action per ACTION EXECUTION section.
 ## Parse Arguments
 ```
 /aristotle learn <query>             → ROUTE: command="learn", args={query: "<query>"}
@@ -58,3 +47,13 @@ Execute the returned action per ACTION EXECUTION section.
 /aristotle review <N>                → ROUTE: command="review", args={sequence: N}
 /aristotle [anything else]           → ROUTE: command="reflect" + PRE-RESOLVE
 ```
+## PASSIVE TRIGGER
+
+Monitor the conversation for these patterns:
+1. You corrected your own output (acknowledged a mistake)
+2. User pointed out an error and you agreed
+3. You tried an approach, it failed, and you switched approaches
+
+When any pattern is detected, suggest:
+"🦉 I detected an error pattern. Run /aristotle to reflect and prevent similar mistakes."
+Do NOT auto-trigger. Only suggest.

@@ -80,3 +80,17 @@ SKILL_DIR = Path(
         str(Path(__file__).parent.parent),
     )
 )
+
+# ── Phase 2 constants ──
+# M5: Learn Two-Round 检索
+SCORING_TOP_N = 5
+SCORE_PARALLEL_MAX = 3
+COMPRESS_TOP_N = 3
+COMPRESS_MAX_CHARS = 800
+COMPRESS_RULE_MAX_CHARS = 200
+
+# M6: Error Feedback
+MAX_FEEDBACK_REFLECT = 3
+
+# M7: Δ log-normalization
+MAX_SAMPLES = 20

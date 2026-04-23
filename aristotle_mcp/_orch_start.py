@@ -177,6 +177,7 @@ def orchestrate_start(command: str, args_json: str = "{}") -> dict:
             "target_record": target_record,
             "displayed_rules": displayed_rules,
             "target_session_id": target_session,
+            "committed_rule_paths": target_record.get("committed_rule_paths", []),
             "re_reflect_count": target_record.get("re_reflect_count", 0),
         })
 

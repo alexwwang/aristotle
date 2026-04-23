@@ -158,6 +158,19 @@ def complete_reflection_record(
     return {"success": True, "message": f"Record {target_id} updated to {status}"}
 
 
+def _update_record_field(sequence: int, field: str, value) -> None:
+    """Update a specific field in the reflection record."""
+    from aristotle_mcp.config import resolve_repo_dir
+    state_path = resolve_repo_dir().parent / "aristotle-state.json"
+    if not state_path.exists():
+        return
+    records = json.loads(state_path.read_text(encoding="utf-8"))
+    idx = sequence - 1
+    if 0 <= idx < len(records):
+        records[idx][field] = value
+        state_path.write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 def register_reflection_tools(mcp) -> None:
     """Register reflection tools with the MCP server."""
     mcp.tool()(persist_draft)

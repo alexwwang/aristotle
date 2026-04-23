@@ -303,6 +303,30 @@ assert_contains "$ARISTOTLE_DIR/aristotle_mcp/config.py" "SKILL_DIR" "config.py 
 
 sep
 
+# ═══ T-M8: Passive Trigger (Phase 2 M8) ═══
+info "T-M8: Passive Trigger (Phase 2 M8)"; sep
+
+# TC-M8-01: SKILL.md line count ≤ 60
+SKILL_FILE="$ARISTOTLE_DIR/SKILL.md"
+SKILL_LINES=$(wc -l < "$SKILL_FILE" | tr -d ' ')
+if [ "$SKILL_LINES" -le 60 ]; then
+    pass "TC-M8-01: SKILL.md line count ($SKILL_LINES) <= 60"
+else
+    fail "TC-M8-01: SKILL.md line count ($SKILL_LINES) > 60"
+fi
+
+# TC-M8-02: SKILL.md contains PASSIVE TRIGGER section
+assert_contains "$SKILL_FILE" "PASSIVE TRIGGER" "TC-M8-02: SKILL.md contains PASSIVE TRIGGER"
+assert_contains "$SKILL_FILE" "error pattern" "TC-M8-02: SKILL.md contains error pattern"
+assert_contains "$SKILL_FILE" "/aristotle" "TC-M8-02: SKILL.md contains /aristotle"
+
+# TC-M8-03: SKILL.md does NOT contain auto-trigger instructions (best-effort guard)
+# 以下否定断言仅为 best-effort 防护，不能替代技术方案要求的人工审查
+assert_not_contains "$SKILL_FILE" "automatically trigger" "TC-M8-03: SKILL.md does not contain 'automatically trigger'"
+assert_not_contains "$SKILL_FILE" "auto_call" "TC-M8-03: SKILL.md does not contain 'auto_call'"
+
+sep
+
 # Summary
 sep
 echo ""

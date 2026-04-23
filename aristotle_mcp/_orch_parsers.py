@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
 from aristotle_mcp._orch_state import _load_workflow, _save_workflow
+from aristotle_mcp.config import SCORING_TOP_N
 
 
 def _parse_checker_result(result: str) -> tuple[int, int]:
@@ -93,8 +95,9 @@ def _parse_revised_rule(content: str) -> tuple[str | None, str | None]:
 
 
 def _do_search_and_notify(workflow_id: str) -> dict:
-    """Execute list_rules with workflow's intent tags and return formatted notification."""
+    """Execute list_rules with workflow's intent tags and return score requests or notification."""
     from aristotle_mcp._tools_rules import list_rules
+    from aristotle_mcp._orch_prompts import _build_scoring_prompt
 
     workflow = _load_workflow(workflow_id)
     if not workflow:
@@ -102,6 +105,7 @@ def _do_search_and_notify(workflow_id: str) -> dict:
 
     intent = workflow.get("intent_tags", {})
     keywords = workflow.get("keywords", "")
+    query = workflow.get("query", "")
 
     params: dict = {"status_filter": "verified"}
     if intent.get("domain"):
@@ -112,28 +116,112 @@ def _do_search_and_notify(workflow_id: str) -> dict:
         params["keyword"] = keywords
 
     result = list_rules(**params)
+    count = result.get("count", 0)
 
-    # Mark workflow done
-    workflow["phase"] = "done"
-    workflow["result_count"] = result.get("count", 0)
+    if count == 0:
+        workflow["phase"] = "done"
+        workflow["result_count"] = 0
+        _save_workflow(workflow_id, workflow)
+        return {
+            "action": "notify",
+            "workflow_id": workflow_id,
+            "message": "🦉 No relevant lessons found for this query.",
+            "result_count": 0,
+        }
+
+    # Truncate to top candidates for scoring
+    rules = result.get("rules", [])[:SCORING_TOP_N]
+    candidates = []
+    score_requests = []
+
+    for i, r in enumerate(rules):
+        rule_path = r.get("path", "")
+        rule_id = r.get("id", f"candidate_{i}")
+        candidates.append({"rule_id": rule_id, "path": rule_path, "metadata": r.get("metadata", {})})
+        prompt = _build_scoring_prompt(
+            query=query,
+            domain=intent.get("domain", ""),
+            task_goal=intent.get("task_goal", ""),
+            rule_path=rule_path,
+        )
+        score_requests.append({"rule_id": rule_id, "prompt": prompt})
+
+    workflow["phase"] = "scoring"
+    workflow["candidates"] = candidates
     _save_workflow(workflow_id, workflow)
 
-    count = result.get("count", 0)
-    if count == 0:
-        msg = "🦉 No relevant lessons found for this query."
-    else:
-        rules = result.get("rules", [])
-        lines = [f"🦉 Found {count} relevant lesson(s):"]
-        for i, r in enumerate(rules[:5], 1):
-            meta = r.get("metadata", {})
-            summary = meta.get("error_summary", "No summary")
-            cat = meta.get("category", "?")
-            lines.append(f"  {i}. [{cat}] {summary}")
-        msg = "\n".join(lines)
-
+    notify_msg = f"🦉 Found {count} relevant lesson(s). Scoring top {len(candidates)}..."
     return {
-        "action": "notify",
+        "action": "fire_score",
         "workflow_id": workflow_id,
-        "message": msg,
-        "result_count": count,
+        "score_requests": score_requests,
+        "notify_message": notify_msg,
     }
+
+
+def _parse_scores(score_done_data: dict) -> list[dict]:
+    """Parse score results from subagent responses.
+
+    Handles items that are strings (attempts json.loads) or dicts.
+    Clamps score to 1-10, truncates summary to 120 chars, default score is 5.
+    """
+    raw_scores = score_done_data.get("scores", [])
+
+    parsed = []
+    for item in raw_scores:
+        if isinstance(item, str):
+            try:
+                item = json.loads(item)
+            except (json.JSONDecodeError, ValueError):
+                item = {}
+        if not isinstance(item, dict):
+            item = {}
+        score = item.get("score", 5)
+        summary = item.get("summary", "")
+        try:
+            score = int(score)
+        except (ValueError, TypeError):
+            score = 5
+        score = max(1, min(10, score))
+        summary = str(summary)[:120]
+        parsed.append({"rule_id": item.get("rule_id", ""), "score": score, "summary": summary})
+    return parsed
+
+
+def _format_scored_rules_for_compress(scores: list[dict], workflow: dict) -> str:
+    """Format scored rules into a text block for the compression prompt.
+
+    Sorts by score descending, reads file content, and formats each rule.
+    """
+    candidates = workflow.get("candidates", [])
+
+    scored_candidates = []
+    for s in scores:
+        rule_id = s.get("rule_id", "")
+        rule_path = ""
+        for c in candidates:
+            if c.get("rule_id") == rule_id:
+                rule_path = c.get("path", "")
+                break
+        scored_candidates.append({
+            "path": rule_path,
+            "score": s.get("score", 5),
+            "summary": s.get("summary", ""),
+        })
+
+    scored_candidates.sort(key=lambda x: x["score"], reverse=True)
+
+    parts = []
+    for sc in scored_candidates:
+        path = sc["path"]
+        content = ""
+        if path:
+            try:
+                content = Path(path).read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                content = "<file not readable>"
+        parts.append(
+            f"---\nRule: {path} (score: {sc['score']}/10)\nSummary: {sc['summary']}\n\n{content}"
+        )
+
+    return "\n".join(parts)

@@ -110,8 +110,84 @@ def _build_checker_prompt(
     )
 
 
+SCORING_PROMPT_TEMPLATE = """You are a relevance scoring agent. Rate how relevant a rule is to the user's query.
+
+USER QUERY:
+```
+{query}
+```
+
+INTENT:
+- Domain: {domain}
+- Task Goal: {task_goal}
+
+RULE FILE: {rule_path}
+
+Read the rule file and evaluate its relevance to the user's query on a scale of 1-10, where:
+- 1-3: Not relevant
+- 4-6: Somewhat relevant
+- 7-8: Very relevant
+- 9-10: Exactly what the user needs
+
+Return ONLY valid JSON (no markdown, no explanation):
+{{
+  "score": <integer 1-10>,
+  "summary": "<one-sentence summary of why this rule is or isn't relevant>"
+}}
+"""
+
+COMPRESS_PROMPT_TEMPLATE = """You are a compression agent. Summarize the most relevant rules into a concise guide.
+
+USER QUERY:
+```
+{query}
+```
+
+SCORED RULES:
+{scored_rules_text}
+
+Instructions:
+- Select the top {top_n} most relevant rules
+- Compress each rule to at most {rule_max_chars} characters
+- Total output must not exceed {max_chars} characters
+
+Output format (use --- as section separator):
+---
+WHEN: <describe when this rule applies>
+DO: <describe what to do>
+NEVER: <describe what to avoid>
+CHECK: <describe how to verify>
+---
+"""
+
+
+def _build_scoring_prompt(query: str, domain: str, task_goal: str, rule_path: str) -> str:
+    return SCORING_PROMPT_TEMPLATE.format(
+        query=query[:500],
+        domain=domain or "general",
+        task_goal=task_goal or "unspecified",
+        rule_path=rule_path,
+    )
+
+
+def _build_compress_prompt(
+    query: str,
+    scored_rules_text: str,
+    top_n: int = 3,
+    rule_max_chars: int = 200,
+    max_chars: int = 800,
+) -> str:
+    return COMPRESS_PROMPT_TEMPLATE.format(
+        query=query[:500],
+        scored_rules_text=scored_rules_text,
+        top_n=top_n,
+        rule_max_chars=rule_max_chars,
+        max_chars=max_chars,
+    )
+
+
 def _build_revise_prompt(rule_path: str, original_content: str,
-                         feedback: str, draft_summary: str) -> str:
+                          feedback: str, draft_summary: str) -> str:
     _esc = lambda s: s.replace("{", "{{").replace("}", "}}")
     safe_feedback = feedback[:2000]
     return REVISE_PROMPT_TEMPLATE.format(

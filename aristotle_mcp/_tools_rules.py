@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import time
 from pathlib import Path
 
@@ -51,10 +52,14 @@ def get_audit_decision(file_path: str) -> dict:
     confidence = metadata.get("confidence", 0.7)
     risk_level = metadata.get("risk_level", DEFAULT_RISK_LEVEL)
 
-    try:
-        delta = compute_delta(confidence, risk_level)
-    except ValueError as e:
-        return {"success": False, "message": str(e)}
+    # Read sample_size from frontmatter if present
+    raw_ss = metadata.get("sample_size", None)
+    sample_size = int(raw_ss) if raw_ss is not None else None
+    delta = compute_delta(
+        confidence=confidence,
+        risk_level=risk_level,
+        sample_size=sample_size,
+    )
 
     audit_level = decide_audit_level(delta)
 
@@ -387,6 +392,38 @@ def commit_rule(file_path: str, message: str | None = None) -> dict:
     commit_msg = message or f"rule: verify {rule_id}"
     commit_result = git_add_and_commit(repo_path, rel_path, commit_msg)
 
+    # Conflict detection and bidirectional annotation
+    conflicts = detect_conflicts(file_path)
+    if conflicts:
+        fm = read_frontmatter_raw(path) or {}
+        new_id = fm.get("id", "")
+        if new_id:
+            data = load_rule_file(path)
+            metadata = data["metadata"]
+            metadata["conflicts_with"] = json.dumps(conflicts)
+            write_rule_file(path, metadata, data["content"])
+
+            for conflict_id in conflicts:
+                existing = list_rules(keyword=conflict_id, limit=1)
+                for er in existing.get("rules", []):
+                    er_path = Path(er.get("path", ""))
+                    if not er_path.exists():
+                        continue
+                    er_data = load_rule_file(er_path)
+                    er_meta = er_data["metadata"]
+                    cw = er_meta.get("conflicts_with", [])
+                    if isinstance(cw, str):
+                        try:
+                            cw = json.loads(cw)
+                        except (json.JSONDecodeError, TypeError):
+                            cw = []
+                    if cw is None:
+                        cw = []
+                    if new_id not in cw:
+                        cw.append(new_id)
+                        er_meta["conflicts_with"] = json.dumps(cw)
+                        write_rule_file(er_path, er_meta, er_data["content"])
+
     return {
         "success": commit_result["success"],
         "message": commit_result.get("message", "OK"),
@@ -635,6 +672,50 @@ def list_rules(
                 remaining -= len(paths)
 
     return {"success": True, "count": len(rules), "rules": rules}
+
+
+def detect_conflicts(file_path: str) -> list[str]:
+    """Detect conflicting rules based on domain, task_goal, and failed_skill triple.
+
+    A conflict exists when another verified rule shares the same
+    domain, task_goal, and failed_skill.
+
+    Args:
+        file_path: Path to the rule file to check.
+
+    Returns list of conflicting rule IDs.
+    """
+    path, err = _safe_resolve(file_path)
+    if err:
+        return []
+    if not path.exists():
+        return []
+
+    fm = read_frontmatter_raw(path) or {}
+    intent_tags = fm.get("intent_tags") or {}
+    domain = intent_tags.get("domain")
+    task_goal = intent_tags.get("task_goal")
+    failed_skill = fm.get("failed_skill")
+
+    if not domain or not task_goal:
+        return []
+
+    self_id = fm.get("id", "")
+    result = list_rules(
+        status_filter="verified",
+        intent_domain=domain,
+        intent_task_goal=task_goal,
+    )
+
+    conflicts = []
+    for r in result.get("rules", []):
+        meta = r.get("metadata", {})
+        if r.get("path") == str(path):
+            continue
+        if meta.get("failed_skill") == failed_skill:
+            conflicts.append(meta.get("id"))
+
+    return conflicts
 
 
 def register_rules_tools(mcp) -> None:

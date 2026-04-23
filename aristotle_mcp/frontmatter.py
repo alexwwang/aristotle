@@ -46,6 +46,12 @@ def stream_filter_rules(
                     if line.strip() == "---":
                         delim_count += 1
                         if delim_count == 2:
+                            # Read a few content lines for keyword search
+                            for _ in range(10):
+                                try:
+                                    head += next(f)
+                                except StopIteration:
+                                    break
                             break
         except (OSError, UnicodeDecodeError):
             continue
@@ -73,7 +79,10 @@ def stream_filter_rules(
         if keyword_re:
             values = " ".join(m.group(2) for m in _KV_RE.finditer(fm_text))
             if not keyword_re.search(values):
-                continue
+                # Also search content portion (after frontmatter) within the head buffer
+                content_part = head[fm_match.end():] if fm_match else head
+                if not keyword_re.search(content_part):
+                    continue
 
         needs_intent_filter = (
             intent_domain or intent_task_goal or failed_skill or error_summary
@@ -136,6 +145,8 @@ def write_rule_file(path: Path, metadata: dict, content: str) -> dict:
     try:
         lines = ["---\n"]
         for key, val in metadata.items():
+            if val is None and key in ("sample_size", "feedback_count"):
+                continue
             lines.append(f"{key}: {_serialize(val)}\n")
         lines.append("---\n")
         if content and not content.startswith("\n"):

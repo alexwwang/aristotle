@@ -8,7 +8,7 @@ from aristotle_mcp.frontmatter import read_frontmatter_raw, update_frontmatter_f
 from aristotle_mcp._orch_prompts import _build_checker_prompt
 from aristotle_mcp._orch_state import _load_workflow, _save_workflow
 from aristotle_mcp._orch_parsers import _parse_checker_result, _parse_revised_rule, _do_search_and_notify
-from aristotle_mcp._tools_rules import stage_rule, get_audit_decision, commit_rule
+from aristotle_mcp._tools_rules import list_rules, stage_rule, get_audit_decision, commit_rule
 from aristotle_mcp._tools_reflection import create_reflection_record, complete_reflection_record
 from aristotle_mcp._utils import _safe_resolve
 
@@ -103,7 +103,22 @@ def orchestrate_on_event(event_type: str, data_json: str) -> dict:
             "message": action_msg,
         }
 
-    # ═══ 3. o_done catch-all ═══
+    # ═══ 3. Learn flow: o_done + compressing ═══
+    if event_type == "o_done" and workflow.get("phase") == "compressing":
+        compressed = data.get("result", "")
+        if isinstance(compressed, dict):
+            compressed = json.dumps(compressed)
+        compressed = str(compressed)
+        workflow["phase"] = "done"
+        _save_workflow(workflow_id, workflow)
+        count = workflow.get("result_count", 0)
+        return {
+            "action": "notify",
+            "workflow_id": workflow_id,
+            "message": f"🦉 Found {count} relevant lesson(s) (scored & compressed):\n\n{compressed}",
+        }
+
+    # ═══ 4. o_done catch-all ═══
     if event_type == "o_done":
         return {
             "action": "notify",
@@ -111,7 +126,39 @@ def orchestrate_on_event(event_type: str, data_json: str) -> dict:
             "message": f"🦉 Unexpected o_done in phase '{workflow.get('phase')}'.",
         }
 
-    # ═══ 4. Reflect flow: subagent_done + reflecting ═══
+    # ═══ M5: score_done + scoring ═══
+    if event_type == "score_done" and workflow.get("phase") == "scoring":
+        from aristotle_mcp._orch_parsers import _parse_scores, _format_scored_rules_for_compress
+        from aristotle_mcp._orch_prompts import _build_compress_prompt
+        from aristotle_mcp.config import COMPRESS_TOP_N, COMPRESS_RULE_MAX_CHARS, COMPRESS_MAX_CHARS
+
+        scores = _parse_scores(data)
+
+        # Degradation: all default scores → single-round fallback
+        if all(s["score"] == 5 and not s["summary"] for s in scores):
+            workflow["phase"] = "done"
+            _save_workflow(workflow_id, workflow)
+            candidates = workflow.get("candidates", [])
+            lines = [f"🦉 Found {workflow.get('result_count', 0)} relevant lesson(s):"]
+            for i, c in enumerate(candidates[:5], 1):
+                lines.append(f"  {i}. {c.get('path', '?')}")
+            return {"action": "notify", "workflow_id": workflow_id, "message": "\n".join(lines)}
+
+        scored_text = _format_scored_rules_for_compress(scores, workflow)
+        workflow["phase"] = "compressing"
+        workflow["scores"] = scores
+        _save_workflow(workflow_id, workflow)
+
+        o_prompt = _build_compress_prompt(
+            query=workflow.get("query", ""),
+            scored_rules_text=scored_text,
+            top_n=COMPRESS_TOP_N,
+            rule_max_chars=COMPRESS_RULE_MAX_CHARS,
+            max_chars=COMPRESS_MAX_CHARS,
+        )
+        return {"action": "fire_o", "workflow_id": workflow_id, "o_prompt": o_prompt}
+
+    # ═══ 5. Reflect flow: subagent_done + reflecting ═══
     if event_type == "subagent_done" and workflow.get("phase") == "reflecting":
         reflector_session_id = data.get("session_id", "")
 
@@ -160,7 +207,7 @@ def orchestrate_on_event(event_type: str, data_json: str) -> dict:
             "sub_role": "C",
         }
 
-    # ═══ 5. Reflect flow: subagent_done + checking ═══
+    # ═══ 6. Reflect flow: subagent_done + checking ═══
     if event_type == "subagent_done" and workflow.get("phase") == "checking":
         result = data.get("result", "")
         if isinstance(result, dict):
@@ -168,6 +215,44 @@ def orchestrate_on_event(event_type: str, data_json: str) -> dict:
 
         committed, staged = _parse_checker_result(str(result))
         sequence = workflow.get("sequence")
+
+        # ── M1: collect committed rule paths ──
+        target_session = workflow.get("target_session_id", "")
+        rules_result = list_rules(status_filter="all", keyword=target_session, limit=20)
+        rule_paths = []
+        for r in rules_result.get("rules", []):
+            meta_r = r.get("metadata", {})
+            if (meta_r.get("status") in ("staging", "verified")
+                    and meta_r.get("source_session") == target_session
+                    and r.get("path")):
+                rule_paths.append(r["path"])
+
+        # Write paths to reflection record
+        from aristotle_mcp._tools_reflection import _update_record_field
+        _update_record_field(sequence, "committed_rule_paths", rule_paths)
+
+        workflow["committed_rule_paths"] = rule_paths
+
+        # ── M9: collect conflict warnings from committed rules ──
+        conflict_warnings = []
+        for rp in rule_paths:
+            resolved, _ = _safe_resolve(rp)
+            if not resolved or not resolved.exists():
+                continue
+            fm = read_frontmatter_raw(resolved) or {}
+            cw = fm.get("conflicts_with")
+            if cw:
+                if isinstance(cw, str):
+                    try:
+                        cw = json.loads(cw)
+                    except (json.JSONDecodeError, TypeError):
+                        cw = []
+                if cw:
+                    rule_id = fm.get("id", "unknown")
+                    conflict_warnings.append(
+                        f"⚠️ Rule {rule_id} conflicts with: {', '.join(cw)}"
+                    )
+        workflow["conflict_warnings"] = conflict_warnings
 
         status = "auto_committed" if staged == 0 else "partial_commit"
         complete_reflection_record(
@@ -179,11 +264,15 @@ def orchestrate_on_event(event_type: str, data_json: str) -> dict:
         workflow["phase"] = "done"
         _save_workflow(workflow_id, workflow)
 
+        msg = f"🦉 Aristotle done. {committed} rules committed, {staged} staged."
+        if conflict_warnings:
+            msg += "\n" + "\n".join(conflict_warnings)
+        msg += f"\n   Review: /aristotle review {sequence}"
+
         return {
             "action": "notify",
             "workflow_id": workflow_id,
-            "message": f"🦉 Aristotle done. {committed} rules committed, {staged} staged.\n"
-                       f"   Review: /aristotle review {sequence}",
+            "message": msg,
         }
 
     # ═══ 6. Catch-all ═══

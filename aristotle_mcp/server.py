@@ -6,6 +6,7 @@ from mcp.server.fastmcp import FastMCP
 from aristotle_mcp._tools_rules import register_rules_tools
 from aristotle_mcp._tools_sync import register_sync_tools
 from aristotle_mcp._tools_reflection import register_reflection_tools
+from aristotle_mcp._tools_feedback import register_feedback_tools
 from aristotle_mcp._orch_start import register_orch_start_tools
 from aristotle_mcp._orch_event import register_orch_event_tools
 from aristotle_mcp._orch_review import register_orch_review_tools
@@ -74,6 +75,7 @@ mcp = FastMCP("aristotle-mcp")
 register_rules_tools(mcp)
 register_sync_tools(mcp)
 register_reflection_tools(mcp)
+register_feedback_tools(mcp)
 register_orch_start_tools(mcp)
 register_orch_event_tools(mcp)
 register_orch_review_tools(mcp)

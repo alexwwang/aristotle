@@ -268,9 +268,12 @@ class TestIntegrationMockO:
             }),
         }))
 
-        assert o_result["action"] == "notify"
+        # M5: when rules are found, _do_search_and_notify returns fire_score
+        assert o_result["action"] == "fire_score"
+        assert "score_requests" in o_result
+        assert len(o_result["score_requests"]) > 0
         wf = _load_workflow(wf_id)
-        assert wf["phase"] == "done"
+        assert wf["phase"] == "scoring"
 
     def test_full_learn_flow_no_results(self):
         start = _start_learn_workflow("obscure topic with no matching rules")

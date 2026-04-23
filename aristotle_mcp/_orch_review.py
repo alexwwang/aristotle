@@ -10,6 +10,7 @@ from aristotle_mcp._orch_parsers import _parse_revised_rule
 from aristotle_mcp._tools_rules import list_rules, commit_rule, reject_rule
 from aristotle_mcp._tools_reflection import complete_reflection_record
 from aristotle_mcp._utils import _safe_resolve
+from aristotle_mcp.frontmatter import read_frontmatter_raw
 
 
 def orchestrate_review_action(
@@ -41,17 +42,40 @@ def orchestrate_review_action(
     if action == "confirm":
         target_session = workflow.get("target_session_id", "")
 
+        rule_paths = workflow.get("committed_rule_paths", [])
+
         committed = 0
         failed = 0
-        rules_result = list_rules(status_filter="all", keyword=target_session, limit=20)
-        for r in rules_result.get("rules", []):
-            meta = r.get("metadata", {})
-            if meta.get("status") == "staging":
-                try:
-                    commit_rule(file_path=r.get("path", ""))
-                    committed += 1
-                except Exception:
+
+        if rule_paths:
+            # M1: use pre-recorded paths
+            for rp in rule_paths:
+                resolved, _ = _safe_resolve(rp)
+                if not resolved or not resolved.exists():
                     failed += 1
+                    continue
+                fm = read_frontmatter_raw(resolved) or {}
+                if fm.get("status") == "staging":
+                    try:
+                        commit_rule(file_path=rp)
+                        committed += 1
+                    except Exception:
+                        failed += 1
+                elif fm.get("status") == "verified":
+                    committed += 1  # already committed by C
+        else:
+            # Legacy fallback: keyword search
+            rules_result = list_rules(status_filter="all", keyword=target_session, limit=20)
+            for r in rules_result.get("rules", []):
+                meta = r.get("metadata", {})
+                if meta.get("status") == "staging":
+                    try:
+                        commit_rule(file_path=r.get("path", ""))
+                        committed += 1
+                    except Exception:
+                        failed += 1
+                elif meta.get("status") == "verified":
+                    committed += 1
 
         complete_reflection_record(sequence=sequence, status="auto_committed",
                                    rules_count=committed or None)
