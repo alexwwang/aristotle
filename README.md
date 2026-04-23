@@ -4,7 +4,7 @@
 [![Release](https://img.shields.io/github/v/release/alexwwang/aristotle?include_prereleases)](https://github.com/alexwwang/aristotle/releases)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
-[![Tests](https://img.shields.io/badge/tests-227%20pytest%20%2B%2098%20static-brightgreen)](./test/)
+[![Tests](https://img.shields.io/badge/tests-295%20pytest%20%2B%20104%20static-brightgreen)](./TESTING.md)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19660780.svg)](https://doi.org/10.5281/zenodo.19660780)
 
 English | [中文](./README.zh-CN.md)
@@ -385,62 +385,14 @@ The full protocol specification — state machine, frontmatter schema, Δ decisi
 
 ## Testing
 
-### Static Tests (no session required)
+> **Full test documentation:** See **[TESTING.md](./TESTING.md)** for detailed test suites, coverage breakdowns, and manual test plans.
 
-```bash
-bash test.sh
-```
-
-98 assertions covering file structure, progressive disclosure, SKILL.md content, hook logic, error pattern detection (English/Chinese/threshold), and architecture guarantees.
-
-### MCP Server Unit Tests
-
-```bash
-uv run pytest test/ -v
-```
-
-227 assertions covering all 28 test classes:
-
-| Test Class | Module | Assertions | What It Tests |
-|------------|--------|------------|---------------|
-| `TestConfig` | `config.py` | 14 | Path resolution, env override, RISK_MAP, RISK_WEIGHTS, AUDIT_THRESHOLDS, SKILL_DIR, project hash |
-| `TestEvolution` | `evolution.py` | 10 | compute_delta (all risk levels, edge cases, validation), decide_audit_level (auto/semi/manual), integration |
-| `TestModels` | `models.py` | 13 | RuleMetadata defaults, YAML serialization roundtrip, from_frontmatter_dict, GEAR 2.0 field tests |
-| `TestGitOps` | `git_ops.py` | 8 | init, add+commit, show, log, status, git_show_exists, edge cases |
-| `TestFrontmatter` | `frontmatter.py` | 18 | Atomic write, raw read, field update, stream filter (status/category/keyword/limit), index skip, multi-dimension search tests |
-| `TestMigration` | `migration.py` | 8 | Flat Markdown parsing, repo init, auto-migration with backup |
-| `TestServerTools` | `server.py` | 22 | Full lifecycle (write → stage → commit → read), reject flow, restore_rule, input validation, GEAR 2.0 fields, git check tests |
-| `TestSyncTools` | `server.py` | 7 | check_sync_status (clean/dirty/no repo), sync_rules (auto/specific/nothing), git_show_exists |
-| `TestDeltaDecision` | `server.py` + `evolution.py` | 8 | get_audit_decision (auto/semi/manual), write_rule confidence (default/custom), Δ affects audit level |
-| `TestPathTraversal` | `server.py` | 7 | Path containment for stage/commit/reject/restore/get_audit_decision, absolute + relative traversal, legitimate paths still work |
-| `TestPersistDraft` | `server.py` | 4 | Atomic write, content verification, overwrite |
-| `TestCreateReflectionRecord` | `server.py` | 9 | Sequence numbering, JSON state, 50-record pruning |
-| `TestCompleteReflectionRecord` | `server.py` | 8 | Status update, rules_count, error handling |
-| `TestOrchestrateStart` | `server.py` (orchestration) | 11 | Learn flow (fire_o, explicit params, empty query, invalid args, domain+goal, reflect, latency) |
-| `TestOrchestrateOnEvent` | `server.py` (orchestration) | 9 | o_done → search, string result, empty result, missing workflow_id, phase mismatch, invalid JSON |
-| `TestWorkflowStateManagement` | `server.py` (orchestration) | 6 | Workflow dir creation, JSON validity, timestamp, done phase, corrupted/missing workflows |
-| `TestIntegrationMockO` | `server.py` (orchestration) | 5 | Full learn flow (with/without results), explicit params, unique IDs, concurrent workflows |
-| `TestSearchParamMapping` | `server.py` (orchestration) | 2 | Intent tags → search params, empty intent handling |
-| `TestOrchestrateStartReflect` | `_orch_start.py` + `_orch_state.py` | 8 | reflect command (basic, sequence increment, no target, focus hint, auto init, invalid args, explicit session, workflow state) |
-| `TestOrchestrateOnEventReflect` | `_orch_event.py` + `_orch_state.py` | 4 | Full reflect flow (R→C→done), reflection record creation, draft file path, partial commit status |
-| `TestOrchestrateStartSessions` | `_orch_start.py` | 8 | sessions formatting (basic, empty, no workflow, status icons parametrized) |
-| `TestHelperFunctions` | `_orch_state.py` | 11 | _next_sequence, _ensure_repo_initialized, _cleanup_stale_workflows (6 phase parametrized) |
-| `TestOrchestrateReviewAction` | `_orch_review.py` | 14 | confirm, reject, revise (prompt + index + o_done), re_reflect, wrong phase, commit/reject exception paths |
-| `TestReReflectCountPropagation` | `_orch_review.py` + `_orch_start.py` | 4 | Re-reflect count inheritance, cascade to max, zero not written |
-| `TestExceptionRevise` | `_orch_event.py` | 2 | Revise flow stage_rule / commit_rule exception paths |
-| `TestIntegrationReview` | full chain | 2 | End-to-end review→confirm, review→revise→o_done |
-| `TestExceptionReflect` | `_orch_event.py` | 2 | C done result parse failure, invalid workflow_id format |
-| `TestExceptionStart` | `_orch_start.py` | 3 | Review state file corrupted, invalid sequence type, sessions state file corrupted |
-
-All tests use isolated temp directories (`tmp_path` fixture) and are safe to run repeatedly.
-
-### E2E Live Tests (requires opencode session)
-
-```bash
-bash test/live-test.sh --model <provider/model>
-```
-
-Creates a real session with known error patterns, triggers `/aristotle`, and verifies the full coordinator → reflector → rule-writing flow. 8 assertions.
+| Suite | Command | Count |
+|-------|---------|-------|
+| Static | `bash test.sh` | 104 |
+| Unit/Integration | `uv run pytest test/ -v` | 295 |
+| E2E Automated | `uv run python test_e2e_phase2.py` | 70 |
+| E2E Live | `bash test/live-test.sh --model <provider/model>` | 8 |
 
 ## Project Structure
 
@@ -455,7 +407,7 @@ Creates a real session with known error patterns, triggers `/aristotle`, and ver
 ├── install.sh            # Installer (macOS/Linux)
 ├── install.ps1           # Installer (Windows)
 ├── pyproject.toml        # Python dependencies for MCP server
-├── test.sh               # Static test suite (98 assertions)
+├── test.sh               # Static test suite (104 assertions)
 ├── aristotle_mcp/        # MCP server (Git-backed rule management + workflow orchestration)
 │   ├── __init__.py
 │   ├── config.py         # Paths, constants, env vars, RISK_WEIGHTS, AUDIT_THRESHOLDS, SKILL_DIR
@@ -556,65 +508,18 @@ git clone https://github.com/alexwwang/aristotle.git ~/.claude/skills/aristotle
 
 ## Branch Status: `test-coverage`
 
-> This branch tracks test coverage improvements. Code changes are from user-reported issue remediation (Issues #1–#8 + 2 discovered gaps) and GEAR orchestration (M1-M4).
+> Phase 2 complete. See **[TESTING.md](./TESTING.md)** for detailed test documentation.
 
 ### Test Coverage History
 
-| Milestone | pytest | static (test.sh) | Commit |
-|-----------|--------|-------------------|--------|
-| Baseline (pre-remediation) | 111 | 67 | `35cc613` (main) |
-| Post-remediation | 134 | 67 | `96eed0d` |
-| Post-coroutine-O merge | 166 | 84 | `c0ffee5` |
-| GEAR Orchestration (M1-M4) | **218** | **98** | `a3ab41a` |
-| M4 Exception Path Tests | **227** | **98** | pending |
-
-### Coverage by Module (227 pytest)
-
-| Test Class | Module | Assertions | What It Tests |
-|------------|--------|------------|---------------|
-| `TestConfig` | `config.py` | 14 | Path resolution, env override, RISK_MAP, RISK_WEIGHTS, AUDIT_THRESHOLDS, SKILL_DIR, project hash |
-| `TestEvolution` | `evolution.py` | 10 | compute_delta (all risk levels, edge cases), decide_audit_level (auto/semi/manual) |
-| `TestModels` | `models.py` | 13 | RuleMetadata defaults, YAML serialization roundtrip, GEAR 2.0 fields |
-| `TestGitOps` | `git_ops.py` | 8 | init, add+commit, show, log, status, git_show_exists |
-| `TestFrontmatter` | `frontmatter.py` | 18 | Atomic write, raw read, field update, stream filter, multi-dimension search |
-| `TestMigration` | `migration.py` | 8 | Flat Markdown parsing, repo init, auto-migration |
-| `TestServerTools` | `server.py` | 22 | Full lifecycle (write→stage→commit→read), reject, restore, input validation, GEAR 2.0 |
-| `TestSyncTools` | `server.py` | 7 | check_sync_status, sync_rules (auto/specific/nothing) |
-| `TestDeltaDecision` | server+evolution | 8 | get_audit_decision (auto/semi/manual), confidence defaults |
-| `TestPathTraversal` | `server.py` | 7 | Path containment for stage/commit/reject/restore/get_audit_decision |
-| `TestPersistDraft` | `server.py` | 4 | Atomic write, content verification, overwrite |
-| `TestCreateReflectionRecord` | `server.py` | 9 | Sequence numbering, JSON state, 50-record pruning |
-| `TestCompleteReflectionRecord` | `server.py` | 8 | Status update, rules_count, error handling |
-| `TestOrchestrateStart` | `server.py` (orchestration) | 11 | Learn flow (fire_o, explicit params, empty query, invalid args, domain+goal, reflect, latency) |
-| `TestOrchestrateOnEvent` | `server.py` (orchestration) | 9 | o_done → search, string result, empty result, missing workflow_id, phase mismatch, invalid JSON |
-| `TestWorkflowStateManagement` | `server.py` (orchestration) | 6 | Workflow dir creation, JSON validity, timestamp, done phase, corrupted/missing workflows |
-| `TestIntegrationMockO` | `server.py` (orchestration) | 5 | Full learn flow (with/without results), explicit params, unique IDs, concurrent workflows |
-| `TestSearchParamMapping` | `server.py` (orchestration) | 2 | Intent tags → search params, empty intent handling |
-| `TestOrchestrateStartReflect` | `_orch_start.py` + `_orch_state.py` | 8 | reflect command (basic, sequence increment, no target, focus hint, auto init, invalid args, explicit session, workflow state) |
-| `TestOrchestrateOnEventReflect` | `_orch_event.py` + `_orch_state.py` | 4 | Full reflect flow (R→C→done), reflection record creation, draft file path, partial commit status |
-| `TestOrchestrateStartSessions` | `_orch_start.py` | 8 | sessions formatting (basic, empty, no workflow, status icons parametrized) |
-| `TestHelperFunctions` | `_orch_state.py` | 11 | _next_sequence, _ensure_repo_initialized, _cleanup_stale_workflows (6 phase parametrized) |
-| `TestOrchestrateReviewAction` | `_orch_review.py` | 14 | confirm, reject, revise (prompt + index + o_done), re_reflect, wrong phase, commit/reject exception paths |
-| `TestReReflectCountPropagation` | `_orch_review.py` + `_orch_start.py` | 4 | Re-reflect count inheritance, cascade to max, zero not written |
-| `TestExceptionRevise` | `_orch_event.py` | 2 | Revise flow stage_rule / commit_rule exception paths |
-| `TestIntegrationReview` | full chain | 2 | End-to-end review→confirm, review→revise→o_done |
-| `TestExceptionReflect` | `_orch_event.py` | 2 | C done result parse failure, invalid workflow_id format |
-| `TestExceptionStart` | `_orch_start.py` | 3 | Review state file corrupted, invalid sequence type, sessions state file corrupted |
-
-### Coverage Gaps (Not Yet Implemented)
-
-**~35 test cases remain unimplemented:**
-
-| Test Domain | Pending Tests | Priority |
-|-------------|--------------|----------|
-| Learn flow testing | 18 (unit) | P0 |
-| Supplementary testing (Checker, Focus, Install) | ~17 | P0-P1 |
-
-**Specific untested areas:**
-- Learn command full E2E integration (7)
-- Checker validation static assertions (14)
-- Focus Modes static assertions (12)
-- Install Script static + unit (9)
+| Milestone | pytest | static | e2e | Commit |
+|-----------|--------|--------|-----|--------|
+| Baseline (pre-remediation) | 111 | 67 | — | `35cc613` (main) |
+| Post-remediation | 134 | 67 | — | `96eed0d` |
+| Post-coroutine-O merge | 166 | 84 | — | `c0ffee5` |
+| GEAR Orchestration (M1-M4) | 218 | 98 | — | `a3ab41a` |
+| M4 Exception Path Tests | 227 | 98 | — | `3e8f94b` |
+| **Phase 2 (M1/M5-M9)** | **295** | **104** | **70** | `7da8269` |
 
 ## License
 

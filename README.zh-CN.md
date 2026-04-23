@@ -4,7 +4,7 @@
 [![Release](https://img.shields.io/github/v/release/alexwwang/aristotle?include_prereleases)](https://github.com/alexwwang/aristotle/releases)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
-[![Tests](https://img.shields.io/badge/tests-227%20pytest%20%2B%2098%20static-brightgreen)](./test/)
+[![Tests](https://img.shields.io/badge/tests-295%20pytest%20%2B%20104%20static-brightgreen)](./TESTING.zh-CN.md)
 
 **[English](./README.md)** | 中文
 
@@ -383,62 +383,14 @@ GEAR 协议操作映射到 Aristotle 的 MCP 工具：`produce` → `write_rule`
 
 ## 测试
 
-### 静态测试（无需会话）
+> **完整测试文档：** 详见 **[TESTING.zh-CN.md](./TESTING.zh-CN.md)**，包含详细的测试套件说明、覆盖率分析和人工测试计划。
 
-```bash
-bash test.sh
-```
-
-98 个断言，覆盖文件结构、渐进披露、SKILL.md 内容、错误模式检测（英文/中文/阈值）和架构保证。
-
-### MCP Server 单元测试
-
-```bash
-uv run pytest test/ -v
-```
-
-227 个断言，覆盖全部 28 个测试类：
-
-| 测试类 | 模块 | 断言数 | 测试内容 |
-|--------|------|--------|----------|
-| `TestConfig` | `config.py` | 14 | 路径解析、环境变量覆盖、RISK_MAP、RISK_WEIGHTS、AUDIT_THRESHOLDS、SKILL_DIR、项目哈希 |
-| `TestEvolution` | `evolution.py` | 10 | compute_delta（所有 risk_level、边界值、输入校验）、decide_audit_level（auto/semi/manual）、集成测试 |
-| `TestModels` | `models.py` | 13 | RuleMetadata 默认值、YAML 序列化往返、from_frontmatter_dict、GEAR 2.0 字段测试 |
-| `TestGitOps` | `git_ops.py` | 8 | init、add+commit、show、log、status、git_show_exists、边界情况 |
-| `TestFrontmatter` | `frontmatter.py` | 18 | 原子写入、原始读取、字段更新、流式过滤（status/category/keyword/limit）、跳过索引文件、多维度搜索测试 |
-| `TestMigration` | `migration.py` | 8 | 扁平 Markdown 解析、仓库初始化、自动迁移并备份 |
-| `TestServerTools` | `server.py` | 22 | 完整生命周期（write → stage → commit → read）、拒绝流程、restore_rule、输入校验、GEAR 2.0 字段、git 检查测试 |
-| `TestSyncTools` | `server.py` | 7 | check_sync_status（干净/脏数据/无仓库）、sync_rules（自动/指定文件/无待同步）、git_show_exists |
-| `TestDeltaDecision` | `server.py` + `evolution.py` | 8 | get_audit_decision（auto/semi/manual）、write_rule confidence（默认/自定义）、Δ 影响审核级别 |
-| `TestPathTraversal` | `server.py` | 7 | 路径包含检查（stage/commit/reject/restore/get_audit_decision）、绝对路径+相对路径遍历、合法路径正常工作 |
-| `TestPersistDraft` | `server.py` | 4 | 原子写入、内容验证、覆盖 |
-| `TestCreateReflectionRecord` | `server.py` | 9 | 序列编号、JSON 状态、50 条记录裁剪 |
-| `TestCompleteReflectionRecord` | `server.py` | 8 | 状态更新、rules_count、错误处理 |
-| `TestOrchestrateStart` | `server.py` (orchestration) | 11 | Learn 流程（fire_o、显式参数、空查询、无效参数、domain+goal、reflect、延迟） |
-| `TestOrchestrateOnEvent` | `server.py` (orchestration) | 9 | o_done → search、字符串结果、空结果、缺少 workflow_id、阶段不匹配、无效 JSON |
-| `TestWorkflowStateManagement` | `server.py` (orchestration) | 6 | 工作流目录创建、JSON 有效性、时间戳、done 阶段、损坏/缺失的工作流 |
-| `TestIntegrationMockO` | `server.py` (orchestration) | 5 | 完整 learn 流程（带/不带结果）、显式参数、唯一 ID、并发工作流 |
-| `TestSearchParamMapping` | `server.py` (orchestration) | 2 | Intent tags → 搜索参数、空 intent 处理 |
-| `TestOrchestrateStartReflect` | `_orch_start.py` + `_orch_state.py` | 8 | reflect 命令（基础、序列递增、无 target、focus hint、auto init、无效参数、显式 session、工作流状态） |
-| `TestOrchestrateOnEventReflect` | `_orch_event.py` + `_orch_state.py` | 4 | 完整 reflect 流程（R→C→done）、reflection record 创建、draft file 路径、partial commit 状态 |
-| `TestOrchestrateStartSessions` | `_orch_start.py` | 8 | sessions 格式化（基础、空、无 workflow、状态图标参数化） |
-| `TestHelperFunctions` | `_orch_state.py` | 11 | _next_sequence、_ensure_repo_initialized、_cleanup_stale_workflows（6 阶段参数化） |
-| `TestOrchestrateReviewAction` | `_orch_review.py` | 14 | confirm、reject、revise、re_reflect、wrong phase、commit/reject 异常路径 |
-| `TestReReflectCountPropagation` | `_orch_review.py` + `_orch_start.py` | 4 | Re-reflect count 继承、级联到上限、零值不写入 |
-| `TestExceptionRevise` | `_orch_event.py` | 2 | Revise 流程 stage_rule / commit_rule 异常路径 |
-| `TestIntegrationReview` | full chain | 2 | 端到端 review→confirm、review→revise→o_done |
-| `TestExceptionReflect` | `_orch_event.py` | 2 | C done 结果解析失败、无效 workflow_id 格式 |
-| `TestExceptionStart` | `_orch_start.py` | 3 | Review state file 损坏、无效 sequence 类型、sessions state file 损坏 |
-
-所有测试使用隔离的临时目录（`tmp_path` fixture），可安全反复运行。
-
-### E2E 实时测试（需要 opencode 会话）
-
-```bash
-bash test/live-test.sh --model <provider/model>
-```
-
-创建真实会话，注入已知错误模式，触发 `/aristotle`，验证完整的协调器 → 反思器 → 规则写入流程。8 个断言。
+| 套件 | 命令 | 数量 |
+|------|------|------|
+| 静态测试 | `bash test.sh` | 104 |
+| 单元/集成测试 | `uv run pytest test/ -v` | 295 |
+| E2E 自动化测试 | `uv run python test_e2e_phase2.py` | 70 |
+| E2E 实时测试 | `bash test/live-test.sh --model <provider/model>` | 8 |
 
 ## 项目结构
 
@@ -453,7 +405,7 @@ bash test/live-test.sh --model <provider/model>
 ├── install.sh            # 安装脚本（macOS/Linux）
 ├── install.ps1           # 安装脚本（Windows）
 ├── pyproject.toml        # MCP server 的 Python 依赖声明
-├── test.sh               # 静态测试套件（98 断言）
+├── test.sh               # 静态测试套件（104 断言）
 ├── aristotle_mcp/        # MCP server（Git 版本管理 + 工作流编排）
 │   ├── __init__.py
 │   ├── config.py         # 路径、常量、环境变量、RISK_WEIGHTS、AUDIT_THRESHOLDS、SKILL_DIR
@@ -554,65 +506,18 @@ git clone https://github.com/alexwwang/aristotle.git ~/.claude/skills/aristotle
 
 ## 分支状态：`test-coverage`
 
-> 本分支跟踪测试覆盖率改进。代码变更来自用户反馈问题修复（Issue #1–#8 + 2 个发现的问题）以及 GEAR 编排工作流（M1-M4）实现。
+> Phase 2 已完成。详见 **[TESTING.zh-CN.md](./TESTING.zh-CN.md)**。
 
 ### 测试覆盖率历史
 
-| 里程碑 | pytest | 静态测试 (test.sh) | 提交 |
-|--------|--------|-------------------|------|
-| 基线（修复前） | 111 | 67 | `35cc613` (main) |
-| 修复后 | 134 | 67 | `96eed0d` |
-| 协程 O 合并后 | 166 | 84 | `c0ffee5` |
-| GEAR 编排 (M1-M4) | **218** | **98** | `a3ab41a` |
-| M4 异常路径测试 | **227** | **98** | pending |
-
-### 模块覆盖率（227 pytest）
-
-| 测试类 | 模块 | 断言数 | 测试内容 |
-|--------|------|--------|----------|
-| `TestConfig` | `config.py` | 14 | 路径解析、环境变量覆盖、RISK_MAP、RISK_WEIGHTS、AUDIT_THRESHOLDS、SKILL_DIR、项目哈希 |
-| `TestEvolution` | `evolution.py` | 10 | compute_delta（所有风险级别、边界情况）、decide_audit_level（auto/semi/manual） |
-| `TestModels` | `models.py` | 13 | RuleMetadata 默认值、YAML 序列化往返、GEAR 2.0 字段 |
-| `TestGitOps` | `git_ops.py` | 8 | init、add+commit、show、log、status、git_show_exists |
-| `TestFrontmatter` | `frontmatter.py` | 18 | 原子写入、原始读取、字段更新、流式过滤、多维度搜索 |
-| `TestMigration` | `migration.py` | 8 | 扁平 Markdown 解析、repo 初始化、自动迁移 |
-| `TestServerTools` | `server.py` | 22 | 完整生命周期（write→stage→commit→read）、reject、restore、输入验证、GEAR 2.0 |
-| `TestSyncTools` | `server.py` | 7 | check_sync_status、sync_rules（auto/specific/nothing） |
-| `TestDeltaDecision` | server+evolution | 8 | get_audit_decision（auto/semi/manual）、confidence 默认值 |
-| `TestPathTraversal` | `server.py` | 7 | stage/commit/reject/restore/get_audit_decision 的路径包含性检查 |
-| `TestPersistDraft` | `server.py` | 4 | 原子写入、内容验证、覆盖 |
-| `TestCreateReflectionRecord` | `server.py` | 9 | 序列编号、JSON 状态、50 条记录裁剪 |
-| `TestCompleteReflectionRecord` | `server.py` | 8 | 状态更新、rules_count、错误处理 |
-| `TestOrchestrateStart` | `server.py` (orchestration) | 11 | Learn 流程（fire_o、显式参数、空查询、无效参数、domain+goal、reflect、延迟） |
-| `TestOrchestrateOnEvent` | `server.py` (orchestration) | 9 | o_done → search、字符串结果、空结果、缺少 workflow_id、阶段不匹配、无效 JSON |
-| `TestWorkflowStateManagement` | `server.py` (orchestration) | 6 | 工作流目录创建、JSON 有效性、时间戳、done 阶段、损坏/缺失的工作流 |
-| `TestIntegrationMockO` | `server.py` (orchestration) | 5 | 完整 learn 流程（带/不带结果）、显式参数、唯一 ID、并发工作流 |
-| `TestSearchParamMapping` | `server.py` (orchestration) | 2 | Intent tags → 搜索参数、空 intent 处理 |
-| `TestOrchestrateStartReflect` | `_orch_start.py` + `_orch_state.py` | 8 | reflect 命令（基础、序列递增、无 target、focus hint、auto init、无效参数、显式 session、工作流状态） |
-| `TestOrchestrateOnEventReflect` | `_orch_event.py` + `_orch_state.py` | 4 | 完整 reflect 流程（R→C→done）、reflection record 创建、draft file 路径、partial commit 状态 |
-| `TestOrchestrateStartSessions` | `_orch_start.py` | 8 | sessions 格式化（基础、空、无 workflow、状态图标参数化） |
-| `TestHelperFunctions` | `_orch_state.py` | 11 | _next_sequence、_ensure_repo_initialized、_cleanup_stale_workflows（6 阶段参数化） |
-| `TestOrchestrateReviewAction` | `_orch_review.py` | 14 | confirm、reject、revise（prompt + index + o_done）、re_reflect、wrong phase、commit/reject 异常路径 |
-| `TestReReflectCountPropagation` | `_orch_review.py` + `_orch_start.py` | 4 | Re-reflect count 继承、级联到上限、零值不写入 |
-| `TestExceptionRevise` | `_orch_event.py` | 2 | Revise 流程 stage_rule / commit_rule 异常路径 |
-| `TestIntegrationReview` | full chain | 2 | 端到端 review→confirm、review→revise→o_done |
-| `TestExceptionReflect` | `_orch_event.py` | 2 | C done 结果解析失败、无效 workflow_id 格式 |
-| `TestExceptionStart` | `_orch_start.py` | 3 | Review state file 损坏、无效 sequence 类型、sessions state file 损坏 |
-
-### 待覆盖的测试域（~35 条未实现）
-
-**异常路径测试已完成（M4 §3.8，9 条），以下测试域尚未实现：**
-
-| 测试域 | 待实现用例 | 优先级 |
-|--------|-----------|--------|
-| Learn 测试 | 18（单元） | P0 |
-| 补充测试（Checker、Focus、Install） | ~17 | P0-P1 |
-
-**具体未测试区域：**
-- Learn 命令完整 E2E 集成（7 条）
-- Checker 验证静态断言（14 条）
-- Focus Modes 静态断言（12 条）
-- Install Script 静态 + 单元测试（9 条）
+| 里程碑 | pytest | 静态测试 | e2e | 提交 |
+|--------|--------|----------|-----|------|
+| 基线（修复前） | 111 | 67 | — | `35cc613` (main) |
+| 修复后 | 134 | 67 | — | `96eed0d` |
+| 协程 O 合并后 | 166 | 84 | — | `c0ffee5` |
+| GEAR 编排 (M1-M4) | 218 | 98 | — | `a3ab41a` |
+| M4 异常路径测试 | 227 | 98 | — | `3e8f94b` |
+| **Phase 2 (M1/M5-M9)** | **295** | **104** | **70** | `7da8269` |
 
 ## 许可证
 

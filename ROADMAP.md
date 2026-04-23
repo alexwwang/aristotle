@@ -1,6 +1,6 @@
 # Aristotle Roadmap
 
-> P1–P4 + GEAR 编排已完成（17 MCP tools, 227 pytest + 98 static）。本文档记录后续开发计划。
+> P1–P4 + GEAR 编排已完成。Phase 2（M1/M5-M9）已完成并通过 e2e 验证（295 pytest + 104 static + 70 e2e）。本文档记录后续开发计划。
 
 ---
 
@@ -42,11 +42,58 @@
 
 ---
 
-## V1.2 — 进化等级（设计阶段）
+## V1.2 — Phase 2 收尾
+
+### V1.2a 代码推送与合并
+
+**现状：** Phase 2 全部代码在 `test-coverage` 分支，2 个 commit 未推到远程。
+- `567b793` feat: implement Phase 2 modules (M1/M5/M6/M7/M8/M9) with 66 new tests
+- `7da8269` fix: 4 bugs found by e2e testing + add e2e test script
+
+### V1.2b 人工 P1 Passive Trigger 测试
+
+**现状：** 69/70 e2e 场景已自动化。P1（Passive Trigger 宿主 agent 行为验证）需人工操作。
+
+**步骤：**
+1. 在 Claude Code/OpenCode 中安装 Aristotle skill
+2. 制造错误纠正场景（自我纠正 / 用户纠正 / 方案切换）
+3. 验证 agent 是否建议 `Run /aristotle to reflect`
+4. 验证正常对话不误触发
+
+### V1.2c Phase 2.1 集成测试
+
+**目标：** 端到端工作流验证（含真实 LLM 交互），覆盖自动化测试无法验证的 LLM-in-the-loop 场景。
+
+**关键场景：**
+- Learn 完整流程：`o_prompt` → 真实 LLM → 合法 intent_tags JSON → score → compress
+- Reflect：Reflector/Checker 子 agent 实际产出质量
+- Review Revise：O 收到修改指令后正确改写规则文件
+
+---
+
+## V1.3 — 进化等级（设计阶段）
 
 > 需先回答以下问题再实施。不急于编码。
 
-### 未决问题
+### V1.3a needs_sync 自动闭环
+
+**现状：** `check_sync_status` 能检测未同步规则，但需手动调用 `sync_rules`。
+
+**目标：** 检测到未同步规则后自动 commit。
+
+### V1.3b LLM 语义冲突检测
+
+**现状：** `detect_conflicts` 基于精确 triple 匹配（domain + task_goal + failed_skill）。
+
+**目标：** 用 embedding 替代精确匹配，检测语义层面的规则冲突。
+
+### V1.3c 自动触发 Passive Trigger
+
+**现状：** SKILL.md Passive Trigger 段落只建议用户运行 `/aristotle`，不自动调用。
+
+**目标：** 从建议升级为可选的自动调用模式。
+
+### V1.3d 未决问题
 
 1. **进化的对象** — GEAR 五个 agent 全部 stateless。调整 threshold 不能提升能力，只减少人工审核。真正该进化的是什么？
    - R 的产出质量？（需要 R 能参考自己过去写过的规则）
@@ -76,11 +123,11 @@
 
 ---
 
-## V1.3 — 架构改进（OpenCode 限制相关）
+## V1.4 — 架构改进（OpenCode 限制相关）
 
 > 以下改进依赖 OpenCode 平台能力，部分可能需要上游变更。
 
-### V1.3a 子进程 session 注册为可交互
+### V1.4a 子进程 session 注册为可交互
 
 **现状：** `task()` 创建的 session 非交互式，用户无法通过 `opencode -s <id>` 切入并继续对话。
 
@@ -88,7 +135,7 @@
 
 **依赖：** OpenCode 上游支持（GitHub Issues #4422, #16303, #11012）
 
-### V1.3b 启动时上下文优化
+### V1.4b 启动时上下文优化
 
 **现状：** `/aristotle` 触发时，SKILL.md 完整内容注入父上下文。
 
@@ -112,6 +159,7 @@
 | v1.1 | M2 | SKILL 调度器重写 — 统一 MCP dispatcher（60 行），PRE-RESOLVE + REVIEW FEEDBACK | `a3ab41a` |
 | v1.1 | M3 | 子代理提示词模板 — REFLECTOR/CHECKER/REVISE prompt, SKILL_DIR 配置 | `a3ab41a` |
 | v1.1 | M4 | 测试方案 — reflect/review/sessions/端到端测试，218 pytest + 98 static | `a3ab41a` |
+| v1.2 | Phase 2 | M1补丁/M5-M9 全模块实现 + 4 bug fix + e2e 自动化测试（295 pytest + 104 static + 70 e2e） | `7da8269` |
 
 ---
 
