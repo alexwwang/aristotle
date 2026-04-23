@@ -150,7 +150,7 @@ def write_rule(
             "message": "project_path is required when scope is 'project'",
         }
 
-    rule_id = f"rec_{int(time.time())}"
+    rule_id = f"rec_{int(time.time() * 1000)}"
     p_hash = project_hash(project_path) if scope == "project" else None
     risk_level = RISK_MAP.get(category, DEFAULT_RISK_LEVEL)
 
@@ -404,8 +404,13 @@ def commit_rule(file_path: str, message: str | None = None) -> dict:
             write_rule_file(path, metadata, data["content"])
 
             for conflict_id in conflicts:
-                existing = list_rules(keyword=conflict_id, limit=1)
+                # Search by rule_id precisely, then filter exact match
+                existing = list_rules(keyword=conflict_id, limit=10)
                 for er in existing.get("rules", []):
+                    er_meta = er.get("metadata", {})
+                    # Only update the rule whose id exactly matches conflict_id
+                    if er_meta.get("id") != conflict_id:
+                        continue
                     er_path = Path(er.get("path", ""))
                     if not er_path.exists():
                         continue
@@ -423,6 +428,7 @@ def commit_rule(file_path: str, message: str | None = None) -> dict:
                         cw.append(new_id)
                         er_meta["conflicts_with"] = json.dumps(cw)
                         write_rule_file(er_path, er_meta, er_data["content"])
+                    break  # Found and updated the exact rule
 
     return {
         "success": commit_result["success"],
@@ -729,3 +735,4 @@ def register_rules_tools(mcp) -> None:
     mcp.tool()(reject_rule)
     mcp.tool()(restore_rule)
     mcp.tool()(list_rules)
+    mcp.tool()(detect_conflicts)

@@ -10,7 +10,7 @@ DEFAULT_REPO_DIR = Path.home() / ".config" / "opencode" / "aristotle-repo"
 
 def resolve_repo_dir() -> Path:
     env = os.environ.get("ARISTOTLE_REPO_DIR")
-    return Path(env) if env else DEFAULT_REPO_DIR
+    return (Path(env) if env else DEFAULT_REPO_DIR).resolve()
 
 
 def resolve_state_file() -> Path:
