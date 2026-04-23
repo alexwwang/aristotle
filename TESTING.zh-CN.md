@@ -114,36 +114,50 @@ bash test/live-test.sh --model <provider/model>
 
 ### 测试用例
 
-#### P1-A：自我纠正触发
+每个测试用例对应 SKILL.md PASSIVE TRIGGER 的一种触发模式。
+
+#### P1-A：Agent 自我纠正触发（模式 1 — "You corrected your own output"）
 
 **步骤：**
-1. 要求 agent 实现某功能（例如"写一个数组排序函数"）
-2. Agent 产出了有错误的代码
-3. 指出错误："这不对，没有处理空数组的情况"
-4. Agent 承认错误并修正
+1. 要求 agent 实现一个函数（例如"写一个数组排序函数"）
+2. Agent 产出代码后，要求它自我审查："Can you review the code you just wrote?"
+3. Agent **自己**发现问题："Wait, there's a bug with..."
+4. Agent 自行修正
 
 **期望输出：** Agent 输出类似建议：
 > 🦉 I detected an error pattern. Run /aristotle to reflect and prevent similar mistakes.
 
 **断言：**
+- ✅ Agent **自己**发现错误（非用户指出）
 - ✅ Agent 建议运行 `/aristotle`
 - ✅ Agent **不**自动调用 `/aristotle`
 
-#### P1-B：方案切换触发
+#### P1-B：方案切换触发（模式 3 — "You tried an approach, it failed, and you switched"）
 
 **步骤：**
-1. Agent 尝试某种方案但失败
-2. Agent 说"我试了方案 X 但不行，换方案 Y 试试..."
+1. 给 agent 一个有挑战性的任务，使其可能尝试失败后换方案
+2. Agent 尝试方案 A 但失败（编译错误、测试不通过等）
+3. Agent 说 "Let me try a different approach..." 并切换到方案 B
 
-**期望：** 与 P1-A 相同的被动触发建议。
+**期望：** Agent 在方案切换后输出被动触发建议。
 
-#### P1-C：用户明确纠正
+**断言：**
+- ✅ Agent **自己**主动切换方案（非用户指示）
+- ✅ 被动触发建议出现
+
+#### P1-C：用户指出错误触发（模式 2 — "User pointed out an error and you agreed"）
 
 **步骤：**
-1. 用户明确纠正 agent："不对，你搞错了" / "That's wrong"
-2. Agent 同意并修正
+1. 要求 agent 实现某功能
+2. Agent 产出有错误的代码
+3. **用户**指出错误："这不对，没有处理空数组的情况"
+4. Agent 同意并修正
 
-**期望：** 与 P1-A 相同的被动触发建议。
+**期望：** Agent 在同意用户纠正后输出被动触发建议。
+
+**断言：**
+- ✅ **用户**指出错误，Agent 同意
+- ✅ 被动触发建议出现
 
 #### P1-D：无误触发验证
 
@@ -153,13 +167,37 @@ bash test/live-test.sh --model <provider/model>
 
 **期望：** 不触发任何 Aristotle 建议。
 
+#### P1-E：思考阶段自我纠正（不触发 — 正确行为）
+
+**步骤：**
+1. Agent 在思考/推理阶段遇到错误
+2. Agent 在内部认识到错误，但在输出最终结果前自行修正
+3. 最终输出给用户的内容已经是正确的——对话中没有可见错误
+
+**期望：** 不触发 Aristotle 建议。
+
+**合理性说明：** Agent 在错误到达对话之前已自行解决。Passive Trigger 监控的是可见的对话模式，而非内部推理状态。
+
+#### P1-F：主会话纠正子代理错误（触发）
+
+**步骤：**
+1. 一个子代理（通过 `task()` 生成）返回了有错误的结果
+2. 主会话 agent 审查子代理的输出
+3. 主会话 agent 发现错误并予以修正
+
+**期望：** 被动触发建议出现——主会话 agent 检测到并纠正了一个错误。
+
+**合理性说明：** 从主会话的角度看，这匹配模式 1（"You corrected your own output"）。多 agent 错误检测场景已被 SKILL.md 的触发模式显式覆盖。
+
 ### 验证清单
 
 完成所有 P1 测试后确认：
-- [ ] P1-A：自我纠正 → 出现建议
-- [ ] P1-B：方案切换 → 出现建议
-- [ ] P1-C：用户纠正 → 出现建议
+- [ ] P1-A：Agent **自己**发现错误并纠正 → 出现建议（模式 1）
+- [ ] P1-B：Agent 方案切换 → 出现建议（模式 3）
+- [ ] P1-C：**用户**指出错误，Agent 同意 → 出现建议（模式 2）
 - [ ] P1-D：正常对话 → 无建议
+- [ ] P1-E：思考阶段纠正（无可视错误）→ 无建议 ✅
+- [ ] P1-F：主会话纠正子代理错误 → 出现建议 ✅
 - [ ] Agent 从不自动调用 `/aristotle`
 - [ ] 建议文本与 SKILL.md 定义一致
 

@@ -114,36 +114,50 @@ Verify that the SKILL.md PASSIVE TRIGGER section correctly causes the host agent
 
 ### Test Cases
 
-#### P1-A: Self-Correction Trigger
+Each test case maps to one of the three SKILL.md PASSIVE TRIGGER patterns.
+
+#### P1-A: Agent Self-Correction (Pattern 1 — "You corrected your own output")
 
 **Steps:**
-1. Ask the agent to implement something (e.g., "Write a function to sort an array")
-2. The agent produces output with an error
-3. Point out the error: "That's wrong, it doesn't handle empty arrays"
-4. The agent acknowledges and fixes the mistake
+1. Ask the agent to implement a function (e.g., "Write a function to sort an array")
+2. After the agent produces code, ask it to review its own work: "Can you review the code you just wrote?"
+3. The agent **itself** discovers an issue: "Wait, there's a bug with..."
+4. The agent self-corrects
 
 **Expected:** Agent outputs a suggestion like:
 > 🦉 I detected an error pattern. Run /aristotle to reflect and prevent similar mistakes.
 
 **Assert:**
+- ✅ Agent discovers the error **on its own** (not pointed out by user)
 - ✅ Agent suggests `/aristotle`
 - ✅ Agent does NOT automatically invoke `/aristotle`
 
-#### P1-B: Approach Switch Trigger
+#### P1-B: Approach Switch (Pattern 3 — "You tried an approach, it failed, and you switched")
 
 **Steps:**
-1. Agent attempts an approach that fails
-2. Agent says "I tried using approach X but it failed. Let me try approach Y instead..."
+1. Give the agent a challenging task where the first approach may fail
+2. Agent tries approach A, which fails (compile error, test failure, etc.)
+3. Agent says "Let me try a different approach..." and switches to approach B
 
-**Expected:** Same passive trigger suggestion as P1-A.
+**Expected:** Agent outputs passive trigger suggestion after the switch.
 
-#### P1-C: User Explicit Correction
+**Assert:**
+- ✅ Agent initiates the switch **on its own**
+- ✅ Passive trigger suggestion appears
+
+#### P1-C: User Correction (Pattern 2 — "User pointed out an error and you agreed")
 
 **Steps:**
-1. User explicitly corrects the agent: "不对，你搞错了" / "That's wrong"
-2. Agent agrees and corrects
+1. Ask the agent to implement something
+2. Agent produces output with an error
+3. **User** points out the error: "That's wrong, it doesn't handle empty arrays"
+4. Agent agrees and corrects
 
-**Expected:** Same passive trigger suggestion.
+**Expected:** Agent outputs passive trigger suggestion after agreeing with user correction.
+
+**Assert:**
+- ✅ **User** points out the error, agent agrees
+- ✅ Passive trigger suggestion appears
 
 #### P1-D: No False Positive
 
@@ -153,13 +167,37 @@ Verify that the SKILL.md PASSIVE TRIGGER section correctly causes the host agent
 
 **Expected:** No Aristotle suggestion triggered.
 
+#### P1-E: Thinking-Phase Self-Correction (No Trigger — Correct Behavior)
+
+**Steps:**
+1. Agent encounters an error during its thinking/reasoning phase
+2. Agent recognizes the mistake internally but self-corrects before producing the final output
+3. The final output to the user is already correct — no visible error in the conversation
+
+**Expected:** No Aristotle suggestion triggered.
+
+**Rationale:** The agent resolved the error before it reached the conversation. Passive trigger monitors visible conversation patterns, not internal reasoning states.
+
+#### P1-F: Main Session Corrects Subagent Error (Trigger)
+
+**Steps:**
+1. A subagent (spawned via `task()`) returns a result with an error
+2. The main session agent reviews the subagent output
+3. Main session agent detects the error and corrects it
+
+**Expected:** Passive trigger suggestion appears — the main session agent detected and corrected an error.
+
+**Rationale:** This matches Pattern 1 ("You corrected your own output") from the main session's perspective. The multi-agent error detection scenario is explicitly covered by SKILL.md's trigger patterns.
+
 ### Validation Checklist
 
 After completing all P1 tests, verify:
-- [ ] P1-A: Self-correction → suggestion appears
-- [ ] P1-B: Approach switch → suggestion appears
-- [ ] P1-C: User correction → suggestion appears
+- [ ] P1-A: Agent **self** discovers error → suggestion appears (Pattern 1)
+- [ ] P1-B: Agent switches approach → suggestion appears (Pattern 3)
+- [ ] P1-C: **User** points out error, agent agrees → suggestion appears (Pattern 2)
 - [ ] P1-D: Normal conversation → no suggestion
+- [ ] P1-E: Thinking-phase correction (no visible error) → no suggestion ✅
+- [ ] P1-F: Main session corrects subagent error → suggestion appears ✅
 - [ ] Agent never auto-invokes `/aristotle`
 - [ ] Suggestion text matches SKILL.md definition
 
