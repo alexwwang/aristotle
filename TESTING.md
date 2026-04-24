@@ -1,14 +1,16 @@
 # Aristotle — Testing Guide
 
-> Testing overview for the Aristotle MCP rule engine. Current coverage: 295 pytest + 104 static + 70 e2e = 469 checks.
+> Testing overview for the Aristotle MCP rule engine + Bridge Plugin. Current coverage: 318 pytest + 104 static + 100 vitest + 23 e2e = 545 checks.
 
 ## 1. Test Suites Overview
 
 | Suite | Command | Count | What It Covers |
 |-------|---------|-------|----------------|
 | Static | `bash test.sh` | 104 | File structure, SKILL.md content, hook logic, error pattern detection |
-| Unit/Integration | `uv run pytest test/ -v` | 295 | All MCP tools, orchestration, evolution, frontmatter, git ops |
-| E2E Automated | `uv run python test_e2e_phase2.py` | 70 | Full MCP stdio transport, orchestration workflows, feedback, conflicts |
+| Unit/Integration (Python) | `uv run pytest test/ -v` | 318 | All MCP tools, orchestration, evolution, frontmatter, git ops, Phase 0 Bridge MCP |
+| Bridge Integration | `uv run pytest test/test_e2e_bridge_integration.py -v` | 9 | Bridge↔MCP integration: context fix, bridge detection, async workflow, multi-stage |
+| Bridge Plugin (TypeScript) | `cd plugins/aristotle-bridge && bunx vitest run` | 100 | 7 modules: types, utils, api-probe, snapshot-extractor, workflow-store, idle-handler, executor |
+| E2E Automated (opencode) | `bash test/e2e_opencode.sh` | 14 (5 PASS / 9 SKIP) | Real opencode session: skill load, sessions, learn, reflect (requires LLM) |
 | E2E Live | `bash test/live-test.sh --model <provider/model>` | 8 | Real session with known error patterns |
 
 ## 2. Static Tests
@@ -31,7 +33,7 @@ bash test.sh
 uv run pytest test/ -v
 ```
 
-295 tests in 50 test classes. All use isolated temp directories (`tmp_path` fixture) and are safe to run repeatedly.
+318 tests in 51+ test classes. All use isolated temp directories (`tmp_path` fixture) and are safe to run repeatedly.
 
 ### Phase 1 Tests (227)
 
@@ -61,26 +63,49 @@ uv run pytest test/ -v
 | `test/test_m7_delta_norm.py` | 12 | compute_delta log-normalization, sample_size passthrough, audit level thresholds |
 | `test/test_m9_conflicts.py` | 11 | detect_conflicts, bidirectional conflict annotation, triple matching |
 
-## 4. E2E Automated Tests (Phase 2)
+### Phase 0 Bridge MCP Tests (23)
+
+| Test File | Classes | Count | What It Tests |
+|-----------|---------|-------|---------------|
+| `test/test_phase0_snapshot.py` | TestResolveSessionsDir, TestBuildReflectorPrompt, TestOrchestrateStartSessionFile, TestBridgeDetection, TestOnUndo, TestUndoneShortCircuit | 13 | Session dir resolution, reflector prompt SESSION_FILE, bridge marker detection, on_undo tool, undone state short-circuit |
+| `test/test_e2e_bridge_integration.py` | TestContextFixE2E, TestBridgeDetectionE2E, TestAsyncBridgeWorkflowE2E, TestMultiStageBridgeE2E | 9 | Bridge↔MCP integration via real stdio transport (see Section 4 for breakdown) |
+
+## 4. Bridge Integration Tests (9 pytest)
 
 ```bash
-uv run python test_e2e_phase2.py
+uv run pytest test/test_e2e_bridge_integration.py -v
 ```
 
-70 tests running through MCP stdio transport. Spawns a real MCP server subprocess and calls tools via JSON-RPC.
+Integration tests verifying the Bridge↔MCP interaction via real MCP stdio transport.
 
-### Coverage by Test Function
+### TestContextFixE2E — Context Fix Verification
 
-| Test Function | Assertions | Scenarios |
-|---------------|------------|-----------|
-| `test_learn` | 13 | Full two-round retrieval, shortcut path, no results, missing params |
-| `test_reflect` | 9 | Reflector→Checker full chain, missing params |
-| `test_review` | 7 | Confirm, re-reflect, non-existent sequence |
-| `test_feedback` | 13 | Metadata updates, delta log-norm, missing params, nonexistent rules |
-| `test_feedback_auto_reflect` | 5 | Auto-reflect trigger, max depth guard |
-| `test_conflicts` | 11 | Bidirectional annotation, no-conflict rule, detect_conflicts |
-| `test_integration` | 10 | Unknown workflow, invalid JSON, sessions, reject+restore, nonexistent file |
-| `test_passive_trigger` | 5 | SKILL.md content validation (4 assertions + 1 structural) |
+| Test | Description |
+|------|-------------|
+| `test_reflect_prompt_contains_session_file_path` | snapshot → MCP reflect → prompt contains SESSION_FILE |
+| `test_reflect_without_session_file_still_works` | Backward compat: no crash without session_file |
+| `test_snapshot_file_on_disk_is_valid_json` | Snapshot JSON schema (v1, session_id) |
+
+### TestBridgeDetectionE2E — Bridge Detection
+
+| Test | Description |
+|------|-------------|
+| `test_use_bridge_true_when_marker_exists` | `.bridge-active` → use_bridge=true |
+| `test_use_bridge_false_when_no_marker` | No marker → use_bridge=false |
+| `test_marker_content_is_valid_json` | Marker schema (pid + startedAt) |
+
+### TestAsyncBridgeWorkflowE2E — Async Workflow
+
+| Test | Description |
+|------|-------------|
+| `test_full_async_reflect_workflow` | reflect → R → C → notify full chain |
+| `test_bridge_poll_then_abort` | Abort running workflow |
+
+### TestMultiStageBridgeE2E — Multi-Stage
+
+| Test | Description |
+|------|-------------|
+| `test_two_round_reflect_check` | reflect → checker two-round loop |
 
 ### Bugs Found During E2E Testing
 
@@ -91,7 +116,45 @@ uv run python test_e2e_phase2.py
 | `commit_rule` bidirectional conflict annotation matched wrong rules | Exact ID match with `limit=10` |
 | macOS `/tmp` symlink caused `relative_to` failure | Added `.resolve()` to `resolve_repo_dir()` |
 
-## 5. E2E Live Tests
+## 5. Bridge Plugin Tests (100 vitest)
+
+> Full test-level breakdown: See [plugins/aristotle-bridge/testing.en.md](plugins/aristotle-bridge/testing.en.md)
+
+```bash
+cd plugins/aristotle-bridge && bunx vitest run
+```
+
+| File | Count | Coverage |
+|------|-------|----------|
+| `utils.test.ts` | 7 | extractLastAssistantText: reverse traversal, sentinel, whitespace skip |
+| `api-probe.test.ts` | 5 | detectApiMode: promptAsync detection, session cleanup |
+| `snapshot-extractor.test.ts` | 12 | Truncation (4000/200), atomic write, filtering, schema |
+| `workflow-store.test.ts` | 35 | Disk persistence, 50-cap eviction, reconcile batch-5, loadFromDisk validation |
+| `idle-handler.test.ts` | 7 | Status filtering (running only), error handling |
+| `executor.test.ts` | 12 | Launch flow, snapshot, crash safety, session.create try/catch |
+| `index.test.ts` | 22 | 3 tool registration, event dispatch, .bridge-active marker, abort idempotency |
+
+## 6. E2E Automated Tests (opencode)
+
+```bash
+bash test/e2e_opencode.sh
+```
+
+14 assertions driven by `opencode run "message" --format json`. Tests real skill loading and MCP calls.
+
+| Group | Asserts | Result | Description |
+|-------|---------|--------|-------------|
+| E2E-1 | 1 | PASS | Skill loads |
+| E2E-2 | 2 | PASS | Sessions (MCP calls + content) |
+| E2E-3 | 2 | PASS | Learn (orchestration calls + content) |
+| E2E-4 | 2 | SKIP | Reflect (requires LLM sub-agent) |
+| E2E-5 | 2 | SKIP | Snapshot artifact (depends on reflect) |
+| E2E-6 | 2 | SKIP | Bridge marker (requires plugin) |
+| E2E-7 | 3 | SKIP | Workflow store (requires plugin) |
+
+> SKIP tests require a running LLM or loaded Bridge Plugin. They pass when run in a live environment.
+
+## 7. E2E Live Tests
 
 ```bash
 bash test/live-test.sh --model <provider/model>
@@ -99,7 +162,9 @@ bash test/live-test.sh --model <provider/model>
 
 Creates a real session with known error patterns, triggers `/aristotle`, and verifies the full coordinator → reflector → rule-writing flow. 8 assertions.
 
-## 6. Manual Test Plan (P1 — Passive Trigger)
+## 8. Manual Test Plan
+
+### P1: Passive Trigger (cannot be automated)
 
 > This is the only scenario that cannot be automated. It requires verifying the host agent's behavior in a real conversation.
 
@@ -201,7 +266,61 @@ After completing all P1 tests, verify:
 - [ ] Agent never auto-invokes `/aristotle`
 - [ ] Suggestion text matches SKILL.md definition
 
-## 7. Configuration Reference
+### Bridge Plugin Manual Scenarios (M1–M5)
+
+#### M1: Reflect Full Flow (Context Fix Verification)
+
+Prerequisites: opencode running, Aristotle MCP configured
+
+1. Intentionally make an error (e.g., wrong API usage)
+2. User corrects the error
+3. Wait for passive trigger suggestion
+4. Execute `/aristotle`
+5. Verify: Reflector sub-agent can read error conversation context
+6. Verify: `~/.config/opencode/aristotle-sessions/ses_*_snapshot.json` is created
+7. Verify: snapshot.source is "t_session_search" or "bridge-plugin-sdk"
+8. Verify: `/aristotle sessions` shows new record
+9. Verify: `/aristotle review 1` shows rule draft
+
+#### M2: Bridge Async Non-Blocking
+
+Prerequisites: Bridge plugin loaded (.bridge-active exists)
+
+1. Execute `/aristotle`
+2. Verify: Main session is NOT blocked; LLM immediately returns "Task launched"
+3. Verify: `~/.config/opencode/aristotle-sessions/.bridge-active` exists
+4. Verify: `bridge-workflows.json` exists with workflowId
+5. Poll `aristotle_check` or wait for idle event
+6. Verify: Status transitions running → completed
+7. Verify: Checker is automatically triggered upon completion
+
+#### M3: Post-/undo Aristotle Cleanup
+
+1. Start a running Aristotle workflow
+2. Execute `/undo`
+3. Verify: SKILL.md "After any /undo" rule triggers
+4. Verify: `aristotle_check()` with no args returns active workflows
+5. Verify: Each running workflow is cancelled via `aristotle_abort`
+6. Verify: MCP `on_undo` is called
+7. Verify: User sees "Cancelled N active Aristotle workflow(s)"
+
+#### M4: Bridge Plugin Load Verification
+
+1. Confirm `plugins/aristotle-bridge/` is compiled
+2. Start opencode, no "promptAsync not available" in logs
+3. Verify: `.bridge-active` marker exists (pid + startedAt)
+4. Exit opencode, verify marker is cleaned up
+
+#### M5: Multi-Stage Reflect-Check Loop
+
+1. Execute `/aristotle` to trigger first reflect
+2. Wait for Reflector to complete → Checker auto-starts
+3. If Checker needs deeper analysis → second round Reflector
+4. Verify: Each round launches via Bridge `aristotle_fire_o`
+5. Verify: Each round `aristotle_check` returns correct status
+6. Verify: Final Checker completion notifies user
+
+## 9. Configuration Reference
 
 ### Test Constants (config.py)
 
@@ -218,16 +337,24 @@ After completing all P1 tests, verify:
 | `AUDIT_THRESHOLDS.semi` | 0.4 | 0.4 < Δ ≤ 0.7 → semi-auto |
 | `RISK_WEIGHTS` | high=0.8, medium=0.5, low=0.2 | Risk multipliers |
 
-## 8. CI Integration
+## 10. CI Integration
 
 All test suites can run headless:
 
 ```bash
-# Quick smoke test
+# Quick smoke test (Python + static)
 bash test.sh && uv run pytest test/ -q
 
-# Full Phase 2 validation
-bash test.sh && uv run pytest test/ -q && uv run python test_e2e_phase2.py
+# Bridge Plugin
+cd plugins/aristotle-bridge && bunx vitest run
 ```
 
-Expected result: `295 passed` + `104 passed` + `70 passed` = **469 checks, 0 failures**.
+Expected result: `318 passed` + `104 passed` + `100 passed` = **522 checks, 0 failures**.
+
+## 11. Gate #1 Verification (Completed)
+
+**Question**: Does `session.prompt({noReply: true})` inject a system-reminder into the parent session?
+
+**Result**: **No.** `noReply: true` causes a hang bug (OpenCode issues #4431, #14451) — it does not inject messages into the parent session. This was verified via `test/gate1-noReply-verify.sh`.
+
+**Decision**: Bridge Plugin adopted polling mode instead of noReply injection. SKILL.md uses idle detection + `aristotle_check`/`aristotle_abort` tools to manage async reflection without blocking the main session.

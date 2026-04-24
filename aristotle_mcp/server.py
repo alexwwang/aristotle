@@ -10,6 +10,7 @@ from aristotle_mcp._tools_feedback import register_feedback_tools
 from aristotle_mcp._orch_start import register_orch_start_tools
 from aristotle_mcp._orch_event import register_orch_event_tools
 from aristotle_mcp._orch_review import register_orch_review_tools
+from aristotle_mcp._tools_undo import register_undo_tools
 
 # Re-export all public symbols for backward compatibility
 from aristotle_mcp._utils import (
@@ -79,6 +80,7 @@ register_feedback_tools(mcp)
 register_orch_start_tools(mcp)
 register_orch_event_tools(mcp)
 register_orch_review_tools(mcp)
+register_undo_tools(mcp)
 
 
 if __name__ == "__main__":

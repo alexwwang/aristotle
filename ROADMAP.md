@@ -1,6 +1,6 @@
 # Aristotle Roadmap
 
-> P1–P4 + GEAR 编排已完成。Phase 2（M1/M5-M9）已完成并通过 e2e 验证（295 pytest + 104 static + 70 e2e）。本文档记录后续开发计划。
+> P1–P4 + GEAR 编排已完成。Phase 2（M1/M5-M9）已完成并通过 e2e 验证。Phase 0 Bridge MCP 扩展 + Phase 1 Bridge Plugin 已完成。当前测试总量：318 pytest + 100 vitest + 104 static。本文档记录后续开发计划。
 
 ---
 
@@ -21,16 +21,13 @@
 
 **注：** SKILL.md 调度器重写已完成（M2），但 TRIGGERS.md 外置化未实施。
 
-### V1.1b Subagent session_read 兼容性
+### ~~V1.1b Subagent session_read 兼容性~~ — 已解决
 
-**现状：** Reflector 使用 `session_read()` 读取会话内容，部分 model/provider 不暴露该工具。
+**原现状：** Reflector 使用 `session_read()` 读取会话内容，部分 model/provider 不暴露该工具。
 
-**目标：** 提供优雅降级路径。
+**解决方案：** Bridge Plugin 的 PRE-RESOLVE snapshot 提取器在主会话（有 `session_read` 访问权）中提取错误上下文快照，通过 `session_file` 传给 Reflector 子代理。Reflector 不再需要 `session_read`，直接从快照文件读取。
 
-**方案要点：**
-- 检测 `session_read` 是否可用
-- 不可用时回退到 `session_list` + `session_info` 获取元数据
-- 输出提示："🦉 当前模型不支持 session 读取，建议使用 --model 参数指定兼容模型"
+**改动文件：** `_orch_start.py`（`session_file` 字段）、`_orch_prompts.py`（prompt 模板）、`plugins/aristotle-bridge/src/snapshot-extractor.ts`
 
 ### V1.1c 多模型 E2E 测试
 
@@ -160,6 +157,8 @@
 | v1.1 | M3 | 子代理提示词模板 — REFLECTOR/CHECKER/REVISE prompt, SKILL_DIR 配置 | `a3ab41a` |
 | v1.1 | M4 | 测试方案 — reflect/review/sessions/端到端测试，218 pytest + 98 static | `a3ab41a` |
 | v1.2 | Phase 2 | M1补丁/M5-M9 全模块实现 + 4 bug fix + e2e 自动化测试（295 pytest + 104 static + 70 e2e） | `7da8269` |
+| v1.2 | Phase 0 Bridge | MCP 侧扩展：`session_file` 传入、`.bridge-active` marker 检测产出 `use_bridge` 标志、`on_undo` tool、`_orch_event.py` undone 状态短路 + 9 E2E 集成测试（含 e2e→pytest 迁移 14 条，309→318 pytest） | — |
+| v1.2 | Phase 1 Bridge | Bridge Plugin 7 模块 + SKILL.md 集成（PRE-RESOLVE + fire_sub Bridge 路径 + /undo 规则）— 100 vitest | — |
 
 ---
 

@@ -4,7 +4,7 @@ import json
 import uuid
 from pathlib import Path
 
-from aristotle_mcp.config import resolve_repo_dir
+from aristotle_mcp.config import resolve_repo_dir, resolve_sessions_dir
 from aristotle_mcp._orch_prompts import (
     _build_intent_extraction_prompt,
     _build_reflector_prompt,
@@ -87,6 +87,7 @@ def orchestrate_start(command: str, args_json: str = "{}") -> dict:
         focus = args.get("focus", "last")
         user_language = args.get("user_language", "en-US")
         project_directory = args.get("project_directory", "")
+        session_file = args.get("session_file", "")
 
         if not target_session_id:
             return {"action": "notify", "message": "🦉 Need target_session_id."}
@@ -99,7 +100,11 @@ def orchestrate_start(command: str, args_json: str = "{}") -> dict:
             sequence=sequence,
             project_directory=project_directory,
             user_language=user_language,
+            session_file=session_file,
         )
+
+        # Detect Bridge plugin via marker file
+        bridge_active = resolve_sessions_dir().joinpath(".bridge-active").exists()
 
         _save_workflow(workflow_id, {
             "phase": "reflecting",
@@ -121,6 +126,7 @@ def orchestrate_start(command: str, args_json: str = "{}") -> dict:
             "sub_role": "R",
             "notify_message": f"🦉 Aristotle Reflector launched [{args.get('target_label', 'unknown')}].\n"
                              "   Checker will validate automatically when done.",
+            "use_bridge": bridge_active,
         }
 
     elif command == "review":

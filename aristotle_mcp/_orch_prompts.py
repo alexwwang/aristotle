@@ -30,6 +30,7 @@ REFLECTOR_PROMPT_TEMPLATE = """You are Aristotle's Reflector subagent. Read and 
 {skill_dir}/REFLECTOR.md (read the file first, then follow it step by step).
 
 TARGET_SESSION_ID: {target_session_id}
+SESSION_FILE: {session_file}
 PROJECT_DIRECTORY: {project_directory}
 USER_LANGUAGE: {user_language}
 FOCUS_HINT: {focus_hint}
@@ -38,6 +39,11 @@ DRAFT_SEQUENCE: {sequence}
 Your output is NOT shown to the user. The Coordinator reads your session and \
 extracts the DRAFT. Follow REFLECTOR.md exactly — especially STEP R5 to persist \
 the DRAFT via persist_draft(sequence={sequence}, content=...).
+
+IMPORTANT: SESSION_FILE is a JSON file. If SESSION_FILE is non-empty, use the Read \
+tool to read it, then parse the "messages" array. Each message has "index", "role", \
+"content" fields. Do NOT attempt to use session_read or any session API. \
+If SESSION_FILE is empty, output "No session data available for reflection." and STOP.
 """
 
 CHECKER_PROMPT_TEMPLATE = """You are Aristotle's Checker subagent. Read and execute the full protocol at
@@ -85,11 +91,13 @@ def _build_reflector_prompt(
     sequence: int,
     project_directory: str = "",
     user_language: str = "en-US",
+    session_file: str = "",
 ) -> str:
     safe_focus = focus_hint[:200]
     return REFLECTOR_PROMPT_TEMPLATE.format(
         skill_dir=str(SKILL_DIR),
         target_session_id=target_session_id,
+        session_file=session_file,
         project_directory=project_directory,
         user_language=user_language,
         focus_hint=safe_focus,

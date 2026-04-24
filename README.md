@@ -4,7 +4,7 @@
 [![Release](https://img.shields.io/github/v/release/alexwwang/aristotle?include_prereleases)](https://github.com/alexwwang/aristotle/releases)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
-[![Tests](https://img.shields.io/badge/tests-295%20pytest%20%2B%20104%20static-brightgreen)](./TESTING.md)
+[![Tests](https://img.shields.io/badge/tests-318%20pytest%20%2B%20100%20vitest%20%2B%20104%20static-brightgreen)](./TESTING.md)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19660780.svg)](https://doi.org/10.5281/zenodo.19660780)
 
 English | [中文](./README.zh-CN.md)
@@ -27,10 +27,15 @@ Activate with `/aristotle` to spawn an isolated subagent that analyzes your sess
 - **Bilingual** — Detects error-correction patterns in English and Chinese (zh-CN)
 - **Two-Tier Output** — User-level rules (`~/.config/opencode/aristotle-learnings.md`) apply globally; project-level rules (`.opencode/aristotle-project-learnings.md`) apply per-project
 - **Auto-Suggestion** — Skill description includes error-correction keywords; when detected in conversation, the AI can suggest running `/aristotle` (automatic, no configuration needed)
+- **Bridge Plugin (optional)** — Async polling-based reflection for environments without OMO support. Captures error context via PRE-RESOLVE snapshot extraction, runs Reflector in background, signals completion via idle detection. Supports `/undo` to cancel in-flight reflections.
 
 ## Installation
 
-Aristotle has two components: the **Skill** (protocol files loaded by OpenCode) and the **MCP Server** (Git-backed rule management). Both are installed from the same repo.
+Aristotle has three components, all installed from the same repo:
+
+1. **Skill** — Protocol files loaded by OpenCode (`SKILL.md`, `REFLECT.md`, etc.)
+2. **MCP Server** — Python-based Git-backed rule management (`aristotle_mcp/`)
+3. **Bridge Plugin** (optional) — TypeScript-based async reflection for environments without OMO support (`plugins/aristotle-bridge/`). Only needed if you want polling-based background reflection.
 
 ### Option 1: Manual Install (macOS / Linux)
 
@@ -45,7 +50,10 @@ bash install.sh
 # 3. Install MCP server dependencies
 uv sync
 
-# 4. Add MCP config to opencode.json
+# 4. (Optional) Install Bridge Plugin dependencies
+cd plugins/aristotle-bridge && bun install && cd ../..
+
+# 5. Add MCP config to opencode.json
 # See "MCP Configuration" section below for the JSON snippet
 ```
 
@@ -62,7 +70,10 @@ powershell -ExecutionPolicy Bypass -File install.ps1
 # 3. Install MCP server dependencies
 uv sync
 
-# 4. Add MCP config to opencode.json
+# 4. (Optional) Install Bridge Plugin dependencies
+cd plugins/aristotle-bridge; bun install; cd ..\..
+
+# 5. Add MCP config to opencode.json
 # See "MCP Configuration" section below for the JSON snippet
 ```
 
@@ -85,10 +96,21 @@ Install the Aristotle skill with MCP server from https://github.com/alexwwang/ar
 1. Clone to ~/.claude/skills/aristotle
 2. cd into the cloned directory, run `bash install.sh` (macOS/Linux) or `powershell -File install.ps1` (Windows)
 3. Run `uv sync` to install Python dependencies for the MCP server
-4. Verify: run `bash test.sh` — all assertions must pass
-5. Add MCP config to opencode.json: { "mcp": { "aristotle": { "type": "local", "command": ["uv", "run", "--project", "~/.claude/skills/aristotle", "python", "-m", "aristotle_mcp.server"], "enabled": true } } }
-6. Verify MCP: run `uv run python -c "from aristotle_mcp.server import mcp; print(len(mcp._tool_manager._tools), 'tools loaded')"` — should print "17 tools loaded"
+4. (Optional) Run `cd plugins/aristotle-bridge && bun install` to enable the Bridge Plugin for async reflection
+5. Verify: run `bash test.sh` — all assertions must pass
+6. Add MCP config to opencode.json: { "mcp": { "aristotle": { "type": "local", "command": ["uv", "run", "--project", "~/.claude/skills/aristotle", "python", "-m", "aristotle_mcp.server"], "enabled": true } } }
+7. Verify MCP: run `uv run python -c "from aristotle_mcp.server import mcp; print(len(mcp._tool_manager._tools), 'tools loaded')"` — should print "20 tools loaded"
 ```
+
+> **Tip:** You can also install the skill via `opencode.json` without cloning manually. Add the repo URL to `skills.urls`:
+> ```jsonc
+> {
+>   "skills": {
+>     "urls": ["https://github.com/alexwwang/aristotle.git"]
+>   }
+> }
+> ```
+> Then restart OpenCode. The skill will be fetched automatically. You still need to run `uv sync` and add the MCP config separately.
 
 ### MCP Configuration
 
@@ -292,7 +314,7 @@ _rule()      │
 verified rejected/  (preserves scope + metadata)
 ```
 
-### 17 MCP Tools
+### 20 MCP Tools
 
 | Tool | Purpose |
 |------|---------|
@@ -304,6 +326,7 @@ verified rejected/  (preserves scope + metadata)
 | `reject_rule` | Move to `rejected/{scope}/` with reason, delete original, commit |
 | `restore_rule` | Restore a rejected rule back to active directory with new status |
 | `list_rules` | Lightweight metadata-only listing with full search dimensions (no rule bodies loaded). Used for relevance scoring before selective content read |
+| `detect_conflicts` | Detect verified rules sharing the same (domain, task_goal, failed_skill) triple |
 | `check_sync_status` | Detect verified rules on disk that are not committed to git |
 | `sync_rules` | Commit unsynced verified rules to git (auto-detect or specify files) |
 | `get_audit_decision` | Compute Δ = confidence × (1 − risk_weight) for a staging rule, return audit level (auto/semi/manual) |
@@ -313,6 +336,8 @@ verified rejected/  (preserves scope + metadata)
 | `orchestrate_start` | Initialize workflow for learn/reflect/review/sessions commands, return first action |
 | `orchestrate_on_event` | Receive subagent completion events, update state machine, return next action |
 | `orchestrate_review_action` | Handle user review actions (confirm/reject/revise/re_reflect) |
+| `on_undo` | Handle undo signaling from Bridge Plugin — mark workflow as undone |
+| `report_feedback` | Report feedback for rules and optionally trigger reflection workflow |
 
 ### Streaming Frontmatter Search
 
@@ -390,8 +415,9 @@ The full protocol specification — state machine, frontmatter schema, Δ decisi
 | Suite | Command | Count |
 |-------|---------|-------|
 | Static | `bash test.sh` | 104 |
-| Unit/Integration | `uv run pytest test/ -v` | 295 |
-| E2E Automated | `uv run python test_e2e_phase2.py` | 70 |
+| Unit/Integration (Python) | `uv run pytest test/ -v` | 318 |
+| Bridge Plugin (TypeScript) | `cd plugins/aristotle-bridge && bunx vitest run` | 100 |
+| E2E Integration | `uv run pytest test/test_e2e_bridge_integration.py -v` | 9 |
 | E2E Live | `bash test/live-test.sh --model <provider/model>` | 8 |
 
 ## Project Structure
@@ -418,17 +444,27 @@ The full protocol specification — state machine, frontmatter schema, Δ decisi
 │   ├── migration.py      # Flat Markdown → Git repo migration
 │   ├── server.py         # FastMCP entry point, re-exports, tool registration
 │   ├── _utils.py         # Shared utility functions
-│   ├── _tools_rules.py   # 9 rule lifecycle tools
+│   ├── _tools_rules.py   # 10 rule lifecycle tools (includes detect_conflicts, get_audit_decision)
 │   ├── _tools_sync.py    # 2 sync tools
 │   ├── _tools_reflection.py  # 3 reflection state tools
+│   ├── _tools_undo.py    # on_undo tool (bridge undo signaling)
+│   ├── _tools_feedback.py    # report_feedback tool (rule feedback + auto-reflect)
 │   ├── _orch_prompts.py  # Prompt templates + builders
 │   ├── _orch_state.py    # Workflow persistence + state management
 │   ├── _orch_parsers.py  # Parsers + formatters
-│   ├── _orch_start.py    # orchestrate_start tool
+│   ├── _orch_start.py    # orchestrate_start tool (session_file + use_bridge)
 │   ├── _orch_event.py    # orchestrate_on_event tool
 │   └── _orch_review.py   # orchestrate_review_action tool
+├── plugins/
+│   └── aristotle-bridge/ # Bridge Plugin — async reflect via polling (no OMO dependency)
+│       ├── src/          # 7 modules (types/utils/api-probe/snapshot-extractor/workflow-store/idle-handler/executor)
+│       ├── test/         # 7 test files, 100 vitest cases
+│       ├── testing.en.md # Bridge-specific test documentation (English)
+│       └── testing.zh.md # Bridge-specific test documentation (Chinese)
 └── test/
-    └── live-test.sh      # E2E live test (8 assertions)
+    ├── live-test.sh      # E2E live test (8 assertions)
+    ├── e2e_opencode.sh   # E2E automation script (14 assertions)
+    └── test_e2e_bridge_integration.py  # Bridge↔MCP integration (9 pytest)
 ```
 
 ## Architecture: Progressive Disclosure
@@ -451,7 +487,7 @@ PRs welcome! Here are areas that need improvement:
 
 ### Medium Priority
 
-- **Subagent `session_read` access** — The Reflector subagent uses `session_read()` to read session content, but some model/provider combinations don't expose this tool. Needs a graceful degradation path.
+- **Subagent `session_read` access** — The Reflector subagent previously required `session_read()` to read session content, which some model/provider combinations don't expose. **Mitigated by Bridge Plugin**: the PRE-RESOLVE snapshot extractor captures error context in the main session (which has access) and passes it to the Reflector via `session_file`. Full graceful degradation (fallback to `session_list` + `session_info`) remains a nice-to-have for non-Bridge paths.
 - **Multi-model E2E testing** — Live test only validates with the user-specified model. Should test across multiple providers/models.
 
 ### Nice to Have
@@ -520,6 +556,8 @@ git clone https://github.com/alexwwang/aristotle.git ~/.claude/skills/aristotle
 | GEAR Orchestration (M1-M4) | 218 | 98 | — | `a3ab41a` |
 | M4 Exception Path Tests | 227 | 98 | — | `3e8f94b` |
 | **Phase 2 (M1/M5-M9)** | **295** | **104** | **70** | `7da8269` |
+| Phase 0 Bridge (MCP ext) | 318 | 104 | 9 | — |
+| Phase 1 Bridge (Plugin) | 318 | 104 | 9 + 100 vitest | — |
 
 ## License
 

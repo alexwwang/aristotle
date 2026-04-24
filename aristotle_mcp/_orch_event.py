@@ -34,6 +34,12 @@ def orchestrate_on_event(event_type: str, data_json: str) -> dict:
     if not workflow:
         return {"action": "notify", "workflow_id": workflow_id, "message": f"🦉 Unknown workflow: {workflow_id}"}
 
+    # Phase 0: undone/cancelled workflow short-circuit
+    if workflow.get("status") in ("undone", "cancelled"):
+        reason = "undone" if workflow.get("status") == "undone" else "cancelled"
+        return {"action": "notify", "workflow_id": workflow_id,
+                "message": f"🦉 Workflow {workflow_id} was {reason}. Event ignored."}
+
     # ═══ 1. Learn flow: o_done + intent_extraction ═══
     if event_type == "o_done" and workflow.get("phase") == "intent_extraction":
         result = data.get("result", {})

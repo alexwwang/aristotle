@@ -82,6 +82,15 @@ SKILL_DIR = Path(
 )
 
 # ── Phase 2 constants ──
+
+# Phase 0: Session Snapshot Bridge
+SESSIONS_DIR_NAME = "aristotle-sessions"
+
+
+def resolve_sessions_dir() -> Path:
+    return Path.home() / ".config" / "opencode" / SESSIONS_DIR_NAME
+
+
 # M5: Learn Two-Round 检索
 SCORING_TOP_N = 5
 SCORE_PARALLEL_MAX = 3

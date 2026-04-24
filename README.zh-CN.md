@@ -4,7 +4,7 @@
 [![Release](https://img.shields.io/github/v/release/alexwwang/aristotle?include_prereleases)](https://github.com/alexwwang/aristotle/releases)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
-[![Tests](https://img.shields.io/badge/tests-295%20pytest%20%2B%20104%20static-brightgreen)](./TESTING.zh-CN.md)
+[![Tests](https://img.shields.io/badge/tests-318%20pytest%20%2B%20100%20vitest%20%2B%20104%20static-brightgreen)](./TESTING.zh-CN.md)
 
 **[English](./README.md)** | 中文
 
@@ -26,10 +26,15 @@
 - **双语支持** — 同时检测英文和中文（zh-CN）的错误纠正模式
 - **双层输出** — 用户级规则（`~/.config/opencode/aristotle-learnings.md`）全局生效；项目级规则（`.opencode/aristotle-project-learnings.md`）按项目生效
 - **自动建议** — 技能描述中包含错误纠正关键词；当对话中出现这些模式时，AI 会自动建议运行 `/aristotle`（无需配置）
+- **Bridge 插件（可选）** — 面向无 OMO 支持环境的异步轮询式反思。通过 PRE-RESOLVE 快照提取捕获错误上下文，后台运行反思器，空闲检测判定完成。支持 `/undo` 取消进行中的反思任务。
 
 ## 安装
 
-Aristotle 包含两个组件：**Skill**（OpenCode 加载的协议文件）和 **MCP Server**（Git 版本管理的规则引擎）。两者从同一仓库安装。
+Aristotle 包含三个组件，均从同一仓库安装：
+
+1. **Skill** — OpenCode 加载的协议文件（`SKILL.md`、`REFLECT.md` 等）
+2. **MCP Server** — 基于 Python 的 Git 版本管理规则引擎（`aristotle_mcp/`）
+3. **Bridge 插件**（可选）— 基于 TypeScript 的异步反思，面向无 OMO 支持的环境（`plugins/aristotle-bridge/`）。仅在需要轮询式后台反思时安装。
 
 ### 方式一：手动安装（macOS / Linux）
 
@@ -44,7 +49,10 @@ bash install.sh
 # 3. 安装 MCP server 依赖
 uv sync
 
-# 4. 添加 MCP 配置到 opencode.json
+# 4.（可选）安装 Bridge 插件依赖
+cd plugins/aristotle-bridge && bun install && cd ../..
+
+# 5. 添加 MCP 配置到 opencode.json
 # 见下方"MCP 配置"部分的 JSON 示例
 ```
 
@@ -61,7 +69,10 @@ powershell -ExecutionPolicy Bypass -File install.ps1
 # 3. 安装 MCP server 依赖
 uv sync
 
-# 4. 添加 MCP 配置到 opencode.json
+# 4.（可选）安装 Bridge 插件依赖
+cd plugins/aristotle-bridge; bun install; cd ..\..
+
+# 5. 添加 MCP 配置到 opencode.json
 # 见下方"MCP 配置"部分的 JSON 示例
 ```
 
@@ -84,10 +95,21 @@ Install the Aristotle skill with MCP server from https://github.com/alexwwang/ar
 1. Clone to ~/.claude/skills/aristotle
 2. cd into the cloned directory, run `bash install.sh` (macOS/Linux) or `powershell -File install.ps1` (Windows)
 3. Run `uv sync` to install Python dependencies for the MCP server
-4. Verify: run `bash test.sh` — all assertions must pass
-5. Add MCP config to opencode.json: { "mcp": { "aristotle": { "type": "local", "command": ["uv", "run", "--project", "~/.claude/skills/aristotle", "python", "-m", "aristotle_mcp.server"], "enabled": true } } }
-6. Verify MCP: run `uv run python -c "from aristotle_mcp.server import mcp; print(len(mcp._tool_manager._tools), 'tools loaded')"` — should print "17 tools loaded"
+4. (Optional) Run `cd plugins/aristotle-bridge && bun install` to enable the Bridge Plugin for async reflection
+5. Verify: run `bash test.sh` — all assertions must pass
+6. Add MCP config to opencode.json: { "mcp": { "aristotle": { "type": "local", "command": ["uv", "run", "--project", "~/.claude/skills/aristotle", "python", "-m", "aristotle_mcp.server"], "enabled": true } } }
+7. Verify MCP: run `uv run python -c "from aristotle_mcp.server import mcp; print(len(mcp._tool_manager._tools), 'tools loaded')"` — should print "20 tools loaded"
 ```
+
+> **提示：** 你也可以通过 `opencode.json` 免克隆安装 skill。将仓库 URL 添加到 `skills.urls`：
+> ```jsonc
+> {
+>   "skills": {
+>     "urls": ["https://github.com/alexwwang/aristotle.git"]
+>   }
+> }
+> ```
+> 然后重启 OpenCode，skill 会自动拉取。你仍需单独执行 `uv sync` 并添加 MCP 配置。
 
 ### MCP 配置
 
@@ -291,7 +313,7 @@ _rule()      │
 verified rejected/  （保留 scope 和元数据）
 ```
 
-### 17 个 MCP 工具
+### 20 个 MCP 工具
 
 | 工具 | 用途 |
 |------|------|
@@ -303,14 +325,18 @@ verified rejected/  （保留 scope 和元数据）
 | `reject_rule` | 移到 `rejected/{scope}/`，记录原因，删除原文件，提交 |
 | `restore_rule` | 从 rejected 目录恢复规则到正式目录，设置新状态 |
 | `list_rules` | 轻量元数据列表，支持全部搜索维度（不加载规则正文）。用于相关性评分后再选择性读取内容 |
+| `detect_conflicts` | 检测共享相同 (domain, task_goal, failed_skill) 三元组的已验证规则 |
 | `check_sync_status` | 检测磁盘上存在但未提交到 git 的 verified 规则 |
 | `sync_rules` | 将未同步的 verified 规则提交到 git（自动检测或指定文件） |
 | `get_audit_decision` | 计算当前 staging 规则的 Δ = confidence × (1 − risk_weight)，返回审核级别（auto/semi/manual） |
+| `persist_draft` | 持久化 DRAFT 报告到磁盘，供后续审核和二次反思（原子写入到 `aristotle-drafts/`） |
 | `create_reflection_record` | 向状态文件追加新的反思记录，自动生成序号，处理 50 条记录裁剪 |
 | `complete_reflection_record` | Checker 完成后更新反思记录状态 |
 | `orchestrate_start` | 初始化 learn/reflect/review/sessions 命令的工作流，返回首个动作 |
 | `orchestrate_on_event` | 接收子代理完成事件，更新状态机，返回下一个动作 |
 | `orchestrate_review_action` | 处理用户审核操作（确认/驳回/修改/重新反思） |
+| `on_undo` | 处理 Bridge 插件的 undo 信令——将工作流标记为已撤销 |
+| `report_feedback` | 报告规则反馈，并可选触发反思工作流 |
 
 ### 流式 Frontmatter 检索
 
@@ -388,8 +414,9 @@ GEAR 协议操作映射到 Aristotle 的 MCP 工具：`produce` → `write_rule`
 | 套件 | 命令 | 数量 |
 |------|------|------|
 | 静态测试 | `bash test.sh` | 104 |
-| 单元/集成测试 | `uv run pytest test/ -v` | 295 |
-| E2E 自动化测试 | `uv run python test_e2e_phase2.py` | 70 |
+| 单元/集成测试 (Python) | `uv run pytest test/ -v` | 318 |
+| Bridge 插件 (TypeScript) | `cd plugins/aristotle-bridge && bunx vitest run` | 100 |
+| E2E 集成测试 | `uv run pytest test/test_e2e_bridge_integration.py -v` | 9 |
 | E2E 实时测试 | `bash test/live-test.sh --model <provider/model>` | 8 |
 
 ## 项目结构
@@ -416,17 +443,27 @@ GEAR 协议操作映射到 Aristotle 的 MCP 工具：`produce` → `write_rule`
 │   ├── migration.py      # 扁平 Markdown → Git 仓库迁移
 │   ├── server.py         # FastMCP 入口，re-export，工具注册
 │   ├── _utils.py         # 共享工具函数
-│   ├── _tools_rules.py   # 9 个规则生命周期工具
+│   ├── _tools_rules.py   # 10 个规则生命周期工具（含 detect_conflicts、get_audit_decision）
 │   ├── _tools_sync.py    # 2 个同步工具
 │   ├── _tools_reflection.py  # 3 个反思状态工具
+│   ├── _tools_undo.py    # on_undo 工具（bridge undo 信令）
+│   ├── _tools_feedback.py    # report_feedback 工具（规则反馈 + 自动反思）
 │   ├── _orch_prompts.py  # Prompt 模板 + 构建器
 │   ├── _orch_state.py    # 工作流持久化 + 状态管理
 │   ├── _orch_parsers.py  # 解析器 + 格式化器
-│   ├── _orch_start.py    # orchestrate_start 工具
+│   ├── _orch_start.py    # orchestrate_start 工具（session_file + use_bridge）
 │   ├── _orch_event.py    # orchestrate_on_event 工具
 │   └── _orch_review.py   # orchestrate_review_action 工具
+├── plugins/
+│   └── aristotle-bridge/ # Bridge 插件 — 轮询式异步反思（不依赖 OMO）
+│       ├── src/          # 7 个模块（types/utils/api-probe/snapshot-extractor/workflow-store/idle-handler/executor）
+│       ├── test/         # 7 个测试文件，100 vitest 用例
+│       ├── testing.en.md # Bridge 独立测试文档（英文）
+│       └── testing.zh.md # Bridge 独立测试文档（中文）
 └── test/
-    └── live-test.sh      # E2E 实时测试（8 断言）
+    ├── live-test.sh      # E2E 实时测试（8 断言）
+    ├── e2e_opencode.sh   # E2E 自动化脚本（14 断言）
+    └── test_e2e_bridge_integration.py  # Bridge↔MCP 集成测试（9 pytest）
 ```
 
 ## 架构：渐进披露
@@ -449,7 +486,7 @@ GEAR 协议操作映射到 Aristotle 的 MCP 工具：`produce` → `write_rule`
 
 ### 中优先级
 
-- **子代理 `session_read` 可用性** — 反思器子代理依赖 `session_read()` 读取会话内容，但部分模型/提供商组合不提供此工具。需要优雅的降级路径。
+- **子代理 `session_read` 可用性** — 反思器子代理此前依赖 `session_read()` 读取会话内容，但部分模型/提供商组合不提供此工具。**已通过 Bridge Plugin 缓解**：PRE-RESOLVE 快照提取器在主会话（有访问权）中捕获错误上下文，通过 `session_file` 传给反思器子代理。非 Bridge 路径的完整优雅降级（回退到 `session_list` + `session_info`）仍为锦上添花项。
 - **多模型 E2E 测试** — 实时测试仅验证用户指定的模型。应跨多个提供商/模型测试以验证可移植性。
 
 ### 锦上添花
@@ -518,6 +555,8 @@ git clone https://github.com/alexwwang/aristotle.git ~/.claude/skills/aristotle
 | GEAR 编排 (M1-M4) | 218 | 98 | — | `a3ab41a` |
 | M4 异常路径测试 | 227 | 98 | — | `3e8f94b` |
 | **Phase 2 (M1/M5-M9)** | **295** | **104** | **70** | `7da8269` |
+| Phase 0 Bridge (MCP 扩展) | 318 | 104 | 9 | — |
+| Phase 1 Bridge (插件) | 318 | 104 | 9 + 100 vitest | — |
 
 ## 许可证
 
