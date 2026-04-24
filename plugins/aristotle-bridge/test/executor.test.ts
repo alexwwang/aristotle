@@ -78,15 +78,13 @@ describe('AsyncTaskExecutor', () => {
     } as LaunchResult);
   });
 
-  it('should_extract_snapshot_when_targetSessionId_and_not_exists', async () => {
+  it('should_extract_snapshot_when_targetSessionId', async () => {
     const mockExtract = vi.fn().mockResolvedValue(undefined);
-    const mockSnapshotExists = vi.fn().mockReturnValue(false);
 
     vi.mocked(SnapshotExtractor).mockImplementation(
       () =>
         ({
           extract: mockExtract,
-          snapshotExists: mockSnapshotExists,
         }) as any,
     );
 
@@ -103,7 +101,6 @@ describe('AsyncTaskExecutor', () => {
     await executor.launch(args);
 
     expect(SnapshotExtractor).toHaveBeenCalled();
-    expect(mockSnapshotExists).toHaveBeenCalledWith('target-1');
     expect(mockExtract).toHaveBeenCalledWith(
       client,
       'target-1',
@@ -112,15 +109,13 @@ describe('AsyncTaskExecutor', () => {
     );
   });
 
-  it('should_skip_snapshot_when_already_exists', async () => {
+  it('should_always_re_extract_even_if_snapshot_exists', async () => {
     const mockExtract = vi.fn().mockResolvedValue(undefined);
-    const mockSnapshotExists = vi.fn().mockReturnValue(true);
 
     vi.mocked(SnapshotExtractor).mockImplementation(
       () =>
         ({
           extract: mockExtract,
-          snapshotExists: mockSnapshotExists,
         }) as any,
     );
 
@@ -136,8 +131,13 @@ describe('AsyncTaskExecutor', () => {
 
     await executor.launch(args);
 
-    expect(mockSnapshotExists).toHaveBeenCalledWith('target-1');
-    expect(mockExtract).not.toHaveBeenCalled();
+    // H2 fix: always re-extract, no snapshotExists check
+    expect(mockExtract).toHaveBeenCalledWith(
+      client,
+      'target-1',
+      expect.any(String),
+      expect.any(Number),
+    );
   });
 
   it('should_continue_launch_when_snapshot_extraction_fails', async () => {

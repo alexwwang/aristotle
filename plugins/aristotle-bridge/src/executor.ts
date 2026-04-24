@@ -1,6 +1,8 @@
 import type { LaunchArgs, LaunchResult } from './types.js';
 import { SnapshotExtractor } from './snapshot-extractor.js';
 import type { WorkflowStore } from './workflow-store.js';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 
 export class AsyncTaskExecutor {
   private readonly sessionsDir: string;
@@ -14,18 +16,29 @@ export class AsyncTaskExecutor {
   }
 
   async launch(args: LaunchArgs): Promise<LaunchResult> {
-    const { workflowId, oPrompt, parentSessionId, targetSessionId } = args;
+    let { workflowId, oPrompt, parentSessionId, targetSessionId } = args;
     const agent: string = args.agent || 'R';
 
     // 1. Snapshot extraction (non-blocking)
     if (targetSessionId) {
       try {
         const extractor = new SnapshotExtractor(this.sessionsDir || undefined);
-        if (!extractor.snapshotExists(targetSessionId)) {
-          await extractor.extract(this.client, targetSessionId, 'last 50 messages', 50);
-        }
+        await Promise.race([
+          extractor.extract(this.client, targetSessionId, args.focusHint ?? 'last 50 messages', 50),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('snapshot extraction timed out')), 10000)
+          ),
+        ]);
       } catch (e) {
         console.warn('[aristotle-bridge] snapshot extraction failed:', e);
+      }
+    }
+
+    // Inject SESSION_FILE path if snapshot exists
+    if (targetSessionId) {
+      const snapshotPath = join(this.sessionsDir, `${targetSessionId}_snapshot.json`);
+      if (existsSync(snapshotPath)) {
+        oPrompt = oPrompt.replace('SESSION_FILE: ', `SESSION_FILE: ${snapshotPath}`);
       }
     }
 

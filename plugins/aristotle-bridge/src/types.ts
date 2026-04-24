@@ -20,6 +20,7 @@ export interface LaunchArgs {
   agent: string;
   parentSessionId: string;
   targetSessionId?: string;
+  focusHint?: string;
 }
 
 // LaunchResult — type definition (stub)

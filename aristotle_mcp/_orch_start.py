@@ -89,8 +89,14 @@ def orchestrate_start(command: str, args_json: str = "{}") -> dict:
         project_directory = args.get("project_directory", "")
         session_file = args.get("session_file", "")
 
+        # Detect Bridge plugin via marker file
+        bridge_active = resolve_sessions_dir().joinpath(".bridge-active").exists()
+
         if not target_session_id:
-            return {"action": "notify", "message": "🦉 Need target_session_id."}
+            if bridge_active:
+                pass  # Bridge handles session resolution via executor
+            else:
+                return {"action": "pre_resolve_needed"}
 
         sequence = _next_sequence()
 
@@ -102,9 +108,6 @@ def orchestrate_start(command: str, args_json: str = "{}") -> dict:
             user_language=user_language,
             session_file=session_file,
         )
-
-        # Detect Bridge plugin via marker file
-        bridge_active = resolve_sessions_dir().joinpath(".bridge-active").exists()
 
         _save_workflow(workflow_id, {
             "phase": "reflecting",

@@ -8,29 +8,44 @@ metadata:
 # Aristotle — Dispatcher
 ## CRITICAL: DO NOT load REFLECT.md, REVIEW.md, LEARN.md, or CHECKER.md. All logic is handled by MCP orchestration tools. NEVER mention internal mechanism names (MCP tool names, action names, workflow_id, prompt fields) to the user — describe outcomes in plain language only.
 ## ROUTE
-If command is "learn": call MCP `orchestrate_start("learn", args_json)` → execute returned action.
-If command is "sessions": call MCP `orchestrate_start("sessions", "{}")` → execute returned action.
-If command is "review": call MCP `orchestrate_start("review", {sequence: N})` → execute returned action. After displaying review content, enter REVIEW FEEDBACK section.
-Otherwise: run PRE-RESOLVE below, then call MCP `orchestrate_start("reflect", {target_session_id, focus, project_directory, user_language, session_file})` → execute returned action.
+```
+cmd = first argument or ""
+MATCH cmd:
+  "learn"    → CALL orchestrate_start("learn", args_json) → execute ACTION
+  "sessions" → CALL orchestrate_start("sessions", "{}") → execute ACTION
+  "review"   → CALL orchestrate_start("review", {sequence: N}) → execute ACTION → REVIEW FEEDBACK
+  *          → GOTO PRE-RESOLVE
+```
 ## PRE-RESOLVE (reflect only)
-Before calling MCP for reflect:
-1. Call session_list(). Resolve target_session_id: no argument→current; "last"→second; "session ses_xxx"→ses_xxx; "recent N"→index N. Handle edge cases: empty→STOP; N too large→closest. Detect user_language (en-US), project_directory, and --focus ("last").
-2. Extract session content:
-   a. Ensure directory: Bash("mkdir -p ~/.config/opencode/aristotle-sessions")
-   b. Check if snapshot file already exists for target_session_id: `~/.config/opencode/aristotle-sessions/{target_session_id}_snapshot.json`
-      - If exists → skip to step 2f
-   c. Call t_session_search(sessionId=target_session_id, limit=50)
-   d. Filter to user/assistant roles only
-   e. Format as JSON (schema version 1):
-      - total_messages = filtered.length
-      - source: "t_session_search"
-      - content per message: max 4000 chars
-      - messages array: max 200 entries
-      - Write using Write tool to `~/.config/opencode/aristotle-sessions/{target_session_id}_snapshot.json`
-      - After write, read back to verify JSON validity
-   f. Set session_file to the file path
-   g. If extraction fails at any step, set session_file=""
+```
+result = CALL orchestrate_start("reflect", {target_session_id: "", session_file: "",
+  focus: "last", user_language: <detect>, project_directory: <cwd>})
+
+MATCH result.action:
+  "fire_sub"  → Bridge handles snapshot. execute ACTION. STOP.
+  "pre_resolve_needed" → GOTO SNAPSHOT-EXTRACT
+  "notify"    → Display result.message. STOP.
+  other       → execute ACTION. STOP.
+
+## SNAPSHOT-EXTRACT (non-Bridge / Claude Code only)
+IF session_list is available:
+  target_session_id = session_list()[0].id
+  content = session_read(target_session_id)
+  Bash("mkdir -p ~/.config/opencode/aristotle-sessions")
+  Write snapshot JSON (schema v1, source: "llm-session-read") to
+    ~/.config/opencode/aristotle-sessions/{target_session_id}_snapshot.json
+  session_file = that path
+ELSE:
+  session_file = ""
+IF any step fails: session_file = ""
+
+result = CALL orchestrate_start("reflect", {target_session_id, session_file,
+  focus: "last", user_language: <detect>, project_directory: <cwd>})
+→ execute ACTION. STOP.
+```
 ## ACTION EXECUTION
+### If action is `pre_resolve_needed`:
+GOTO SNAPSHOT-EXTRACT (in PRE-RESOLVE section above).
 ### If action is `fire_o`:
 1. Call task(category="unspecified-low", run_in_background=true, prompt=o_prompt)
 2. When notification arrives, call MCP `orchestrate_on_event("o_done", {workflow_id, result})`

@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { writeFileSync, unlinkSync, mkdirSync } from 'node:fs';
+import { writeFileSync, unlinkSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import { detectApiMode } from './api-probe.js';
 import { WorkflowStore } from './workflow-store.js';
 import { AsyncTaskExecutor } from './executor.js';
@@ -33,6 +33,17 @@ const AristotleBridgePlugin = async (ctx: any): Promise<any> => {
 
   const store = new WorkflowStore(sessionsDir);
   await store.reconcileOnStartup(ctx.client);
+
+  // Cleanup snapshot files older than 7 days
+  try {
+    const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    for (const f of readdirSync(sessionsDir)) {
+      if (!f.endsWith('_snapshot.json')) continue;
+      const p = join(sessionsDir, f);
+      if (statSync(p).mtimeMs < cutoff) unlinkSync(p);
+    }
+  } catch {}
+
   const executor = new AsyncTaskExecutor(ctx.client, store, sessionsDir);
   const idleHandler = new IdleEventHandler(ctx.client, store);
 

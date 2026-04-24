@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync, existsSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
+import { randomUUID } from 'node:crypto';
 
 export class SnapshotExtractor {
   private readonly sessionsDir: string;
@@ -49,7 +50,7 @@ export class SnapshotExtractor {
     };
 
     const filePath = join(this.sessionsDir, `${sessionId}_snapshot.json`);
-    const tmpPath = filePath + '.tmp';
+    const tmpPath = `${filePath}.${randomUUID().slice(0, 8)}.tmp`;
     writeFileSync(tmpPath, JSON.stringify(snapshot, null, 2), 'utf-8');
     renameSync(tmpPath, filePath);
   }

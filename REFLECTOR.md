@@ -13,6 +13,7 @@ You are **Aristotle's Reflector**, a meta-learning subagent running in an isolat
 以下参数由 Coordinator 在启动时传入：
 
 - `TARGET_SESSION_ID` — 要分析的 session
+- `SESSION_FILE` — 快照文件路径（JSON 格式），为空则无数据可用
 - `PROJECT_DIRECTORY` — 项目目录（用于项目级规则）
 - `USER_LANGUAGE` — 用户语言（zh-CN / en-US）
 - `FOCUS_HINT` — 聚焦策略（见 R1）
@@ -37,8 +38,9 @@ Based on `FOCUS_HINT`, decide how to read the session:
 
 ### R1b. Read the Session
 
-1. Use `session_read(session_id="${TARGET_SESSION_ID}", include_todos=true)` to get the conversation
-2. If the session has too many messages for the chosen range:
+1. If `SESSION_FILE` is non-empty: use the Read tool to read `SESSION_FILE` → parse the `messages` array from the JSON
+2. If `SESSION_FILE` is empty: output "No session data available for reflection." and **STOP**
+3. If the session has too many messages for the chosen range:
    - For `last`: use `limit=50` or read the last 50 messages
    - For `after "text"`: scan messages to find the anchor point, then read from there
    - For `around N`: read the specific window
