@@ -268,57 +268,47 @@ bash test/live-test.sh --model <provider/model>
 
 ### Bridge 插件人工测试剧本（M1–M5）
 
-#### M1：Reflect 完整流程（上下文修复验证）
+> **执行策略**：原 5 个场景按自动化可行性合并为 2 轮执行。覆盖完整保留——每个原始验证点均映射到下方步骤。
 
-前置：opencode 运行中，Aristotle MCP 已配置
+#### Round A：M4 + M2 + M3 — Bridge 生命周期（tmux 可自动化）
 
-1. 故意犯错（如给出错误 API 用法）
-2. 用户纠正错误
-3. 等待被动触发提示
-4. 执行 `/aristotle`
-5. 验证：Reflector 子 agent 能读取错误对话上下文
-6. 验证：`~/.config/opencode/aristotle-sessions/ses_*_snapshot.json` 已生成
-7. 验证：snapshot.source 为 "t_session_search" 或 "bridge-plugin-sdk"
-8. 验证：`/aristotle sessions` 显示新记录
-9. 验证：`/aristotle review 1` 显示规则草稿
+一次 opencode 会话覆盖插件加载、异步反思和 undo 清理。**18 个验证点。**
 
-#### M2：Bridge 异步非阻塞
+| 步骤 | 动作 | 验证 | 覆盖 |
+|------|------|------|------|
+| A1 | 启动 opencode（含 Bridge 插件） | 日志无 "promptAsync not available" | M4-2 |
+| A2 | 检查 `~/.config/opencode/aristotle-sessions/.bridge-active` | 文件存在，JSON 含 pid + startedAt | M4-3 |
+| A3 | 发送 `/aristotle` | LLM 立即返回（会话不阻塞） | M2-1,2 |
+| A4 | 检查 `.bridge-active` 仍存在 | Marker 文件在 | M2-3 |
+| A5 | 检查 `bridge-workflows.json` | 文件存在，含 workflowId | M2-4 |
+| A6 | 等待 idle 事件或轮询状态 | 状态 running → completed | M2-5,6 |
+| A7 | 验证 Checker 自动触发 | 完成的工作流含 checker 结果 | M2-7 |
+| A8 | 再次发送 `/aristotle` 启动新工作流 | 新工作流出现，status = running | M3-1 |
+| A9 | 发送 `/undo` | SKILL.md "After any /undo" 规则触发 | M3-2,3 |
+| A10 | 检查 `aristotle_check` 输出 | 返回运行中的工作流 | M3-4 |
+| A11 | 验证取消操作 | 每个 running 工作流被 `aristotle_abort` 取消；MCP `on_undo` 被调用 | M3-5,6 |
+| A12 | 验证用户可见消息 | "Cancelled N active Aristotle workflow(s)" | M3-7 |
+| A13 | 退出 opencode | `.bridge-active` marker 被清理 | M4-4 |
 
-前置：Bridge plugin 已加载（.bridge-active 存在）
+**自动化说明**：A1–A13 可通过 tmux + 文件系统断言驱动。仅 A3、A6、A9 依赖 LLM 响应时间——需加充分 sleep 或轮询循环。
 
-1. 执行 `/aristotle`
-2. 验证：主会话不阻塞，LLM 立即返回 "Task launched"
-3. 验证：`~/.config/opencode/aristotle-sessions/.bridge-active` 存在
-4. 验证：`bridge-workflows.json` 存在且含 workflowId
-5. 轮询 `aristotle_check` 或等待 idle 事件
-6. 验证：状态 running → completed
-7. 验证：完成后自动触发 Checker
+#### Round B：M1 + M5 — Reflect-Check 完整链路（半自动）
 
-#### M3：/undo 后 Aristotle 清理
+一次 `/aristotle` 调用覆盖快照提取、reflect-check 循环、sessions 和 review。**15 个验证点。**
 
-1. 启动运行中的 Aristotle 工作流
-2. 执行 `/undo`
-3. 验证：SKILL.md "After any /undo" 规则触发
-4. 验证：`aristotle_check()` 无参返回活跃工作流
-5. 验证：每个 running 被 `aristotle_abort` 取消
-6. 验证：MCP `on_undo` 被调用
-7. 验证：用户看到 "Cancelled N active Aristotle workflow(s)"
+| 步骤 | 动作 | 验证 | 覆盖 |
+|------|------|------|------|
+| B1 | 在对话中故意犯错后纠正 | 错误-纠正模式在会话中可见 | M1-1,2,3 |
+| B2 | 发送 `/aristotle` | Reflector 子代理已启动 | M1-4, M5-1 |
+| B3 | 检查 `~/.config/opencode/aristotle-sessions/ses_*_snapshot.json` | 文件已创建；snapshot.source 为 "t_session_search" 或 "bridge-plugin-sdk" | M1-5,6,7 |
+| B4 | 等待 Reflector → Checker 链 | 每轮通过 `aristotle_fire_o` 启动；每轮状态正确 | M5-2,3,4 |
+| B5 | 如 Checker 请求更深入分析 | 第二轮 Reflector 自动触发 | M5-3 |
+| B6 | 通过 `aristotle_check` 检查每轮状态 | 状态 running → completed 逐轮转换 | M5-5 |
+| B7 | 验证最终完成通知 | 用户看到完成消息 | M5-6 |
+| B8 | 发送 `/aristotle sessions` | 新记录出现，状态正确 | M1-8 |
+| B9 | 发送 `/aristotle review 1` | DRAFT 规则内容已展示 | M1-9 |
 
-#### M4：Bridge Plugin 加载验证
-
-1. 确认 `plugins/aristotle-bridge/` 已编译
-2. 启动 opencode，日志无 "promptAsync not available"
-3. 验证：`.bridge-active` 标记文件存在（pid + startedAt）
-4. 退出 opencode，验证标记文件被清理
-
-#### M5：多轮 Reflect-Check 循环
-
-1. 执行 `/aristotle` 触发首次 reflect
-2. 等 Reflector 完成 → Checker 自动启动
-3. 如 Checker 需补充分析 → 第二轮 Reflector
-4. 验证：每轮通过 Bridge `aristotle_fire_o` 启动
-5. 验证：每轮 `aristotle_check` 返回正确状态
-6. 验证：最终 Checker 完成后通知用户
+**自动化说明**：B3、B4、B6、B8、B9 为文件/API 断言。B1、B2、B5 依赖 LLM。可通过 `opencode run "message" --format json` 实现脚本化交互。
 
 ## 9. 配置常量参考
 

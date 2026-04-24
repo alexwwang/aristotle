@@ -25,6 +25,9 @@ tmp/
 # Dependencies
 node_modules/
 
+# Build output
+plugins/aristotle-bridge/dist/
+
 # Python
 .venv/
 __pycache__/

@@ -268,57 +268,47 @@ After completing all P1 tests, verify:
 
 ### Bridge Plugin Manual Scenarios (M1–M5)
 
-#### M1: Reflect Full Flow (Context Fix Verification)
+> **Execution strategy**: The 5 original scenarios are consolidated into 2 executable rounds based on automation feasibility. Coverage is preserved — every original verification point maps to a step below.
 
-Prerequisites: opencode running, Aristotle MCP configured
+#### Round A: M4 + M2 + M3 — Bridge Lifecycle (tmux-automatable)
 
-1. Intentionally make an error (e.g., wrong API usage)
-2. User corrects the error
-3. Wait for passive trigger suggestion
-4. Execute `/aristotle`
-5. Verify: Reflector sub-agent can read error conversation context
-6. Verify: `~/.config/opencode/aristotle-sessions/ses_*_snapshot.json` is created
-7. Verify: snapshot.source is "t_session_search" or "bridge-plugin-sdk"
-8. Verify: `/aristotle sessions` shows new record
-9. Verify: `/aristotle review 1` shows rule draft
+One opencode session covers plugin load, async reflect, and undo cleanup. **18 verification points.**
 
-#### M2: Bridge Async Non-Blocking
+| Step | Action | Verification | Covers |
+|------|--------|-------------|--------|
+| A1 | Start opencode (with Bridge plugin) | No "promptAsync not available" in logs | M4-2 |
+| A2 | Check `~/.config/opencode/aristotle-sessions/.bridge-active` | File exists with valid JSON (pid + startedAt) | M4-3 |
+| A3 | Send `/aristotle` | LLM immediately returns (session NOT blocked) | M2-1,2 |
+| A4 | Check `.bridge-active` still exists | Marker present | M2-3 |
+| A5 | Check `bridge-workflows.json` | File exists with workflowId | M2-4 |
+| A6 | Wait for idle event or poll status | Status transitions: running → completed | M2-5,6 |
+| A7 | Verify Checker auto-triggered | Completed workflow shows checker result | M2-7 |
+| A8 | Send `/aristotle` again to start a new workflow | New workflow appears, status = running | M3-1 |
+| A9 | Send `/undo` | SKILL.md "After any /undo" rule triggers | M3-2,3 |
+| A10 | Check `aristotle_check` output | Returns running workflows | M3-4 |
+| A11 | Verify cancellation | Each running workflow cancelled via `aristotle_abort`; MCP `on_undo` called | M3-5,6 |
+| A12 | Verify user-visible message | "Cancelled N active Aristotle workflow(s)" | M3-7 |
+| A13 | Exit opencode | `.bridge-active` marker cleaned up | M4-4 |
 
-Prerequisites: Bridge plugin loaded (.bridge-active exists)
+**Automation notes**: Steps A1–A13 can be driven via tmux + file-system assertions. Only A3, A6, A9 depend on LLM response timing — add generous sleep or poll loops.
 
-1. Execute `/aristotle`
-2. Verify: Main session is NOT blocked; LLM immediately returns "Task launched"
-3. Verify: `~/.config/opencode/aristotle-sessions/.bridge-active` exists
-4. Verify: `bridge-workflows.json` exists with workflowId
-5. Poll `aristotle_check` or wait for idle event
-6. Verify: Status transitions running → completed
-7. Verify: Checker is automatically triggered upon completion
+#### Round B: M1 + M5 — Reflect-Check Full Chain (semi-automated)
 
-#### M3: Post-/undo Aristotle Cleanup
+One `/aristotle` invocation covers snapshot extraction, reflect-check loop, sessions, and review. **15 verification points.**
 
-1. Start a running Aristotle workflow
-2. Execute `/undo`
-3. Verify: SKILL.md "After any /undo" rule triggers
-4. Verify: `aristotle_check()` with no args returns active workflows
-5. Verify: Each running workflow is cancelled via `aristotle_abort`
-6. Verify: MCP `on_undo` is called
-7. Verify: User sees "Cancelled N active Aristotle workflow(s)"
+| Step | Action | Verification | Covers |
+|------|--------|-------------|--------|
+| B1 | Intentionally produce an error in conversation, then correct it | Error-correction pattern visible in session | M1-1,2,3 |
+| B2 | Send `/aristotle` | Reflector sub-agent launched | M1-4, M5-1 |
+| B3 | Check `~/.config/opencode/aristotle-sessions/ses_*_snapshot.json` | File created; snapshot.source is "t_session_search" or "bridge-plugin-sdk" | M1-5,6,7 |
+| B4 | Wait for Reflector → Checker chain | Each round launched via `aristotle_fire_o`; status correct per round | M5-2,3,4 |
+| B5 | If Checker requests deeper analysis | Second-round Reflector triggered automatically | M5-3 |
+| B6 | Check each round's status via `aristotle_check` | Status transitions: running → completed per round | M5-5 |
+| B7 | Verify final completion notification | User sees completion message | M5-6 |
+| B8 | Send `/aristotle sessions` | New record appears with correct status | M1-8 |
+| B9 | Send `/aristotle review 1` | DRAFT rule content displayed | M1-9 |
 
-#### M4: Bridge Plugin Load Verification
-
-1. Confirm `plugins/aristotle-bridge/` is compiled
-2. Start opencode, no "promptAsync not available" in logs
-3. Verify: `.bridge-active` marker exists (pid + startedAt)
-4. Exit opencode, verify marker is cleaned up
-
-#### M5: Multi-Stage Reflect-Check Loop
-
-1. Execute `/aristotle` to trigger first reflect
-2. Wait for Reflector to complete → Checker auto-starts
-3. If Checker needs deeper analysis → second round Reflector
-4. Verify: Each round launches via Bridge `aristotle_fire_o`
-5. Verify: Each round `aristotle_check` returns correct status
-6. Verify: Final Checker completion notifies user
+**Automation notes**: Steps B3, B4, B6, B8, B9 are file/API assertions. B1, B2, B5 depend on LLM. Use `opencode run "message" --format json` for scriptable interaction.
 
 ## 9. Configuration Reference
 

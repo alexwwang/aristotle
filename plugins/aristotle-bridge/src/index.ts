@@ -8,7 +8,7 @@ import { IdleEventHandler } from './idle-handler.js';
 
 const DEFAULT_SESSIONS_DIR = () => join(homedir(), '.config', 'opencode', 'aristotle-sessions');
 
-export const AristotleBridgePlugin = async (ctx: any): Promise<any> => {
+const AristotleBridgePlugin = async (ctx: any): Promise<any> => {
   const apiMode = await detectApiMode(ctx.client);
   if (!apiMode) {
     console.error('[aristotle-bridge] promptAsync not available. Plugin disabled.');
@@ -83,3 +83,5 @@ export const AristotleBridgePlugin = async (ctx: any): Promise<any> => {
     },
   };
 };
+
+export default AristotleBridgePlugin;

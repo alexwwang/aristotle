@@ -51,10 +51,13 @@ bash install.sh
 uv sync
 
 # 4. (Optional) Install Bridge Plugin dependencies
-cd plugins/aristotle-bridge && bun install && cd ../..
+cd plugins/aristotle-bridge && bun install && bun run build && cd ../..
 
 # 5. Add MCP config to opencode.json
 # See "MCP Configuration" section below for the JSON snippet
+
+# 6. (Optional) Register Bridge Plugin in opencode.json
+# Add to the "plugin" array: "file:///ABSOLUTE/PATH/TO/aristotle/plugins/aristotle-bridge/dist/index.js"
 ```
 
 ### Option 2: Manual Install (Windows)
@@ -71,10 +74,13 @@ powershell -ExecutionPolicy Bypass -File install.ps1
 uv sync
 
 # 4. (Optional) Install Bridge Plugin dependencies
-cd plugins/aristotle-bridge; bun install; cd ..\..
+cd plugins/aristotle-bridge; bun install; bun run build; cd ..\..
 
 # 5. Add MCP config to opencode.json
 # See "MCP Configuration" section below for the JSON snippet
+
+# 6. (Optional) Register Bridge Plugin in opencode.json
+# Add to the "plugin" array: "file:///ABSOLUTE/PATH/TO/aristotle/plugins/aristotle-bridge/dist/index.js"
 ```
 
 ### Option 3: One-Line Clone (skill only, no MCP)
@@ -96,10 +102,11 @@ Install the Aristotle skill with MCP server from https://github.com/alexwwang/ar
 1. Clone to ~/.claude/skills/aristotle
 2. cd into the cloned directory, run `bash install.sh` (macOS/Linux) or `powershell -File install.ps1` (Windows)
 3. Run `uv sync` to install Python dependencies for the MCP server
-4. (Optional) Run `cd plugins/aristotle-bridge && bun install` to enable the Bridge Plugin for async reflection
+4. (Optional) Run `cd plugins/aristotle-bridge && bun install && bun run build` to enable the Bridge Plugin for async reflection
 5. Verify: run `bash test.sh` — all assertions must pass
 6. Add MCP config to opencode.json: { "mcp": { "aristotle": { "type": "local", "command": ["uv", "run", "--project", "~/.claude/skills/aristotle", "python", "-m", "aristotle_mcp.server"], "enabled": true } } }
-7. Verify MCP: run `uv run python -c "from aristotle_mcp.server import mcp; print(len(mcp._tool_manager._tools), 'tools loaded')"` — should print "20 tools loaded"
+7. (Optional) Register Bridge Plugin: add `"file:///ABSOLUTE/PATH/TO/aristotle/plugins/aristotle-bridge/dist/index.js"` to the `"plugin"` array in opencode.json
+8. Verify MCP: run `uv run python -c "from aristotle_mcp.server import mcp; print(len(mcp._tool_manager._tools), 'tools loaded')"` — should print "20 tools loaded"
 ```
 
 > **Tip:** You can also install the skill via `opencode.json` without cloning manually. Add the repo URL to `skills.urls`:

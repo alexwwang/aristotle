@@ -3,9 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "main": "dist/index.js",
   "scripts": {
+    "build": "bun build src/index.ts --outdir dist --target node --format esm",
     "test": "vitest run",
     "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@opencode-ai/plugin": "^1.4.0"
   },
   "devDependencies": {
     "@types/node": "^25.6.0",

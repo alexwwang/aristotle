@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { AristotleBridgePlugin } from '../src/index.js';
+import AristotleBridgePlugin from '../src/index.js';
 import { detectApiMode } from '../src/api-probe.js';
 import { WorkflowStore } from '../src/workflow-store.js';
 import { AsyncTaskExecutor } from '../src/executor.js';
