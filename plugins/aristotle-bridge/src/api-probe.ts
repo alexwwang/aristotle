@@ -1,18 +1,11 @@
 import type { ApiMode } from './types.js';
 
 export async function detectApiMode(client: any): Promise<ApiMode | null> {
-  const testSession = await client.session.create({
-    body: { title: 'aristotle-bridge-api-probe' },
-  });
-  try {
-    await client.session.promptAsync({
-      path: { id: testSession.data.id },
-      body: { parts: [{ type: 'text', text: 'probe' }] },
-    });
+  // Check if promptAsync method exists on the client — do NOT actually call it.
+  // Calling it during plugin init sends a real LLM request which can block
+  // or crash startup if the model provider isn't ready yet.
+  if (typeof client?.session?.promptAsync === 'function') {
     return 'promptAsync';
-  } catch {
-    return null;
-  } finally {
-    await client.session.delete({ path: { id: testSession.data.id } }).catch(() => {});
   }
+  return null;
 }

@@ -2,61 +2,51 @@ import { describe, it, expect, vi } from 'vitest';
 import { detectApiMode } from '../src/api-probe.js';
 
 describe('detectApiMode', () => {
-  const createMockClient = (sessionOverrides = {}) => ({
-    session: {
-      create: vi.fn().mockResolvedValue({ data: { id: 'probe-session-1' } }),
-      promptAsync: vi.fn().mockResolvedValue(undefined),
-      delete: vi.fn().mockResolvedValue(undefined),
-      ...sessionOverrides,
-    },
-  });
-
   it('should_return_promptAsync_when_api_available', async () => {
-    const client = createMockClient();
+    const client = {
+      session: {
+        promptAsync: vi.fn().mockResolvedValue(undefined),
+      },
+    };
 
     const result = await detectApiMode(client as any);
 
     expect(result).toBe('promptAsync');
   });
 
-  it('should_return_null_when_promptAsync_fails', async () => {
-    const client = createMockClient({
-      promptAsync: vi.fn().mockRejectedValue(new Error('prompt failed')),
-    });
+  it('should_return_null_when_promptAsync_missing', async () => {
+    const client = { session: {} };
 
     const result = await detectApiMode(client as any);
 
     expect(result).toBeNull();
   });
 
-  it('should_delete_probe_session_on_success', async () => {
-    const mockDelete = vi.fn().mockResolvedValue(undefined);
-    const client = createMockClient({ delete: mockDelete });
+  it('should_return_null_when_session_missing', async () => {
+    const client = {};
 
-    await detectApiMode(client as any);
+    const result = await detectApiMode(client as any);
 
-    expect(mockDelete).toHaveBeenCalledTimes(1);
+    expect(result).toBeNull();
   });
 
-  it('should_delete_probe_session_on_failure', async () => {
-    const mockDelete = vi.fn().mockResolvedValue(undefined);
-    const client = createMockClient({
-      promptAsync: vi.fn().mockRejectedValue(new Error('prompt failed')),
-      delete: mockDelete,
-    });
+  it('should_return_null_when_client_null', async () => {
+    const result = await detectApiMode(null as any);
 
-    await detectApiMode(client as any);
-
-    expect(mockDelete).toHaveBeenCalledTimes(1);
+    expect(result).toBeNull();
   });
 
-  it('should_propagate_error_when_probe_session_create_fails', async () => {
+  it('should_not_call_promptAsync_only_check_existence', async () => {
+    const mockPromptAsync = vi.fn().mockResolvedValue(undefined);
     const client = {
       session: {
-        create: vi.fn().mockRejectedValue(new Error('create failed')),
+        promptAsync: mockPromptAsync,
       },
     };
 
-    await expect(detectApiMode(client as any)).rejects.toThrow('create failed');
+    await detectApiMode(client as any);
+
+    // Should NOT actually call promptAsync — only check typeof
+    expect(mockPromptAsync).not.toHaveBeenCalled();
   });
 });
