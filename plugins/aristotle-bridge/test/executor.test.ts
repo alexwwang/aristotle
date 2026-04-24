@@ -79,12 +79,16 @@ describe('AsyncTaskExecutor', () => {
   });
 
   it('should_extract_snapshot_when_targetSessionId', async () => {
-    const mockExtract = vi.fn().mockResolvedValue(undefined);
+    const mockExtract = vi.fn().mockResolvedValue('/path/to/snapshot.json');
+    const mockSnapshotExists = vi.fn().mockReturnValue(false);
+    const mockSnapshotPath = vi.fn().mockReturnValue(null);
 
     vi.mocked(SnapshotExtractor).mockImplementation(
       () =>
         ({
           extract: mockExtract,
+          snapshotExists: mockSnapshotExists,
+          snapshotPath: mockSnapshotPath,
         }) as any,
     );
 
@@ -101,21 +105,27 @@ describe('AsyncTaskExecutor', () => {
     await executor.launch(args);
 
     expect(SnapshotExtractor).toHaveBeenCalled();
+    expect(mockSnapshotExists).toHaveBeenCalledWith('target-1', 'wf-1');
     expect(mockExtract).toHaveBeenCalledWith(
       client,
       'target-1',
       expect.any(String),
       expect.any(Number),
+      'wf-1',
     );
   });
 
-  it('should_always_re_extract_even_if_snapshot_exists', async () => {
-    const mockExtract = vi.fn().mockResolvedValue(undefined);
+  it('should_reuse_snapshot_when_exists_for_this_workflow', async () => {
+    const mockExtract = vi.fn().mockResolvedValue('/path/to/snapshot.json');
+    const mockSnapshotExists = vi.fn().mockReturnValue(true);
+    const mockSnapshotPath = vi.fn().mockReturnValue('/path/to/snapshot.json');
 
     vi.mocked(SnapshotExtractor).mockImplementation(
       () =>
         ({
           extract: mockExtract,
+          snapshotExists: mockSnapshotExists,
+          snapshotPath: mockSnapshotPath,
         }) as any,
     );
 
@@ -131,13 +141,10 @@ describe('AsyncTaskExecutor', () => {
 
     await executor.launch(args);
 
-    // H2 fix: always re-extract, no snapshotExists check
-    expect(mockExtract).toHaveBeenCalledWith(
-      client,
-      'target-1',
-      expect.any(String),
-      expect.any(Number),
-    );
+    // Snapshot exists for this workflowId → should NOT re-extract
+    expect(mockSnapshotExists).toHaveBeenCalledWith('target-1', 'wf-1');
+    expect(mockExtract).not.toHaveBeenCalled();
+    expect(mockSnapshotPath).toHaveBeenCalledWith('target-1', 'wf-1');
   });
 
   it('should_continue_launch_when_snapshot_extraction_fails', async () => {

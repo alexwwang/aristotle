@@ -16,7 +16,8 @@ export class SnapshotExtractor {
     sessionId: string,
     focusHint: string = 'last 50 messages',
     limit: number = 50,
-  ): Promise<void> {
+    workflowId?: string,
+  ): Promise<string> {
     const effectiveLimit = Math.min(limit, 200);
     const messages = await client.session.messages({
       path: { id: sessionId },
@@ -49,13 +50,22 @@ export class SnapshotExtractor {
       messages: filtered,
     };
 
-    const filePath = join(this.sessionsDir, `${sessionId}_snapshot.json`);
+    const suffix = workflowId ? `_${workflowId}` : '';
+    const filePath = join(this.sessionsDir, `${sessionId}${suffix}_snapshot.json`);
     const tmpPath = `${filePath}.${randomUUID().slice(0, 8)}.tmp`;
     writeFileSync(tmpPath, JSON.stringify(snapshot, null, 2), 'utf-8');
     renameSync(tmpPath, filePath);
+    return filePath;
   }
 
-  snapshotExists(sessionId: string): boolean {
-    return existsSync(join(this.sessionsDir, `${sessionId}_snapshot.json`));
+  snapshotExists(sessionId: string, workflowId?: string): boolean {
+    const suffix = workflowId ? `_${workflowId}` : '';
+    return existsSync(join(this.sessionsDir, `${sessionId}${suffix}_snapshot.json`));
+  }
+
+  snapshotPath(sessionId: string, workflowId?: string): string | null {
+    const suffix = workflowId ? `_${workflowId}` : '';
+    const p = join(this.sessionsDir, `${sessionId}${suffix}_snapshot.json`);
+    return existsSync(p) ? p : null;
   }
 }

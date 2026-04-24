@@ -114,13 +114,3 @@ Monitor the conversation for these patterns:
 When any pattern is detected, suggest:
 "🦉 I detected an error pattern. Run /aristotle to reflect and prevent similar mistakes."
 Do NOT auto-trigger. Only suggest.
-
-## After any /undo command
-
-1. Call `aristotle_check()` with NO arguments to get all active workflows:
-   └─ Returns: `{ active: [{workflow_id, status, started_at}] }`
-2. For each active workflow with status "running":
-   a. Call `aristotle_abort(workflow_id)` to cancel the background task
-   b. Call MCP `on_undo(workflow_id, undo_scope="session", timestamp=<current Unix ms>)`
-3. Report to user: "🦉 Cancelled N active Aristotle workflow(s): wf-xxx, wf-yyy"
-4. If no active workflows: silently continue
