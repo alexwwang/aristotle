@@ -103,7 +103,7 @@ Install the Aristotle skill with MCP server from https://github.com/alexwwang/ar
 3. Run `uv sync` to install Python dependencies for the MCP server
 4. (Optional) Run `cd plugins/aristotle-bridge && bun install && bun run build` to enable the Bridge Plugin for async reflection
 5. Verify: run `bash test.sh` — all assertions must pass
-6. Add MCP config to opencode.json: { "mcp": { "aristotle": { "type": "local", "command": ["uv", "run", "--project", "~/.claude/skills/aristotle", "python", "-m", "aristotle_mcp.server"], "enabled": true } } }
+6. Add MCP config to opencode.json: { "mcp": { "aristotle": { "type": "local", "command": ["uv", "run", "--project", "$HOME/.claude/skills/aristotle", "python", "-m", "aristotle_mcp.server"], "enabled": true } } }
 7. (Optional) Register Bridge Plugin: add `"file:///ABSOLUTE/PATH/TO/aristotle/plugins/aristotle-bridge/dist/index.js"` to the `"plugin"` array in opencode.json
 8. Verify MCP: run `uv run python -c "from aristotle_mcp.server import mcp; print(len(mcp._tool_manager._tools), 'tools loaded')"` — should print "20 tools loaded"
 ```
@@ -127,7 +127,7 @@ Install the Aristotle skill with MCP server from https://github.com/alexwwang/ar
   "mcp": {
     "aristotle": {
       "type": "local",
-      "command": ["uv", "run", "--project", "~/.claude/skills/aristotle", "python", "-m", "aristotle_mcp.server"],
+      "command": ["uv", "run", "--project", "/absolute/path/to/.claude/skills/aristotle", "python", "-m", "aristotle_mcp.server"],
       "enabled": true
     }
   }
