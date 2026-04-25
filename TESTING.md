@@ -1,6 +1,6 @@
 # Aristotle — Testing Guide
 
-> Testing overview for the Aristotle MCP rule engine + Bridge Plugin. Current coverage: 318 pytest + 104 static + 100 vitest + 23 e2e = 545 checks.
+> Testing overview for the Aristotle MCP rule engine + Bridge Plugin. Current coverage: 318 pytest + 104 static + 118 vitest + 39 regression = 579 checks.
 
 ## 1. Test Suites Overview
 
@@ -9,9 +9,9 @@
 | Static | `bash test.sh` | 104 | File structure, SKILL.md content, hook logic, error pattern detection |
 | Unit/Integration (Python) | `uv run pytest test/ -v` | 318 | All MCP tools, orchestration, evolution, frontmatter, git ops, Phase 0 Bridge MCP |
 | Bridge Integration | `uv run pytest test/test_e2e_bridge_integration.py -v` | 9 | Bridge↔MCP integration: context fix, bridge detection, async workflow, multi-stage |
-| Bridge Plugin (TypeScript) | `cd plugins/aristotle-bridge && bunx vitest run` | 100 | 7 modules: types, utils, api-probe, snapshot-extractor, workflow-store, idle-handler, executor |
+| Bridge Plugin (TypeScript) | `cd plugins/aristotle-bridge && bunx vitest run` | 118 | 7 modules: types, utils, api-probe, snapshot-extractor, workflow-store, idle-handler, executor. B1 subprocess chain driving |
 | E2E Automated (opencode) | `bash test/e2e_opencode.sh` | 14 (5 PASS / 9 SKIP) | Real opencode session: skill load, sessions, learn, reflect (requires LLM) |
-| E2E Live | `bash test/live-test.sh --model <provider/model>` | 8 | Real session with known error patterns |
+| B1 Regression | `bash test/regression_b1_checks.sh` | 39 | Post-deploy verification for B1 fixes (config paths, code logic, test assertions, deploy sync) |
 
 ## 2. Static Tests
 
@@ -116,7 +116,7 @@ Integration tests verifying the Bridge↔MCP interaction via real MCP stdio tran
 | `commit_rule` bidirectional conflict annotation matched wrong rules | Exact ID match with `limit=10` |
 | macOS `/tmp` symlink caused `relative_to` failure | Added `.resolve()` to `resolve_repo_dir()` |
 
-## 5. Bridge Plugin Tests (100 vitest)
+## 5. Bridge Plugin Tests (118 vitest)
 
 > Full test-level breakdown: See [plugins/aristotle-bridge/testing.en.md](plugins/aristotle-bridge/testing.en.md)
 
@@ -130,7 +130,7 @@ cd plugins/aristotle-bridge && bunx vitest run
 | `api-probe.test.ts` | 5 | detectApiMode: promptAsync detection, session cleanup |
 | `snapshot-extractor.test.ts` | 12 | Truncation (4000/200), atomic write, filtering, schema |
 | `workflow-store.test.ts` | 35 | Disk persistence, 50-cap eviction, reconcile batch-5, loadFromDisk validation |
-| `idle-handler.test.ts` | 7 | Status filtering (running only), error handling |
+| `idle-handler.test.ts` | 25 | Status guards, R→C chain driving (subprocess mock), C completion, error handling, resolveMcpProjectDir, callMCP error parsing |
 | `executor.test.ts` | 12 | Launch flow, snapshot, crash safety, session.create try/catch |
 | `index.test.ts` | 22 | 3 tool registration, event dispatch, .bridge-active marker, abort idempotency |
 
@@ -282,7 +282,7 @@ One opencode session covers plugin load, async reflect, and undo cleanup. **18 v
 | A4 | Check `.bridge-active` still exists | Marker present | M2-3 |
 | A5 | Check `bridge-workflows.json` | File exists with workflowId | M2-4 |
 | A6 | Wait for idle event or poll status | Status transitions: running → completed | M2-5,6 |
-| A7 | Verify Checker auto-triggered | Completed workflow shows checker result | M2-7 |
+| A7 | Verify R→C chain — Automated (B1) | Completed workflow shows checker result. Now automated by Bridge Plugin (B1). Plugin drives R→C chain via subprocess. No longer requires LLM polling. Verify via `bash test/e2e_a7_r2c_chain.sh --project /path/to/project` | M2-7 |
 | A8 | Send `/aristotle` again to start a new workflow | New workflow appears, status = running | M3-1 |
 | A9 | Send `/undo` | SKILL.md "After any /undo" rule triggers | M3-2,3 |
 | A10 | Check `aristotle_check` output | Returns running workflows | M3-4 |
@@ -337,9 +337,12 @@ bash test.sh && uv run pytest test/ -q
 
 # Bridge Plugin
 cd plugins/aristotle-bridge && bunx vitest run
+
+# B1 Regression
+bash test/regression_b1_checks.sh
 ```
 
-Expected result: `318 passed` + `104 passed` + `100 passed` = **522 checks, 0 failures**.
+Expected result: `318 passed` + `104 passed` + `118 passed` + `39 passed` = **579 checks, 0 failures**.
 
 ## 11. Gate #1 Verification (Completed)
 
@@ -348,3 +351,26 @@ Expected result: `318 passed` + `104 passed` + `100 passed` = **522 checks, 0 fa
 **Result**: **No.** `noReply: true` causes a hang bug (OpenCode issues #4431, #14451) — it does not inject messages into the parent session. This was verified via `test/gate1-noReply-verify.sh`.
 
 **Decision**: Bridge Plugin adopted polling mode instead of noReply injection. SKILL.md uses idle detection + `aristotle_check`/`aristotle_abort` tools to manage async reflection without blocking the main session.
+
+## 12. B1 Regression Checks
+
+```bash
+bash test/regression_b1_checks.sh
+```
+
+39 assertions covering all B1 fixes. Run before every deployment.
+
+| Category | Checks | What It Verifies |
+|----------|--------|------------------|
+| Config | 2 | opencode.json paths (no tilde), absolute paths |
+| MCP logic | 2 | checking→done, reflecting→fire_sub |
+| CLI entry | 3 | _cli.py exists, reads stdin, handles empty input |
+| Status types | 2 | chain_pending/chain_broken in types.ts |
+| Workflow store | 7 | markChainPending/Broken, retrieve, getActive, eviction, reconcile |
+| Chain driving | 8 | subprocess call, stdin payload, launchResult.status, no markCompleted after fire_sub, notify→chainBroken, debug log, cancelled race |
+| Index integration | 3 | 4-arg constructor, abort chain_broken/chain_pending |
+| Logger | 3 | exists, stderr output, unknown[] types |
+| Deploy sync | 4 | install dir exists, _cli.py synced, done action synced, plugin deployed |
+| Test assertions | 5 | notify→done in Python tests, bridge-active marker cleanup |
+
+Design principles: one check per fix point, check intent not implementation, cover config layer, fast and repeatable.

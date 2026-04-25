@@ -3,7 +3,7 @@ export interface WorkflowState {
   workflowId: string;
   sessionId: string;
   parentSessionId: string;
-  status: 'running' | 'completed' | 'error' | 'undone' | 'cancelled';
+  status: 'running' | 'chain_pending' | 'completed' | 'error' | 'chain_broken' | 'undone' | 'cancelled';
   result?: string;
   error?: string;
   startedAt: number;

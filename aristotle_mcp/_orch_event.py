@@ -276,7 +276,7 @@ def orchestrate_on_event(event_type: str, data_json: str) -> dict:
         msg += f"\n   Review: /aristotle review {sequence}"
 
         return {
-            "action": "notify",
+            "action": "done",
             "workflow_id": workflow_id,
             "message": msg,
         }

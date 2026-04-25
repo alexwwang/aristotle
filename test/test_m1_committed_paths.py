@@ -72,8 +72,7 @@ class TestCommittedPathsCollection:
 
         # 4. 模拟 C 完成
         c_done = _fire_c_done_event(wf_id, "Committed: 1, Staged: 0")
-        assert c_done["action"] == "notify"
-
+        assert c_done["action"] == "done"
         # 5. 验证 workflow 包含路径
         wf = _load_workflow(wf_id)
         assert "committed_rule_paths" in wf

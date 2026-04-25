@@ -1,6 +1,6 @@
 # Aristotle — 测试指南
 
-> Aristotle MCP 规则引擎 + Bridge 插件测试概览。当前覆盖率：318 pytest + 104 static + 100 vitest + 23 e2e = 545 项检查。
+> Aristotle MCP 规则引擎 + Bridge 插件测试概览。当前覆盖率：318 pytest + 104 static + 118 vitest + 39 regression = 579 项检查。
 
 ## 1. 测试套件总览
 
@@ -9,9 +9,9 @@
 | 静态测试 | `bash test.sh` | 104 | 文件结构、SKILL.md 内容、hook 逻辑、错误模式检测 |
 | 单元/集成测试 (Python) | `uv run pytest test/ -v` | 318 | 所有 MCP 工具、编排、进化、frontmatter、git 操作、Phase 0 Bridge MCP |
 | Bridge 集成测试 | `uv run pytest test/test_e2e_bridge_integration.py -v` | 9 | Bridge↔MCP 集成：上下文修复、Bridge 检测、异步工作流、多阶段 |
-| Bridge 插件 (TypeScript) | `cd plugins/aristotle-bridge && bunx vitest run` | 100 | 7 个模块：types/utils/api-probe/snapshot-extractor/workflow-store/idle-handler/executor |
+| Bridge 插件 (TypeScript) | `cd plugins/aristotle-bridge && bunx vitest run` | 118 | 7 个模块：types/utils/api-probe/snapshot-extractor/workflow-store/idle-handler/executor。B1 子进程链路驱动 |
 | E2E 自动化测试 (opencode) | `bash test/e2e_opencode.sh` | 14 (5 PASS / 9 SKIP) | 真实 opencode 会话：skill 加载、sessions、learn、reflect（需 LLM） |
-| E2E 实时测试 | `bash test/live-test.sh --model <provider/model>` | 8 | 真实会话 + 已知错误模式 |
+| B1 回归测试 | `bash test/regression_b1_checks.sh` | 39 | B1 修复的部署后验证（配置路径、代码逻辑、测试断言、部署同步） |
 
 ## 2. 静态测试
 
@@ -116,7 +116,7 @@ uv run pytest test/test_e2e_bridge_integration.py -v
 | `commit_rule` 双向冲突标注匹配了错误的规则 | 精确 ID 匹配 + `limit=10` |
 | macOS `/tmp` symlink 导致 `relative_to` 失败 | `resolve_repo_dir()` 添加 `.resolve()` |
 
-## 5. Bridge 插件测试（100 vitest）
+## 5. Bridge 插件测试（118 vitest）
 
 > 完整测试级明细：详见 [plugins/aristotle-bridge/testing.zh.md](plugins/aristotle-bridge/testing.zh.md)
 
@@ -130,7 +130,7 @@ cd plugins/aristotle-bridge && bunx vitest run
 | `api-probe.test.ts` | 5 | detectApiMode：promptAsync 检测、session 清理 |
 | `snapshot-extractor.test.ts` | 12 | 截断（4000/200）、原子写入、过滤、schema |
 | `workflow-store.test.ts` | 35 | 磁盘持久化、50 容量淘汰、reconcile batch-5、loadFromDisk 验证 |
-| `idle-handler.test.ts` | 7 | 状态过滤（running only）、错误处理 |
+| `idle-handler.test.ts` | 25 | 状态守卫、R→C 链路驱动（子进程 mock）、C 完成、错误处理、resolveMcpProjectDir、callMCP 错误解析 |
 | `executor.test.ts` | 12 | 启动流程、snapshot、crash safety、session.create try/catch |
 | `index.test.ts` | 22 | 3 工具注册、事件分发、.bridge-active marker、abort 幂等 |
 
@@ -282,7 +282,7 @@ bash test/live-test.sh --model <provider/model>
 | A4 | 检查 `.bridge-active` 仍存在 | Marker 文件在 | M2-3 |
 | A5 | 检查 `bridge-workflows.json` | 文件存在，含 workflowId | M2-4 |
 | A6 | 等待 idle 事件或轮询状态 | 状态 running → completed | M2-5,6 |
-| A7 | 验证 Checker 自动触发 | 完成的工作流含 checker 结果 | M2-7 |
+| A7 | 验证 R→C 链路 — 已自动化 (B1) | 完成的工作流含 checker 结果。现由 Bridge Plugin (B1) 自动化驱动。Plugin 通过子进程驱动 R→C 链路，无需 LLM 轮询。通过 `bash test/e2e_a7_r2c_chain.sh --project /path/to/project` 验证 | M2-7 |
 | A8 | 再次发送 `/aristotle` 启动新工作流 | 新工作流出现，status = running | M3-1 |
 | A9 | 发送 `/undo` | SKILL.md "After any /undo" 规则触发 | M3-2,3 |
 | A10 | 检查 `aristotle_check` 输出 | 返回运行中的工作流 | M3-4 |
@@ -337,9 +337,12 @@ bash test.sh && uv run pytest test/ -q
 
 # Bridge 插件
 cd plugins/aristotle-bridge && bunx vitest run
+
+# B1 回归测试
+bash test/regression_b1_checks.sh
 ```
 
-期望结果：`318 passed` + `104 passed` + `100 passed` = **522 项检查，0 失败**。
+期望结果：`318 passed` + `104 passed` + `118 passed` + `39 passed` = **579 项检查，0 失败**。
 
 ## 11. Gate #1 验证（已完成）
 
@@ -348,3 +351,26 @@ cd plugins/aristotle-bridge && bunx vitest run
 **结论**：**否。** `noReply: true` 会导致挂起 bug（OpenCode issues #4431, #14451）——它不会向父会话注入消息。已通过 `test/gate1-noReply-verify.sh` 验证。
 
 **决策**：Bridge Plugin 采用轮询模式而非 noReply 注入。SKILL.md 使用空闲检测 + `aristotle_check`/`aristotle_abort` 工具管理异步反思，不阻塞主会话。
+
+## 12. B1 回归测试
+
+```bash
+bash test/regression_b1_checks.sh
+```
+
+39 个断言覆盖所有 B1 修复。每次部署前运行。
+
+| 类别 | 检查数 | 验证内容 |
+|------|--------|----------|
+| 配置 | 2 | opencode.json 路径（无 tilde）、绝对路径 |
+| MCP 逻辑 | 2 | checking→done、reflecting→fire_sub |
+| CLI 入口 | 3 | _cli.py 存在、读取 stdin、处理空输入 |
+| 状态类型 | 2 | chain_pending/chain_broken 在 types.ts 中 |
+| 工作流存储 | 7 | markChainPending/Broken、检索、getActive、淘汰、reconcile |
+| 链路驱动 | 8 | 子进程调用、stdin payload、launchResult.status、fire_sub 后无 markCompleted、notify→chainBroken、调试日志、取消竞争 |
+| 索引集成 | 3 | 4 参数构造器、中止 chain_broken/chain_pending |
+| 日志 | 3 | 存在、stderr 输出、unknown[] 类型 |
+| 部署同步 | 4 | 安装目录存在、_cli.py 已同步、done action 已同步、插件已部署 |
+| 测试断言 | 5 | notify→done 在 Python 测试中、bridge-active marker 清理 |
+
+设计原则：每个修复点一项检查、检查意图而非实现、覆盖配置层、快速且可重复。

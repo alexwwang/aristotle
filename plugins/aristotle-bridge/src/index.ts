@@ -45,7 +45,7 @@ const AristotleBridgePlugin = async (ctx: any): Promise<any> => {
   } catch {}
 
   const executor = new AsyncTaskExecutor(ctx.client, store, sessionsDir);
-  const idleHandler = new IdleEventHandler(ctx.client, store);
+  const idleHandler = new IdleEventHandler(ctx.client, store, executor, sessionsDir);
 
   return {
     tool: () => ({
@@ -72,6 +72,16 @@ const AristotleBridgePlugin = async (ctx: any): Promise<any> => {
           return { error: 'Workflow not found' };
         }
         if (wf.status === 'cancelled') {
+          return { status: 'cancelled', workflow_id: args.workflow_id };
+        }
+        // chain_broken is terminal — return its error (no state change)
+        if (wf.status === 'chain_broken') {
+          return { status: 'chain_broken', error: wf.error };
+        }
+        // chain_pending is cancellable (like running) — abort + mark cancelled
+        if (wf.status === 'chain_pending') {
+          await ctx.client.session.abort({ path: { id: wf.sessionId } }).catch(() => {});
+          store.cancel(args.workflow_id);
           return { status: 'cancelled', workflow_id: args.workflow_id };
         }
         if (wf.status !== 'running') {

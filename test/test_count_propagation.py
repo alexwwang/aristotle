@@ -62,7 +62,7 @@ class TestReReflectCountPropagation:
         assert r_done["sub_role"] == "C"
 
         c_done = _fire_c_done_event(new_wf_id, "Committed: 1, Staged: 0")
-        assert c_done["action"] == "notify"
+        assert c_done["action"] == "done"
 
         _setup_reflection_record(2)
         _create_draft_file(2)

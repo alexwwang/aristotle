@@ -64,15 +64,13 @@ class TestOrchestrateStartReflect:
 
     @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_reflect_no_target_session_id(self):
-        result = orchestrate_start("reflect", json.dumps({}))
-        assert result["action"] == "notify"
-        assert "Need" in result["message"]
-        assert "target_session_id" in result["message"].lower()
+        # Ensure no bridge marker affects this test (marker from prior opencode run)
+        from aristotle_mcp.config import resolve_sessions_dir
+        marker = resolve_sessions_dir() / ".bridge-active"
+        marker.unlink(missing_ok=True)
 
-        from aristotle_mcp.config import resolve_repo_dir
-        wf_dir = resolve_repo_dir() / ".workflows"
-        if wf_dir.exists():
-            assert len(list(wf_dir.glob("*.json"))) == 0
+        result = orchestrate_start("reflect", json.dumps({}))
+        assert result["action"] == "pre_resolve_needed"
 
     @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_reflect_focus_hint_in_prompt(self):
@@ -165,7 +163,7 @@ class TestOrchestrateOnEventReflect:
         assert wf["record_created"] is True
 
         c_done = _fire_c_done_event(wf_id, "Committed: 2, Staged: 0")
-        assert c_done["action"] == "notify"
+        assert c_done["action"] == "done"
         assert "committed" in c_done["message"]
         assert "/aristotle review" in c_done["message"]
         assert "2 rules committed" in c_done["message"]
@@ -221,7 +219,7 @@ class TestOrchestrateOnEventReflect:
 
         result = _fire_c_done_event(wf_id, "Committed: 1\nStaged: 2")
 
-        assert result["action"] == "notify"
+        assert result["action"] == "done"
         assert "1 rules committed" in result["message"]
         assert "2 staged" in result["message"]
 
@@ -249,7 +247,7 @@ class TestExceptionReflect:
 
         result = _fire_c_done_event(wf_id, "This is not parseable at all!!!")
 
-        assert result["action"] == "notify"
+        assert result["action"] == "done"
         wf = _load_workflow(wf_id)
         assert wf["phase"] == "done"
 

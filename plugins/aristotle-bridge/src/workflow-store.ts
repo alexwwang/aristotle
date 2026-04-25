@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import type { WorkflowState } from './types.js';
 import { extractLastAssistantText } from './utils.js';
+import { logger } from './logger.js';
 
 export class WorkflowStore {
   private workflows = new Map<string, WorkflowState>();
@@ -38,6 +39,8 @@ export class WorkflowStore {
   retrieve(workflowId: string):
     | { error: string }
     | { status: 'running' }
+    | { status: 'chain_pending' }
+    | { status: 'chain_broken'; error?: string }
     | { status: 'error'; error?: string }
     | { status: 'undone' }
     | { status: 'cancelled' }
@@ -46,6 +49,8 @@ export class WorkflowStore {
     const wf = this.workflows.get(workflowId);
     if (!wf) return { error: 'Workflow not found' };
     if (wf.status === 'running') return { status: 'running' };
+    if (wf.status === 'chain_pending') return { status: 'chain_pending' as const };
+    if (wf.status === 'chain_broken') return { status: 'chain_broken' as const, error: wf.error };
     if (wf.status === 'error') return { status: 'error', error: wf.error };
     if (wf.status === 'undone') return { status: 'undone' };
     if (wf.status === 'cancelled') return { status: 'cancelled' };
@@ -54,7 +59,7 @@ export class WorkflowStore {
 
   getActive(): { active: Array<{ workflow_id: string; status: string; started_at: number }> } {
     const active = [...this.workflows.values()]
-      .filter(wf => wf.status === 'running')
+      .filter(wf => wf.status === 'running' || wf.status === 'chain_pending')
       .map(wf => ({
         workflow_id: wf.workflowId,
         status: wf.status,
@@ -68,6 +73,24 @@ export class WorkflowStore {
     if (wf) {
       wf.status = 'completed';
       wf.result = result;
+      this.saveToDisk();
+    }
+  }
+
+  markChainPending(id: string, result: string): void {
+    const wf = this.workflows.get(id);
+    if (wf) {
+      wf.status = 'chain_pending';
+      wf.result = result;
+      this.saveToDisk();
+    }
+  }
+
+  markChainBroken(id: string, error: string): void {
+    const wf = this.workflows.get(id);
+    if (wf) {
+      wf.status = 'chain_broken';
+      wf.error = error;
       this.saveToDisk();
     }
   }
@@ -98,6 +121,26 @@ export class WorkflowStore {
   }
 
   async reconcileOnStartup(client: any): Promise<void> {
+    // Phase 1: Recover chain_broken workflows (terminal, just log)
+    const chainBroken = [...this.workflows.entries()]
+      .filter(([_, wf]) => wf.status === 'chain_broken');
+    for (const [id, wf] of chainBroken) {
+      logger.warn('chain_broken from prior run: wf=%s agent=%s error=%s',
+        id, wf.agent, wf.error ?? 'unknown');
+    }
+
+    // Phase 2: Recover chain_pending workflows (mid-chain crash)
+    const chainPending = [...this.workflows.entries()]
+      .filter(([_, wf]) => wf.status === 'chain_pending');
+    for (const [id, wf] of chainPending) {
+      logger.warn('recovering chain_pending workflow: wf=%s agent=%s', id, wf.agent);
+      if (wf.agent === 'R') {
+        logger.warn('R chain_pending recovered as completed, but MCP state may be at "checking" phase. No C was launched.');
+      }
+      this.markCompleted(id, wf.result || '');
+      logger.info('recovered chain_pending → completed: wf=%s', id);
+    }
+
     const running = [...this.workflows.entries()].filter(([_, wf]) => wf.status === 'running');
     for (let i = 0; i < running.length; i += 5) {
       const batch = running.slice(i, i + 5);
@@ -145,7 +188,7 @@ export class WorkflowStore {
 
   private evictOldestNonRunning(): boolean {
     const candidates = [...this.workflows.entries()]
-      .filter(([_, wf]) => wf.status !== 'running')
+      .filter(([_, wf]) => wf.status !== 'running' && wf.status !== 'chain_pending')
       .sort(([_, a], [__, b]) => a.startedAt - b.startedAt);
     if (candidates.length > 0) {
       this.workflows.delete(candidates[0][0]);

@@ -250,7 +250,7 @@ class TestAsyncBridgeWorkflowE2E:
             "result": "Committed: 1\nStaged: 0",
         }))
 
-        assert c_done["action"] == "notify"
+        assert c_done["action"] == "done"
         msg = c_done.get("notify_message", c_done.get("message", ""))
         assert "done" in msg.lower() or "aristotle" in msg.lower(), \
             f"Expected completion message, got: {msg}"
@@ -330,4 +330,4 @@ class TestMultiStageBridgeE2E:
             "session_id": "ses_c1",
             "result": "Committed: 0\nStaged: 0",
         }))
-        assert c1["action"] == "notify"
+        assert c1["action"] == "done"
