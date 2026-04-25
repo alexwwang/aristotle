@@ -430,12 +430,26 @@ describe('IdleEventHandler', () => {
     expect(result).toBe(envDir);
   });
 
-  it('should_fallback_to_hardcoded', () => {
+  it('should_fallback_to_cwd_when_no_env', () => {
     delete process.env.ARISTOTLE_MCP_DIR;
+    delete process.env.ARISTOTLE_PROJECT_DIR;
     vi.mocked(existsSync).mockReturnValue(false);
 
     const result = resolveMcpProjectDir(sessionsDir);
-    expect(result).toBe('$$ARISTOTLE_PROJECT_DIR');
+    expect(result).toBe(process.cwd());
+  });
+
+  it('should_fallback_to_aristotle_project_dir_env', () => {
+    delete process.env.ARISTOTLE_MCP_DIR;
+    process.env.ARISTOTLE_PROJECT_DIR = '/tmp/mock-project';
+    // Make existsSync return true only for the env fallback check
+    vi.mocked(existsSync).mockImplementation((p: any) => {
+      return String(p).includes('mock-project/aristotle_mcp');
+    });
+
+    const result = resolveMcpProjectDir(sessionsDir);
+    expect(result).toBe('/tmp/mock-project');
+    delete process.env.ARISTOTLE_PROJECT_DIR;
   });
 
   // ── callMCP error handling ─────────────────────────────────────────────

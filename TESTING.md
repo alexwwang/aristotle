@@ -247,32 +247,34 @@ Run these steps **when code has changed** and before any E2E/live testing. Order
 
 ```bash
 # Step 1: Run all automated tests (must pass before deploy)
-cd $$ARISTOTLE_PROJECT_DIR
+cd "$ARISTOTLE_PROJECT_DIR"
 uv run pytest -q
 cd plugins/aristotle-bridge && npx vitest run
 
 # Step 2: Build Bridge Plugin
-cd $$ARISTOTLE_PROJECT_DIR/plugins/aristotle-bridge
+cd "$ARISTOTLE_PROJECT_DIR/plugins/aristotle-bridge"
 npx bun build src/index.ts --outdir dist --target node --format esm \
   --external zod --external effect --external @opencode-ai/plugin
 
 # Step 3: Sync code to install directory (MCP server code)
 rsync -av --exclude='.venv' --exclude='.git' --exclude='__pycache__' \
   --exclude='*.egg-info' --exclude='.pytest_cache' --exclude='.ruff_cache' \
-  $$ARISTOTLE_PROJECT_DIR/ ~/.claude/skills/aristotle/
-cd ~/.claude/skills/aristotle && uv sync
+  "$ARISTOTLE_PROJECT_DIR/" "$HOME/.claude/skills/aristotle/"
+cd "$HOME/.claude/skills/aristotle" && uv sync
 
 # Step 4: Deploy Bridge Plugin
-cp $$ARISTOTLE_PROJECT_DIR/plugins/aristotle-bridge/dist/index.js \
-   ~/.config/opencode/aristotle-bridge/index.js
+cp "$ARISTOTLE_PROJECT_DIR/plugins/aristotle-bridge/dist/index.js" \
+   "$HOME/.config/opencode/aristotle-bridge/index.js"
 
 # Step 5: Clear stale state (before starting opencode)
-echo '[]' > ~/.config/opencode/aristotle-sessions/bridge-workflows.json
-rm -f ~/.config/opencode/aristotle-sessions/.bridge-active
+echo '[]' > "$HOME/.config/opencode/aristotle-sessions/bridge-workflows.json"
+rm -f "$HOME/.config/opencode/aristotle-sessions/.bridge-active"
 
 # Step 6: Run regression checks (validates Steps 3-4)
-bash $$ARISTOTLE_PROJECT_DIR/test/regression_b1_checks.sh
+bash "$ARISTOTLE_PROJECT_DIR/test/regression_b1_checks.sh"
 ```
+
+> **Required environment variables**: `ARISTOTLE_PROJECT_DIR` — the project root (e.g. set via `export ARISTOTLE_PROJECT_DIR=$(pwd)` from the repo root). All other paths derive from `$HOME`.
 
 | Step | What | Why |
 |------|------|-----|

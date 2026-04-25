@@ -48,8 +48,10 @@ export function resolveMcpProjectDir(sessionsDir: string): string {
     dir = parent;
   }
 
-  // Fallback (local dev)
-  return '$$ARISTOTLE_PROJECT_DIR';
+  // Fallback: use ARISTOTLE_PROJECT_DIR env var, or cwd as last resort
+  const envFallback = process.env.ARISTOTLE_PROJECT_DIR;
+  if (envFallback && existsSync(join(envFallback, 'aristotle_mcp'))) return envFallback;
+  return process.cwd();
 }
 
 export class IdleEventHandler {

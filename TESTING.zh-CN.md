@@ -257,32 +257,34 @@ bash test/regression_b1_checks.sh
 
 ```bash
 # 步骤 1: 跑自动化测试（部署前必须通过）
-cd $$ARISTOTLE_PROJECT_DIR
+cd "$ARISTOTLE_PROJECT_DIR"
 uv run pytest -q
 cd plugins/aristotle-bridge && npx vitest run
 
 # 步骤 2: 构建 Bridge 插件
-cd $$ARISTOTLE_PROJECT_DIR/plugins/aristotle-bridge
+cd "$ARISTOTLE_PROJECT_DIR/plugins/aristotle-bridge"
 npx bun build src/index.ts --outdir dist --target node --format esm \
   --external zod --external effect --external @opencode-ai/plugin
 
 # 步骤 3: 同步代码到安装目录（MCP server 代码）
 rsync -av --exclude='.venv' --exclude='.git' --exclude='__pycache__' \
   --exclude='*.egg-info' --exclude='.pytest_cache' --exclude='.ruff_cache' \
-  $$ARISTOTLE_PROJECT_DIR/ ~/.claude/skills/aristotle/
-cd ~/.claude/skills/aristotle && uv sync
+  "$ARISTOTLE_PROJECT_DIR/" "$HOME/.claude/skills/aristotle/"
+cd "$HOME/.claude/skills/aristotle" && uv sync
 
 # 步骤 4: 部署 Bridge 插件
-cp $$ARISTOTLE_PROJECT_DIR/plugins/aristotle-bridge/dist/index.js \
-   ~/.config/opencode/aristotle-bridge/index.js
+cp "$ARISTOTLE_PROJECT_DIR/plugins/aristotle-bridge/dist/index.js" \
+   "$HOME/.config/opencode/aristotle-bridge/index.js"
 
 # 步骤 5: 清理残留状态（启动 opencode 前）
-echo '[]' > ~/.config/opencode/aristotle-sessions/bridge-workflows.json
-rm -f ~/.config/opencode/aristotle-sessions/.bridge-active
+echo '[]' > "$HOME/.config/opencode/aristotle-sessions/bridge-workflows.json"
+rm -f "$HOME/.config/opencode/aristotle-sessions/.bridge-active"
 
 # 步骤 6: 跑回归检查（验证步骤 3-4 的正确性）
-bash $$ARISTOTLE_PROJECT_DIR/test/regression_b1_checks.sh
+bash "$ARISTOTLE_PROJECT_DIR/test/regression_b1_checks.sh"
 ```
+
+> **必需环境变量**: `ARISTOTLE_PROJECT_DIR` — 项目根目录（例如在仓库根目录执行 `export ARISTOTLE_PROJECT_DIR=$(pwd)`）。其他所有路径均从 `$HOME` 派生。
 
 | 步骤 | 内容 | 目的 |
 |------|------|------|
