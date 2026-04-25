@@ -224,6 +224,8 @@ One `/aristotle` invocation covers snapshot extraction, reflect-check loop, sess
 
 ## 8. CI Integration
 
+### 8.1 Test Commands
+
 All test suites can run headless:
 
 ```bash
@@ -233,11 +235,53 @@ bash test.sh && uv run pytest test/ -q
 # Bridge Plugin
 cd plugins/aristotle-bridge && bunx vitest run
 
-# B1 Regression
+# B1 Regression (run before every deployment)
 bash test/regression_b1_checks.sh
 ```
 
-Expected result: `306 passed` + `104 passed` + `118 passed` + `39 passed` = **567 checks, 0 failures**.
+Expected result: `318 passed` + `104 passed` + `118 passed` + `39 passed` = **579 checks, 0 failures**.
+
+### 8.2 Pre-Test Deployment Checklist
+
+Run these steps **when code has changed** and before any E2E/live testing. Order matters.
+
+```bash
+# Step 1: Run all automated tests (must pass before deploy)
+cd $$ARISTOTLE_PROJECT_DIR
+uv run pytest -q
+cd plugins/aristotle-bridge && npx vitest run
+
+# Step 2: Build Bridge Plugin
+cd $$ARISTOTLE_PROJECT_DIR/plugins/aristotle-bridge
+npx bun build src/index.ts --outdir dist --target node --format esm \
+  --external zod --external effect --external @opencode-ai/plugin
+
+# Step 3: Sync code to install directory (MCP server code)
+rsync -av --exclude='.venv' --exclude='.git' --exclude='__pycache__' \
+  --exclude='*.egg-info' --exclude='.pytest_cache' --exclude='.ruff_cache' \
+  $$ARISTOTLE_PROJECT_DIR/ ~/.claude/skills/aristotle/
+cd ~/.claude/skills/aristotle && uv sync
+
+# Step 4: Deploy Bridge Plugin
+cp $$ARISTOTLE_PROJECT_DIR/plugins/aristotle-bridge/dist/index.js \
+   ~/.config/opencode/aristotle-bridge/index.js
+
+# Step 5: Clear stale state (before starting opencode)
+echo '[]' > ~/.config/opencode/aristotle-sessions/bridge-workflows.json
+rm -f ~/.config/opencode/aristotle-sessions/.bridge-active
+
+# Step 6: Run regression checks (validates Steps 3-4)
+bash $$ARISTOTLE_PROJECT_DIR/test/regression_b1_checks.sh
+```
+
+| Step | What | Why |
+|------|------|-----|
+| 1 | Run automated tests | Catch regressions before deploy |
+| 2 | Build plugin | Compile TS → JS for opencode |
+| 3 | Sync + uv sync | MCP server runs from install dir |
+| 4 | Deploy plugin | opencode loads from config dir |
+| 5 | Clear state | Stale marker/workflows cause false failures |
+| 6 | Regression check | Verify sync/deploy correctness (39 assertions) |
 
 ## 9. Gate #1 Verification (Completed)
 

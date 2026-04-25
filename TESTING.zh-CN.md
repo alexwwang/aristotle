@@ -234,6 +234,8 @@ bash test/regression_b1_checks.sh
 
 ## 8. CI 集成
 
+### 8.1 测试命令
+
 所有测试套件可无头运行：
 
 ```bash
@@ -243,9 +245,53 @@ bash test.sh && uv run pytest test/ -q
 # Bridge 插件
 cd plugins/aristotle-bridge && bunx vitest run
 
-# B1 回归测试
+# B1 回归测试（每次部署前必须运行）
 bash test/regression_b1_checks.sh
 ```
+
+期望结果：`318 passed` + `104 passed` + `118 passed` + `39 passed` = **579 项检查，0 失败**。
+
+### 8.2 测试前部署检查清单
+
+代码有变动时，**E2E/人工测试前**按顺序执行以下步骤：
+
+```bash
+# 步骤 1: 跑自动化测试（部署前必须通过）
+cd $$ARISTOTLE_PROJECT_DIR
+uv run pytest -q
+cd plugins/aristotle-bridge && npx vitest run
+
+# 步骤 2: 构建 Bridge 插件
+cd $$ARISTOTLE_PROJECT_DIR/plugins/aristotle-bridge
+npx bun build src/index.ts --outdir dist --target node --format esm \
+  --external zod --external effect --external @opencode-ai/plugin
+
+# 步骤 3: 同步代码到安装目录（MCP server 代码）
+rsync -av --exclude='.venv' --exclude='.git' --exclude='__pycache__' \
+  --exclude='*.egg-info' --exclude='.pytest_cache' --exclude='.ruff_cache' \
+  $$ARISTOTLE_PROJECT_DIR/ ~/.claude/skills/aristotle/
+cd ~/.claude/skills/aristotle && uv sync
+
+# 步骤 4: 部署 Bridge 插件
+cp $$ARISTOTLE_PROJECT_DIR/plugins/aristotle-bridge/dist/index.js \
+   ~/.config/opencode/aristotle-bridge/index.js
+
+# 步骤 5: 清理残留状态（启动 opencode 前）
+echo '[]' > ~/.config/opencode/aristotle-sessions/bridge-workflows.json
+rm -f ~/.config/opencode/aristotle-sessions/.bridge-active
+
+# 步骤 6: 跑回归检查（验证步骤 3-4 的正确性）
+bash $$ARISTOTLE_PROJECT_DIR/test/regression_b1_checks.sh
+```
+
+| 步骤 | 内容 | 目的 |
+|------|------|------|
+| 1 | 跑自动化测试 | 部署前捕获回归 |
+| 2 | 构建插件 | 编译 TS → JS 供 opencode 加载 |
+| 3 | 同步代码 + uv sync | MCP server 从安装目录运行 |
+| 4 | 部署插件 | opencode 从配置目录加载 |
+| 5 | 清理状态 | 残留 marker/workflow 会导致误判 |
+| 6 | 回归检查 | 验证同步/部署正确性（39 项断言） |
 
 期望结果：`318 passed` + `104 passed` + `118 passed` + `39 passed` = **579 项检查，0 失败**。
 
