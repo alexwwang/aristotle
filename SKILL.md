@@ -53,31 +53,12 @@ GOTO SNAPSHOT-EXTRACT (in PRE-RESOLVE section above).
 ### If action is `fire_sub`:
 1. If `notify_message` is present, display it to user first
 2. Check `use_bridge` in response:
-   - **If `use_bridge` is true (Bridge path)**:
-     a. Try calling `aristotle_fire_o(workflow_id=response.workflow_id, o_prompt=response.sub_prompt, target_session_id=target_session_id)`
-        - If succeeds → capture response.session_id as bridge_session_id, proceed to step b
+   - **If `use_bridge` is true (Bridge path — async, NON-BLOCKING)**:
+     a. Call `aristotle_fire_o(workflow_id=response.workflow_id, o_prompt=response.sub_prompt, target_session_id=target_session_id)`
         - If fails or tool not found → fall through to blocking path (step 3)
-     b. Return to user: "🦉 Task launched. I'll check results when ready."
-     c. MULTI-STAGE LOOP (reflect→check→… may require multiple rounds):
-        ```
-        while true:
-          - Call aristotle_check(workflow_id)
-          - If status="running" → continue polling (each poll is a tool round-trip with inherent ~1-3s delay, no extra sleep needed)
-          - If status="completed" → extract result, proceed to step d
-          - If status="error" → report error to user, BREAK
-          - If status="cancelled" → report "Workflow was cancelled", BREAK
-          - If status="undone" → report "Workflow was undone", BREAK
-          - Max polls per stage: 50
-        ```
-     d. Call MCP `orchestrate_on_event("subagent_done", {workflow_id, result: result, session_id: bridge_session_id})`
-     e. If response.action === "fire_sub":
-         - Call `aristotle_fire_o(workflow_id, o_prompt=response.sub_prompt, target_session_id=target_session_id)`
-        - Update bridge_session_id = response.session_id
-        - GOTO step c (poll next stage)
-     f. If response.action === "notify":
-        - Display response.message to user, DONE
-     g. If response.action === "done":
-        - DONE
+     b. Display response message to user. Then **STOP — do NOT poll.**
+        The Bridge plugin handles the entire R→C chain automatically via session.idle events.
+        No further action needed from the main session.
    - **If `use_bridge` is absent or false (blocking path)**:
 3. Call task(category="unspecified-low", load_skills=[], run_in_background=true, prompt=sub_prompt)
 4. When notification arrives, call MCP `orchestrate_on_event("subagent_done", {workflow_id, session_id, result})` → execute returned action per this section
