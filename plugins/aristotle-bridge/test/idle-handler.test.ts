@@ -2,27 +2,49 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { IdleEventHandler, resolveMcpProjectDir } from '../src/idle-handler.js';
 import type { WorkflowState } from '../src/types.js';
 import { extractLastAssistantText } from '../src/utils.js';
-import { execFile } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { EventEmitter } from 'node:events';
+import { existsSync, readFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 
 vi.mock('../src/utils.js', () => ({
   extractLastAssistantText: vi.fn(),
 }));
 
+// Mock spawn: returns a child-like EventEmitter with stdout/stderr/stdin
+let mockSpawnResult: { stdout: string; stderr: string; exitCode: number | null; signal: string | null; error: Error | null };
+
+function createMockChild() {
+  const child = new EventEmitter();
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+  child.stdin = { write: vi.fn(), end: vi.fn(), on: vi.fn() };
+
+  // Simulate async close event on next tick
+  process.nextTick(() => {
+    if (mockSpawnResult.error) {
+      child.emit('error', mockSpawnResult.error);
+    } else {
+      // Emit stdout/stderr data first
+      if (mockSpawnResult.stdout) child.stdout.emit('data', Buffer.from(mockSpawnResult.stdout));
+      if (mockSpawnResult.stderr) child.stderr.emit('data', Buffer.from(mockSpawnResult.stderr));
+      child.emit('close', mockSpawnResult.exitCode, mockSpawnResult.signal);
+    }
+  });
+
+  return child;
+}
+
+const mockSpawn = vi.fn(createMockChild);
+
 vi.mock('node:child_process', () => ({
-  execFile: Object.assign(vi.fn(), {
-    [Symbol.for('nodejs.util.promisify.custom')]: vi.fn(),
-  }),
+  spawn: (...args: any[]) => mockSpawn(...args),
 }));
 
 vi.mock('node:fs', () => ({
   existsSync: vi.fn(),
+  readFileSync: vi.fn(),
+  unlinkSync: vi.fn(),
 }));
-
-function getPromisifiedExecFile(): ReturnType<typeof vi.fn> {
-  return (execFile as any)[Symbol.for('nodejs.util.promisify.custom')];
-}
 
 describe('IdleEventHandler', () => {
   let store: {
@@ -76,10 +98,15 @@ describe('IdleEventHandler', () => {
     vi.mocked(extractLastAssistantText).mockReturnValue('extracted result');
     vi.mocked(existsSync).mockReturnValue(false);
     delete process.env.ARISTOTLE_MCP_DIR;
-    getPromisifiedExecFile().mockResolvedValue({
+    // Default: subprocess returns { action: 'done' }
+    mockSpawnResult = {
       stdout: JSON.stringify({ action: 'done' }),
       stderr: '',
-    });
+      exitCode: 0,
+      signal: null,
+      error: null,
+    };
+    mockSpawn.mockImplementation(createMockChild);
   });
 
   afterEach(() => {
@@ -140,7 +167,7 @@ describe('IdleEventHandler', () => {
 
   it('should_drive_R_to_C_chain', async () => {
     store.findBySession.mockReturnValue(baseWf({ agent: 'R', status: 'running' }));
-    getPromisifiedExecFile().mockResolvedValue({
+    mockSpawnResult = {
       stdout: JSON.stringify({
         action: 'fire_sub',
         workflow_id: 'wf-1',
@@ -148,7 +175,10 @@ describe('IdleEventHandler', () => {
         sub_role: 'C',
       }),
       stderr: '',
-    });
+      exitCode: 0,
+      signal: null,
+      error: null,
+    };
 
     const handler = new IdleEventHandler(client, store, executor, sessionsDir);
     await handler.handle('session-1');
@@ -165,11 +195,13 @@ describe('IdleEventHandler', () => {
 
   it('should_mark_chain_broken_on_subprocess_error', async () => {
     store.findBySession.mockReturnValue(baseWf({ agent: 'R', status: 'running' }));
-    const err = Object.assign(new Error('MCP subprocess crashed'), {
+    mockSpawnResult = {
       stdout: '',
       stderr: 'fatal error',
-    });
-    getPromisifiedExecFile().mockRejectedValue(err);
+      exitCode: 1,
+      signal: null,
+      error: null,
+    };
 
     const handler = new IdleEventHandler(client, store, executor, sessionsDir);
     await handler.handle('session-1');
@@ -180,7 +212,7 @@ describe('IdleEventHandler', () => {
 
   it('should_mark_chain_broken_on_workflow_id_mismatch', async () => {
     store.findBySession.mockReturnValue(baseWf({ agent: 'R', status: 'running' }));
-    getPromisifiedExecFile().mockResolvedValue({
+    mockSpawnResult = {
       stdout: JSON.stringify({
         action: 'fire_sub',
         workflow_id: 'wrong-wf',
@@ -188,7 +220,10 @@ describe('IdleEventHandler', () => {
         sub_role: 'C',
       }),
       stderr: '',
-    });
+      exitCode: 0,
+      signal: null,
+      error: null,
+    };
 
     const handler = new IdleEventHandler(client, store, executor, sessionsDir);
     await handler.handle('session-1');
@@ -202,7 +237,7 @@ describe('IdleEventHandler', () => {
 
   it('should_mark_chain_broken_on_executor_launch_error_status', async () => {
     store.findBySession.mockReturnValue(baseWf({ agent: 'R', status: 'running' }));
-    getPromisifiedExecFile().mockResolvedValue({
+    mockSpawnResult = {
       stdout: JSON.stringify({
         action: 'fire_sub',
         workflow_id: 'wf-1',
@@ -210,7 +245,10 @@ describe('IdleEventHandler', () => {
         sub_role: 'C',
       }),
       stderr: '',
-    });
+      exitCode: 0,
+      signal: null,
+      error: null,
+    };
     executor.launch.mockResolvedValue({
       workflow_id: 'wf-1',
       session_id: '',
@@ -229,7 +267,7 @@ describe('IdleEventHandler', () => {
 
   it('should_mark_chain_broken_on_executor_launch_throw', async () => {
     store.findBySession.mockReturnValue(baseWf({ agent: 'R', status: 'running' }));
-    getPromisifiedExecFile().mockResolvedValue({
+    mockSpawnResult = {
       stdout: JSON.stringify({
         action: 'fire_sub',
         workflow_id: 'wf-1',
@@ -237,7 +275,10 @@ describe('IdleEventHandler', () => {
         sub_role: 'C',
       }),
       stderr: '',
-    });
+      exitCode: 0,
+      signal: null,
+      error: null,
+    };
     executor.launch.mockRejectedValue(new Error('network timeout'));
 
     const handler = new IdleEventHandler(client, store, executor, sessionsDir);
@@ -251,10 +292,13 @@ describe('IdleEventHandler', () => {
 
   it('should_mark_completed_on_done_action', async () => {
     store.findBySession.mockReturnValue(baseWf({ agent: 'R', status: 'running' }));
-    getPromisifiedExecFile().mockResolvedValue({
+    mockSpawnResult = {
       stdout: JSON.stringify({ action: 'done' }),
       stderr: '',
-    });
+      exitCode: 0,
+      signal: null,
+      error: null,
+    };
 
     const handler = new IdleEventHandler(client, store, executor, sessionsDir);
     await handler.handle('session-1');
@@ -265,10 +309,13 @@ describe('IdleEventHandler', () => {
 
   it('should_mark_chain_broken_on_notify_action', async () => {
     store.findBySession.mockReturnValue(baseWf({ agent: 'R', status: 'running' }));
-    getPromisifiedExecFile().mockResolvedValue({
+    mockSpawnResult = {
       stdout: JSON.stringify({ action: 'notify', message: 'something went wrong' }),
       stderr: '',
-    });
+      exitCode: 0,
+      signal: null,
+      error: null,
+    };
 
     const handler = new IdleEventHandler(client, store, executor, sessionsDir);
     await handler.handle('session-1');
@@ -278,10 +325,13 @@ describe('IdleEventHandler', () => {
 
   it('should_mark_chain_broken_on_unexpected_action', async () => {
     store.findBySession.mockReturnValue(baseWf({ agent: 'R', status: 'running' }));
-    getPromisifiedExecFile().mockResolvedValue({
+    mockSpawnResult = {
       stdout: JSON.stringify({ action: 'weird_action' }),
       stderr: '',
-    });
+      exitCode: 0,
+      signal: null,
+      error: null,
+    };
 
     const handler = new IdleEventHandler(client, store, executor, sessionsDir);
     await handler.handle('session-1');
@@ -296,10 +346,13 @@ describe('IdleEventHandler', () => {
 
   it('should_complete_on_C_done', async () => {
     store.findBySession.mockReturnValue(baseWf({ agent: 'C', status: 'running' }));
-    getPromisifiedExecFile().mockResolvedValue({
+    mockSpawnResult = {
       stdout: JSON.stringify({ action: 'done' }),
       stderr: '',
-    });
+      exitCode: 0,
+      signal: null,
+      error: null,
+    };
 
     const handler = new IdleEventHandler(client, store, executor, sessionsDir);
     await handler.handle('session-1');
@@ -309,10 +362,13 @@ describe('IdleEventHandler', () => {
 
   it('should_mark_chain_broken_on_C_notify', async () => {
     store.findBySession.mockReturnValue(baseWf({ agent: 'C', status: 'running' }));
-    getPromisifiedExecFile().mockResolvedValue({
+    mockSpawnResult = {
       stdout: JSON.stringify({ action: 'notify', message: 'C error' }),
       stderr: '',
-    });
+      exitCode: 0,
+      signal: null,
+      error: null,
+    };
 
     const handler = new IdleEventHandler(client, store, executor, sessionsDir);
     await handler.handle('session-1');
@@ -322,7 +378,7 @@ describe('IdleEventHandler', () => {
 
   it('should_handle_C_fire_sub_rereflect', async () => {
     store.findBySession.mockReturnValue(baseWf({ agent: 'C', status: 'running' }));
-    getPromisifiedExecFile().mockResolvedValue({
+    mockSpawnResult = {
       stdout: JSON.stringify({
         action: 'fire_sub',
         workflow_id: 'wf-1',
@@ -330,7 +386,10 @@ describe('IdleEventHandler', () => {
         sub_role: 'R',
       }),
       stderr: '',
-    });
+      exitCode: 0,
+      signal: null,
+      error: null,
+    };
 
     const handler = new IdleEventHandler(client, store, executor, sessionsDir);
     await handler.handle('session-1');
@@ -346,7 +405,7 @@ describe('IdleEventHandler', () => {
 
   it('should_mark_chain_broken_on_C_launch_error_status', async () => {
     store.findBySession.mockReturnValue(baseWf({ agent: 'C', status: 'running' }));
-    getPromisifiedExecFile().mockResolvedValue({
+    mockSpawnResult = {
       stdout: JSON.stringify({
         action: 'fire_sub',
         workflow_id: 'wf-1',
@@ -354,7 +413,10 @@ describe('IdleEventHandler', () => {
         sub_role: 'R',
       }),
       stderr: '',
-    });
+      exitCode: 0,
+      signal: null,
+      error: null,
+    };
     executor.launch.mockResolvedValue({
       workflow_id: 'wf-1',
       session_id: '',
@@ -379,10 +441,13 @@ describe('IdleEventHandler', () => {
       .mockReturnValueOnce(baseWf({ agent: 'R', status: 'running' }))
       .mockReturnValueOnce(baseWf({ agent: 'R', status: 'chain_pending' }));
     // Make execFile succeed but return invalid JSON so JSON.parse throws
-    getPromisifiedExecFile().mockResolvedValue({
+    mockSpawnResult = {
       stdout: 'not-valid-json',
       stderr: '',
-    });
+      exitCode: 0,
+      signal: null,
+      error: null,
+    };
 
     const handler = new IdleEventHandler(client, store, executor, sessionsDir);
     await handler.handle('session-1');
@@ -455,11 +520,13 @@ describe('IdleEventHandler', () => {
   // ── callMCP error handling ─────────────────────────────────────────────
 
   it('should_parse_stdout_error_on_nonzero_exit', async () => {
-    const err = Object.assign(new Error('Command failed with exit code 1'), {
+    mockSpawnResult = {
       stdout: JSON.stringify({ error: 'MCP validation failed' }),
       stderr: '',
-    });
-    getPromisifiedExecFile().mockRejectedValue(err);
+      exitCode: 1,
+      signal: null,
+      error: null,
+    };
 
     const handler = new IdleEventHandler(client, store, executor, sessionsDir);
     const result = await (handler as any).callMCP('subagent_done', {
@@ -472,8 +539,13 @@ describe('IdleEventHandler', () => {
   });
 
   it('should_return_node_error_when_no_stdout', async () => {
-    const err = new Error('spawn uv ENOENT');
-    getPromisifiedExecFile().mockRejectedValue(err);
+    mockSpawnResult = {
+      stdout: '',
+      stderr: '',
+      exitCode: null,
+      signal: null,
+      error: new Error('spawn uv ENOENT'),
+    };
 
     const handler = new IdleEventHandler(client, store, executor, sessionsDir);
     const result = await (handler as any).callMCP('subagent_done', {
@@ -483,5 +555,153 @@ describe('IdleEventHandler', () => {
     });
 
     expect(result).toEqual({ error: 'spawn uv ENOENT' });
+  });
+
+  // ── Trigger file tests ────────────────────────────────────────────────
+
+  it('should_ignore_when_no_trigger_file', async () => {
+    vi.mocked(existsSync).mockReturnValue(false);
+    store.findBySession.mockReturnValue(undefined);
+    const handler = new IdleEventHandler(client, store, executor, sessionsDir);
+    await handler.handle('session-1');
+    // readFileSync should not be called since trigger file doesn't exist
+    expect(readFileSync).not.toHaveBeenCalled();
+  });
+
+  it('should_process_trigger_and_launch_R', async () => {
+    const triggerData = {
+      session_id: 'ses_target123',
+      project_directory: '/tmp/test-project',
+    };
+    const triggerPath = join(sessionsDir, '.trigger-reflect.json');
+
+    // existsSync: true for trigger file, false for mcpProjectDir walk
+    vi.mocked(existsSync).mockImplementation((p: any) => {
+      const path = String(p);
+      if (path.endsWith('.trigger-reflect.json')) return true;
+      return false;
+    });
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(triggerData));
+    vi.mocked(unlinkSync).mockReturnValue(undefined);
+
+    // orchestrate_start subprocess returns fire_sub
+    mockSpawnResult = {
+      stdout: JSON.stringify({
+        action: 'fire_sub',
+        workflow_id: 'wf_trigger_001',
+        sub_prompt: 'Reflect on session...',
+        sub_role: 'R',
+        use_bridge: true,
+      }),
+      stderr: '',
+      exitCode: 0,
+      signal: null,
+      error: null,
+    };
+
+    executor.launch.mockResolvedValue({
+      workflow_id: 'wf_trigger_001',
+      session_id: 'new-r-session',
+      status: 'running',
+      message: 'launched',
+    });
+
+    store.findBySession.mockReturnValue(undefined);
+    const handler = new IdleEventHandler(client, store, executor, sessionsDir);
+    await handler.handle('session-parent');
+
+    // Should have called orchestrate_start subprocess
+    const spawnCall = mockSpawn.mock.calls[0];
+    expect(spawnCall[1]).toContain('orchestrate_start');
+    expect(spawnCall[1]).toContain('reflect');
+
+    // Should have launched R
+    expect(executor.launch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workflowId: 'wf_trigger_001',
+        agent: 'R',
+        parentSessionId: 'session-parent',
+        targetSessionId: 'ses_target123',
+      }),
+    );
+
+    // Should have deleted trigger file
+    expect(unlinkSync).toHaveBeenCalledWith(triggerPath);
+  });
+
+  it('should_delete_trigger_on_parse_error', async () => {
+    const triggerPath = join(sessionsDir, '.trigger-reflect.json');
+
+    vi.mocked(existsSync).mockImplementation((p: any) => {
+      return String(p).endsWith('.trigger-reflect.json');
+    });
+    vi.mocked(readFileSync).mockReturnValue('not valid json {{{');
+    vi.mocked(unlinkSync).mockReturnValue(undefined);
+
+    store.findBySession.mockReturnValue(undefined);
+    const handler = new IdleEventHandler(client, store, executor, sessionsDir);
+    await handler.handle('session-parent');
+
+    expect(unlinkSync).toHaveBeenCalledWith(triggerPath);
+    expect(executor.launch).not.toHaveBeenCalled();
+  });
+
+  it('should_delete_trigger_on_subprocess_error', async () => {
+    const triggerPath = join(sessionsDir, '.trigger-reflect.json');
+
+    vi.mocked(existsSync).mockImplementation((p: any) => {
+      return String(p).endsWith('.trigger-reflect.json');
+    });
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify({ session_id: 'ses_1' }));
+    vi.mocked(unlinkSync).mockReturnValue(undefined);
+
+    mockSpawnResult = {
+      stdout: JSON.stringify({ error: 'MCP init failed' }),
+      stderr: '',
+      exitCode: 0,
+      signal: null,
+      error: null,
+    };
+
+    store.findBySession.mockReturnValue(undefined);
+    const handler = new IdleEventHandler(client, store, executor, sessionsDir);
+    await handler.handle('session-parent');
+
+    expect(unlinkSync).toHaveBeenCalledWith(triggerPath);
+    expect(executor.launch).not.toHaveBeenCalled();
+  });
+
+  it('should_delete_trigger_on_R_launch_failure', async () => {
+    const triggerPath = join(sessionsDir, '.trigger-reflect.json');
+
+    vi.mocked(existsSync).mockImplementation((p: any) => {
+      return String(p).endsWith('.trigger-reflect.json');
+    });
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify({ session_id: 'ses_1' }));
+    vi.mocked(unlinkSync).mockReturnValue(undefined);
+
+    mockSpawnResult = {
+      stdout: JSON.stringify({
+        action: 'fire_sub',
+        workflow_id: 'wf_t1',
+        sub_prompt: 'prompt',
+        sub_role: 'R',
+      }),
+      stderr: '',
+      exitCode: 0,
+      signal: null,
+      error: null,
+    };
+
+    executor.launch.mockResolvedValue({
+      status: 'error',
+      message: 'promptAsync unavailable',
+    });
+
+    store.findBySession.mockReturnValue(undefined);
+    const handler = new IdleEventHandler(client, store, executor, sessionsDir);
+    await handler.handle('session-parent');
+
+    expect(unlinkSync).toHaveBeenCalledWith(triggerPath);
   });
 });

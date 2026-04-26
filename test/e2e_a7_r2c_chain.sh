@@ -266,15 +266,25 @@ wait_for "Top-level session has assistant messages" \
 sleep 3
 
 # ───────────────────────────────────────────────────────────────
-# Step 5: Trigger /aristotle
+# Step 5: Trigger /aristotle via trigger file
 # ───────────────────────────────────────────────────────────────
-echo -e "\n${CYAN}═══ Step 5: Trigger /aristotle ═══${RESET}"
+echo -e "\n${CYAN}═══ Step 5: Trigger /aristotle via trigger file ═══${RESET}"
 
-echo "  Sending: /aristotle"
-tmux_send "/aristotle"
+# Get the latest session ID (created in step 4)
+LATEST_SESSION=$(get_latest_session)
+echo "  Parent session: $LATEST_SESSION"
 
-# Wait for the slash command to be processed
-sleep 3
+# Write trigger JSON — bridge plugin will read this on next idle event
+TRIGGER_JSON=$(cat <<EOF
+{"session_id":"$LATEST_SESSION","project_directory":"$PROJECT_DIR","target_label":"current","user_language":"en-US","focus":"last"}
+EOF
+)
+echo "$TRIGGER_JSON" > "$SESSIONS_DIR/.trigger-reflect.json"
+echo "  Trigger file written to $SESSIONS_DIR/.trigger-reflect.json"
+echo "  Waiting for bridge plugin to pick up trigger..."
+
+# Give plugin a moment to detect the trigger on the next idle event
+sleep 5
 
 # ───────────────────────────────────────────────────────────────
 # Step 6: Wait for fire_o — workflow goes to 'running'

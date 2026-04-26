@@ -1,14 +1,14 @@
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
+import { spawn } from 'node:child_process';
 import { join } from 'node:path';
-import { existsSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { existsSync, readFileSync, unlinkSync } from 'node:fs';
 import { extractLastAssistantText } from './utils.js';
 import type { WorkflowState } from './types.js';
 import type { WorkflowStore } from './workflow-store.js';
 import type { AsyncTaskExecutor } from './executor.js';
 import { logger } from './logger.js';
 
-const execFileAsync = promisify(execFile);
+const TRIGGER_FILENAME = '.trigger-reflect.json';
 
 /** Result from MCP subprocess call */
 interface McpResult {
@@ -48,14 +48,18 @@ export function resolveMcpProjectDir(sessionsDir: string): string {
     dir = parent;
   }
 
-  // Fallback: use ARISTOTLE_PROJECT_DIR env var, or cwd as last resort
+  // Fallback: use ARISTOTLE_PROJECT_DIR env var, or default install path
   const envFallback = process.env.ARISTOTLE_PROJECT_DIR;
   if (envFallback && existsSync(join(envFallback, 'aristotle_mcp'))) return envFallback;
+  // Default install path (matches opencode.json MCP config)
+  const defaultInstall = join(homedir(), '.claude', 'skills', 'aristotle');
+  if (existsSync(join(defaultInstall, 'aristotle_mcp'))) return defaultInstall;
   return process.cwd();
 }
 
 export class IdleEventHandler {
   private readonly mcpProjectDir: string;
+  private readonly sessionsDir: string;
 
   constructor(
     private client: any,
@@ -63,11 +67,15 @@ export class IdleEventHandler {
     private executor: AsyncTaskExecutor,
     sessionsDir: string,
   ) {
+    this.sessionsDir = sessionsDir;
     this.mcpProjectDir = resolveMcpProjectDir(sessionsDir);
     logger.debug('mcpProjectDir=%s', this.mcpProjectDir);
   }
 
   async handle(sessionID: string): Promise<void> {
+    // Check for trigger file before normal idle handling
+    await this.checkTrigger(sessionID);
+
     const wf: WorkflowState | undefined = this.store.findBySession(sessionID);
     logger.debug('idle handle: session=%s found=%s status=%s agent=%s',
       sessionID, !!wf, wf?.status ?? 'n/a', wf?.agent ?? 'n/a');
@@ -242,34 +250,138 @@ export class IdleEventHandler {
   }
 
   /**
+   * Check for a trigger file written by an external test harness.
+   * If found, call orchestrate_start("reflect") via subprocess and launch R.
+   * The trigger file is deleted after processing (success or failure).
+   *
+   * Trigger JSON format:
+   *   { "session_id": "ses_xxx", "project_directory": "/path", ... }
+   *   All fields are passed as args_json to orchestrate_start("reflect").
+   */
+  private async checkTrigger(parentSessionId: string): Promise<void> {
+    const triggerPath = join(this.sessionsDir, TRIGGER_FILENAME);
+    if (!existsSync(triggerPath)) return;
+
+    let trigger: Record<string, string>;
+    try {
+      const raw = readFileSync(triggerPath, 'utf-8');
+      trigger = JSON.parse(raw);
+    } catch (e) {
+      logger.error('trigger file parse error: %s', e instanceof Error ? e.message : e);
+      try { unlinkSync(triggerPath); } catch {}
+      return;
+    }
+
+    logger.info('trigger detected: session=%s project=%s', trigger.session_id, trigger.project_directory);
+
+    // Call orchestrate_start("reflect") via subprocess
+    const result = await this.callMCPStart('reflect', trigger);
+    try { unlinkSync(triggerPath); } catch {}
+
+    if (result.error) {
+      logger.error('trigger orchestrate_start failed: %s', result.error);
+      return;
+    }
+
+    if (result.action === 'fire_sub' && result.sub_prompt) {
+      logger.info('trigger: launching R for wf=%s', result.workflow_id);
+      try {
+        const launchResult = await this.executor.launch({
+          workflowId: result.workflow_id!,
+          oPrompt: result.sub_prompt,
+          agent: result.sub_role || 'R',
+          parentSessionId,
+          targetSessionId: trigger.session_id,
+        });
+        if (launchResult.status === 'error') {
+          logger.error('trigger: R launch failed: %s', launchResult.message);
+        } else {
+          logger.info('trigger: R launched, session=%s', launchResult.session_id);
+        }
+      } catch (launchError) {
+        const msg = launchError instanceof Error ? launchError.message : String(launchError);
+        logger.error('trigger: R launch threw: %s', msg);
+      }
+    } else {
+      logger.warn('trigger: unexpected action=%s', result.action ?? 'undefined');
+    }
+  }
+
+  /**
+   * Call MCP orchestrate_start via subprocess.
+   * Uses stdin for args_json payload (spawn + stdin.write/end).
+   */
+  private async callMCPStart(command: string, args: Record<string, string>): Promise<McpResult> {
+    return this.runSubprocess(
+      ['run', '--project', this.mcpProjectDir, 'python', '-m', 'aristotle_mcp._cli', 'orchestrate_start', command],
+      JSON.stringify(args),
+    );
+  }
+
+  /**
    * Call MCP orchestrate_on_event via subprocess.
    * Uses stdin for payload to avoid ARG_MAX limit (Council R1).
    */
   private async callMCP(eventType: string, data: Record<string, string>): Promise<McpResult> {
-    const dataJson = JSON.stringify(data);
-    try {
-      const { stdout } = await execFileAsync('uv', [
-        'run', 'python', '-m', 'aristotle_mcp._cli',
-        eventType,
-      ], {
-        cwd: this.mcpProjectDir,
-        timeout: 30000,
-        input: dataJson,  // payload via stdin (Council R1)
-      });
-      return JSON.parse(stdout.trim()) as McpResult;
-    } catch (e: any) {
-      // execFileAsync throws on non-zero exit code.
-      // Try to parse error from stdout (if Python wrote JSON before exit).
-      if (e.stdout) {
+    return this.runSubprocess(
+      ['run', '--project', this.mcpProjectDir, 'python', '-m', 'aristotle_mcp._cli', eventType],
+      JSON.stringify(data),
+    );
+  }
+
+  /**
+   * Run a subprocess via spawn with stdin data.
+   * Uses spawn (async) instead of execFile because Node.js async child_process
+   * APIs do not support the `input` option — only sync APIs do.
+   * Returns parsed JSON from stdout, or { error } on failure.
+   */
+  private runSubprocess(args: string[], stdinData: string): Promise<McpResult> {
+    return new Promise<McpResult>((resolve) => {
+      const child = spawn('uv', args, { timeout: 30000 });
+
+      let stdout = '';
+      let stderr = '';
+      child.stdout.on('data', (d: Buffer) => { stdout += d; });
+      child.stderr.on('data', (d: Buffer) => { stderr += d; });
+
+      // Oracle rev 1: stdin error handler — child may exit before stdin is consumed
+      child.stdin.on('error', () => { /* pipe closed, close event will resolve */ });
+
+      child.on('close', (code, signal) => {
+        // Oracle rev 3: distinguish signal kill (timeout) from real errors
+        if (signal) {
+          const msg = `Process killed by signal ${signal} (timeout?)`;
+          logger.error('subprocess killed: %s stderr=%s', msg, stderr);
+          resolve({ error: msg });
+          return;
+        }
+        if (code !== 0) {
+          // Try to parse error JSON from stdout (Python may have written it before exit)
+          try {
+            const parsed = JSON.parse(stdout.trim()) as McpResult;
+            if ('error' in parsed && parsed.error !== undefined) {
+              resolve(parsed);
+              return;
+            }
+          } catch {}
+          logger.error('subprocess failed: exit=%d stderr=%s', code, stderr);
+          resolve({ error: `Process exited with code ${code}: ${stderr}` });
+          return;
+        }
         try {
-          const parsed = JSON.parse(String(e.stdout).trim()) as McpResult;
-          // Oracle R4 Issue 9: check with 'in' operator, not truthiness
-          if ('error' in parsed && parsed.error !== undefined) return parsed;
-        } catch {}
-      }
-      const stderr = e.stderr ? String(e.stderr) : '';
-      logger.error('subprocess failed: %s stderr=%s', e.message, stderr);
-      return { error: e.message };
-    }
+          resolve(JSON.parse(stdout.trim()) as McpResult);
+        } catch (e) {
+          resolve({ error: `Invalid JSON output: ${stdout.substring(0, 200)}` });
+        }
+      });
+
+      child.on('error', (err) => {
+        resolve({ error: err.message });
+      });
+
+      // Write stdin data and close — this is the correct async API for stdin
+      child.stdin.write(stdinData);
+      child.stdin.end();
+    });
   }
 }
