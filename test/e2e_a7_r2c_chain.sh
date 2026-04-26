@@ -473,6 +473,23 @@ else
     VERIFICATION_FAILED=$((VERIFICATION_FAILED + 1))
 fi
 
+# 10.7: Snapshot file was created (B3 verification)
+echo -e "\n  ${CYAN}10.7${RESET} Snapshot file created for R"
+SNAPSHOT_FILE=$(ls -t "$SESSIONS_DIR"/*_snapshot.json 2>/dev/null | head -1)
+if [[ -n "$SNAPSHOT_FILE" ]]; then
+    SNAPSHOT_MSGS=$(python3 -c "import json; d=json.load(open('$SNAPSHOT_FILE')); print(d.get('total_messages', 0))" 2>/dev/null || echo "0")
+    if [[ "$SNAPSHOT_MSGS" -gt 0 ]]; then
+        echo -e "    ${GREEN}✅${RESET} Snapshot: $SNAPSHOT_FILE ($SNAPSHOT_MSGS messages)"
+        VERIFICATION_PASSED=$((VERIFICATION_PASSED + 1))
+    else
+        echo -e "    ${RED}❌${RESET} Snapshot exists but has 0 messages"
+        VERIFICATION_FAILED=$((VERIFICATION_FAILED + 1))
+    fi
+else
+    echo -e "    ${RED}❌${RESET} No snapshot file found in $SESSIONS_DIR"
+    VERIFICATION_FAILED=$((VERIFICATION_FAILED + 1))
+fi
+
 # ───────────────────────────────────────────────────────────────
 # Output summary
 # ───────────────────────────────────────────────────────────────
