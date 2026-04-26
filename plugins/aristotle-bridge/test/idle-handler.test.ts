@@ -620,7 +620,7 @@ describe('IdleEventHandler', () => {
       expect.objectContaining({
         workflowId: 'wf_trigger_001',
         agent: 'R',
-        parentSessionId: 'session-parent',
+        parentSessionId: 'ses_target123',
         targetSessionId: 'ses_target123',
       }),
     );

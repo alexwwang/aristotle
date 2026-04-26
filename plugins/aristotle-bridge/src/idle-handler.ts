@@ -286,11 +286,13 @@ export class IdleEventHandler {
     if (result.action === 'fire_sub' && result.sub_prompt) {
       logger.info('trigger: launching R for wf=%s', result.workflow_id);
       try {
+        // Use trigger.session_id as parent — R must be a child of the
+        // session being reflected on, not whichever session happened to idle.
         const launchResult = await this.executor.launch({
           workflowId: result.workflow_id!,
           oPrompt: result.sub_prompt,
           agent: result.sub_role || 'R',
-          parentSessionId,
+          parentSessionId: trigger.session_id,
           targetSessionId: trigger.session_id,
         });
         if (launchResult.status === 'error') {
