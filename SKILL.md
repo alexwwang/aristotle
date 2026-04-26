@@ -71,7 +71,7 @@ GOTO SNAPSHOT-EXTRACT (in PRE-RESOLVE section above).
         ```
      d. Call MCP `orchestrate_on_event("subagent_done", {workflow_id, result: result, session_id: bridge_session_id})`
      e. If response.action === "fire_sub":
-        - Call `aristotle_fire_o(workflow_id, o_prompt=response.sub_prompt, agent=response.sub_role)`
+         - Call `aristotle_fire_o(workflow_id, o_prompt=response.sub_prompt, target_session_id=target_session_id)`
         - Update bridge_session_id = response.session_id
         - GOTO step c (poll next stage)
      f. If response.action === "notify":
