@@ -81,7 +81,7 @@ export class AsyncTaskExecutor {
     try {
       await this.client.session.promptAsync({
         path: { id: session.data.id },
-        body: { agent, parts: [{ type: 'text', text: oPrompt }] },
+        body: { parts: [{ type: 'text', text: oPrompt }] },
       });
     } catch (e) {
       await this.client.session.abort({ path: { id: session.data.id } }).catch(() => {});
