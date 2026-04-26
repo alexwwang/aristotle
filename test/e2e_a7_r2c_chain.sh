@@ -238,28 +238,43 @@ wait_for ".bridge-active marker created" \
     }
 
 # ───────────────────────────────────────────────────────────────
-# Step 3: Create error context (send a message about the typo)
+# Step 3: Create error-correction context (two turns)
+#   Turn 1: Ask model to do something → model responds
+#   Turn 2: Tell model it was wrong → model corrects → error-correction pattern
 # ───────────────────────────────────────────────────────────────
-echo -e "\n${CYAN}═══ Step 3: Create error context in OpenCode ═══${RESET}"
+echo -e "\n${CYAN}═══ Step 3: Create error-correction context (two turns) ═══${RESET}"
 
 # Find the typo line number for reference
 TYPO_LINE=$(grep -n "hellow world" "$README_PATH" | head -1 | cut -d: -f1 || echo "?")
 echo "  Typo found at README.md line $TYPO_LINE"
 
-MSG="Please fix the typo in README: 'hellow world' should be 'hello world'"
-echo "  Sending: $MSG"
-tmux_send "$MSG"
+# Turn 1: Ask model to fix the typo — but give WRONG target
+MSG1="Fix the typo in README: change 'hellow world' to 'hello earth'"
+echo "  Turn 1: $MSG1"
+tmux_send "$MSG1"
 
-# ───────────────────────────────────────────────────────────────
-# Step 4: Wait for LLM response (assistant message in DB)
-# ───────────────────────────────────────────────────────────────
-echo -e "\n${CYAN}═══ Step 4: Wait for LLM response ═══${RESET}"
-
-# Poll for the latest top-level session to appear with assistant messages
-wait_for "Top-level session has assistant messages" \
-    "LATEST_SESSION=\"\$(get_latest_session)\" && [[ -n \"\$LATEST_SESSION\" ]] && [[ \$(count_assistant_messages \"\$LATEST_SESSION\") -gt 0 ]]" \
+# Wait for model response
+wait_for "Turn 1: assistant messages" \
+    "LATEST_SESSION=\"\$(get_latest_session)\" && [[ -n \"\$LATEST_SESSION\" ]] && [[ \$(count_assistant_messages \"\$LATEST_SESSION\") -ge 1 ]]" \
     60 || {
-        echo "  ${YELLOW}⚠${RESET} No assistant messages yet, continuing anyway..."
+        echo "  ${YELLOW}⚠${RESET} Turn 1: No assistant message yet, continuing..."
+    }
+sleep 3
+
+# Turn 2: Correct the model — creates error-correction pattern
+MSG2="That's wrong. I said 'hello earth' but that's incorrect — it should be 'hello world' not 'hello earth'. Fix it properly. Also you should have known better."
+echo "  Turn 2: $MSG2"
+tmux_send "$MSG2"
+
+# ───────────────────────────────────────────────────────────────
+# Step 4: Wait for LLM correction response
+# ───────────────────────────────────────────────────────────────
+echo -e "\n${CYAN}═══ Step 4: Wait for LLM correction response ═══${RESET}"
+
+wait_for "Top-level session has ≥2 assistant messages" \
+    "LATEST_SESSION=\"\$(get_latest_session)\" && [[ -n \"\$LATEST_SESSION\" ]] && [[ \$(count_assistant_messages \"\$LATEST_SESSION\") -ge 2 ]]" \
+    60 || {
+        echo "  ${YELLOW}⚠${RESET} Not enough assistant messages, continuing anyway..."
     }
 
 # Give a moment for the response to settle
@@ -430,6 +445,32 @@ elif grep -q "hellow world" "$README_PATH" 2>/dev/null; then
     # Don't count as failure — C might not have had changes to commit
 else
     echo -e "    ${YELLOW}⚠${RESET}  Could not verify typo state"
+fi
+
+# 10.6: R generated a DRAFT file (persis_draft was called)
+echo -e "\n  ${CYAN}10.6${RESET} R generated DRAFT file"
+# Check the workflow result for draft-related content
+WF_RESULT=$(python3 -c "import json; wfs=json.load(open('$WORKFLOWS_FILE')); print(wfs[0].get('result',''))" 2>/dev/null || echo "")
+# Also check if any draft file exists in the aristotle-drafts or state directory
+DRAFTS_DIR="$HOME/.config/opencode/aristotle-drafts"
+DRAFT_FOUND=""
+if [[ -d "$DRAFTS_DIR" ]]; then
+    DRAFT_FOUND=$(ls -t "$DRAFTS_DIR"/*.md 2>/dev/null | head -1)
+fi
+# Also check aristotle-state drafts
+if [[ -z "$DRAFT_FOUND" ]]; then
+    DRAFT_FOUND=$(ls -t "$ARISTOTLE_PROJECT_DIR/aristotle-state"/*draft* 2>/dev/null | head -1)
+fi
+if [[ -n "$DRAFT_FOUND" ]]; then
+    echo -e "    ${GREEN}✅${RESET} DRAFT file found: $DRAFT_FOUND"
+    VERIFICATION_PASSED=$((VERIFICATION_PASSED + 1))
+elif echo "$WF_RESULT" | grep -qi "draft\|rule\|commit"; then
+    echo -e "    ${GREEN}✅${RESET} Workflow result mentions draft/rules"
+    VERIFICATION_PASSED=$((VERIFICATION_PASSED + 1))
+else
+    echo -e "    ${RED}❌${RESET} No DRAFT file found and workflow result has no draft content"
+    echo "    Workflow result: ${WF_RESULT:0:200}"
+    VERIFICATION_FAILED=$((VERIFICATION_FAILED + 1))
 fi
 
 # ───────────────────────────────────────────────────────────────
