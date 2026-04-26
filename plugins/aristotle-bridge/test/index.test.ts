@@ -122,10 +122,13 @@ describe('AristotleBridgePlugin', () => {
       expect(plugin).toHaveProperty('tool');
       expect(plugin).toHaveProperty('event');
 
-      const tools = plugin.tool();
+      const tools = plugin.tool;
       expect(tools).toHaveProperty('aristotle_fire_o');
       expect(tools).toHaveProperty('aristotle_check');
       expect(tools).toHaveProperty('aristotle_abort');
+      expect(tools.aristotle_fire_o).toHaveProperty('description');
+      expect(tools.aristotle_fire_o).toHaveProperty('args');
+      expect(tools.aristotle_fire_o).toHaveProperty('execute');
     });
 
     it('should_return_empty_tools_when_promptAsync_unavailable', async () => {
@@ -281,11 +284,12 @@ describe('AristotleBridgePlugin', () => {
       mockStore.getActive.mockReturnValue(active);
 
       const plugin = await AristotleBridgePlugin(ctx);
-      const tools = plugin.tool();
-      const result = await tools.aristotle_check({});
+      const tools = plugin.tool;
+      const result = await tools.aristotle_check.execute({});
 
       expect(mockStore.getActive).toHaveBeenCalledTimes(1);
-      expect(result).toEqual(active);
+      expect(JSON.parse(result)).toEqual(active);
+      expect(mockStore.getActive).toHaveBeenCalledTimes(1);
     });
 
     it('should_delegate_to_retrieve_when_workflow_id_provided', async () => {
@@ -294,12 +298,12 @@ describe('AristotleBridgePlugin', () => {
       mockStore.retrieve.mockReturnValue(retrieved);
 
       const plugin = await AristotleBridgePlugin(ctx);
-      const tools = plugin.tool();
-      const result = await tools.aristotle_check({ workflow_id: 'x' });
+      const tools = plugin.tool;
+      const result = await tools.aristotle_check.execute({ workflow_id: 'x' });
 
       expect(mockStore.retrieve).toHaveBeenCalledTimes(1);
       expect(mockStore.retrieve).toHaveBeenCalledWith('x');
-      expect(result).toEqual(retrieved);
+      expect(JSON.parse(result)).toEqual(retrieved);
     });
   });
 
@@ -312,13 +316,13 @@ describe('AristotleBridgePlugin', () => {
       ctx.client.session.abort = mockAbort;
 
       const plugin = await AristotleBridgePlugin(ctx);
-      const tools = plugin.tool();
-      const result = await tools.aristotle_abort({ workflow_id: 'wf-1' });
+      const tools = plugin.tool;
+      const result = await tools.aristotle_abort.execute({ workflow_id: 'wf-1' });
 
       expect(mockAbort).toHaveBeenCalledWith({ path: { id: 's1' } });
       expect(mockStore.cancel).toHaveBeenCalledTimes(1);
       expect(mockStore.cancel).toHaveBeenCalledWith('wf-1');
-      expect(result).toEqual({ status: 'cancelled', workflow_id: 'wf-1' });
+      expect(JSON.parse(result)).toEqual({ status: 'cancelled', workflow_id: 'wf-1' });
     });
 
     it('should_return_cancelled_for_already_cancelled_workflow', async () => {
@@ -326,10 +330,10 @@ describe('AristotleBridgePlugin', () => {
       mockStore.findByWorkflowId.mockReturnValue({ status: 'cancelled', sessionId: 's1' });
 
       const plugin = await AristotleBridgePlugin(ctx);
-      const tools = plugin.tool();
-      const result = await tools.aristotle_abort({ workflow_id: 'wf-1' });
+      const tools = plugin.tool;
+      const result = await tools.aristotle_abort.execute({ workflow_id: 'wf-1' });
 
-      expect(result).toEqual({ status: 'cancelled', workflow_id: 'wf-1' });
+      expect(JSON.parse(result)).toEqual({ status: 'cancelled', workflow_id: 'wf-1' });
       expect(mockStore.cancel).not.toHaveBeenCalled();
     });
 
@@ -338,10 +342,10 @@ describe('AristotleBridgePlugin', () => {
       mockStore.findByWorkflowId.mockReturnValue({ status: 'completed', sessionId: 's1' });
 
       const plugin = await AristotleBridgePlugin(ctx);
-      const tools = plugin.tool();
-      const result = await tools.aristotle_abort({ workflow_id: 'wf-1' });
+      const tools = plugin.tool;
+      const result = await tools.aristotle_abort.execute({ workflow_id: 'wf-1' });
 
-      expect(result).toEqual({ status: 'completed', workflow_id: 'wf-1' });
+      expect(JSON.parse(result)).toEqual({ status: 'completed', workflow_id: 'wf-1' });
       expect(mockStore.cancel).not.toHaveBeenCalled();
     });
 
@@ -350,10 +354,10 @@ describe('AristotleBridgePlugin', () => {
       mockStore.findByWorkflowId.mockReturnValue({ status: 'error', sessionId: 's1' });
 
       const plugin = await AristotleBridgePlugin(ctx);
-      const tools = plugin.tool();
-      const result = await tools.aristotle_abort({ workflow_id: 'wf-1' });
+      const tools = plugin.tool;
+      const result = await tools.aristotle_abort.execute({ workflow_id: 'wf-1' });
 
-      expect(result).toEqual({ status: 'error', workflow_id: 'wf-1' });
+      expect(JSON.parse(result)).toEqual({ status: 'error', workflow_id: 'wf-1' });
       expect(mockStore.cancel).not.toHaveBeenCalled();
     });
 
@@ -362,10 +366,10 @@ describe('AristotleBridgePlugin', () => {
       mockStore.findByWorkflowId.mockReturnValue({ status: 'undone', sessionId: 's1' });
 
       const plugin = await AristotleBridgePlugin(ctx);
-      const tools = plugin.tool();
-      const result = await tools.aristotle_abort({ workflow_id: 'wf-1' });
+      const tools = plugin.tool;
+      const result = await tools.aristotle_abort.execute({ workflow_id: 'wf-1' });
 
-      expect(result).toEqual({ status: 'undone', workflow_id: 'wf-1' });
+      expect(JSON.parse(result)).toEqual({ status: 'undone', workflow_id: 'wf-1' });
       expect(mockStore.cancel).not.toHaveBeenCalled();
     });
 
@@ -374,10 +378,10 @@ describe('AristotleBridgePlugin', () => {
       mockStore.findByWorkflowId.mockReturnValue(undefined);
 
       const plugin = await AristotleBridgePlugin(ctx);
-      const tools = plugin.tool();
-      const result = await tools.aristotle_abort({ workflow_id: 'unknown' });
+      const tools = plugin.tool;
+      const result = await tools.aristotle_abort.execute({ workflow_id: 'unknown' });
 
-      expect(result).toEqual({ error: 'Workflow not found' });
+      expect(JSON.parse(result)).toEqual({ error: 'Workflow not found' });
       expect(mockStore.cancel).not.toHaveBeenCalled();
     });
 
@@ -388,40 +392,55 @@ describe('AristotleBridgePlugin', () => {
       ctx.client.session.abort = mockAbort;
 
       const plugin = await AristotleBridgePlugin(ctx);
-      const tools = plugin.tool();
-      const result = await tools.aristotle_abort({ workflow_id: 'wf-1' });
+      const tools = plugin.tool;
+      const result = await tools.aristotle_abort.execute({ workflow_id: 'wf-1' });
 
       expect(mockStore.cancel).toHaveBeenCalledTimes(1);
       expect(mockStore.cancel).toHaveBeenCalledWith('wf-1');
-      expect(result).toEqual({ status: 'cancelled', workflow_id: 'wf-1' });
+      expect(JSON.parse(result)).toEqual({ status: 'cancelled', workflow_id: 'wf-1' });
     });
   });
 
   /* ── Group 6: fire_o handler ── */
   describe('aristotle_fire_o', () => {
-    it('should_fire_o_tool_handler_map_params_to_executor_launch', async () => {
+    const toolContext = { sessionID: 'tool-ctx-session-1', messageID: 'm1', agent: 'primary' };
+
+    it('should_default_target_session_id_to_tool_context_sessionID_when_empty', async () => {
       vi.mocked(detectApiMode).mockResolvedValue('promptAsync');
 
       const plugin = await AristotleBridgePlugin(ctx);
-      const tools = plugin.tool();
-      const result = await tools.aristotle_fire_o({
+      const tools = plugin.tool;
+      await tools.aristotle_fire_o.execute({
         workflow_id: 'w1',
         o_prompt: 'p',
-      });
+      }, toolContext);
 
-      expect(mockExecutor.launch).toHaveBeenCalledTimes(1);
       expect(mockExecutor.launch).toHaveBeenCalledWith({
         workflowId: 'w1',
         oPrompt: 'p',
         agent: 'R',
-        parentSessionId: 'parent-session-1',
-        targetSessionId: undefined,
+        parentSessionId: 'tool-ctx-session-1',
+        targetSessionId: 'tool-ctx-session-1',
       });
-      expect(result).toEqual({
+    });
+
+    it('should_use_explicit_target_session_id_when_provided', async () => {
+      vi.mocked(detectApiMode).mockResolvedValue('promptAsync');
+
+      const plugin = await AristotleBridgePlugin(ctx);
+      const tools = plugin.tool;
+      await tools.aristotle_fire_o.execute({
         workflow_id: 'w1',
-        session_id: 's1',
-        status: 'running',
-        message: 'launched',
+        o_prompt: 'p',
+        target_session_id: 'target-ses-123',
+      }, toolContext);
+
+      expect(mockExecutor.launch).toHaveBeenCalledWith({
+        workflowId: 'w1',
+        oPrompt: 'p',
+        agent: 'R',
+        parentSessionId: 'tool-ctx-session-1',
+        targetSessionId: 'target-ses-123',
       });
     });
   });
