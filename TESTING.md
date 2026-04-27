@@ -187,28 +187,6 @@ One opencode session covers plugin load, async reflect, and undo cleanup. **13 v
 
 **Automation notes**: A1–A13 can be driven via tmux + file-system assertions. B1 eliminates LLM polling dependency for R→C chain — A6/A7 depend only on subprocess timing (~200ms). A3, A9 still depend on LLM response timing.
 
-#### A1–A7 Test Results (2026-04-27)
-
-Executed in a real opencode TUI session with GLM-5.1 model.
-
-| Step | Result | Details |
-|------|--------|---------|
-| A1 | ✅ PASS | Plugin registered correctly, tools exposed to LLM |
-| A2 | ✅ PASS | `.bridge-active` exists with pid + startedAt |
-| A3 | ✅ PASS | `/aristotle` returns immediately, main session not blocked |
-| A4 | ✅ PASS | Marker file persists |
-| A5 | ✅ PASS | `bridge-workflows.json` contains workflowId + sessionId |
-| A6 | ✅ PASS | Status: running → completed (confirmed via debug log) |
-| A7 | ✅ PASS | Full R→C chain: R produced DRAFT → C wrote 2 staging rules → done |
-
-##### Bugs Found
-
-| Bug | Root Cause | Fix | Commit |
-|-----|-----------|-----|--------|
-| **#14 R truncation** | `opencode.json` had `limit.output: 4096` for GLM-5.1; reasoning + output share max_tokens budget; reasoning consumed 4092 → 4 tokens left for output → DRAFT never produced | (1) DRAFT existence check in `_orch_event.py` (2) Compact prompt mode (3) Config-driven prompt mode selection (full/compact/auto) | `07e71a7` |
-| **#14a Count mismatch** | `_parse_checker_result` regex `committed\s*[:=]\s*(\d+)` didn't match C's actual output format `"- Auto-committed: 0"` → count (0,0) → state record `rules_count=0` | Query `list_rules` frontmatter status for counting instead of text parsing | `db9d2e0` |
-| **#14b No user notification** | Bridge fire-and-forget architecture; chain completion only logged to stderr, invisible in normal mode | **Pending** — plan to use `client.tui.showToast()` API for TUI toast notification | — |
-
 #### Round B: Reflect-Check Chain (semi-automated)
 
 One `/aristotle` invocation covers snapshot extraction, reflect-check loop, sessions, and review. **9 verification points.**
@@ -226,77 +204,6 @@ One `/aristotle` invocation covers snapshot extraction, reflect-check loop, sess
 | B9 | Send `/aristotle review 1` | DRAFT rule content displayed | M1-9 |
 
 **Automation notes**: B3, B4, B6, B8, B9 are file/API assertions. B1, B2, B5 depend on LLM. R→C chain (B4) is now plugin-driven — no LLM polling needed. Use `opencode run "message" --format json` for scriptable interaction.
-
-#### Round B Partial Results (2026-04-27)
-
-| Step | Result | Details |
-|------|--------|---------|
-| B1 | ✅ PASS | Prime function error-correction scenario: model identified 1 as prime, user corrected |
-| B2 | ✅ PASS | `/aristotle` triggered Reflector with CONTEXT SUMMARY |
-| B3 | ⬜ SKIP | Snapshot file not verified separately (SESSION_FILE was empty, used CONTEXT SUMMARY) |
-| B4 | ✅ PASS | R→C chain completed, rec_19 DRAFT produced 2 reflections |
-| B5 | ⬜ SKIP | Checker did not request deeper analysis |
-| B6 | ✅ PASS | running → completed (confirmed via debug log) |
-| B7 | ❌ FAIL | User cannot see completion notification in TUI (Bug #14b, pending fix) |
-| B8 | ⬜ TODO | `/aristotle sessions` not tested |
-| B9 | ⬜ TODO | `/aristotle review 19` not tested |
-
----
-
-## 7. Next Phase Test Plan
-
-### 7.1 Phase Gate
-
-**Blocker**: B7 (no user notification) must be fixed before proceeding. Requires TUI Toast implementation.
-
-**Fix path**: Add `client.tui.showToast()` calls in `idle-handler.ts` `driveChainCompletion()` and `driveChainTransition()`.
-
-### 7.2 Test Priority
-
-#### P0 — Post B7 Fix Verification (blocks subsequent testing)
-
-| ID | Test | Prerequisite |
-|----|------|-------------|
-| T1 | Toast appears in top-right corner after chain completes | B7 fix deployed |
-| T2 | Toast contains rule count + review link | T1 |
-| T3 | Toast auto-dismisses after duration | T1 |
-
-#### P1 — A8~A13 (undo + cleanup)
-
-| ID | Test | Prerequisite |
-|----|------|-------------|
-| A8 | Second `/aristotle` starts new workflow | A7 passed |
-| A9 | `/undo` triggers SKILL.md rule | A8 complete |
-| A10 | `aristotle_check` returns running workflows | A8 |
-| A11 | `aristotle_abort` cancels all running workflows | A10 |
-| A12 | User sees "Cancelled N active workflow(s)" | A11 |
-| A13 | `.bridge-active` cleaned up on exit | A12 |
-
-#### P2 — B8~B9 Completion
-
-| ID | Test | Prerequisite |
-|----|------|-------------|
-| B8 | `/aristotle sessions` returns rec_19 record | A7 passed |
-| B9 | `/aristotle review 19` displays DRAFT content | B8 |
-
-#### P3 — P1 Passive Trigger (manual)
-
-| ID | Test | Notes |
-|----|------|-------|
-| P1-A | Agent self-correction → suggestion | New session, ask to implement function → self-review |
-| P1-B | Approach switch → suggestion | Challenging task, approach A fails → switch to B |
-| P1-C | User correction → suggestion | Agent produces error, user points it out |
-| P1-D | Normal conversation → no suggestion | Multi-turn normal dialog |
-| P1-E | Thinking-phase correction → no suggestion | Agent internally catches error before output |
-| P1-F | Main session corrects subagent → suggestion | Subagent returns error, main session fixes |
-
-### 7.3 Execution Order
-
-```
-Fix B7 (TUI Toast) → T1-T3 verify → A8-A13 → B8-B9 → P1-A~P1-F
-```
-
-A8-A13 and B8-B9 can be completed in a single opencode session. P1 requires a fresh session.
 
 ## 7. Configuration Reference
 

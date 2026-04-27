@@ -135,28 +135,6 @@ bash test/e2e_opencode.sh
 
 **自动化说明**：A1–A13 可通过 tmux + 文件系统断言驱动。仅 A3、A6、A9 依赖 LLM 响应时间——需加充分 sleep 或轮询循环。
 
-#### A1–A7 测试结果（2026-04-27）
-
-在真实 opencode TUI 中执行，使用 GLM-5.1 模型。
-
-| 步骤 | 结果 | 详情 |
-|------|------|------|
-| A1 | ✅ PASS | Plugin 正确注册，tool 暴露给 LLM |
-| A2 | ✅ PASS | `.bridge-active` 存在，含 pid + startedAt |
-| A3 | ✅ PASS | `/aristotle` 触发后主会话不阻塞，LLM 返回 STOP |
-| A4 | ✅ PASS | marker 文件持续存在 |
-| A5 | ✅ PASS | `bridge-workflows.json` 含 workflowId + sessionId |
-| A6 | ✅ PASS | 状态 running → completed（debug 日志确认） |
-| A7 | ✅ PASS | R→C 链路完整跑通：R 产出 DRAFT → C 写 2 条 staging rules → done |
-
-##### 发现的 Bug
-
-| Bug | 根因 | 修复 | Commit |
-|-----|------|------|--------|
-| **#14 R 截断** | `opencode.json` 配置 `limit.output: 4096`，GLM reasoning+output 共享预算，reasoning 消耗 4092 tokens → output 仅 4 tokens → DRAFT 未产生 | (1) `_orch_event.py` DRAFT 存在性检查 (2) compact prompt 模式 (3) 配置驱动的 prompt 模式选择 | `07e71a7` |
-| **#14a 计数错误** | `_parse_checker_result` 正则 `committed\s*[:=]\s*(\d+)` 不匹配 C 的实际输出格式 `"- Auto-committed: 0"` → 计数 (0,0) → state record `rules_count=0` | 改为查 `list_rules` 返回的规则文件 frontmatter status 计数 | `db9d2e0` |
-| **#14b 用户无通知** | Bridge fire-and-forget 架构，chain 完成后只打 logger，非 debug 模式下用户看不到 | **待修复** — 计划用 `client.tui.showToast()` API 推送 TUI 内通知 | — |
-
 ### 5.3 B1 回归检查
 
 ```bash
@@ -236,77 +214,6 @@ bash test/regression_b1_checks.sh
 | B9 | 发送 `/aristotle review 1` | DRAFT 规则内容已展示 | M1-9 |
 
 **自动化说明**：B3、B4、B6、B8、B9 为文件/API 断言。B1、B2、B5 依赖 LLM。可通过 `opencode run "message" --format json` 实现脚本化交互。
-
-#### Round B 部分结果（2026-04-27）
-
-| 步骤 | 结果 | 详情 |
-|------|------|------|
-| B1 | ✅ PASS | 素数函数错误-纠正场景：模型将 1 识别为素数，用户纠正 |
-| B2 | ✅ PASS | `/aristotle` 触发 Reflector，prompt 含 CONTEXT SUMMARY |
-| B3 | ⬜ SKIP | Snapshot 文件未单独验证（SESSION_FILE 为空，用了 CONTEXT SUMMARY） |
-| B4 | ✅ PASS | R→C 链完成，rec_19 DRAFT 产出 2 个 reflection |
-| B5 | ⬜ SKIP | Checker 未请求更深入分析 |
-| B6 | ✅ PASS | running → completed（debug 日志确认） |
-| B7 | ❌ FAIL | 用户在 TUI 中看不到完成通知（Bug #14b，待修复） |
-| B8 | ⬜ TODO | `/aristotle sessions` 未测试 |
-| B9 | ⬜ TODO | `/aristotle review 19` 未测试 |
-
----
-
-## 7. 下一阶段测试方案
-
-### 7.1 Phase Gate
-
-**阻塞项**：B7（用户无通知）需先修复 TUI Toast 后再进入下阶段。
-
-**修复路径**：在 `idle-handler.ts` 的 `driveChainCompletion()` 和 `driveChainTransition()` 中添加 `client.tui.showToast()` 调用。
-
-### 7.2 待测项优先级
-
-#### P0 — B7 修复后验证（阻塞后续测试）
-
-| 编号 | 测试项 | 前置条件 |
-|------|--------|----------|
-| T1 | chain 完成后 TUI 右上角弹出 toast | B7 修复部署完成 |
-| T2 | toast 含规则计数 + review 链接 | T1 |
-| T3 | toast 在 duration 后自动消失 | T1 |
-
-#### P1 — A8~A13（undo + 清理）
-
-| 编号 | 测试项 | 前置条件 |
-|------|--------|----------|
-| A8 | 再次 `/aristotle` 启动新工作流 | A7 通过 |
-| A9 | `/undo` 触发 SKILL.md 规则 | A8 完成 |
-| A10 | `aristotle_check` 返回运行中工作流 | A8 |
-| A11 | `aristotle_abort` 取消所有 running 工作流 | A10 |
-| A12 | 用户看到 "Cancelled N active workflow(s)" | A11 |
-| A13 | 退出 opencode 后 `.bridge-active` 被清理 | A12 |
-
-#### P2 — B8~B9 补测
-
-| 编号 | 测试项 | 前置条件 |
-|------|--------|----------|
-| B8 | `/aristotle sessions` 返回 rec_19 记录 | A7 通过 |
-| B9 | `/aristotle review 19` 展示 DRAFT 内容 | B8 |
-
-#### P3 — P1 Passive Trigger（需人工操作）
-
-| 编号 | 测试项 | 说明 |
-|------|--------|------|
-| P1-A | Agent 自我纠正 → 出现建议 | 在新会话中要求实现函数 → 要求自我审查 |
-| P1-B | 方案切换 → 出现建议 | 给挑战性任务，让 Agent 方案 A 失败后切换 B |
-| P1-C | 用户指出错误 → 出现建议 | Agent 产出错误后用户指出 |
-| P1-D | 正常对话 → 无建议 | 多轮正常对话不触发 |
-| P1-E | 思考阶段纠正 → 无建议 | Agent 内部发现错误并在输出前修正 |
-| P1-F | 主会话纠正子代理 → 出现建议 | 子代理返回错误，主会话修正 |
-
-### 7.3 执行顺序
-
-```
-修复 B7 (TUI Toast) → T1-T3 验证 → A8-A13 → B8-B9 → P1-A~P1-F
-```
-
-A8-A13 和 B8-B9 可在同一次 opencode 会话中完成。P1 需要独立的新会话。
 
 ## 7. 配置常量参考
 
