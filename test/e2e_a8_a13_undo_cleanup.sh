@@ -218,11 +218,29 @@ EOF
         }
 
     # Wait for C to complete
+    SETUP_FAILED=0
     wait_for "First workflow is 'completed'" \
         "workflow_has_status completed" \
         120 || {
-            echo "  ${YELLOW}⚠${RESET} First workflow not completed within timeout"
+            echo "  ${RED}❌${RESET} First workflow not completed within timeout"
+            SETUP_FAILED=1
         }
+
+    if [[ "$SETUP_FAILED" -eq 1 ]]; then
+        WF_STATUS=$(get_workflow_status)
+        echo ""
+        echo -e "  ${RED}Standalone setup FAILED — first workflow stuck at: $WF_STATUS${RESET}"
+        echo "  Possible causes:"
+        echo "    - Sub-session idle events not firing (tmux headless limitation)"
+        echo "    - R→C chain timeout (model response too slow)"
+        echo "    - MCP connection issue"
+        echo ""
+        echo "  Workflow state:"
+        python3 -m json.tool "$WORKFLOWS_FILE" 2>/dev/null || cat "$WORKFLOWS_FILE"
+        echo ""
+        echo -e "  ${RED}Aborting test — standalone setup must succeed before A8-A13.${RESET}"
+        exit 1
+    fi
 
     sleep 3
     echo "  ${GREEN}✓${RESET} Standalone setup complete — 1 workflow completed"
@@ -261,7 +279,7 @@ wait_for "Second workflow appears (≥2 workflows total)" \
     }
 
 wait_for "Latest workflow is 'running'" \
-    "python3 -c \"import json; wfs=json.load(open('$WORKFLOWS_FILE')); exit(0 if wfs and wfs[0].get('status')=='running' else 1)\"" \
+    "python3 -c \"import json; wfs=json.load(open('$WORKFLOWS_FILE')); exit(0 if wfs and wfs[-1].get('status')=='running' else 1)\"" \
     60 || {
         echo "  ${YELLOW}⚠${RESET} Latest workflow not in 'running' state"
     }
