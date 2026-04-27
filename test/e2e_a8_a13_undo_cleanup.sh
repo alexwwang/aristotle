@@ -7,7 +7,7 @@
 #
 # Test flow:
 #   A8  → Second /aristotle starts new workflow
-#   A9  → /undo triggers SKILL.md cleanup
+# A9  → /aristotle suspend cancels running workflows (via trigger-abort file)
 #   A10 → aristotle_check returns running workflows (implicit)
 #   A11 → aristotle_abort cancels running workflows + MCP on_undo
 #   A12 → User-visible cancel message
@@ -247,29 +247,30 @@ EOF
 fi
 
 # ───────────────────────────────────────────────────────────────
-# A8: Second /aristotle starts new workflow
+# A8: Second /aristotle starts new workflow (via trigger file)
 # ───────────────────────────────────────────────────────────────
 echo -e "\n${CYAN}═══ A8: Second /aristotle starts new workflow ═══${RESET}"
 
 WF_COUNT_BEFORE=$(count_workflows)
 echo "  Workflows before A8: $WF_COUNT_BEFORE"
 
-# Send /aristotle via TUI (same path as real user: SKILL.md → MCP fire_o)
-# This is more reliable than trigger file because:
-#   1. Trigger file requires session.idle event which only fires after LLM responds
-#   2. After first R→C chain, main session has no new messages → no idle → trigger rots
-#   3. TUI message creates new user turn → LLM processes → idle fires naturally
-tmux_send "/aristotle"
-echo "  Sent /aristotle via TUI"
+# Use trigger file (same mechanism as standalone setup) instead of
+# tmux send-keys. tmux send-keys injects into stdin buffer, which
+# bypasses opencode's interactive skill activation layer.
+LATEST_SESSION=$(get_latest_session)
+if [[ -z "$LATEST_SESSION" ]]; then
+    echo "  ${YELLOW}⚠${RESET} No session found, falling back to tmux_send"
+    tmux_send "/aristotle"
+else
+    TRIGGER_JSON=$(cat <<EOF
+{"session_id":"$LATEST_SESSION","project_directory":"$PROJECT_DIR","target_label":"current","user_language":"en-US","focus":"last"}
+EOF
+)
+    echo "$TRIGGER_JSON" > "$SESSIONS_DIR/.trigger-reflect.json"
+    echo "  Trigger file written for second workflow (session=$LATEST_SESSION)"
+fi
 
-# Wait for LLM to process the command and call MCP (look for owl emoji or "reflect")
-wait_for "LLM processed /aristotle (owl or reflect in output)" \
-    "tmux_output | grep -qiE '🦉|aristotle.*reflect|aristotle.*fire|reflection'" \
-    60 || {
-        echo "  ${YELLOW}⚠${RESET} LLM response to /aristotle not detected, continuing..."
-    }
-
-sleep 3
+sleep 5
 
 # Wait for second workflow to appear (≥2 entries) and be running
 wait_for "Second workflow appears (≥2 workflows total)" \
@@ -292,31 +293,29 @@ echo "    Latest workflow: $WF1_ID"
 echo "    Previous workflow: $WF2_ID"
 
 # ───────────────────────────────────────────────────────────────
-# A9: /undo triggers SKILL.md cleanup
+# A9: /aristotle suspend cancels running workflows (via trigger-abort file)
 # ───────────────────────────────────────────────────────────────
-echo -e "\n${CYAN}═══ A9: /undo triggers SKILL.md cleanup ═══${RESET}"
+echo -e "\n${CYAN}═══ A9: /aristotle suspend cancels running workflows ═══${RESET}"
 
-# Capture state before /undo for A10 verification
+# Capture state before suspend for A10 verification
 RUNNING_BEFORE=$(count_workflows_with_status "running")
 CHAIN_PENDING_BEFORE=$(count_workflows_with_status "chain_pending")
-echo "  Running workflows before /undo: $RUNNING_BEFORE"
-echo "  Chain-pending workflows before /undo: $CHAIN_PENDING_BEFORE"
+echo "  Running workflows before abort: $RUNNING_BEFORE"
+echo "  Chain-pending workflows before abort: $CHAIN_PENDING_BEFORE"
 
-# Send /undo
-tmux_send "/undo"
-echo "  Sent /undo to tmux session"
+# Use trigger-abort file instead of tmux send-keys.
+# Same reason as A8: tmux send-keys bypasses skill activation.
+# The abort trigger file is processed by checkAbortTrigger() in idle-handler.
+ABORT_JSON=$(cat <<EOF
+{"workflow_ids":[]}
+EOF
+)
+echo "$ABORT_JSON" > "$SESSIONS_DIR/.trigger-abort.json"
+echo "  Abort trigger file written (abort all active workflows)"
 
-# Wait for LLM to process /undo (generous timeout)
-wait_for "LLM processed /undo (aristotle|cancel|workflow in output)" \
-    "tmux_output | grep -qiE 'aristotle|cancel|workflow'" \
-    120 || {
-        echo "  ${YELLOW}⚠${RESET} LLM /undo response not detected within timeout"
-    }
+sleep 5
 
-# Give LLM time to call aristotle_abort
-sleep 10
-
-echo "  ${GREEN}✓${RESET} A9 complete — /undo sent and LLM responded"
+echo "  ${GREEN}✓${RESET} A9 complete — abort trigger sent"
 
 # ───────────────────────────────────────────────────────────────
 # A10: aristotle_check returns running workflows (implicit)
@@ -406,10 +405,10 @@ echo -e "\n${CYAN}═══ A13: Exit opencode → .bridge-active cleaned up ═
 tmux_send "/exit"
 echo "  Sent /exit to opencode"
 
-# Wait for tmux session to end
+# Wait for tmux session to end (increased timeout for opencode state flush)
 wait_for "tmux session ended" \
     "! tmux_session_exists '$TMUX_SESSION'" \
-    15 || {
+    30 || {
         echo "  ${YELLOW}⚠${RESET} Session still alive, trying Ctrl-C..."
         tmux send-keys -t "$TMUX_SESSION" C-c
         sleep 3
@@ -417,9 +416,18 @@ wait_for "tmux session ended" \
         if tmux_session_exists "$TMUX_SESSION"; then
             # Send 'y' to confirm exit, or another Ctrl-C
             tmux send-keys -t "$TMUX_SESSION" "y" Enter
-            sleep 3
+            sleep 5
         fi
     }
+
+# Second graceful attempt before force-kill
+if tmux_session_exists "$TMUX_SESSION"; then
+    echo "  ${YELLOW}⚠${RESET} Session still alive, sending second Ctrl-C..."
+    tmux send-keys -t "$TMUX_SESSION" C-c
+    sleep 3
+    tmux send-keys -t "$TMUX_SESSION" C-c
+    sleep 5
+fi
 
 # Force kill if still alive
 if tmux_session_exists "$TMUX_SESSION"; then
