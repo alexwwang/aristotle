@@ -9,6 +9,7 @@ import type { AsyncTaskExecutor } from './executor.js';
 import { logger } from './logger.js';
 
 const TRIGGER_FILENAME = '.trigger-reflect.json';
+const ABORT_TRIGGER_FILENAME = '.trigger-abort.json';
 
 /** Result from MCP subprocess call */
 interface McpResult {
@@ -73,7 +74,9 @@ export class IdleEventHandler {
   }
 
   async handle(sessionID: string): Promise<void> {
-    // Check for trigger file before normal idle handling
+    // Check for trigger files before normal idle handling
+    // Process aborts BEFORE launching new work (prevents immediate abort of just-created workflow)
+    await this.checkAbortTrigger();
     await this.checkTrigger(sessionID);
 
     const wf: WorkflowState | undefined = this.store.findBySession(sessionID);
@@ -247,6 +250,64 @@ export class IdleEventHandler {
       this.store.markChainBroken(wf.workflowId, msg);
       logger.warn('unexpected action: wf=%s action=%s', wf.workflowId, action.action);
     }
+  }
+
+  /**
+   * Check for an abort trigger file written by an external test harness
+   * or as a defense-in-depth cancellation mechanism.
+   * If found, abort all active (running/chain_pending) workflows.
+   * The trigger file is deleted after processing (success or failure).
+   *
+   * Trigger JSON format:
+   *   { "workflow_ids": ["wf_xxx", "wf_yyy"] }
+   *   If workflow_ids is empty or absent, ALL active workflows are aborted.
+   */
+  private async checkAbortTrigger(): Promise<void> {
+    const triggerPath = join(this.sessionsDir, ABORT_TRIGGER_FILENAME);
+    if (!existsSync(triggerPath)) return;
+
+    let targetIds: string[] = [];
+    try {
+      const raw = readFileSync(triggerPath, 'utf-8');
+      const parsed = JSON.parse(raw);
+      targetIds = Array.isArray(parsed.workflow_ids) ? parsed.workflow_ids : [];
+    } catch (e) {
+      logger.error('abort trigger parse error: %s', e instanceof Error ? e.message : e);
+      try { unlinkSync(triggerPath); } catch {}
+      return;
+    }
+
+    // Delete trigger immediately to prevent re-processing
+    try { unlinkSync(triggerPath); } catch {}
+
+    // Determine which workflows to abort
+    const active = this.store.getActive().active;
+    const toAbort = targetIds.length > 0
+      ? active.filter(wf => targetIds.includes(wf.workflow_id))
+      : active; // Empty array → abort all active
+
+    if (toAbort.length === 0) {
+      logger.info('abort trigger: no active workflows to cancel');
+      return;
+    }
+
+    let cancelled = 0;
+    for (const wf of toAbort) {
+      if (wf.status !== 'running' && wf.status !== 'chain_pending') continue;
+      try {
+        const wfData = this.store.findByWorkflowId(wf.workflow_id);
+        if (wfData?.sessionId) {
+          await this.client.session.abort({ path: { id: wfData.sessionId } }).catch(() => {});
+        }
+        this.store.cancel(wf.workflow_id);
+        cancelled++;
+        logger.info('abort trigger: cancelled wf=%s', wf.workflow_id);
+      } catch (e) {
+        logger.error('abort trigger: failed to cancel wf=%s %s',
+          wf.workflow_id, e instanceof Error ? e.message : e);
+      }
+    }
+    logger.info('abort trigger: cancelled %d/%d workflows', cancelled, toAbort.length);
   }
 
   /**
