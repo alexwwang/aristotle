@@ -35,13 +35,12 @@ wait_for() {
 }
 
 tmux_send() {
-    local session="$1"
-    tmux send-keys -t "$session" "$2" Enter
+    local msg="$1"
+    tmux send-keys -t "$TMUX_SESSION" "$msg" Enter
 }
 
 tmux_output() {
-    local session="$1"
-    tmux capture-pane -t "$session" -p -S -100 2>/dev/null || true
+    tmux capture-pane -t "$TMUX_SESSION" -p -S -100 2>/dev/null || true
 }
 
 tmux_session_exists() {
@@ -81,7 +80,7 @@ try:
     with open('$WORKFLOWS_FILE', 'r') as f:
         wfs = json.load(f)
     if wfs:
-        print(wfs[0].get('status', 'none'))
+        print(wfs[-1].get('status', 'none'))
     else:
         print('none')
 except Exception:
@@ -146,7 +145,7 @@ except Exception:
 " 2>/dev/null
 }
 
-# Get the most recent workflow ID
+# Get the most recent workflow ID (last element = newest)
 get_latest_workflow_id() {
     python3 -c "
 import json, sys
@@ -154,7 +153,7 @@ try:
     with open('$WORKFLOWS_FILE', 'r') as f:
         wfs = json.load(f)
     if wfs:
-        print(wfs[0].get('workflowId', ''))
+        print(wfs[-1].get('workflowId', ''))
     else:
         print('')
 except Exception:
@@ -162,7 +161,7 @@ except Exception:
 " 2>/dev/null || echo ""
 }
 
-# Get the second most recent workflow ID
+# Get the second most recent workflow ID (second-to-last = penultimate)
 get_second_workflow_id() {
     python3 -c "
 import json, sys
@@ -170,7 +169,7 @@ try:
     with open('$WORKFLOWS_FILE', 'r') as f:
         wfs = json.load(f)
     if len(wfs) >= 2:
-        print(wfs[1].get('workflowId', ''))
+        print(wfs[-2].get('workflowId', ''))
     else:
         print('')
 except Exception:

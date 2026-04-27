@@ -154,7 +154,7 @@ if [[ "$STANDALONE_SETUP" == "true" ]]; then
 
     # Wait for plugin init
     wait_for "Bridge plugin initialized" \
-        "tmux_output '$TMUX_SESSION' | grep -qE 'plugin initialized|mcpProjectDir='" \
+        "tmux_output | grep -qE 'plugin initialized|mcpProjectDir='" \
         30 || {
             echo "  ${YELLOW}⚠${RESET} Plugin init log not seen, continuing anyway..."
         }
@@ -170,7 +170,7 @@ if [[ "$STANDALONE_SETUP" == "true" ]]; then
 
     MSG1="Fix the typo in README: change 'hellow world' to 'hello earth'"
     echo "  Turn 1: $MSG1"
-    tmux_send "$TMUX_SESSION" "$MSG1"
+    tmux_send "$MSG1"
 
     wait_for "Turn 1: assistant message" \
         "LATEST_SESSION=\"\$(get_latest_session)\" && [[ -n \"\$LATEST_SESSION\" ]] && [[ \$(count_assistant_messages \"\$LATEST_SESSION\") -ge 1 ]]" \
@@ -181,7 +181,7 @@ if [[ "$STANDALONE_SETUP" == "true" ]]; then
 
     MSG2="That's wrong. I said 'hello earth' but that's incorrect — it should be 'hello world' not 'hello earth'. Fix it properly."
     echo "  Turn 2: $MSG2"
-    tmux_send "$TMUX_SESSION" "$MSG2"
+    tmux_send "$MSG2"
 
     wait_for "Top-level session has ≥2 assistant messages" \
         "LATEST_SESSION=\"\$(get_latest_session)\" && [[ -n \"\$LATEST_SESSION\" ]] && [[ \$(count_assistant_messages \"\$LATEST_SESSION\") -ge 2 ]]" \
@@ -236,19 +236,22 @@ echo -e "\n${CYAN}═══ A8: Second /aristotle starts new workflow ═══$
 WF_COUNT_BEFORE=$(count_workflows)
 echo "  Workflows before A8: $WF_COUNT_BEFORE"
 
-# Get the latest session ID for the trigger
-LATEST_SESSION=$(get_latest_session)
-echo "  Parent session: $LATEST_SESSION"
+# Send /aristotle via TUI (same path as real user: SKILL.md → MCP fire_o)
+# This is more reliable than trigger file because:
+#   1. Trigger file requires session.idle event which only fires after LLM responds
+#   2. After first R→C chain, main session has no new messages → no idle → trigger rots
+#   3. TUI message creates new user turn → LLM processes → idle fires naturally
+tmux_send "/aristotle"
+echo "  Sent /aristotle via TUI"
 
-# Write trigger file for second /aristotle
-TRIGGER_JSON=$(cat <<EOF
-{"session_id":"$LATEST_SESSION","project_directory":"$PROJECT_DIR","target_label":"current","user_language":"en-US","focus":"last"}
-EOF
-)
-echo "$TRIGGER_JSON" > "$SESSIONS_DIR/.trigger-reflect.json"
-echo "  Trigger file written for second /aristotle"
+# Wait for LLM to process the command and call MCP (look for owl emoji or "reflect")
+wait_for "LLM processed /aristotle (owl or reflect in output)" \
+    "tmux_output | grep -qiE '🦉|aristotle.*reflect|aristotle.*fire|reflection'" \
+    60 || {
+        echo "  ${YELLOW}⚠${RESET} LLM response to /aristotle not detected, continuing..."
+    }
 
-sleep 5
+sleep 3
 
 # Wait for second workflow to appear (≥2 entries) and be running
 wait_for "Second workflow appears (≥2 workflows total)" \
@@ -282,12 +285,12 @@ echo "  Running workflows before /undo: $RUNNING_BEFORE"
 echo "  Chain-pending workflows before /undo: $CHAIN_PENDING_BEFORE"
 
 # Send /undo
-tmux_send "$TMUX_SESSION" "/undo"
+tmux_send "/undo"
 echo "  Sent /undo to tmux session"
 
 # Wait for LLM to process /undo (generous timeout)
 wait_for "LLM processed /undo (aristotle|cancel|workflow in output)" \
-    "tmux_output '$TMUX_SESSION' | grep -qiE 'aristotle|cancel|workflow'" \
+    "tmux_output | grep -qiE 'aristotle|cancel|workflow'" \
     120 || {
         echo "  ${YELLOW}⚠${RESET} LLM /undo response not detected within timeout"
     }
@@ -323,7 +326,7 @@ wait_for "All workflows in terminal state (not running/chain_pending)" \
     }
 
 # Check tmux output for evidence of aristotle_abort calls
-TMUX_TEXT=$(tmux_output "$TMUX_SESSION")
+TMUX_TEXT=$(tmux_output)
 if echo "$TMUX_TEXT" | grep -qi "aristotle_abort"; then
     echo "  ${GREEN}✓${RESET} tmux output contains 'aristotle_abort'"
 else
@@ -354,7 +357,7 @@ fi
 # ───────────────────────────────────────────────────────────────
 echo -e "\n${CYAN}═══ A12: User-visible cancel message ═══${RESET}"
 
-TMUX_TEXT=$(tmux_output "$TMUX_SESSION")
+TMUX_TEXT=$(tmux_output)
 CANCEL_FOUND=false
 
 if echo "$TMUX_TEXT" | grep -qi "cancelled.*aristotle"; then
@@ -381,18 +384,31 @@ echo "$TMUX_TEXT" | grep -iE "cancelled.*active.*aristotle|aristotle.*cancelled"
 # ───────────────────────────────────────────────────────────────
 echo -e "\n${CYAN}═══ A13: Exit opencode → .bridge-active cleaned up ═══${RESET}"
 
-# Send /exit to opencode
-tmux_send "$TMUX_SESSION" "/exit"
+# Try /exit first, then Esc+Ctrl-C as fallback
+tmux_send "/exit"
 echo "  Sent /exit to opencode"
 
 # Wait for tmux session to end
 wait_for "tmux session ended" \
     "! tmux_session_exists '$TMUX_SESSION'" \
-    30 || {
-        echo "  ${YELLOW}⚠${RESET} Session still alive after /exit, sending Ctrl-C..."
+    15 || {
+        echo "  ${YELLOW}⚠${RESET} Session still alive, trying Ctrl-C..."
         tmux send-keys -t "$TMUX_SESSION" C-c
-        sleep 5
+        sleep 3
+        # Check if confirmation prompt appeared
+        if tmux_session_exists "$TMUX_SESSION"; then
+            # Send 'y' to confirm exit, or another Ctrl-C
+            tmux send-keys -t "$TMUX_SESSION" "y" Enter
+            sleep 3
+        fi
     }
+
+# Force kill if still alive
+if tmux_session_exists "$TMUX_SESSION"; then
+    echo "  ${YELLOW}⚠${RESET} Force-killing tmux session..."
+    tmux kill-session -t "$TMUX_SESSION" 2>/dev/null || true
+    sleep 2
+fi
 
 # Verify .bridge-active marker is gone
 if [[ ! -f "$BRIDGE_MARKER" ]]; then
@@ -444,7 +460,7 @@ fi
 
 # V3: tmux output contains cancel-related text
 echo -e "\n  ${CYAN}V3${RESET} tmux output contains cancel-related text"
-TMUX_TEXT=$(tmux_output "$TMUX_SESSION" 2>/dev/null || true)
+TMUX_TEXT=$(tmux_output 2>/dev/null || true)
 if [[ "$CANCEL_FOUND" == "true" ]] || echo "$TMUX_TEXT" | grep -qi "cancel"; then
     echo -e "    ${GREEN}✅${RESET} Cancel-related text found in tmux output"
     VERIFICATION_PASSED=$((VERIFICATION_PASSED + 1))
@@ -474,7 +490,7 @@ else
 fi
 
 echo -e "\n${CYAN}═══ tmux pane output (last 40 lines) ═══${RESET}"
-tmux_output "$TMUX_SESSION" 2>/dev/null | tail -40 || echo "  (tmux session already closed)"
+tmux_output 2>/dev/null | tail -40 || echo "  (tmux session already closed)"
 
 # ───────────────────────────────────────────────────────────────
 # Final verdict
