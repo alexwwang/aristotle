@@ -17,6 +17,8 @@ from _orch_helpers import (
     _fire_r_done_event,
     _fire_c_done_event,
     _load_workflow,
+    _make_staging_rule,
+    _make_verified_rule,
     init_repo_tool,
     orchestrate_start,
     orchestrate_on_event,
@@ -162,6 +164,10 @@ class TestOrchestrateOnEventReflect:
         assert wf["pending_role"] == "C"
         assert wf["record_created"] is True
 
+        # C writes and commits 2 rules for this target session
+        _make_verified_rule("HALLUCINATION", source_session="ses_target1")
+        _make_verified_rule("PATTERN_VIOLATION", source_session="ses_target1")
+
         c_done = _fire_c_done_event(wf_id, "Committed: 2, Staged: 0")
         assert c_done["action"] == "done"
         assert "committed" in c_done["message"]
@@ -216,6 +222,11 @@ class TestOrchestrateOnEventReflect:
         start = _start_reflect_workflow("ses_tgt")
         wf_id = start["workflow_id"]
         _fire_r_done_event(wf_id)
+
+        # C writes 1 verified + 2 staging rules for this target session
+        _make_verified_rule("HALLUCINATION", source_session="ses_tgt")
+        _make_staging_rule("PATTERN_VIOLATION", source_session="ses_tgt")
+        _make_staging_rule("INCOMPLETE_ANALYSIS", source_session="ses_tgt")
 
         result = _fire_c_done_event(wf_id, "Committed: 1\nStaged: 2")
 

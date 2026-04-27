@@ -249,23 +249,27 @@ def orchestrate_on_event(event_type: str, data_json: str) -> dict:
 
     # ═══ 6. Reflect flow: subagent_done + checking ═══
     if event_type == "subagent_done" and workflow.get("phase") == "checking":
-        result = data.get("result", "")
-        if isinstance(result, dict):
-            result = json.dumps(result)
-
-        committed, staged = _parse_checker_result(str(result))
         sequence = workflow.get("sequence")
 
-        # ── M1: collect committed rule paths ──
+        # ── M1: collect committed/staged rule paths from disk ──
+        # We read actual file status instead of parsing C's text output,
+        # because LLM output format is unpredictable.
         target_session = workflow.get("target_session_id", "")
         rules_result = list_rules(status_filter="all", keyword=target_session, limit=20)
         rule_paths = []
+        committed = 0
+        staged = 0
         for r in rules_result.get("rules", []):
             meta_r = r.get("metadata", {})
-            if (meta_r.get("status") in ("staging", "verified")
-                    and meta_r.get("source_session") == target_session
+            if (meta_r.get("source_session") == target_session
                     and r.get("path")):
-                rule_paths.append(r["path"])
+                rstatus = meta_r.get("status", "")
+                if rstatus == "verified":
+                    committed += 1
+                    rule_paths.append(r["path"])
+                elif rstatus == "staging":
+                    staged += 1
+                    rule_paths.append(r["path"])
 
         # Write paths to reflection record
         from aristotle_mcp._tools_reflection import _update_record_field
