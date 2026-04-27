@@ -76,6 +76,11 @@ describe('AsyncTaskExecutor', () => {
       status: 'running',
       message: expect.any(String),
     } as LaunchResult);
+
+    // Regression: message must NOT instruct LLM to poll (causes main session blocking)
+    // Old bug: "Call aristotle_check(…) to poll status" caused LLM to block the main session
+    expect(result.message).not.toMatch(/^Call aristotle_check/);
+    expect(result.message).toContain('STOP');
   });
 
   it('should_extract_snapshot_when_targetSessionId', async () => {

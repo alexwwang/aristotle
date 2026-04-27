@@ -8,6 +8,7 @@ export interface WorkflowState {
   error?: string;
   startedAt: number;
   agent: string;
+  instanceId?: string;
 }
 
 // ApiMode — type definition (stub)

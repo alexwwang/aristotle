@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { writeFileSync, unlinkSync, mkdirSync, readdirSync, statSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { detectApiMode } from './api-probe.js';
 import { WorkflowStore } from './workflow-store.js';
@@ -32,7 +33,8 @@ const AristotleBridgePlugin = async (ctx: any): Promise<any> => {
   process.on('SIGINT', cleanup);
   process.on('SIGHUP', cleanup);
 
-  const store = new WorkflowStore(sessionsDir);
+  const instanceId = `${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+  const store = new WorkflowStore(sessionsDir, instanceId);
   await store.reconcileOnStartup(ctx.client);
 
   // Cleanup snapshot files older than 7 days
@@ -60,6 +62,8 @@ const AristotleBridgePlugin = async (ctx: any): Promise<any> => {
         },
         execute: async (args: any, context: any) => {
           const sessionId = context?.sessionID || '';
+          logger.debug('fire_o: args.target_session_id=%s context.sessionID=%s sessionId=%s',
+            args.target_session_id || '<empty>', context?.sessionID || '<missing>', sessionId);
           const result = await executor.launch({
             workflowId: args.workflow_id,
             oPrompt: args.o_prompt,

@@ -134,7 +134,7 @@ check "idle-handler uses execFile (subprocess)" \
     "grep -q 'execFile' '$IDLE'"
 
 check "idle-handler uses stdin for payload (not argv)" \
-    "grep -q 'input: dataJson' '$IDLE'"
+    "grep -q 'child.stdin.write' '$IDLE'"
 
 check "idle-handler checks launchResult.status" \
     "grep -q 'launchResult.status' '$IDLE'"
@@ -229,6 +229,138 @@ check "test_reflect_workflow.py clears .bridge-active marker" \
 
 check "no stale 'action==notify' assertions for _fire_c_done_event" \
     "! grep -A1 '_fire_c_done_event' '$ROOT_DIR/test/test_reflect_workflow.py' | grep -q '\"notify\"'"
+
+# ───────────────────────────────────────────────────────────────
+# Fix: Bug #11 — idle-handler uses spawn (not execFile) for subprocess
+# Root cause: Node.js async child_process APIs don't support input option
+# ───────────────────────────────────────────────────────────────
+echo ""
+echo "── Bug #11: spawn instead of execFile ──"
+
+IDLE="$ROOT_DIR/plugins/aristotle-bridge/src/idle-handler.ts"
+
+check "idle-handler imports spawn from child_process" \
+    "grep -q 'spawn' '$IDLE'"
+
+check "idle-handler has runSubprocess method with stdin" \
+    "grep -q 'child.stdin.write' '$IDLE'"
+
+check "idle-handler does NOT use execFile with input option" \
+    "! grep -q 'execFile.*input' '$IDLE'"
+
+# ───────────────────────────────────────────────────────────────
+# Fix: Bug #12 — promptAsync does NOT pass agent parameter
+# Root cause: opencode doesn't recognize 'R'/'C' as agent names, silently
+# fails (returns 204 but LLM loop never starts). Regressed from Bug #9.
+# ───────────────────────────────────────────────────────────────
+echo ""
+echo "── Bug #12: promptAsync no agent parameter ──"
+
+EXECUTOR="$ROOT_DIR/plugins/aristotle-bridge/src/executor.ts"
+
+check "executor promptAsync body has only parts" \
+    "grep -A3 'promptAsync' '$EXECUTOR' | grep -q 'parts'"
+
+check "executor does NOT pass agent to promptAsync" \
+    "! grep -q '{ agent, parts }' '$EXECUTOR'"
+
+# ───────────────────────────────────────────────────────────────
+# Fix: Tool registration format (ToolDefinition with Zod)
+# Root cause: plugin.tool was a function returning bare async functions.
+# opencode expects plain object with {description, args: Zod, execute}.
+# LLM could never see plugin tools.
+# ───────────────────────────────────────────────────────────────
+echo ""
+echo "── Tool registration: ToolDefinition format ──"
+
+INDEX="$ROOT_DIR/plugins/aristotle-bridge/src/index.ts"
+
+check "tool is plain object not function" \
+    "grep -E '^\s+tool: \{' '$INDEX' | grep -qv 'tool: ()'"
+
+check "aristotle_fire_o has description field" \
+    "grep -A20 'aristotle_fire_o:' '$INDEX' | grep -q 'description:'"
+
+check "aristotle_fire_o has args with z.string" \
+    "grep -A20 'aristotle_fire_o:' '$INDEX' | grep -q 'z.string'"
+
+check "aristotle_fire_o has execute function" \
+    "grep -A20 'aristotle_fire_o:' '$INDEX' | grep -q 'execute:'"
+
+# ───────────────────────────────────────────────────────────────
+# Fix: target_session_id defaults to context.sessionID
+# Root cause: ctx.session?.id is always undefined (PluginInput has no
+# session property). Fixed to use ToolContext.sessionID (2nd execute arg).
+# ───────────────────────────────────────────────────────────────
+echo ""
+echo "── target_session_id default ──"
+
+check "fire_o uses context?.sessionID not ctx.session" \
+    "grep -q 'context?.sessionID' '$INDEX'"
+
+check "fire_o defaults targetSessionId to sessionId" \
+    "grep -q 'targetSessionId.*sessionId' '$INDEX'"
+
+check "fire_o does NOT use ctx.session?.id" \
+    "! grep -q 'ctx.session?.id' '$INDEX'"
+
+# ───────────────────────────────────────────────────────────────
+# Fix: Bug #13 — reconcileOnStartup instance isolation + timeout
+# Root cause: reconcile queried ALL running workflows including other
+# instances'. No timeout → hung on stale sessions → blocked startup.
+# ───────────────────────────────────────────────────────────────
+echo ""
+echo "── Bug #13: instance isolation + timeout ──"
+
+STORE="$ROOT_DIR/plugins/aristotle-bridge/src/workflow-store.ts"
+TYPES="$ROOT_DIR/plugins/aristotle-bridge/src/types.ts"
+
+check "WorkflowState has instanceId field" \
+    "grep -q 'instanceId' '$TYPES'"
+
+check "WorkflowStore constructor accepts instanceId" \
+    "grep 'constructor' '$STORE' | grep -q 'instanceId'"
+
+check "reconcileOnStartup filters by instanceId" \
+    "grep -q 'instanceId === this.instanceId' '$STORE'"
+
+check "reconcile has 3 instanceId filters (all phases)" \
+    "test $(grep -c 'instanceId === this.instanceId' "$STORE") -ge 3"
+
+check "reconcile uses withTimeout for running phase" \
+    "grep -q 'withTimeout' '$STORE'"
+
+check "reconcile marks error on empty response" \
+    "grep -q 'Empty or invalid session response' '$STORE'"
+
+check "reconcile marks error when no assistant messages" \
+    "grep -q 'Session has no assistant response' '$STORE'"
+
+check "saveToDisk does read-before-write merge" \
+    "grep -q 'readDiskMap' '$STORE'"
+
+check "saveToDisk merge only preserves other instances" \
+    "grep -q 'instanceId !== this.instanceId' '$STORE'"
+
+check "register calls saveToDiskRaw after eviction" \
+    "grep -q 'saveToDiskRaw' '$STORE'"
+
+check "index.ts generates instanceId with randomUUID" \
+    "grep -q 'randomUUID' '$INDEX'"
+
+# ───────────────────────────────────────────────────────────────
+# Fix: executor return message does NOT instruct polling
+# Root cause: "Call aristotle_check to poll status" caused LLM to
+# block main session with repeated check calls.
+# ───────────────────────────────────────────────────────────────
+echo ""
+echo "── Executor: no polling instruction ──"
+
+check "executor message does not say to poll with check" \
+    "! grep -q 'Call.*aristotle_check.*poll.*status' '$EXECUTOR'"
+
+check "executor message tells LLM to STOP" \
+    "grep -q 'STOP' '$EXECUTOR'"
 
 # ───────────────────────────────────────────────────────────────
 # Summary

@@ -100,8 +100,8 @@ export class AsyncTaskExecutor {
       status: 'running',
       message:
         '🦉 Task launched. workflow_id: ' + workflowId + '. ' +
-        'Call aristotle_check("' + workflowId + '") to poll status. ' +
-        'Call aristotle_abort("' + workflowId + '") to cancel.',
+        'Bridge plugin handles the R→C chain automatically via session.idle events. ' +
+        'Do NOT call aristotle_check to poll. Just inform the user and STOP.',
     };
   }
 }
