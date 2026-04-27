@@ -195,6 +195,40 @@ def orchestrate_on_event(event_type: str, data_json: str) -> dict:
             resolve_repo_dir().parent / "aristotle-drafts" / f"rec_{sequence}.md"
         )
 
+        # ── DRAFT existence check ──
+        # If R was truncated (reason:"length") or correctly found no errors,
+        # the DRAFT file won't exist. Don't launch C in that case.
+        from pathlib import Path
+        draft_path = Path(draft_file)
+        if not draft_path.exists():
+            workflow["phase"] = "done"
+            _save_workflow(workflow_id, workflow)
+
+            # Check R's output for "no errors detected" signal
+            r_result = data.get("result", "") or ""
+            no_errors = any(sig in r_result for sig in [
+                "No actionable errors detected",
+                "No errors detected",
+                "session was clean",
+            ])
+
+            if no_errors:
+                msg = "🦉 Aristotle: No actionable errors detected. Session was clean."
+            else:
+                msg = (
+                    f"🦉 Aristotle: Reflector did not produce a DRAFT file. "
+                    f"This usually means the model was truncated before completing "
+                    f"the reflection (output token budget exhausted). "
+                    f"Try increasing limit.output for the model or re-run reflection. "
+                    f"[draft_file={draft_file}]"
+                )
+
+            return {
+                "action": "notify",
+                "workflow_id": workflow_id,
+                "message": msg,
+            }
+
         c_prompt = _build_checker_prompt(
             sequence=sequence,
             draft_file=draft_file,

@@ -55,6 +55,16 @@ def _start_reflect_workflow(target_session_id="ses_test123", **extra) -> dict:
 
 
 def _fire_r_done_event(workflow_id: str, session_id: str = "ses_r123", result: str = "DRAFT persisted.") -> dict:
+    # When R finishes successfully, it creates a DRAFT file.
+    # Simulate this by auto-creating the DRAFT for the workflow's sequence,
+    # but only if the result indicates success (contains "DRAFT" or doesn't
+    # indicate early termination).
+    w = _load_workflow(workflow_id)
+    if w and w.get("sequence"):
+        no_draft_signals = ["No actionable errors", "No session data", "Session was clean"]
+        if not any(sig in result for sig in no_draft_signals):
+            _create_draft_file(w["sequence"])
+
     return orchestrate_on_event("subagent_done", json.dumps({
         "workflow_id": workflow_id,
         "session_id": session_id,

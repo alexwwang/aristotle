@@ -46,6 +46,75 @@ tool to read it, then parse the "messages" array. Each message has "index", "rol
 If SESSION_FILE is empty, output "No session data available for reflection." and STOP.
 """
 
+# ── Compact prompt for models with limited output tokens (≤8192) ──
+# Does NOT reference REFLECTOR.md — entirely self-contained to save token budget.
+# Uses 3-Why instead of 5-Why, max 2 reflections, simplified DRAFT format.
+REFLECTOR_COMPACT_TEMPLATE = """You are Aristotle's Reflector (compact mode). Analyze the session for errors \
+and produce a DRAFT report. You have limited output tokens — be concise.
+
+TARGET_SESSION_ID: {target_session_id}
+SESSION_FILE: {session_file}
+PROJECT_DIRECTORY: {project_directory}
+USER_LANGUAGE: {user_language}
+FOCUS_HINT: {focus_hint}
+DRAFT_SEQUENCE: {sequence}
+
+## Steps (execute ALL in order):
+
+### Step 1: Read session data
+If SESSION_FILE is non-empty, use the Read tool to read it. Parse the JSON "messages" array.
+Each message has "index", "role", "content" fields.
+If SESSION_FILE is empty or reading fails, output "No session data available for reflection." and STOP.
+
+### Step 2: Detect error corrections (max 30 recent messages)
+Scan for error signals — user says "wrong/no/incorrect/不对/错了", model apologizes, \
+user provides correct answer after model's wrong one.
+If NO errors detected → output "No actionable errors detected in this session. \
+Session was clean. No rules generated." and STOP.
+
+### Step 3: Analyze errors (max 2 reflections)
+For each error, provide:
+- **Category**: one of: HALLUCINATION, PATTERN_VIOLATION, MISUNDERSTOOD_REQUIREMENT, \
+ASSUMED_CONTEXT, INCOMPLETE_ANALYSIS, WRONG_TOOL_CHOICE, OVERSIMPLIFICATION, SYNTAX_API_ERROR
+- **3-Why Root Cause**: (1) Why did it happen? → (2) Root cause? → (3) Prevention?
+- **Severity**: HIGH / MEDIUM / LOW
+
+### Step 4: Output DRAFT report
+Output the DRAFT in this EXACT format (the Checker parses it):
+
+```
+🦉 Aristotle Reflection Report (DRAFT)
+═══════════════════════════════════════
+
+## Scan Context
+- **Session**: {target_session_id}
+- **Focus**: {focus_hint}
+- **Errors Detected**: [count]
+
+---
+
+### Reflection 1: [SHORT_TITLE]
+- **Severity**: [HIGH/MEDIUM/LOW]
+- **Category**: [CATEGORY]
+- **Error Excerpt**: [1-2 sentences what went wrong]
+- **3-Why Root Cause**: [concise chain]
+- **Proposed Rule**: [specific actionable prevention rule]
+- **Context**: [when this rule applies]
+
+---
+
+🦉 DRAFT COMPLETE.
+```
+
+### Step 5: Persist DRAFT
+Call persist_draft(sequence={sequence}, content=<full DRAFT report text from Step 4>).
+Verify it returned success. Then STOP — do NOT write rules to files.
+
+CRITICAL: Prioritize producing the DRAFT output (Step 4) and persisting it (Step 5). \
+Minimize reasoning — output concrete content quickly. You do NOT need to be exhaustive; \
+2 well-analyzed errors are better than 5 shallow ones.
+"""
+
 CHECKER_PROMPT_TEMPLATE = """You are Aristotle's Checker subagent. Read and execute the full protocol at
 {skill_dir}/CHECKER.md (read the file first, then follow it step by step).
 
@@ -92,9 +161,16 @@ def _build_reflector_prompt(
     project_directory: str = "",
     user_language: str = "en-US",
     session_file: str = "",
+    token_budget: int = 0,  # kept for backward compat, ignored
 ) -> str:
+    from aristotle_mcp.config import resolve_prompt_mode
     safe_focus = focus_hint[:200]
-    return REFLECTOR_PROMPT_TEMPLATE.format(
+
+    effective_mode = resolve_prompt_mode()
+    use_compact = effective_mode == "compact"
+    template = REFLECTOR_COMPACT_TEMPLATE if use_compact else REFLECTOR_PROMPT_TEMPLATE
+
+    return template.format(
         skill_dir=str(SKILL_DIR),
         target_session_id=target_session_id,
         session_file=session_file,

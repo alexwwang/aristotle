@@ -232,6 +232,46 @@ class TestOrchestrateOnEventReflect:
         wf = _load_workflow(wf_id)
         assert wf["phase"] == "done"
 
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
+    def test_r_done_without_draft_returns_notify_not_fire_sub(self):
+        start = _start_reflect_workflow("ses_tgt")
+        wf_id = start["workflow_id"]
+        wf = _load_workflow(wf_id)
+        sequence = wf["sequence"]
+
+        # Ensure no DRAFT file exists (delete if auto-created by any prior step)
+        from aristotle_mcp.config import resolve_repo_dir
+        draft_path = resolve_repo_dir().parent / "aristotle-drafts" / f"rec_{sequence}.md"
+        draft_path.unlink(missing_ok=True)
+
+        # Fire event directly to bypass _fire_r_done_event's auto-creation
+        result = orchestrate_on_event("subagent_done", json.dumps({
+            "workflow_id": wf_id,
+            "session_id": "ses_r_no_draft",
+            "result": "DRAFT persisted.",
+        }))
+        assert result["action"] == "notify"
+        assert "did not produce a DRAFT file" in result["message"] or "truncated" in result["message"]
+
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
+    def test_r_done_no_errors_signal_without_draft(self):
+        start = _start_reflect_workflow("ses_tgt")
+        wf_id = start["workflow_id"]
+        wf = _load_workflow(wf_id)
+        sequence = wf["sequence"]
+
+        from aristotle_mcp.config import resolve_repo_dir
+        draft_path = resolve_repo_dir().parent / "aristotle-drafts" / f"rec_{sequence}.md"
+        draft_path.unlink(missing_ok=True)
+
+        result = orchestrate_on_event("subagent_done", json.dumps({
+            "workflow_id": wf_id,
+            "session_id": "ses_r_no_errors",
+            "result": "No actionable errors detected in this session.",
+        }))
+        assert result["action"] == "notify"
+        assert "No actionable errors detected" in result["message"]
+
 
 # ═══════════════════════════════════════════════════════
 # TestExceptionReflect — OnEvent exception paths (§3.8.2)

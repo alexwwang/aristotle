@@ -7,6 +7,7 @@ import { detectApiMode } from './api-probe.js';
 import { WorkflowStore } from './workflow-store.js';
 import { AsyncTaskExecutor } from './executor.js';
 import { IdleEventHandler } from './idle-handler.js';
+import { logger } from './logger.js';
 
 const DEFAULT_SESSIONS_DIR = () => join(homedir(), '.config', 'opencode', 'aristotle-sessions');
 

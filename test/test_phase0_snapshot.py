@@ -215,3 +215,92 @@ class TestUndoneShortCircuit:
         }))
         assert result["action"] == "notify"
         assert "cancelled" in result.get("message", "").lower() or "ignored" in result.get("message", "").lower()
+
+
+# ═══════════════════════════════════════════════════════════
+# UT-11: Compact prompt mode selection (config-based)
+# ═══════════════════════════════════════════════════════════
+
+class TestCompactPromptMode:
+
+    def test_compact_mode_via_env(self, monkeypatch):
+        """ARISTOTLE_PROMPT_MODE=compact → compact prompt."""
+        monkeypatch.setenv("ARISTOTLE_PROMPT_MODE", "compact")
+        from aristotle_mcp._orch_prompts import _build_reflector_prompt
+        prompt = _build_reflector_prompt(
+            target_session_id="ses_test",
+            focus_hint="last",
+            sequence=1,
+            project_directory="/tmp",
+            user_language="en-US",
+            session_file="/tmp/test.json",
+        )
+        assert "REFLECTOR.md" not in prompt
+        assert "compact mode" in prompt
+        assert "3-Why" in prompt
+        assert "max 2 reflections" in prompt
+
+    def test_compact_mode_via_config_file(self, monkeypatch, tmp_path):
+        """aristotle-config.json with prompt_mode=compact → compact prompt."""
+        monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path))
+        config_file = tmp_path / "aristotle-config.json"
+        config_file.write_text('{"prompt_mode": "compact"}\n')
+
+        from aristotle_mcp._orch_prompts import _build_reflector_prompt
+        prompt = _build_reflector_prompt(
+            target_session_id="ses_test",
+            focus_hint="last",
+            sequence=1,
+            project_directory="/tmp",
+            user_language="en-US",
+            session_file="/tmp/test.json",
+        )
+        assert "REFLECTOR.md" not in prompt
+        assert "compact mode" in prompt
+
+    def test_full_mode_by_default(self):
+        """No config → default full mode."""
+        from aristotle_mcp._orch_prompts import _build_reflector_prompt
+        prompt = _build_reflector_prompt(
+            target_session_id="ses_test",
+            focus_hint="last",
+            sequence=1,
+            project_directory="/tmp",
+            user_language="en-US",
+            session_file="/tmp/test.json",
+        )
+        assert "REFLECTOR.md" in prompt
+        assert "compact mode" not in prompt
+
+    def test_full_mode_explicit_via_env(self, monkeypatch):
+        """ARISTOTLE_PROMPT_MODE=full → full prompt."""
+        monkeypatch.setenv("ARISTOTLE_PROMPT_MODE", "full")
+        from aristotle_mcp._orch_prompts import _build_reflector_prompt
+        prompt = _build_reflector_prompt(
+            target_session_id="ses_test",
+            focus_hint="last",
+            sequence=1,
+            project_directory="/tmp",
+            user_language="en-US",
+            session_file="/tmp/test.json",
+        )
+        assert "REFLECTOR.md" in prompt
+        assert "compact mode" not in prompt
+
+    def test_env_overrides_config_file(self, monkeypatch, tmp_path):
+        """ARISTOTLE_PROMPT_MODE env overrides config file."""
+        monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path))
+        monkeypatch.setenv("ARISTOTLE_PROMPT_MODE", "compact")
+        config_file = tmp_path / "aristotle-config.json"
+        config_file.write_text('{"prompt_mode": "full"}\n')
+
+        from aristotle_mcp._orch_prompts import _build_reflector_prompt
+        prompt = _build_reflector_prompt(
+            target_session_id="ses_test",
+            focus_hint="last",
+            sequence=1,
+            project_directory="/tmp",
+            user_language="en-US",
+            session_file="/tmp/test.json",
+        )
+        assert "compact mode" in prompt  # env wins over config file
