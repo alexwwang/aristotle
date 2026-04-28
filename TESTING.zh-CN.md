@@ -64,15 +64,6 @@ uv run pytest test/ -v
 | `test/test_phase0_snapshot.py` | TestResolveSessionsDir, TestBuildReflectorPrompt, TestOrchestrateStartSessionFile, TestBridgeDetection, TestOnUndo, TestUndoneShortCircuit | 14 | Session 目录解析、reflector prompt SESSION_FILE、Bridge marker 检测、on_undo 工具、undone 状态短路 |
 | `test/test_e2e_bridge_integration.py` | TestContextFixE2E, TestBridgeDetectionE2E, TestAsyncBridgeWorkflowE2E, TestMultiStageBridgeE2E | 9 | Bridge↔MCP 集成：上下文修复、Bridge 检测、异步工作流、多阶段 |
 
-#### E2E 测试中发现的 Bug
-
-| Bug | 修复方式 |
-|-----|----------|
-| `detect_conflicts` 未注册为 MCP 工具 | 添加 `mcp.tool()` 注册 |
-| `write_rule` ID 碰撞（秒级时间戳） | 改为毫秒时间戳 |
-| `commit_rule` 双向冲突标注匹配了错误的规则 | 精确 ID 匹配 + `limit=10` |
-| macOS `/tmp` symlink 导致 `relative_to` 失败 | `resolve_repo_dir()` 添加 `.resolve()` |
-
 ## 4. Bridge 插件测试 (135 vitest)
 
 > 完整测试级明细：详见 [plugins/aristotle-bridge/testing.zh.md](plugins/aristotle-bridge/testing.zh.md)

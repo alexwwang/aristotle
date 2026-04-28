@@ -64,15 +64,6 @@ uv run pytest test/ -v
 | `test/test_phase0_snapshot.py` | TestResolveSessionsDir, TestBuildReflectorPrompt, TestOrchestrateStartSessionFile, TestBridgeDetection, TestOnUndo, TestUndoneShortCircuit | 14 | Session dir resolution, reflector prompt SESSION_FILE, Bridge marker detection, on_undo tool, undone state short-circuit |
 | `test/test_e2e_bridge_integration.py` | TestContextFixE2E, TestBridgeDetectionE2E, TestAsyncBridgeWorkflowE2E, TestMultiStageBridgeE2E | 9 | Bridge↔MCP integration: context fix, Bridge detection, async workflow, multi-stage |
 
-#### Bugs Found During E2E Testing
-
-| Bug | Fix |
-|-----|-----|
-| `detect_conflicts` not registered as MCP tool | Added `mcp.tool()` registration |
-| `write_rule` ID collision (second-precision timestamp) | Changed to millisecond timestamp |
-| `commit_rule` bidirectional conflict annotation matched wrong rules | Exact ID match with `limit=10` |
-| macOS `/tmp` symlink caused `relative_to` failure | Added `.resolve()` to `resolve_repo_dir()` |
-
 ## 4. Bridge Plugin Tests (135 vitest)
 
 > Full test-level breakdown: see [plugins/aristotle-bridge/testing.md](plugins/aristotle-bridge/testing.md)
