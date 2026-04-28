@@ -31,7 +31,7 @@ Read the DRAFT file from `DRAFT_FILE` path.
 
 ---
 
-## SCHEMA COMPLIANCE
+## STEP C2: SCHEMA COMPLIANCE
 
 For each Reflection, verify structural correctness:
 
@@ -52,9 +52,11 @@ Auto-correct trivial failures (limited to defaults only):
 
 ---
 
-## CONTENT ACCURACY
+## STEP C3: CONTENT ACCURACY
 
-Cross-reference each Reflection's structured fields against the Error Excerpt and Correction Excerpt in the DRAFT:
+Cross-reference each Reflection's structured fields against the Incident block (User Request, Model Wrong Output, User Correction) in the DRAFT:
+
+> **Check priority:** Checks 1–5 are critical — stop and flag on failure. Checks 6–8 are structural — auto-fix if possible.
 
 1. **Category accuracy** — Does the chosen category match the actual error type?
    - Error is a hallucination (model made up code/facts) → should be `HALLUCINATION`, not `INCOMPLETE_ANALYSIS`
@@ -62,12 +64,12 @@ Cross-reference each Reflection's structured fields against the Error Excerpt an
    - Error is a requirement misunderstanding → should be `MISUNDERSTOOD_REQUIREMENT`, not `ASSUMED_CONTEXT`
 
 2. **Intent tags accuracy** — Do `domain` and `task_goal` match what the user was actually doing?
-   - Cross-check against Error Excerpt: if the error occurred during database migration, `domain` should be `"database_operations"` not `"code_generation"`
+   - Cross-check against Incident's User Request and Model Wrong Output: if the error occurred during database migration, `domain` should be `"database_operations"` not `"code_generation"`
    - `task_goal` should describe the user's original intent, not the error itself
 
 3. **Error summary quality** — Is `error_summary` concise, accurate, and focused on what went wrong?
    - Should be specific enough to distinguish from other errors
-   - Should be consistent with Error Excerpt
+   - Should be consistent with Incident
 
 4. **Failed skill accuracy** — Does `failed_skill` correctly identify the tool/skill involved?
    - If error is a reasoning mistake with no specific tool → should be `null`
@@ -82,9 +84,23 @@ Cross-reference each Reflection's structured fields against the Error Excerpt an
    - Example ✅ should demonstrate correct behavior that would have prevented the error
    - Example ❌ should match the actual error that occurred
 
+**Legacy format compatibility (check first):** If the DRAFT contains `Error Excerpt` / `Correction Excerpt` (old format) instead of `Incident`, treat Error Excerpt as Model Wrong Output and Correction Excerpt as User Correction. User Request must be inferred from Error Excerpt context for legacy DRAFTs.
+
+7. **Incident structure** — Is the Incident block properly formatted and within length constraints?
+    - Verify `**User Request:**` is present and non-empty
+    - Verify `**Model Wrong Output:**` is present and non-empty
+    - Verify `**User Correction:**` or `**Error Impact:**` is present (at least one of the two optional fields)
+    - Verify individual length constraints: User Request ≤400, Model Wrong Output ≤400, User Correction ≤150, Error Impact ≤100
+    - Verify **total Incident length ≤1000 chars** (including labels and formatting). If exceeded, preserve Model Wrong Output in full, then truncate User Request, then truncate optional fields.
+
+8. **Incident quality** — Is the Incident specific to the actual error scene, not a generic description?
+    - `User Request` must contain the actual task/request, not vague phrases like "user made a request"
+    - `Model Wrong Output` must contain the actual erroneous output, not generic summaries like "model gave wrong code"
+    - If either field is overly generalized, flag `[NEEDS_SPECIFIC_INCIDENT]` and reject
+
 ---
 
-## SCOPE DETERMINATION
+## STEP C4: SCOPE DETERMINATION
 
 For each Reflection, determine scope based on the **error's nature** (NOT project path existence):
 
@@ -96,13 +112,38 @@ For each Reflection, determine scope based on the **error's nature** (NOT projec
 | Project-specific tech stack issue | `project` | Error depends on this project's libraries/frameworks |
 | Cannot determine | `user` | Conservative default — user-level rules are safer |
 
-Analyze the DRAFT's 5-Why Root Cause, Error Excerpt, and Intent Tags to make this determination.
+Analyze the DRAFT's 5-Why Root Cause, Incident, and Intent Tags to make this determination.
 
 If `scope = "project"`, set `project_path` to `PROJECT_DIRECTORY`.
 
 ---
 
+### DRAFT → Rule Body Format Transformation
+
+When writing the rule from DRAFT, transform the DRAFT's nested Incident format into the rule body's flat heading format:
+
+**DRAFT format (nested bullets):**
+```markdown
+- **Incident**:
+  - **User Request:** ...
+  - **Model Wrong Output:** ...
+```
+
+**Rule body format (flat headings):**
+```markdown
+### Incident
+
+**User Request:** ...
+**Model Wrong Output:** ...
+```
+
+The Checker must perform this transformation when calling `write_rule`.
+
+---
+
 ## STEP C5: WRITE RULES TO GIT (Subagent Mode)
+
+> **Constraint:** Do NOT use `skill_mcp` — subagents do not have MCP server access. Call the `aristotle_*` tool functions directly.
 
 For each validated Reflection, execute the following sequence using direct tool function calls:
 
@@ -118,8 +159,6 @@ For each validated Reflection, execute the following sequence using direct tool 
 4. IF `audit_level == "auto"` → call `aristotle_commit_rule(file_path=<path>)` → rule committed to Git
 
 5. IF `audit_level == "semi"` or `"manual"` → leave in staging status. User can review via `/aristotle review N`
-
-**Do NOT use `skill_mcp`** — subagents do not have MCP server access. Call the `aristotle_*` tool functions directly.
 
 ---
 

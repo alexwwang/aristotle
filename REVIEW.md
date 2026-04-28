@@ -1,7 +1,7 @@
 # Aristotle Review Protocol (Post-Hoc Review)
 
 > Loaded only during the REVIEW phase. Do NOT load during REFLECT.
-> Review operates on already-committed rules. Rules were auto-committed by the Checker subagent.
+> Review operates on already-committed rules. Rules were processed (auto-committed or staged) by the Checker subagent.
 
 This file defines how to load DRAFT records and committed rules, present them to the user, and handle modifications, rejections, and re-reflections.
 
@@ -57,6 +57,7 @@ Output: "✅ No changes. Rules remain as committed."
 2. Construct revised rule content based on user feedback
 3. Write revised rule via MCP:
    a. Call `write_rule()` with updated content (creates new pending file)
+      - If `write_rule` fails → output error, return to STEP V2 for alternative feedback
    b. Call `stage_rule()` (moves to staging)
    c. Execute content validation (STEP V4 below)
    d. If validation passes → call `commit_rule()` → output success
@@ -113,7 +114,7 @@ Call `get_audit_decision(file_path)` → returns `{delta, audit_level, threshold
 
 ### Content Validation
 1. **Consistency with original error** — Does the modified rule still address the error from the DRAFT?
-2. **No logical contradiction** — Does the proposed rule contradict the Error Excerpt or Correction Excerpt?
+2. **No logical contradiction** — Does the proposed rule contradict the Incident?
 3. **Rule quality** — Is the modified rule specific and actionable (not "be more careful")?
 
 ### Outcome
@@ -127,7 +128,7 @@ Call `get_audit_decision(file_path)` → returns `{delta, audit_level, threshold
   Options: "force" (commit anyway) / "cancel" (keep original) / "修改: feedback"
   ```
 
-Append `_Revised: [DATE]_` timestamp to modified rules. All writes are APPEND ONLY, NO DUPLICATES — MCP write_rule handles dedup via file naming.
+Append `_Revised: [DATE]_` timestamp to modified rules.
 
 ---
 
@@ -149,7 +150,7 @@ After any modification or rejection:
 
 When user requests cross-session analysis (`/aristotle review N --cross M`):
 
-1. Load both DRAFT reports from records N and M
+1. Load both DRAFT reports from records N and M. If either DRAFT is unavailable → fall back to STEP V3 for that record
 2. Cross-analyze: recurring patterns, systemic repeated mistakes, same category/root cause
 3. Check if rules from a previous reflection should have prevented the current errors
 4. Generate merged draft rules → return to STEP V2 for confirm/revise/reject

@@ -96,7 +96,10 @@ Output the DRAFT in this EXACT format (the Checker parses it):
 ### Reflection 1: [SHORT_TITLE]
 - **Severity**: [HIGH/MEDIUM/LOW]
 - **Category**: [CATEGORY]
-- **Error Excerpt**: [1-2 sentences what went wrong]
+- **Incident**:
+  - **User Request:** [verbatim quote of user's original request, ≤400 chars; summarize if >300]
+  - **Model Wrong Output:** [verbatim quote of model's erroneous output, ≤400 chars; summarize if >300]
+  - **User Correction:** [optional — verbatim quote of user's correction, ≤150 chars]
 - **3-Why Root Cause**: [concise chain]
 - **Proposed Rule**: [specific actionable prevention rule]
 - **Context**: [when this rule applies]
