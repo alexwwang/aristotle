@@ -1,16 +1,16 @@
 # Aristotle — 测试指南
 
-> Aristotle MCP 规则引擎 + Bridge 插件测试概览。当前覆盖率：318 pytest + 104 static + 118 vitest + 39 regression = 579 项检查。
+> Aristotle MCP 规则引擎 + Bridge 插件测试概览。当前覆盖率：325 pytest + 104 static + 135 vitest + 64 regression = 628 项检查。
 
 ## 1. 测试套件总览
 
 | 套件 | 命令 | 数量 | 覆盖范围 |
 |------|------|------|----------|
 | 静态测试 | `bash test.sh` | 104 | 文件结构、SKILL.md 内容、hook 逻辑、错误模式检测 |
-| Python 测试 | `uv run pytest test/ -v` | 318 | MCP 核心、编排与工作流、进化、frontmatter、git 操作、Bridge MCP |
-| Bridge 插件 | `cd plugins/aristotle-bridge && bunx vitest run` | 118 | 7 个模块：types/utils/api-probe/snapshot-extractor/workflow-store/idle-handler/executor |
+| Python 测试 | `uv run pytest test/ -v` | 325 | MCP 核心、编排与工作流、进化、frontmatter、git 操作、Bridge MCP |
+| Bridge 插件 | `cd plugins/aristotle-bridge && bunx vitest run` | 135 | 7 个模块：types/utils/api-probe/snapshot-extractor/workflow-store/idle-handler/executor |
 | E2E 自动化 | `bash test/e2e_opencode.sh` | 14 (5 PASS / 9 SKIP) | 真实 opencode 会话：skill 加载、sessions、learn、reflect（需 LLM） |
-| B1 回归 | `bash test/regression_b1_checks.sh` | 39 | B1 修复的部署后验证 |
+| B1 回归 | `bash test/regression_b1_checks.sh` | 64 | B1 修复的部署后验证 |
 
 ## 2. 静态测试 (104)
 
@@ -26,13 +26,13 @@ bash test.sh
 - 架构保证
 - Phase 2：Passive Trigger 段落（M8）
 
-## 3. Python 测试 (318)
+## 3. Python 测试 (325)
 
 ```bash
 uv run pytest test/ -v
 ```
 
-318 个测试，分布在 51+ 个测试类中。所有测试使用隔离的临时目录（`tmp_path` fixture），可安全反复运行。
+325 个测试，分布在 51+ 个测试类中。所有测试使用隔离的临时目录（`tmp_path` fixture），可安全反复运行。
 
 ### 3.1 MCP 核心 (test/mcp/ — 136 tests)
 
@@ -73,7 +73,7 @@ uv run pytest test/ -v
 | `commit_rule` 双向冲突标注匹配了错误的规则 | 精确 ID 匹配 + `limit=10` |
 | macOS `/tmp` symlink 导致 `relative_to` 失败 | `resolve_repo_dir()` 添加 `.resolve()` |
 
-## 4. Bridge 插件测试 (118 vitest)
+## 4. Bridge 插件测试 (135 vitest)
 
 > 完整测试级明细：详见 [plugins/aristotle-bridge/testing.zh.md](plugins/aristotle-bridge/testing.zh.md)
 
@@ -86,10 +86,10 @@ cd plugins/aristotle-bridge && bunx vitest run
 | `utils.test.ts` | 7 | extractLastAssistantText：反向遍历、sentinel、空白跳过 |
 | `api-probe.test.ts` | 5 | detectApiMode：promptAsync 检测、session 清理 |
 | `snapshot-extractor.test.ts` | 12 | 截断（4000/200）、原子写入、过滤、schema |
-| `workflow-store.test.ts` | 35 | 磁盘持久化、50 容量淘汰、reconcile batch-5、loadFromDisk 验证 |
-| `idle-handler.test.ts` | 25 | 状态守卫、R→C 链路驱动（子进程 mock）、C 完成、错误处理、resolveMcpProjectDir、callMCP 错误解析 |
+| `workflow-store.test.ts` | 45 | 磁盘持久化、50 容量淘汰、reconcile batch-5、loadFromDisk 验证、instanceId 隔离、saveToDisk merge |
+| `idle-handler.test.ts` | 31 | 状态守卫、R→C 链路驱动（子进程 mock）、C 完成、错误处理、resolveMcpProjectDir、callMCP 错误解析、trigger 文件处理 |
 | `executor.test.ts` | 12 | 启动流程、snapshot、crash safety、session.create try/catch |
-| `index.test.ts` | 22 | 3 工具注册、事件分发、.bridge-active marker、abort 幂等 |
+| `index.test.ts` | 23 | 3 工具注册、事件分发、.bridge-active marker、abort 幂等 |
 
 ## 5. E2E 与自动化脚本
 
@@ -127,13 +127,13 @@ bash test/e2e_opencode.sh
 | A6 | 等待 idle 事件或轮询状态 | 状态 running → completed | M2-5,6 |
 | A7 | 验证 R→C 链路 — 已自动化 (B1) | Plugin 通过子进程驱动 R→C 链路。`bash test/e2e_a7_r2c_chain.sh --project /path/to/project` | M2-7 |
 | A8 | 再次发送 `/aristotle` 启动新工作流 | 新工作流出现，status = running | M3-1 |
-| A9 | 发送 `/undo` | SKILL.md "After any /undo" 规则触发 | M3-2,3 |
+| A9 | 通过 `.trigger-abort.json` 文件取消运行中的 workflow | `checkAbortTrigger()` 读取文件，取消所有 active workflow | M3-2,3 |
 | A10 | 检查 `aristotle_check` 输出 | 返回运行中的工作流 | M3-4 |
-| A11 | 验证取消操作 | 每个 running 工作流被 `aristotle_abort` 取消；MCP `on_undo` 被调用 | M3-5,6 |
-| A12 | 验证用户可见消息 | "Cancelled N active Aristotle workflow(s)" | M3-7 |
+| A11 | 验证取消操作 | 每个 running 工作流被 `store.cancel()` 取消，状态变为 terminal | M3-5,6 |
+| A12 | 验证用户可见消息 | tmux 输出含 "cancelled" + "workflow" | M3-7 |
 | A13 | 退出 opencode | `.bridge-active` marker 被清理 | M4-4 |
 
-**自动化说明**：A1–A13 可通过 tmux + 文件系统断言驱动。仅 A3、A6、A9 依赖 LLM 响应时间——需加充分 sleep 或轮询循环。
+**自动化说明**：A1–A13 通过 tmux + trigger-file 机制驱动。A8 用 `.trigger-reflect.json` + 中性消息触发 idle 事件；A9 用 `.trigger-abort.json` 触发 `checkAbortTrigger()`。A3 依赖 LLM 响应时间——需加充分 sleep 或轮询循环。
 
 ### 5.3 B1 回归检查
 
@@ -155,6 +155,10 @@ bash test/regression_b1_checks.sh
 | 日志 | 3 | 存在、stderr 输出、unknown[] 类型 |
 | 部署同步 | 4 | 安装目录存在、_cli.py 已同步、done action 已同步、插件已部署 |
 | 测试断言 | 5 | notify→done 在 Python 测试中、bridge-active marker 清理 |
+| Bug #11-#12 | 10 | instanceId 隔离、reconcile 超时、saveToDisk merge、eviction 持久化 |
+| Bug #13-#14 | 6 | spawn stdin、promptAsync 无 agent、ToolDefinition 格式、context?.sessionID |
+| 工具注册 | 6 | description/args/execute 格式、fire_o 默认值、abort 幂等 |
+| Executor | 4 | 无轮询指令、STOP 消息 |
 
 设计原则：每个修复点一项检查、检查意图而非实现、覆盖配置层、快速且可重复。
 
@@ -249,7 +253,7 @@ cd plugins/aristotle-bridge && bunx vitest run
 bash test/regression_b1_checks.sh
 ```
 
-期望结果：`318 passed` + `104 passed` + `118 passed` + `39 passed` = **579 项检查，0 失败**。
+期望结果：`325 passed` + `104 passed` + `135 passed` + `64 passed` = **628 项检查，0 失败**。
 
 ### 8.2 测试前部署检查清单
 
@@ -293,9 +297,9 @@ bash "$ARISTOTLE_PROJECT_DIR/test/regression_b1_checks.sh"
 | 3 | 同步代码 + uv sync | MCP server 从安装目录运行 |
 | 4 | 部署插件 | opencode 从配置目录加载 |
 | 5 | 清理状态 | 残留 marker/workflow 会导致误判 |
-| 6 | 回归检查 | 验证同步/部署正确性（39 项断言） |
+| 6 | 回归检查 | 验证同步/部署正确性（64 项断言） |
 
-期望结果：`318 passed` + `104 passed` + `118 passed` + `39 passed` = **579 项检查，0 失败**。
+期望结果：`325 passed` + `104 passed` + `135 passed` + `64 passed` = **628 项检查，0 失败**。
 
 ## 9. Gate #1 验证（已完成）
 
