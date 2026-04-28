@@ -1,29 +1,29 @@
 # Aristotle — 测试指南
 
-> Aristotle MCP 规则引擎 + Bridge 插件测试概览。当前覆盖率：325 pytest + 104 static + 135 vitest + 64 regression = 628 项检查。
+> Aristotle MCP 规则引擎 + Bridge 插件测试概览。当前覆盖率：325 pytest + 103 static + 135 vitest + 64 regression = 627 项检查。
 
 ## 1. 测试套件总览
 
 | 套件 | 命令 | 数量 | 覆盖范围 |
 |------|------|------|----------|
-| 静态测试 | `bash test.sh` | 104 | 文件结构、SKILL.md 内容、hook 逻辑、错误模式检测 |
+| 静态测试 | `bash test.sh` | 103 | 文件结构、SKILL.md 内容、hook 逻辑、错误模式检测、渐进披露（字节限制） |
 | Python 测试 | `uv run pytest test/ -v` | 325 | MCP 核心、编排与工作流、进化、frontmatter、git 操作、Bridge MCP |
 | Bridge 插件 | `cd plugins/aristotle-bridge && bunx vitest run` | 135 | 7 个模块：types/utils/api-probe/snapshot-extractor/workflow-store/idle-handler/executor |
 | E2E 自动化 | `bash test/e2e_opencode.sh` | 14 (5 PASS / 9 SKIP) | 真实 opencode 会话：skill 加载、sessions、learn、reflect（需 LLM） |
 | B1 回归 | `bash test/regression_b1_checks.sh` | 64 | B1 修复的部署后验证 |
 
-## 2. 静态测试 (104)
+## 2. 静态测试 (103)
 
 ```bash
 bash test.sh
 ```
 
-104 个断言，覆盖：
-- 文件结构完整性（SKILL.md、config.py、test.sh）
-- 渐进披露（SKILL.md ≤ 60 行，省略内部细节）
+103 个断言，覆盖：
+- 文件结构完整性（SKILL.md、config.py）
+- 渐进披露（SKILL.md ≤ 8KB 字节限制，REFLECT.md ≤ 140 行，REVIEW.md ≤ 200 行）
 - Hook 逻辑与参数解析
 - 错误模式检测（英文/中文/阈值）
-- 架构保证
+- 架构保证（dispatcher 不含协议细节、subagent 通过 SESSION_FILE 读取 session）
 - Phase 2：Passive Trigger 段落（M8）
 
 ## 3. Python 测试 (325)
@@ -253,7 +253,7 @@ cd plugins/aristotle-bridge && bunx vitest run
 bash test/regression_b1_checks.sh
 ```
 
-期望结果：`325 passed` + `104 passed` + `135 passed` + `64 passed` = **628 项检查，0 失败**。
+期望结果：`325 passed` + `103 passed` + `135 passed` + `64 passed` = **627 项检查，0 失败**。
 
 ### 8.2 测试前部署检查清单
 
@@ -299,7 +299,7 @@ bash "$ARISTOTLE_PROJECT_DIR/test/regression_b1_checks.sh"
 | 5 | 清理状态 | 残留 marker/workflow 会导致误判 |
 | 6 | 回归检查 | 验证同步/部署正确性（64 项断言） |
 
-期望结果：`325 passed` + `104 passed` + `135 passed` + `64 passed` = **628 项检查，0 失败**。
+期望结果：`325 passed` + `103 passed` + `135 passed` + `64 passed` = **627 项检查，0 失败**。
 
 ## 9. Gate #1 验证（已完成）
 
