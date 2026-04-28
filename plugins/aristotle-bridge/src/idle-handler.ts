@@ -178,9 +178,9 @@ export class IdleEventHandler {
       // Chain complete (e.g., R found nothing to analyze, or C checking finished)
       this.store.markCompleted(wf.workflowId, result);
       logger.info('chain complete (%s): wf=%s', action.action, wf.workflowId);
-      // Bug #14b: notify user that reflection finished
-      await this.notifyParent(wf.parentSessionId,
-        `🦉 Aristotle reflection complete (${wf.workflowId}). Use /aristotle review to see results.`);
+      // Bug #14b: R finished without needing C
+      this.notifyParent(wf.parentSessionId,
+        `🦉 Aristotle ran — no issues found. (${wf.workflowId})`);
     } else if (action.action === 'notify') {
       // Oracle R5 Issue 1: all 'notify' from subagent_done are errors/edge cases.
       // (checking completion returns 'done'; only error paths return 'notify')
@@ -215,9 +215,9 @@ export class IdleEventHandler {
     if (action.action === 'done') {
       this.store.markCompleted(wf.workflowId, result);
       logger.info('reflection complete: %s', action.message ?? 'done');
-      // Bug #14b: notify user that reflection finished
-      await this.notifyParent(wf.parentSessionId,
-        `🦉 Aristotle reflection complete (${wf.workflowId}). Use /aristotle review to see results.`);
+      // Bug #14b: full R→C chain complete
+      this.notifyParent(wf.parentSessionId,
+        `🦉 Reflection complete (${wf.workflowId}). Use /aristotle review to see results.`);
     } else if (action.action === 'notify') {
       // Oracle R5 Issue 1: all 'notify' from subagent_done are errors/edge cases
       const msg = action.message || 'MCP returned notify';
@@ -263,10 +263,11 @@ export class IdleEventHandler {
    * Uses prompt({noReply:true}) — Gate #2 verified: non-blocking + message visible.
    * Best-effort: failures are logged but never throw.
    */
-  private async notifyParent(parentSessionId: string, message: string): Promise<void> {
+  private notifyParent(parentSessionId: string, message: string): void {
     if (!parentSessionId) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      await Promise.race([
+      void Promise.race([
         this.client.session.prompt({
           path: { id: parentSessionId },
           body: {
@@ -274,13 +275,16 @@ export class IdleEventHandler {
             parts: [{ type: 'text', text: message }],
           },
         }),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('notification timeout')), 5000)
-        ),
-      ]);
-      logger.info('notifyParent: sent to session=%s', parentSessionId);
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error('notification timeout')), 5000);
+        }),
+      ]).finally(() => { if (timer) clearTimeout(timer); })
+        .then(() => logger.info('notifyParent: sent to session=%s', parentSessionId))
+        .catch((e) => logger.warn('notifyParent: failed for session=%s %s',
+          parentSessionId, e instanceof Error ? e.message : e));
     } catch (e) {
-      logger.warn('notifyParent: failed for session=%s %s',
+      // Synchronous error (e.g., invalid arguments) — log and move on
+      logger.warn('notifyParent: sync error for session=%s %s',
         parentSessionId, e instanceof Error ? e.message : e);
     }
   }

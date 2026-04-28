@@ -61,6 +61,7 @@ describe('IdleEventHandler', () => {
     session: {
       messages: ReturnType<typeof vi.fn>;
       abort: ReturnType<typeof vi.fn>;
+      prompt: ReturnType<typeof vi.fn>;
     };
   };
   let executor: {
@@ -93,6 +94,7 @@ describe('IdleEventHandler', () => {
       session: {
         messages: vi.fn().mockResolvedValue({ data: [] }),
         abort: vi.fn().mockResolvedValue(undefined),
+        prompt: vi.fn().mockResolvedValue(undefined),
       },
     };
     executor = {
@@ -917,5 +919,89 @@ describe('IdleEventHandler', () => {
     // Both should have been attempted
     expect(store.cancel).toHaveBeenCalledWith('wf-1');
     expect(store.cancel).toHaveBeenCalledWith('wf-2');
+  });
+
+  // ── notifyParent tests ────────────────────────────────────────────────
+
+  it('should_notify_parent_on_R_done', async () => {
+    store.findBySession.mockReturnValue(baseWf({ agent: 'R', status: 'running' }));
+    mockSpawnResult = {
+      stdout: JSON.stringify({ action: 'done' }),
+      stderr: '',
+      exitCode: 0,
+      signal: null,
+      error: null,
+    };
+
+    const handler = new IdleEventHandler(client, store, executor, sessionsDir);
+    await handler.handle('session-1');
+
+    expect(store.markCompleted).toHaveBeenCalledWith('wf-1', 'extracted result');
+    expect(client.session.prompt).toHaveBeenCalledWith({
+      path: { id: 'parent-1' },
+      body: {
+        noReply: true,
+        parts: [{ type: 'text', text: expect.stringContaining('no issues found') }],
+      },
+    });
+  });
+
+  it('should_notify_parent_on_C_done', async () => {
+    store.findBySession.mockReturnValue(baseWf({ agent: 'C', status: 'running' }));
+    mockSpawnResult = {
+      stdout: JSON.stringify({ action: 'done' }),
+      stderr: '',
+      exitCode: 0,
+      signal: null,
+      error: null,
+    };
+
+    const handler = new IdleEventHandler(client, store, executor, sessionsDir);
+    await handler.handle('session-1');
+
+    expect(store.markCompleted).toHaveBeenCalledWith('wf-1', 'extracted result');
+    expect(client.session.prompt).toHaveBeenCalledWith({
+      path: { id: 'parent-1' },
+      body: {
+        noReply: true,
+        parts: [{ type: 'text', text: expect.stringContaining('review') }],
+      },
+    });
+  });
+
+  it('should_not_notify_when_parentSessionId_empty', async () => {
+    store.findBySession.mockReturnValue(baseWf({ agent: 'R', status: 'running', parentSessionId: '' }));
+    mockSpawnResult = {
+      stdout: JSON.stringify({ action: 'done' }),
+      stderr: '',
+      exitCode: 0,
+      signal: null,
+      error: null,
+    };
+
+    const handler = new IdleEventHandler(client, store, executor, sessionsDir);
+    await handler.handle('session-1');
+
+    expect(store.markCompleted).toHaveBeenCalledWith('wf-1', 'extracted result');
+    expect(client.session.prompt).not.toHaveBeenCalled();
+  });
+
+  it('should_not_throw_when_notify_fails', async () => {
+    store.findBySession.mockReturnValue(baseWf({ agent: 'R', status: 'running' }));
+    client.session.prompt.mockRejectedValue(new Error('network error'));
+    mockSpawnResult = {
+      stdout: JSON.stringify({ action: 'done' }),
+      stderr: '',
+      exitCode: 0,
+      signal: null,
+      error: null,
+    };
+
+    const handler = new IdleEventHandler(client, store, executor, sessionsDir);
+    // Should NOT throw — notification is best-effort
+    await handler.handle('session-1');
+
+    expect(store.markCompleted).toHaveBeenCalledWith('wf-1', 'extracted result');
+    expect(client.session.prompt).toHaveBeenCalled();
   });
 });
