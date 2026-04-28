@@ -53,10 +53,14 @@ describe('IdleEventHandler', () => {
     markError: ReturnType<typeof vi.fn>;
     markChainPending: ReturnType<typeof vi.fn>;
     markChainBroken: ReturnType<typeof vi.fn>;
+    getActive: ReturnType<typeof vi.fn>;
+    findByWorkflowId: ReturnType<typeof vi.fn>;
+    cancel: ReturnType<typeof vi.fn>;
   };
   let client: {
     session: {
       messages: ReturnType<typeof vi.fn>;
+      abort: ReturnType<typeof vi.fn>;
     };
   };
   let executor: {
@@ -81,10 +85,14 @@ describe('IdleEventHandler', () => {
       markError: vi.fn().mockResolvedValue(undefined),
       markChainPending: vi.fn().mockResolvedValue(undefined),
       markChainBroken: vi.fn().mockResolvedValue(undefined),
+      getActive: vi.fn().mockReturnValue({ active: [] }),
+      findByWorkflowId: vi.fn(),
+      cancel: vi.fn(),
     };
     client = {
       session: {
         messages: vi.fn().mockResolvedValue({ data: [] }),
+        abort: vi.fn().mockResolvedValue(undefined),
       },
     };
     executor = {
@@ -703,5 +711,187 @@ describe('IdleEventHandler', () => {
     await handler.handle('session-parent');
 
     expect(unlinkSync).toHaveBeenCalledWith(triggerPath);
+  });
+
+  // ── Abort trigger tests ────────────────────────────────────────────────
+
+  it('should_abort_all_active_workflows', async () => {
+    const abortPath = join(sessionsDir, '.trigger-abort.json');
+    vi.mocked(existsSync).mockImplementation((p: any) => {
+      return String(p).endsWith('.trigger-abort.json');
+    });
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify({}));
+    vi.mocked(unlinkSync).mockReturnValue(undefined);
+
+    store.getActive.mockReturnValue({
+      active: [
+        { workflow_id: 'wf-1', status: 'running', sessionId: 'ses-1' },
+        { workflow_id: 'wf-2', status: 'chain_pending', sessionId: 'ses-2' },
+      ],
+    });
+    store.findByWorkflowId
+      .mockReturnValueOnce({ sessionId: 'ses-1' })
+      .mockReturnValueOnce({ sessionId: 'ses-2' });
+    store.findBySession.mockReturnValue(undefined);
+
+    const handler = new IdleEventHandler(client, store, executor, sessionsDir);
+    await handler.handle('session-parent');
+
+    expect(unlinkSync).toHaveBeenCalledWith(abortPath);
+    expect(store.cancel).toHaveBeenCalledWith('wf-1');
+    expect(store.cancel).toHaveBeenCalledWith('wf-2');
+    expect(client.session.abort).toHaveBeenCalledTimes(2);
+  });
+
+  it('should_abort_specific_workflow_ids_only', async () => {
+    vi.mocked(existsSync).mockImplementation((p: any) => {
+      return String(p).endsWith('.trigger-abort.json');
+    });
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify({ workflow_ids: ['wf-1'] }));
+    vi.mocked(unlinkSync).mockReturnValue(undefined);
+
+    store.getActive.mockReturnValue({
+      active: [
+        { workflow_id: 'wf-1', status: 'running', sessionId: 'ses-1' },
+        { workflow_id: 'wf-2', status: 'running', sessionId: 'ses-2' },
+      ],
+    });
+    store.findByWorkflowId.mockReturnValue({ sessionId: 'ses-1' });
+    store.findBySession.mockReturnValue(undefined);
+
+    const handler = new IdleEventHandler(client, store, executor, sessionsDir);
+    await handler.handle('session-parent');
+
+    expect(store.cancel).toHaveBeenCalledWith('wf-1');
+    expect(store.cancel).not.toHaveBeenCalledWith('wf-2');
+  });
+
+  it('should_skip_non_running_workflows', async () => {
+    vi.mocked(existsSync).mockImplementation((p: any) => {
+      return String(p).endsWith('.trigger-abort.json');
+    });
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify({}));
+    vi.mocked(unlinkSync).mockReturnValue(undefined);
+
+    store.getActive.mockReturnValue({
+      active: [
+        { workflow_id: 'wf-1', status: 'completed', sessionId: 'ses-1' },
+        { workflow_id: 'wf-2', status: 'error', sessionId: 'ses-2' },
+        { workflow_id: 'wf-3', status: 'running', sessionId: 'ses-3' },
+      ],
+    });
+    store.findByWorkflowId.mockReturnValue({ sessionId: 'ses-3' });
+    store.findBySession.mockReturnValue(undefined);
+
+    const handler = new IdleEventHandler(client, store, executor, sessionsDir);
+    await handler.handle('session-parent');
+
+    expect(store.cancel).toHaveBeenCalledTimes(1);
+    expect(store.cancel).toHaveBeenCalledWith('wf-3');
+  });
+
+  it('should_delete_trigger_file_after_processing', async () => {
+    const abortPath = join(sessionsDir, '.trigger-abort.json');
+    vi.mocked(existsSync).mockImplementation((p: any) => {
+      return String(p).endsWith('.trigger-abort.json');
+    });
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify({}));
+    vi.mocked(unlinkSync).mockReturnValue(undefined);
+
+    store.getActive.mockReturnValue({ active: [] });
+    store.findBySession.mockReturnValue(undefined);
+
+    const handler = new IdleEventHandler(client, store, executor, sessionsDir);
+    await handler.handle('session-parent');
+
+    expect(unlinkSync).toHaveBeenCalledWith(abortPath);
+  });
+
+  it('should_delete_trigger_file_on_parse_error', async () => {
+    const abortPath = join(sessionsDir, '.trigger-abort.json');
+    vi.mocked(existsSync).mockImplementation((p: any) => {
+      return String(p).endsWith('.trigger-abort.json');
+    });
+    vi.mocked(readFileSync).mockReturnValue('not valid json {{{');
+    vi.mocked(unlinkSync).mockReturnValue(undefined);
+
+    store.findBySession.mockReturnValue(undefined);
+    const handler = new IdleEventHandler(client, store, executor, sessionsDir);
+    await handler.handle('session-parent');
+
+    expect(unlinkSync).toHaveBeenCalledWith(abortPath);
+    expect(store.cancel).not.toHaveBeenCalled();
+  });
+
+  it('should_call_session_abort_for_each_workflow', async () => {
+    vi.mocked(existsSync).mockImplementation((p: any) => {
+      return String(p).endsWith('.trigger-abort.json');
+    });
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify({}));
+    vi.mocked(unlinkSync).mockReturnValue(undefined);
+
+    store.getActive.mockReturnValue({
+      active: [
+        { workflow_id: 'wf-1', status: 'running', sessionId: 'ses-1' },
+        { workflow_id: 'wf-2', status: 'running', sessionId: 'ses-2' },
+      ],
+    });
+    store.findByWorkflowId
+      .mockReturnValueOnce({ sessionId: 'ses-1' })
+      .mockReturnValueOnce({ sessionId: 'ses-2' });
+    store.findBySession.mockReturnValue(undefined);
+
+    const handler = new IdleEventHandler(client, store, executor, sessionsDir);
+    await handler.handle('session-parent');
+
+    expect(client.session.abort).toHaveBeenCalledWith({ path: { id: 'ses-1' } });
+    expect(client.session.abort).toHaveBeenCalledWith({ path: { id: 'ses-2' } });
+  });
+
+  it('should_not_cancel_when_no_active_workflows', async () => {
+    vi.mocked(existsSync).mockImplementation((p: any) => {
+      return String(p).endsWith('.trigger-abort.json');
+    });
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify({}));
+    vi.mocked(unlinkSync).mockReturnValue(undefined);
+
+    store.getActive.mockReturnValue({ active: [] });
+    store.findBySession.mockReturnValue(undefined);
+
+    const handler = new IdleEventHandler(client, store, executor, sessionsDir);
+    await handler.handle('session-parent');
+
+    expect(store.cancel).not.toHaveBeenCalled();
+    expect(client.session.abort).not.toHaveBeenCalled();
+  });
+
+  it('should_continue_cancelling_when_one_fails', async () => {
+    vi.mocked(existsSync).mockImplementation((p: any) => {
+      return String(p).endsWith('.trigger-abort.json');
+    });
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify({}));
+    vi.mocked(unlinkSync).mockReturnValue(undefined);
+
+    store.getActive.mockReturnValue({
+      active: [
+        { workflow_id: 'wf-1', status: 'running', sessionId: 'ses-1' },
+        { workflow_id: 'wf-2', status: 'running', sessionId: 'ses-2' },
+      ],
+    });
+    store.findByWorkflowId
+      .mockReturnValueOnce({ sessionId: 'ses-1' })
+      .mockReturnValueOnce({ sessionId: 'ses-2' });
+    // First cancel throws, second succeeds
+    store.cancel
+      .mockImplementationOnce(() => { throw new Error('cancel failed'); })
+      .mockImplementationOnce(() => {});
+    store.findBySession.mockReturnValue(undefined);
+
+    const handler = new IdleEventHandler(client, store, executor, sessionsDir);
+    await handler.handle('session-parent');
+
+    // Both should have been attempted
+    expect(store.cancel).toHaveBeenCalledWith('wf-1');
+    expect(store.cancel).toHaveBeenCalledWith('wf-2');
   });
 });
