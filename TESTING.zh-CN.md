@@ -299,3 +299,11 @@ bash "$ARISTOTLE_PROJECT_DIR/test/regression_b1_checks.sh"
 **结论**：**否。** `noReply: true` 会导致挂起 bug（OpenCode issues #4431, #14451）——它不会向父会话注入消息。已通过 `test/gate1-noReply-verify.sh` 验证。
 
 **决策**：Bridge Plugin 采用轮询模式而非 noReply 注入。SKILL.md 使用空闲检测 + `aristotle_check`/`aristotle_abort` 工具管理异步反思，不阻塞主会话。
+
+## 10. Gate #2 验证（已完成）
+
+**问题**：`session.prompt({noReply: true})` 是否挂起？消息是否可见？
+
+**结论**：**不挂起，且消息可见。** Gate #2 通过 `test/gate2-prompt-noReply-verify.sh` 验证：`prompt()` + `noReply:true` 在 1180ms 内返回，marker 在 session messages 中可查到。
+
+**决策**：Bug #14b 使用 `notifyParent()` 方法，在 chain 完成后调用 `client.session.prompt({noReply:true})` 通知父会话。最佳努力：失败不抛异常，仅日志记录。

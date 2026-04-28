@@ -298,3 +298,11 @@ Expected result: `325 passed` + `103 passed` + `144 passed` + `64 passed` = **63
 **Result**: **No.** `noReply: true` causes a hang bug (OpenCode issues #4431, #14451) — it does not inject messages into the parent session. This was verified via `test/gate1-noReply-verify.sh`.
 
 **Decision**: Bridge Plugin adopted polling mode instead of noReply injection. SKILL.md uses idle detection + `aristotle_check`/`aristotle_abort` tools to manage async reflection without blocking the main session.
+
+## 10. Gate #2 Verification (Completed)
+
+**Question**: Does `session.prompt({noReply: true})` hang? Is the message visible?
+
+**Result**: **No hang, message visible.** Gate #2 verified via `test/gate2-prompt-noReply-verify.sh`: `prompt()` + `noReply:true` returned in 1180ms, marker found in session messages.
+
+**Decision**: Bug #14b uses `notifyParent()` method, calling `client.session.prompt({noReply:true})` after chain completion to notify the parent session. Best-effort: failures are logged but never throw.
