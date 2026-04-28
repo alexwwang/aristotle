@@ -200,6 +200,8 @@ describe('IdleEventHandler', () => {
       agent: 'C',
       parentSessionId: 'parent-1',
     });
+    // notifyParent should NOT be called for fire_sub (only on done)
+    expect(client.session.prompt).not.toHaveBeenCalled();
     expect(store.markCompleted).not.toHaveBeenCalled();
   });
 
@@ -964,7 +966,7 @@ describe('IdleEventHandler', () => {
       path: { id: 'parent-1' },
       body: {
         noReply: true,
-        parts: [{ type: 'text', text: expect.stringContaining('review') }],
+        parts: [{ type: 'text', text: expect.stringContaining('/aristotle review') }],
       },
     });
   });
@@ -1002,6 +1004,8 @@ describe('IdleEventHandler', () => {
     await handler.handle('session-1');
 
     expect(store.markCompleted).toHaveBeenCalledWith('wf-1', 'extracted result');
-    expect(client.session.prompt).toHaveBeenCalled();
+    expect(client.session.prompt).toHaveBeenCalledWith(expect.objectContaining({
+      path: { id: 'parent-1' },
+    }));
   });
 });
