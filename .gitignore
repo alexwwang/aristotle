@@ -17,6 +17,9 @@ Thumbs.db
 # Design docs (cross-branch reference, not tracked)
 design_plan/
 
+# Protocol drafts (not for distribution)
+protocol_draft/
+
 # Test artifacts
 test-output.log
 tmp/
