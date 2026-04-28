@@ -178,6 +178,9 @@ export class IdleEventHandler {
       // Chain complete (e.g., R found nothing to analyze, or C checking finished)
       this.store.markCompleted(wf.workflowId, result);
       logger.info('chain complete (%s): wf=%s', action.action, wf.workflowId);
+      // Bug #14b: notify user that reflection finished
+      await this.notifyParent(wf.parentSessionId,
+        `🦉 Aristotle reflection complete (${wf.workflowId}). Use /aristotle review to see results.`);
     } else if (action.action === 'notify') {
       // Oracle R5 Issue 1: all 'notify' from subagent_done are errors/edge cases.
       // (checking completion returns 'done'; only error paths return 'notify')
@@ -212,6 +215,9 @@ export class IdleEventHandler {
     if (action.action === 'done') {
       this.store.markCompleted(wf.workflowId, result);
       logger.info('reflection complete: %s', action.message ?? 'done');
+      // Bug #14b: notify user that reflection finished
+      await this.notifyParent(wf.parentSessionId,
+        `🦉 Aristotle reflection complete (${wf.workflowId}). Use /aristotle review to see results.`);
     } else if (action.action === 'notify') {
       // Oracle R5 Issue 1: all 'notify' from subagent_done are errors/edge cases
       const msg = action.message || 'MCP returned notify';
@@ -249,6 +255,33 @@ export class IdleEventHandler {
       const msg = `Unexpected MCP action: ${action.action ?? 'undefined'}`;
       this.store.markChainBroken(wf.workflowId, msg);
       logger.warn('unexpected action: wf=%s action=%s', wf.workflowId, action.action);
+    }
+  }
+
+  /**
+   * Send a fire-and-forget notification to the parent session.
+   * Uses prompt({noReply:true}) — Gate #2 verified: non-blocking + message visible.
+   * Best-effort: failures are logged but never throw.
+   */
+  private async notifyParent(parentSessionId: string, message: string): Promise<void> {
+    if (!parentSessionId) return;
+    try {
+      await Promise.race([
+        this.client.session.prompt({
+          path: { id: parentSessionId },
+          body: {
+            noReply: true,
+            parts: [{ type: 'text', text: message }],
+          },
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('notification timeout')), 5000)
+        ),
+      ]);
+      logger.info('notifyParent: sent to session=%s', parentSessionId);
+    } catch (e) {
+      logger.warn('notifyParent: failed for session=%s %s',
+        parentSessionId, e instanceof Error ? e.message : e);
     }
   }
 
