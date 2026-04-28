@@ -107,17 +107,17 @@ if [ "$SKILL_BYTES" -le 8192 ]; then
 else
     fail "SKILL.md is $SKILL_BYTES bytes (expected ≤8KB)"
 fi
-REFLECT_LINES=$(wc -l < "$ARISTOTLE_DIR/REFLECT.md" | tr -d ' ')
-if [ "$REFLECT_LINES" -le 140 ]; then
-    pass "REFLECT.md is $REFLECT_LINES lines (≤140)"
+REFLECT_BYTES=$(wc -c < "$ARISTOTLE_DIR/REFLECT.md" | tr -d ' ')
+if [ "$REFLECT_BYTES" -le 8192 ]; then
+    pass "REFLECT.md is $REFLECT_BYTES bytes (≤8KB)"
 else
-    fail "REFLECT.md is $REFLECT_LINES lines (expected ≤140)"
+    fail "REFLECT.md is $REFLECT_BYTES bytes (expected ≤8KB)"
 fi
-REVIEW_LINES=$(wc -l < "$ARISTOTLE_DIR/REVIEW.md" | tr -d ' ')
-if [ "$REVIEW_LINES" -le 200 ]; then
-    pass "REVIEW.md is $REVIEW_LINES lines (≤200)"
+REVIEW_BYTES=$(wc -c < "$ARISTOTLE_DIR/REVIEW.md" | tr -d ' ')
+if [ "$REVIEW_BYTES" -le 8192 ]; then
+    pass "REVIEW.md is $REVIEW_BYTES bytes (≤8KB)"
 else
-    fail "REVIEW.md is $REVIEW_LINES lines (expected ≤200)"
+    fail "REVIEW.md is $REVIEW_BYTES bytes (expected ≤8KB)"
 fi
 sep
 

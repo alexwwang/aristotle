@@ -1,71 +1,70 @@
 # Aristotle — Testing Guide
 
-> Technical reference: commands, coverage, how to run. Current coverage: 306 pytest + 104 static + 118 vitest + 39 regression = 567 checks.
+> Aristotle MCP rule engine + Bridge plugin test overview. Current coverage: 325 pytest + 103 static + 135 vitest + 64 regression = 627 checks.
 
 ## 1. Test Suites Overview
 
 | Suite | Command | Count | What It Covers |
 |-------|---------|-------|----------------|
-| Static | `bash test.sh` | 104 | File structure, SKILL.md content, hook logic, error pattern detection |
-| Python (MCP Core) | `uv run pytest test/mcp/ -v` | 136 | Config, models, evolution, git ops, frontmatter, migration, server tools, delta, reflection |
-| Python (Orchestration) | `uv run pytest test/ -v` | 170 | Orchestration, review, reflect workflow, count propagation, Phase 0 Bridge, M1–M9 |
-| Bridge Plugin (TypeScript) | `cd plugins/aristotle-bridge && bunx vitest run` | 118 | Types, utils, api-probe, snapshot-extractor, workflow-store, idle-handler, executor, index |
-| E2E Automated (opencode) | `bash test/e2e_opencode.sh` | 14 (5 PASS / 9 SKIP) | Real opencode session: skill load, sessions, learn, reflect (requires LLM) |
-| B1 Regression | `bash test/regression_b1_checks.sh` | 39 | Post-deploy verification for B1 fixes (config paths, code logic, test assertions, deploy sync) |
+| Static | `bash test.sh` | 103 | File structure, SKILL.md content, hook logic, error pattern detection, progressive disclosure (byte limit) |
+| Python | `uv run pytest test/ -v` | 325 | MCP core, orchestration & workflows, evolution, frontmatter, git ops, Bridge MCP |
+| Bridge Plugin | `cd plugins/aristotle-bridge && bunx vitest run` | 135 | 7 modules: types/utils/api-probe/snapshot-extractor/workflow-store/idle-handler/executor |
+| E2E Automated | `bash test/e2e_opencode.sh` | 14 | Real opencode session: skill load, sessions, learn, reflect (requires LLM) |
+| B1 Regression | `bash test/regression_b1_checks.sh` | 64 | Post-deploy verification for B1 fixes |
 
-## 2. Static Tests (104)
+## 2. Static Tests (103)
 
 ```bash
 bash test.sh
 ```
 
-104 assertions covering:
-- File structure integrity (SKILL.md, config.py, test.sh)
-- Progressive disclosure (SKILL.md ≤ 60 lines, omits internal details)
+103 assertions covering:
+- File structure integrity (SKILL.md, config.py)
+- Progressive disclosure (all skill docs by byte size: SKILL.md ≤ 8KB, REFLECT.md ≤ 8KB, REVIEW.md ≤ 8KB)
 - Hook logic and argument parsing
 - Error pattern detection (English/Chinese/threshold)
-- Architecture guarantees
-- Passive Trigger section (M8)
+- Architecture guarantees (dispatcher contains no protocol details, subagent reads session via SESSION_FILE)
+- Phase 2: Passive Trigger paragraph (M8)
 
-## 3. Python Tests (318)
+## 3. Python Tests (325)
 
 ```bash
 uv run pytest test/ -v
 ```
 
-All tests use isolated temp directories (`tmp_path` fixture) and are safe to run repeatedly.
+325 tests across 51+ test classes. All tests use isolated temp directories (`tmp_path` fixture) and are safe to run repeatedly.
 
 ### 3.1 MCP Core (test/mcp/ — 136 tests)
 
-| Test File | Count | What It Tests |
-|-----------|-------|---------------|
-| `test/mcp/test_mcp_config.py` | 14 | Path resolution, env override, RISK_MAP, RISK_WEIGHTS, AUDIT_THRESHOLDS, SKILL_DIR, project hash |
-| `test/mcp/test_mcp_evolution.py` | 10 | compute_delta (all risk levels, edge cases, validation), decide_audit_level |
-| `test/mcp/test_mcp_models.py` | 13 | RuleMetadata defaults, YAML serialization roundtrip, GEAR 2.0 fields |
-| `test/mcp/test_mcp_git_ops.py` | 8 | init, add+commit, show, log, status, git_show_exists |
-| `test/mcp/test_mcp_frontmatter.py` | 18 | Atomic write, raw read, field update, stream filter, multi-dimension search |
-| `test/mcp/test_mcp_migration.py` | 8 | Flat Markdown parsing, repo init, auto-migration |
-| `test/mcp/test_mcp_server_tools.py` | 36 | Full lifecycle, reject, restore, sync, path containment |
-| `test/mcp/test_mcp_server_delta.py` | 8 | get_audit_decision, confidence defaults, Δ audit levels |
-| `test/mcp/test_mcp_server_reflection.py` | 21 | Draft persistence, reflection records, state management |
+| Test File | Test Class | Count | What It Tests |
+|-----------|-----------|-------|---------------|
+| `test/mcp/test_mcp_config.py` | TestConfig | 14 | Path resolution, env override, RISK_MAP, RISK_WEIGHTS, AUDIT_THRESHOLDS, SKILL_DIR, project hash |
+| `test/mcp/test_mcp_evolution.py` | TestEvolution | 10 | compute_delta (all risk levels, edge cases, validation), decide_audit_level |
+| `test/mcp/test_mcp_models.py` | TestModels | 13 | RuleMetadata defaults, YAML serialization roundtrip, GEAR 2.0 fields |
+| `test/mcp/test_mcp_git_ops.py` | TestGitOps | 8 | init, add+commit, show, log, status, git_show_exists |
+| `test/mcp/test_mcp_frontmatter.py` | TestFrontmatter | 18 | Atomic write, raw read, field update, stream filter, multi-dimension search |
+| `test/mcp/test_mcp_migration.py` | TestMigration | 8 | Flat Markdown parsing, repo init, auto-migration |
+| `test/mcp/test_mcp_server_tools.py` | TestServerTools, TestSyncTools, TestPathTraversal | 36 | Full lifecycle, reject, restore, sync, path containment |
+| `test/mcp/test_mcp_server_delta.py` | TestDeltaDecision | 8 | get_audit_decision, confidence defaults, Δ audit levels |
+| `test/mcp/test_mcp_server_reflection.py` | TestPersistDraft, TestCreateReflectionRecord, TestCompleteReflectionRecord | 21 | Draft persistence, reflection records, state management |
 
 ### 3.2 Orchestration & Workflows (test/ — 182 tests)
 
-| Test File | Count | What It Tests |
-|-----------|-------|---------------|
-| `test/test_orchestration.py` | 52 | Learn orchestration, workflow state, sessions, helpers |
-| `test/test_review_actions.py` | 18 | Review actions, exception paths, integration |
-| `test/test_reflect_workflow.py` | 17 | Reflect flow, exception handling |
-| `test/test_m5_two_round.py` | 24 | Two-round retrieval (search → score → compress), intent extraction, scoring, compression |
-| `test/test_phase0_snapshot.py` | 14 | Session dir resolution, reflector prompt SESSION_FILE, bridge marker detection, on_undo tool, undone state short-circuit |
-| `test/test_m6_feedback.py` | 13 | report_feedback tool, feedback signal metadata, auto-reflect trigger |
-| `test/test_m7_delta_norm.py` | 12 | compute_delta log-normalization, sample_size passthrough, audit level thresholds |
-| `test/test_m9_conflicts.py` | 11 | detect_conflicts, bidirectional conflict annotation, triple matching |
-| `test/test_e2e_bridge_integration.py` | 9 | Bridge↔MCP integration via real stdio transport: context fix, bridge detection, async workflow, multi-stage |
-| `test/test_m1_committed_paths.py` | 8 | committed_rule_paths collection → propagation → confirm fast path |
-| `test/test_count_propagation.py` | 4 | Re-reflect count inheritance and cascading |
+| Test File | Test Class | Count | What It Tests |
+|-----------|-----------|-------|---------------|
+| `test/test_orchestration.py` | TestOrchestrateStart, TestOrchestrateOnEvent, TestWorkflowStateManagement, TestIntegrationMockO, TestSearchParamMapping, TestHelperFunctions, TestOrchestrateStartSessions | 52 | Learn orchestration, workflow state, sessions, helpers |
+| `test/test_review_actions.py` | TestOrchestrateReviewAction, TestExceptionRevise, TestIntegrationReview | 18 | Review actions, exception paths, integration |
+| `test/test_reflect_workflow.py` | TestOrchestrateStartReflect, TestOrchestrateOnEventReflect, TestExceptionReflect, TestExceptionStart | 17 | Reflect flow, exception handling |
+| `test/test_count_propagation.py` | TestReReflectCountPropagation | 4 | Re-reflect count inheritance and cascading |
+| `test/test_m1_committed_paths.py` | — | 8 | committed_rule_paths collection → propagation → confirm fast path |
+| `test/test_m5_two_round.py` | — | 24 | Two-round retrieval (search → score → compress), intent extraction, scoring, compression |
+| `test/test_m6_feedback.py` | — | 13 | report_feedback tool, feedback signal metadata, auto-reflect trigger |
+| `test/test_m7_delta_norm.py` | — | 12 | compute_delta log-normalization, sample_size passthrough, audit level thresholds |
+| `test/test_m9_conflicts.py` | — | 11 | detect_conflicts, bidirectional conflict annotation, triple matching |
+| `test/test_phase0_snapshot.py` | TestResolveSessionsDir, TestBuildReflectorPrompt, TestOrchestrateStartSessionFile, TestBridgeDetection, TestOnUndo, TestUndoneShortCircuit | 14 | Session dir resolution, reflector prompt SESSION_FILE, Bridge marker detection, on_undo tool, undone state short-circuit |
+| `test/test_e2e_bridge_integration.py` | TestContextFixE2E, TestBridgeDetectionE2E, TestAsyncBridgeWorkflowE2E, TestMultiStageBridgeE2E | 9 | Bridge↔MCP integration: context fix, Bridge detection, async workflow, multi-stage |
 
-### Bugs Found During E2E Testing
+#### Bugs Found During E2E Testing
 
 | Bug | Fix |
 |-----|-----|
@@ -74,7 +73,9 @@ All tests use isolated temp directories (`tmp_path` fixture) and are safe to run
 | `commit_rule` bidirectional conflict annotation matched wrong rules | Exact ID match with `limit=10` |
 | macOS `/tmp` symlink caused `relative_to` failure | Added `.resolve()` to `resolve_repo_dir()` |
 
-## 4. Bridge Plugin Tests (118 vitest)
+## 4. Bridge Plugin Tests (135 vitest)
+
+> Full test-level breakdown: see [plugins/aristotle-bridge/testing.md](plugins/aristotle-bridge/testing.md)
 
 ```bash
 cd plugins/aristotle-bridge && bunx vitest run
@@ -85,14 +86,18 @@ cd plugins/aristotle-bridge && bunx vitest run
 | `utils.test.ts` | 7 | extractLastAssistantText: reverse traversal, sentinel, whitespace skip |
 | `api-probe.test.ts` | 5 | detectApiMode: promptAsync detection, session cleanup |
 | `snapshot-extractor.test.ts` | 12 | Truncation (4000/200), atomic write, filtering, schema |
-| `workflow-store.test.ts` | 35 | Disk persistence, 50-cap eviction, reconcile batch-5, loadFromDisk validation |
-| `idle-handler.test.ts` | 25 | Status guards, R→C chain via mock subprocess, C completion, error handling, resolveMcpProjectDir, callMCP errors |
+| `workflow-store.test.ts` | 45 | Disk persistence, 50-cap eviction, reconcile batch-5, loadFromDisk validation, instanceId isolation, saveToDisk merge |
+| `idle-handler.test.ts` | 31 | Status guards, R→C chain driving (mock subprocess), C completion, error handling, resolveMcpProjectDir, callMCP error parsing, trigger file handling |
 | `executor.test.ts` | 12 | Launch flow, snapshot, crash safety, session.create try/catch |
-| `index.test.ts` | 22 | 3 tool registration, event dispatch, .bridge-active marker, abort idempotency |
+| `index.test.ts` | 23 | 3 tool registrations, event dispatch, .bridge-active marker, abort idempotency |
 
 ## 5. E2E & Automation Scripts
 
-### 5.1 E2E Automated (opencode run) — `bash test/e2e_opencode.sh`
+### 5.1 E2E Automated (opencode run)
+
+```bash
+bash test/e2e_opencode.sh
+```
 
 14 assertions driven by `opencode run "message" --format json`. Tests real skill loading and MCP calls.
 
@@ -101,24 +106,40 @@ cd plugins/aristotle-bridge && bunx vitest run
 | E2E-1 | 1 | PASS | Skill loads |
 | E2E-2 | 2 | PASS | Sessions (MCP calls + content) |
 | E2E-3 | 2 | PASS | Learn (orchestration calls + content) |
-| E2E-4 | 2 | SKIP | Reflect (requires LLM sub-agent) |
-| E2E-5 | 2 | SKIP | Snapshot artifact (depends on reflect) |
-| E2E-6 | 2 | SKIP | Bridge marker (requires plugin) |
-| E2E-7 | 3 | SKIP | Workflow store (requires plugin) |
+| E2E-4 | 2 | PASS | Reflect (requires LLM sub-agent) |
+| E2E-5 | 2 | PASS | Snapshot artifact (depends on reflect) |
+| E2E-6 | 2 | PASS | Bridge marker (requires plugin) |
+| E2E-7 | 3 | PASS | Workflow store (requires plugin) |
 
-> 9/14 tests SKIP without a running LLM or loaded Bridge Plugin. They pass in a live environment.
+### 5.2 B1 R→C Chain (tmux)
 
-### 5.2 B1 R→C Chain (tmux) — `bash test/e2e_a7_r2c_chain.sh --project /path`
+One opencode session covers plugin load, async reflect, and undo cleanup. **18 verification points.**
 
-Tmux-based test for the B1 plugin-driven R→C chain. Starts opencode, triggers `/aristotle`, and verifies the full reflect→checker auto-chain via DB state and workflow JSON — no LLM polling required.
+| Step | Action | Verification | Covers |
+|------|--------|-------------|--------|
+| A1 | Start opencode (with Bridge plugin) | No "promptAsync not available" in logs | M4-2 |
+| A2 | Check `~/.config/opencode/aristotle-sessions/.bridge-active` | File exists with valid JSON (pid + startedAt) | M4-3 |
+| A3 | Send `/aristotle` | LLM immediately returns (session NOT blocked) | M2-1,2 |
+| A4 | Check `.bridge-active` still exists | Marker present | M2-3 |
+| A5 | Check `bridge-workflows.json` | File exists with workflowId | M2-4 |
+| A6 | Wait for idle event or poll status | Status: running → completed | M2-5,6 |
+| A7 | Verify R→C chain — automated (B1) | Plugin drives R→C chain via subprocess. `bash test/e2e_a7_r2c_chain.sh --project /path/to/project` | M2-7 |
+| A8 | Send `/aristotle` again to start a new workflow | New workflow appears, status = running | M3-1 |
+| A9 | Cancel running workflow via `.trigger-abort.json` | `checkAbortTrigger()` reads file, cancels all active workflows | M3-2,3 |
+| A10 | Check `aristotle_check` output | Returns running workflows | M3-4 |
+| A11 | Verify cancellation | Each running workflow is cancelled via `store.cancel()`, status becomes terminal | M3-5,6 |
+| A12 | Verify user-visible message | tmux output contains "cancelled" + "workflow" | M3-7 |
+| A13 | Exit opencode | `.bridge-active` marker cleaned up | M4-4 |
+
+**Automation notes**: A1–A13 are driven via tmux + trigger-file mechanism. A8 uses `.trigger-reflect.json` + neutral message to trigger idle event; A9 uses `.trigger-abort.json` to trigger `checkAbortTrigger()`. A3 depends on LLM response time — add sufficient sleep or polling loop.
+
+### 5.3 B1 Regression Checks
 
 ```bash
-bash test/e2e_a7_r2c_chain.sh --project /path/to/project
+bash test/regression_b1_checks.sh
 ```
 
-### 5.3 B1 Regression Checks — `bash test/regression_b1_checks.sh`
-
-39 assertions covering all B1 fixes. Run before every deployment.
+64 assertions covering all B1 fixes. Run before every deployment.
 
 | Category | Checks | What It Verifies |
 |----------|--------|------------------|
@@ -132,6 +153,12 @@ bash test/e2e_a7_r2c_chain.sh --project /path/to/project
 | Logger | 3 | exists, stderr output, unknown[] types |
 | Deploy sync | 4 | install dir exists, _cli.py synced, done action synced, plugin deployed |
 | Test assertions | 5 | notify→done in Python tests, bridge-active marker cleanup |
+| Bug #11–#12 | 10 | instanceId isolation, reconcile timeout, saveToDisk merge, eviction persistence |
+| Bug #13–#14 | 6 | spawn stdin, promptAsync no agent, ToolDefinition format, context?.sessionID |
+| Tool registration | 6 | description/args/execute format, fire_o defaults, abort idempotency |
+| Executor | 4 | no polling directive, STOP message |
+
+Design principle: one check per fix, check intent not implementation, cover config layer, fast and repeatable.
 
 ## 6. Test Scenarios
 
@@ -139,22 +166,30 @@ bash test/e2e_a7_r2c_chain.sh --project /path/to/project
 
 > The only scenario that cannot be automated. Requires verifying the host agent's behavior in a real conversation.
 
-**Objective**: Verify that SKILL.md PASSIVE TRIGGER causes the host agent to suggest `/aristotle` when error patterns are detected, without auto-invoking it.
+**Objective**: Verify that SKILL.md PASSIVE TRIGGER paragraph correctly guides the host agent to suggest `/aristotle` when error patterns are detected, without auto-invoking it.
 
-| Case | Trigger Pattern | Steps | Expected | Assert |
-|------|-----------------|-------|----------|--------|
-| P1-A | Agent Self-Correction (Pattern 1) | 1. Ask agent to implement a function<br>2. Ask it to review its own work<br>3. Agent discovers issue and self-corrects | Agent suggests: "🦉 I detected an error pattern. Run /aristotle to reflect..." | Agent discovers error **on its own**; suggests `/aristotle`; does NOT auto-invoke |
-| P1-B | Approach Switch (Pattern 3) | 1. Give agent a challenging task<br>2. Agent tries approach A, fails<br>3. Agent switches to approach B | Passive trigger suggestion after the switch | Agent initiates switch **on its own**; suggestion appears |
-| P1-C | User Correction (Pattern 2) | 1. Ask agent to implement something<br>2. Agent produces output with an error<br>3. **User** points out the error; agent agrees and corrects | Passive trigger suggestion after agreeing with user correction | **User** points out error, agent agrees; suggestion appears |
-| P1-D | No False Positive | 1. Normal conversation (questions/answers)<br>2. No corrections or errors occur | No Aristotle suggestion triggered | — |
-| P1-E | Thinking-Phase Self-Correction (No Trigger) | 1. Agent encounters an error during thinking<br>2. Agent self-corrects before producing final output<br>3. Final output is already correct | No Aristotle suggestion triggered | Passive trigger monitors visible conversation, not internal reasoning |
-| P1-F | Main Session Corrects Subagent Error (Trigger) | 1. Subagent (via `task()`) returns result with error<br>2. Main session agent reviews and corrects it | Passive trigger suggestion appears | Matches Pattern 1 from main session's perspective |
+**Prerequisites**:
+1. Aristotle skill installed in Claude Code or OpenCode
+2. A conversation session is open
 
-#### Validation Checklist
+| Case | Trigger Pattern | Steps | Expected Output | Assert |
+|------|-----------------|-------|-----------------|--------|
+| P1-A | Pattern 1 — Agent Self-Correction | 1. Ask agent to implement a function 2. Ask it to self-review 3. Agent discovers issue and self-corrects | Agent suggests running `/aristotle` | Agent discovers error on its own; suggests `/aristotle`; does not auto-invoke |
+| P1-B | Pattern 3 — Approach Switch | 1. Give agent a challenging task 2. Approach A fails 3. Agent proactively switches to approach B | Passive trigger suggestion appears after switch | Agent proactively switches; suggestion appears |
+| P1-C | Pattern 2 — User Points Out Error | 1. Ask agent to implement something 2. Agent produces error 3. User points it out, agent agrees and corrects | Suggestion appears after agreeing to correct | User points out, agent agrees; suggestion appears |
+| P1-D | No Trigger | Normal conversation, no corrections | No suggestion triggered | No suggestion |
+| P1-E | Thinking-Phase Self-Correction (No Trigger) | Agent discovers error internally and corrects before output, final output is correct | No suggestion triggered | No suggestion |
+| P1-F | Main Session Corrects Subagent Error | Subagent returns error, main session discovers and corrects it | Trigger suggestion appears | Main session detects and corrects error; suggestion appears |
 
-- [ ] P1-A: Agent **self** discovers error → suggestion appears (Pattern 1)
+**Rationale**:
+- P1-E: The agent resolved the error before it reached the conversation. Passive Trigger monitors visible conversation patterns, not internal reasoning state.
+- P1-F: From the main session's perspective, this matches Pattern 1 ("You corrected your own output"). Multi-agent error detection is explicitly covered by SKILL.md's trigger patterns.
+
+**Validation Checklist**:
+
+- [ ] P1-A: Agent self-discovers error and corrects → suggestion appears (Pattern 1)
 - [ ] P1-B: Agent switches approach → suggestion appears (Pattern 3)
-- [ ] P1-C: **User** points out error, agent agrees → suggestion appears (Pattern 2)
+- [ ] P1-C: User points out error, agent agrees → suggestion appears (Pattern 2)
 - [ ] P1-D: Normal conversation → no suggestion
 - [ ] P1-E: Thinking-phase correction (no visible error) → no suggestion
 - [ ] P1-F: Main session corrects subagent error → suggestion appears
@@ -163,47 +198,25 @@ bash test/e2e_a7_r2c_chain.sh --project /path/to/project
 
 ### 6.2 Bridge Plugin Scenarios (M1–M5)
 
-> **Execution strategy**: The 5 original scenarios are consolidated into 2 rounds. B1 makes R→C chain fully automated — no LLM polling needed.
+> **Execution strategy**: Original 5 scenarios merged into 2 execution rounds by automation feasibility. Full coverage retained — each original verification point maps to steps below.
 
-#### Round A: Bridge Lifecycle (tmux-automatable)
+#### Round B: M1 + M5 — Reflect-Check Full Chain (semi-automated)
 
-One opencode session covers plugin load, async reflect, and undo cleanup. **13 verification points.**
-
-| Step | Action | Verification | Covers |
-|------|--------|-------------|--------|
-| A1 | Start opencode (with Bridge plugin) | No "promptAsync not available" in logs | M4-2 |
-| A2 | Check `~/.config/opencode/aristotle-sessions/.bridge-active` | File exists with valid JSON (pid + startedAt) | M4-3 |
-| A3 | Send `/aristotle` | LLM immediately returns (session NOT blocked) | M2-1,2 |
-| A4 | Check `.bridge-active` still exists | Marker present | M2-3 |
-| A5 | Check `bridge-workflows.json` | File exists with workflowId | M2-4 |
-| A6 | Wait for R idle event | Status: running → chain_pending (B1: plugin detects R idle → calls subprocess) | M2-5 |
-| A7 | Verify R→C auto-chain | Plugin drives R→C via subprocess: chain_pending → running(C) → completed. Checker result present. **Automated**: `bash test/e2e_a7_r2c_chain.sh --project /path` | M2-6,7 |
-| A8 | Send `/aristotle` again to start a new workflow | New workflow appears, status = running | M3-1 |
-| A9 | Send `/undo` | SKILL.md "After any /undo" rule triggers | M3-2,3 |
-| A10 | Check `aristotle_check` output | Returns running workflows (or chain_pending/chain_broken) | M3-4 |
-| A11 | Verify cancellation | Each running/chain_pending workflow cancelled via `aristotle_abort`; MCP `on_undo` called | M3-5,6 |
-| A12 | Verify user-visible message | "Cancelled N active Aristotle workflow(s)" | M3-7 |
-| A13 | Exit opencode | `.bridge-active` marker cleaned up | M4-4 |
-
-**Automation notes**: A1–A13 can be driven via tmux + file-system assertions. B1 eliminates LLM polling dependency for R→C chain — A6/A7 depend only on subprocess timing (~200ms). A3, A9 still depend on LLM response timing.
-
-#### Round B: Reflect-Check Chain (semi-automated)
-
-One `/aristotle` invocation covers snapshot extraction, reflect-check loop, sessions, and review. **9 verification points.**
+One `/aristotle` invocation covers snapshot extraction, reflect-check loop, sessions, and review. **15 verification points.**
 
 | Step | Action | Verification | Covers |
 |------|--------|-------------|--------|
 | B1 | Intentionally produce an error in conversation, then correct it | Error-correction pattern visible in session | M1-1,2,3 |
 | B2 | Send `/aristotle` | Reflector sub-agent launched | M1-4, M5-1 |
 | B3 | Check `~/.config/opencode/aristotle-sessions/ses_*_snapshot.json` | File created; snapshot.source is "t_session_search" or "bridge-plugin-sdk" | M1-5,6,7 |
-| B4 | Wait for Reflector → Checker chain (B1: plugin-driven) | Plugin detects R idle → subprocess `_cli.py subagent_done` → launches C. Status: running(R) → chain_pending → running(C) → completed | M5-2,3,4 |
-| B5 | If Checker requests deeper analysis | Plugin detects C idle → subprocess → launches new R (re-reflect) | M5-3 |
-| B6 | Check each round's status via `aristotle_check` | Status transitions include chain_pending/chain_broken as intermediate states | M5-5 |
+| B4 | Wait for Reflector → Checker chain | Each round launched via `aristotle_fire_o`; each round's state is correct | M5-2,3,4 |
+| B5 | If Checker requests deeper analysis | Second-round Reflector auto-triggered | M5-3 |
+| B6 | Check each round's status via `aristotle_check` | Status running → completed transitions round by round | M5-5 |
 | B7 | Verify final completion notification | User sees completion message | M5-6 |
 | B8 | Send `/aristotle sessions` | New record appears with correct status | M1-8 |
 | B9 | Send `/aristotle review 1` | DRAFT rule content displayed | M1-9 |
 
-**Automation notes**: B3, B4, B6, B8, B9 are file/API assertions. B1, B2, B5 depend on LLM. R→C chain (B4) is now plugin-driven — no LLM polling needed. Use `opencode run "message" --format json` for scriptable interaction.
+**Automation notes**: B3, B4, B6, B8, B9 are file/API assertions. B1, B2, B5 depend on LLM. Can be scripted via `opencode run "message" --format json`.
 
 ## 7. Configuration Reference
 
@@ -220,7 +233,7 @@ One `/aristotle` invocation covers snapshot extraction, reflect-check loop, sess
 | `MAX_SAMPLES` | 20 | Log-normalization denominator |
 | `AUDIT_THRESHOLDS.auto` | 0.7 | Δ > 0.7 → auto commit |
 | `AUDIT_THRESHOLDS.semi` | 0.4 | 0.4 < Δ ≤ 0.7 → semi-auto |
-| `RISK_WEIGHTS` | high=0.8, medium=0.5, low=0.2 | Risk multipliers |
+| `RISK_WEIGHTS` | high=0.8, medium=0.5, low=0.2 | Risk weights |
 
 ## 8. CI Integration
 
@@ -239,14 +252,14 @@ cd plugins/aristotle-bridge && bunx vitest run
 bash test/regression_b1_checks.sh
 ```
 
-Expected result: `318 passed` + `104 passed` + `118 passed` + `39 passed` = **579 checks, 0 failures**.
+Expected result: `325 passed` + `103 passed` + `135 passed` + `64 passed` = **627 checks, 0 failures**.
 
 ### 8.2 Pre-Test Deployment Checklist
 
-Run these steps **when code has changed** and before any E2E/live testing. Order matters.
+When code has changed, **before E2E/live testing**, execute the following steps in order:
 
 ```bash
-# Step 1: Run all automated tests (must pass before deploy)
+# Step 1: Run automated tests (must pass before deploy)
 cd "$ARISTOTLE_PROJECT_DIR"
 uv run pytest -q
 cd plugins/aristotle-bridge && npx vitest run
@@ -283,7 +296,9 @@ bash "$ARISTOTLE_PROJECT_DIR/test/regression_b1_checks.sh"
 | 3 | Sync + uv sync | MCP server runs from install dir |
 | 4 | Deploy plugin | opencode loads from config dir |
 | 5 | Clear state | Stale marker/workflows cause false failures |
-| 6 | Regression check | Verify sync/deploy correctness (39 assertions) |
+| 6 | Regression check | Verify sync/deploy correctness (64 assertions) |
+
+Expected result: `325 passed` + `103 passed` + `135 passed` + `64 passed` = **627 checks, 0 failures**.
 
 ## 9. Gate #1 Verification (Completed)
 

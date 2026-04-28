@@ -20,7 +20,7 @@ bash test.sh
 
 103 个断言，覆盖：
 - 文件结构完整性（SKILL.md、config.py）
-- 渐进披露（SKILL.md ≤ 8KB 字节限制，REFLECT.md ≤ 140 行，REVIEW.md ≤ 200 行）
+- 渐进披露（所有 skill 文档按字节限制：SKILL.md ≤ 8KB、REFLECT.md ≤ 8KB、REVIEW.md ≤ 8KB）
 - Hook 逻辑与参数解析
 - 错误模式检测（英文/中文/阈值）
 - 架构保证（dispatcher 不含协议细节、subagent 通过 SESSION_FILE 读取 session）
