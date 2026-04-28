@@ -3,7 +3,7 @@
  * Set ARISTOTLE_LOG=debug for verbose output, otherwise only error/warn.
  * Output goes to stderr (not stdout) to avoid polluting subprocess JSON.
  */
-const level = (process.env.ARISTOTLE_LOG ?? 'info').toLowerCase();
+const level = (process.env.ARISTOTLE_LOG ?? 'warn').toLowerCase();
 const LEVELS = { debug: 0, info: 1, warn: 2, error: 3 };
 
 function shouldLog(l: string): boolean {
