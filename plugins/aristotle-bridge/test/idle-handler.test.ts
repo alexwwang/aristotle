@@ -725,8 +725,8 @@ describe('IdleEventHandler', () => {
 
     store.getActive.mockReturnValue({
       active: [
-        { workflow_id: 'wf-1', status: 'running', sessionId: 'ses-1' },
-        { workflow_id: 'wf-2', status: 'chain_pending', sessionId: 'ses-2' },
+        { workflow_id: 'wf-1', status: 'running' },
+        { workflow_id: 'wf-2', status: 'chain_pending' },
       ],
     });
     store.findByWorkflowId
@@ -752,8 +752,8 @@ describe('IdleEventHandler', () => {
 
     store.getActive.mockReturnValue({
       active: [
-        { workflow_id: 'wf-1', status: 'running', sessionId: 'ses-1' },
-        { workflow_id: 'wf-2', status: 'running', sessionId: 'ses-2' },
+        { workflow_id: 'wf-1', status: 'running' },
+        { workflow_id: 'wf-2', status: 'running' },
       ],
     });
     store.findByWorkflowId.mockReturnValue({ sessionId: 'ses-1' });
@@ -775,9 +775,9 @@ describe('IdleEventHandler', () => {
 
     store.getActive.mockReturnValue({
       active: [
-        { workflow_id: 'wf-1', status: 'completed', sessionId: 'ses-1' },
-        { workflow_id: 'wf-2', status: 'error', sessionId: 'ses-2' },
-        { workflow_id: 'wf-3', status: 'running', sessionId: 'ses-3' },
+        { workflow_id: 'wf-1', status: 'completed' },
+        { workflow_id: 'wf-2', status: 'error' },
+        { workflow_id: 'wf-3', status: 'running' },
       ],
     });
     store.findByWorkflowId.mockReturnValue({ sessionId: 'ses-3' });
@@ -832,8 +832,8 @@ describe('IdleEventHandler', () => {
 
     store.getActive.mockReturnValue({
       active: [
-        { workflow_id: 'wf-1', status: 'running', sessionId: 'ses-1' },
-        { workflow_id: 'wf-2', status: 'running', sessionId: 'ses-2' },
+        { workflow_id: 'wf-1', status: 'running' },
+        { workflow_id: 'wf-2', status: 'running' },
       ],
     });
     store.findByWorkflowId
@@ -846,6 +846,30 @@ describe('IdleEventHandler', () => {
 
     expect(client.session.abort).toHaveBeenCalledWith({ path: { id: 'ses-1' } });
     expect(client.session.abort).toHaveBeenCalledWith({ path: { id: 'ses-2' } });
+  });
+
+  it('should_cancel_without_abort_when_sessionId_missing', async () => {
+    vi.mocked(existsSync).mockImplementation((p: any) => {
+      return String(p).endsWith('.trigger-abort.json');
+    });
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify({}));
+    vi.mocked(unlinkSync).mockReturnValue(undefined);
+
+    store.getActive.mockReturnValue({
+      active: [
+        { workflow_id: 'wf-1', status: 'running' },
+      ],
+    });
+    // findByWorkflowId returns undefined — no session to abort
+    store.findByWorkflowId.mockReturnValue(undefined);
+    store.findBySession.mockReturnValue(undefined);
+
+    const handler = new IdleEventHandler(client, store, executor, sessionsDir);
+    await handler.handle('session-parent');
+
+    // cancel still called, but session.abort skipped
+    expect(store.cancel).toHaveBeenCalledWith('wf-1');
+    expect(client.session.abort).not.toHaveBeenCalled();
   });
 
   it('should_not_cancel_when_no_active_workflows', async () => {
@@ -874,8 +898,8 @@ describe('IdleEventHandler', () => {
 
     store.getActive.mockReturnValue({
       active: [
-        { workflow_id: 'wf-1', status: 'running', sessionId: 'ses-1' },
-        { workflow_id: 'wf-2', status: 'running', sessionId: 'ses-2' },
+        { workflow_id: 'wf-1', status: 'running' },
+        { workflow_id: 'wf-2', status: 'running' },
       ],
     });
     store.findByWorkflowId
