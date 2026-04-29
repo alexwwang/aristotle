@@ -9,3 +9,5 @@
 | [reset.md](reset.md) | Data artifact inventory and reset procedures |
 | [roadmap.md](roadmap.md) | Version roadmap (v1.2–v1.4), done list, nice-to-have |
 | [archive/](archive/) | Historical snapshots (test status) and early project plans |
+
+> **Note:** The testing and reset docs are also available in Chinese: [testing.zh-CN.md](testing.zh-CN.md), [reset.zh-CN.md](reset.zh-CN.md).

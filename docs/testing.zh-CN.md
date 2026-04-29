@@ -8,7 +8,7 @@
 |------|------|------|----------|
 | 静态测试 | `bash test.sh` | 103 | 文件结构、SKILL.md 内容、hook 逻辑、错误模式检测、渐进披露（字节限制） |
 | Python 测试 | `uv run pytest test/ -v` | 325 | MCP 核心、编排与工作流、进化、frontmatter、git 操作、Bridge MCP |
-| Bridge 插件 | `cd plugins/aristotle-bridge && bunx vitest run` | 144 | 7 个模块：types/utils/api-probe/snapshot-extractor/workflow-store/idle-handler/executor |
+| Bridge 插件 | `cd plugins/aristotle-bridge && bunx vitest run` | 148 | 7 个模块：types/utils/api-probe/snapshot-extractor/workflow-store/idle-handler/executor |
 | E2E 自动化 | `bash test/e2e_opencode.sh` | 14 (5 PASS / 9 SKIP) | 真实 opencode 会话：skill 加载、sessions、learn、reflect（需 LLM） |
 | B1 回归 | `bash test/regression_b1_checks.sh` | 64 | B1 修复的部署后验证 |
 
@@ -48,23 +48,23 @@ uv run pytest test/ -v
 | `test/mcp/test_mcp_server_delta.py` | TestDeltaDecision | 8 | get_audit_decision、confidence 默认值、Δ 审核级别 |
 | `test/mcp/test_mcp_server_reflection.py` | TestPersistDraft, TestCreateReflectionRecord, TestCompleteReflectionRecord | 21 | Draft 持久化、reflection records、状态管理 |
 
-### 3.2 编排与工作流 (test/ — 182 tests)
+### 3.2 编排与工作流 (test/ — 189 tests)
 
 | 测试文件 | 测试类 | 数量 | 测试内容 |
 |----------|--------|------|----------|
 | `test/test_orchestration.py` | TestOrchestrateStart, TestOrchestrateOnEvent, TestWorkflowStateManagement, TestIntegrationMockO, TestSearchParamMapping, TestHelperFunctions, TestOrchestrateStartSessions | 52 | Learn 编排、workflow 状态、sessions、helpers |
 | `test/test_review_actions.py` | TestOrchestrateReviewAction, TestExceptionRevise, TestIntegrationReview | 18 | Review actions、异常路径、集成测试 |
-| `test/test_reflect_workflow.py` | TestOrchestrateStartReflect, TestOrchestrateOnEventReflect, TestExceptionReflect, TestExceptionStart | 17 | Reflect 流程、异常处理 |
+| `test/test_reflect_workflow.py` | TestOrchestrateStartReflect, TestOrchestrateOnEventReflect, TestExceptionReflect, TestExceptionStart | 19 | Reflect 流程、异常处理 |
 | `test/test_count_propagation.py` | TestReReflectCountPropagation | 4 | Re-reflect count 继承和级联 |
 | `test/test_m1_committed_paths.py` | — | 8 | committed_rule_paths 收集 → 传播 → confirm 快路径 |
 | `test/test_m5_two_round.py` | — | 24 | 两轮检索（search → score → compress）、意图提取、评分、压缩 |
 | `test/test_m6_feedback.py` | — | 13 | report_feedback 工具、feedback signal 元数据、自动反思触发 |
 | `test/test_m7_delta_norm.py` | — | 12 | compute_delta log-normalization、sample_size 透传、审核级别阈值 |
 | `test/test_m9_conflicts.py` | — | 11 | detect_conflicts、双向冲突标注、triple 匹配 |
-| `test/test_phase0_snapshot.py` | TestResolveSessionsDir, TestBuildReflectorPrompt, TestOrchestrateStartSessionFile, TestBridgeDetection, TestOnUndo, TestUndoneShortCircuit | 14 | Session 目录解析、reflector prompt SESSION_FILE、Bridge marker 检测、on_undo 工具、undone 状态短路 |
+| `test/test_phase0_snapshot.py` | TestResolveSessionsDir, TestBuildReflectorPrompt, TestOrchestrateStartSessionFile, TestBridgeDetection, TestOnUndo, TestUndoneShortCircuit | 19 | Session 目录解析、reflector prompt SESSION_FILE、Bridge marker 检测、on_undo 工具、undone 状态短路 |
 | `test/test_e2e_bridge_integration.py` | TestContextFixE2E, TestBridgeDetectionE2E, TestAsyncBridgeWorkflowE2E, TestMultiStageBridgeE2E | 9 | Bridge↔MCP 集成：上下文修复、Bridge 检测、异步工作流、多阶段 |
 
-## 4. Bridge 插件测试 (144 vitest)
+## 4. Bridge 插件测试 (148 vitest)
 
 > 完整测试级明细：详见 [plugins/aristotle-bridge/testing.zh.md](plugins/aristotle-bridge/testing.zh.md)
 
@@ -78,7 +78,7 @@ cd plugins/aristotle-bridge && bunx vitest run
 | `api-probe.test.ts` | 5 | detectApiMode：promptAsync 检测、session 清理 |
 | `snapshot-extractor.test.ts` | 12 | 截断（4000/200）、原子写入、过滤、schema |
 | `workflow-store.test.ts` | 45 | 磁盘持久化、50 容量淘汰、reconcile batch-5、loadFromDisk 验证、instanceId 隔离、saveToDisk merge |
-| `idle-handler.test.ts` | 40 | 状态守卫、R→C 链路驱动（子进程 mock）、C 完成、错误处理、resolveMcpProjectDir、callMCP 错误解析、trigger 文件处理、abort trigger 处理 |
+| `idle-handler.test.ts` | 44 | 状态守卫、R→C 链路驱动（子进程 mock）、C 完成、错误处理、resolveMcpProjectDir、callMCP 错误解析、trigger 文件处理、abort trigger 处理 |
 | `executor.test.ts` | 12 | 启动流程、snapshot、crash safety、session.create try/catch |
 | `index.test.ts` | 23 | 3 工具注册、事件分发、.bridge-active marker、abort 幂等 |
 
@@ -97,12 +97,10 @@ bash test/e2e_opencode.sh
 | E2E-1 | 1 | PASS | Skill 加载 |
 | E2E-2 | 2 | PASS | Sessions（MCP 调用 + 内容） |
 | E2E-3 | 2 | PASS | Learn（编排调用 + 内容） |
-| E2E-4 | 2 | SKIP | Reflect（需 LLM 子 agent） |
-| E2E-5 | 2 | SKIP | Snapshot 产物（依赖 reflect） |
-| E2E-6 | 2 | SKIP | Bridge marker（需 plugin） |
-| E2E-7 | 3 | SKIP | Workflow store（需 plugin） |
-
-> SKIP 测试需要运行中的 LLM 或已加载的 Bridge Plugin。在真实环境下可 PASS。
+| E2E-4 | 2 | PASS | Reflect（需 LLM 子 agent） |
+| E2E-5 | 2 | PASS | Snapshot 产物（依赖 reflect） |
+| E2E-6 | 2 | PASS | Bridge marker（需 plugin） |
+| E2E-7 | 3 | PASS | Workflow store（需 plugin） |
 
 ### 5.2 B1 R→C 链路 (tmux)
 
@@ -132,7 +130,7 @@ bash test/e2e_opencode.sh
 bash test/regression_b1_checks.sh
 ```
 
-39 个断言覆盖所有 B1 修复。每次部署前运行。
+64 个断言覆盖所有 B1 修复。每次部署前运行。
 
 | 类别 | 检查数 | 验证内容 |
 |------|--------|----------|

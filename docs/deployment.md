@@ -93,7 +93,7 @@ test $FAIL -eq 0
 
 ```bash
 # 1. 构建插件
-cd $ARISTOTLE_PROJECT_DIR/plugins/aristotle-bridge && npx bun build src/index.ts --outdir dist --target node --format esm --external zod --external effect --external @opencode-ai/plugin
+cd $ARISTOTLE_PROJECT_DIR/plugins/aristotle-bridge && bun build src/index.ts --outdir dist --target node --format esm --external @opencode-ai/plugin
 
 # 2. 部署插件
 cp plugins/aristotle-bridge/dist/index.js ~/.config/opencode/aristotle-bridge/index.js

@@ -8,7 +8,7 @@
 |-------|---------|-------|----------------|
 | Static | `bash test.sh` | 103 | File structure, SKILL.md content, hook logic, error pattern detection, progressive disclosure (byte limit) |
 | Python | `uv run pytest test/ -v` | 325 | MCP core, orchestration & workflows, evolution, frontmatter, git ops, Bridge MCP |
-| Bridge Plugin | `cd plugins/aristotle-bridge && bunx vitest run` | 144 | 7 modules: types/utils/api-probe/snapshot-extractor/workflow-store/idle-handler/executor |
+| Bridge Plugin | `cd plugins/aristotle-bridge && bunx vitest run` | 148 | 7 modules: types/utils/api-probe/snapshot-extractor/workflow-store/idle-handler/executor |
 | E2E Automated | `bash test/e2e_opencode.sh` | 14 | Real opencode session: skill load, sessions, learn, reflect (requires LLM) |
 | B1 Regression | `bash test/regression_b1_checks.sh` | 64 | Post-deploy verification for B1 fixes |
 
@@ -48,25 +48,25 @@ uv run pytest test/ -v
 | `test/mcp/test_mcp_server_delta.py` | TestDeltaDecision | 8 | get_audit_decision, confidence defaults, Δ audit levels |
 | `test/mcp/test_mcp_server_reflection.py` | TestPersistDraft, TestCreateReflectionRecord, TestCompleteReflectionRecord | 21 | Draft persistence, reflection records, state management |
 
-### 3.2 Orchestration & Workflows (test/ — 182 tests)
+### 3.2 Orchestration & Workflows (test/ — 189 tests)
 
 | Test File | Test Class | Count | What It Tests |
 |-----------|-----------|-------|---------------|
 | `test/test_orchestration.py` | TestOrchestrateStart, TestOrchestrateOnEvent, TestWorkflowStateManagement, TestIntegrationMockO, TestSearchParamMapping, TestHelperFunctions, TestOrchestrateStartSessions | 52 | Learn orchestration, workflow state, sessions, helpers |
 | `test/test_review_actions.py` | TestOrchestrateReviewAction, TestExceptionRevise, TestIntegrationReview | 18 | Review actions, exception paths, integration |
-| `test/test_reflect_workflow.py` | TestOrchestrateStartReflect, TestOrchestrateOnEventReflect, TestExceptionReflect, TestExceptionStart | 17 | Reflect flow, exception handling |
+| `test/test_reflect_workflow.py` | TestOrchestrateStartReflect, TestOrchestrateOnEventReflect, TestExceptionReflect, TestExceptionStart | 19 | Reflect flow, exception handling |
 | `test/test_count_propagation.py` | TestReReflectCountPropagation | 4 | Re-reflect count inheritance and cascading |
 | `test/test_m1_committed_paths.py` | — | 8 | committed_rule_paths collection → propagation → confirm fast path |
 | `test/test_m5_two_round.py` | — | 24 | Two-round retrieval (search → score → compress), intent extraction, scoring, compression |
 | `test/test_m6_feedback.py` | — | 13 | report_feedback tool, feedback signal metadata, auto-reflect trigger |
 | `test/test_m7_delta_norm.py` | — | 12 | compute_delta log-normalization, sample_size passthrough, audit level thresholds |
 | `test/test_m9_conflicts.py` | — | 11 | detect_conflicts, bidirectional conflict annotation, triple matching |
-| `test/test_phase0_snapshot.py` | TestResolveSessionsDir, TestBuildReflectorPrompt, TestOrchestrateStartSessionFile, TestBridgeDetection, TestOnUndo, TestUndoneShortCircuit | 14 | Session dir resolution, reflector prompt SESSION_FILE, Bridge marker detection, on_undo tool, undone state short-circuit |
+| `test/test_phase0_snapshot.py` | TestResolveSessionsDir, TestBuildReflectorPrompt, TestOrchestrateStartSessionFile, TestBridgeDetection, TestOnUndo, TestUndoneShortCircuit | 19 | Session dir resolution, reflector prompt SESSION_FILE, Bridge marker detection, on_undo tool, undone state short-circuit |
 | `test/test_e2e_bridge_integration.py` | TestContextFixE2E, TestBridgeDetectionE2E, TestAsyncBridgeWorkflowE2E, TestMultiStageBridgeE2E | 9 | Bridge↔MCP integration: context fix, Bridge detection, async workflow, multi-stage |
 
-## 4. Bridge Plugin Tests (144 vitest)
+## 4. Bridge Plugin Tests (148 vitest)
 
-> Full test-level breakdown: see [plugins/aristotle-bridge/testing.md](plugins/aristotle-bridge/testing.md)
+> Full test-level breakdown: see [plugins/aristotle-bridge/testing.en.md](plugins/aristotle-bridge/testing.en.md)
 
 ```bash
 cd plugins/aristotle-bridge && bunx vitest run
@@ -78,7 +78,7 @@ cd plugins/aristotle-bridge && bunx vitest run
 | `api-probe.test.ts` | 5 | detectApiMode: promptAsync detection, session cleanup |
 | `snapshot-extractor.test.ts` | 12 | Truncation (4000/200), atomic write, filtering, schema |
 | `workflow-store.test.ts` | 45 | Disk persistence, 50-cap eviction, reconcile batch-5, loadFromDisk validation, instanceId isolation, saveToDisk merge |
-| `idle-handler.test.ts` | 40 | Status guards, R→C chain driving (mock subprocess), C completion, error handling, resolveMcpProjectDir, callMCP error parsing, trigger file handling, abort trigger handling |
+| `idle-handler.test.ts` | 44 | Status guards, R→C chain driving (mock subprocess), C completion, error handling, resolveMcpProjectDir, callMCP error parsing, trigger file handling, abort trigger handling |
 | `executor.test.ts` | 12 | Launch flow, snapshot, crash safety, session.create try/catch |
 | `index.test.ts` | 23 | 3 tool registrations, event dispatch, .bridge-active marker, abort idempotency |
 
