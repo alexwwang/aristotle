@@ -293,13 +293,4 @@
 | should_default_target_session_id_to_tool_context_sessionID_when_empty | 空 target_session_id 默认使用 tool context sessionID |
 | should_use_explicit_target_session_id_when_provided | 显式 target_session_id 优先使用 |
 
----
 
-## Phase 5 Ralph Loop 审核记录
-
-| 轮次 | 发现 | 修复 |
-|------|------|------|
-| R1 | 3H + 5M + 6L | sessionsDir fallback、marker 改名 .bridge-active、source 字段修正、loadFromDisk 验证、store 类型化、去除冗余 normalize |
-| R2 | 1M + 2L | executor session.create 加 try/catch |
-| R3 | CLEAN (0 issues) | -- |
-| R4 | CLEAN (0 issues) | -- |

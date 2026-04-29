@@ -44,6 +44,11 @@ export function resolveMcpProjectDir(sessionsDir: string): string {
     if (existsSync(join(dir, 'pyproject.toml')) && existsSync(join(dir, 'aristotle_mcp'))) {
       return dir;
     }
+    // Also check sibling "aristotle" dir (sessions and mcp are peers under ~/.config/opencode/)
+    const sibling = join(dir, 'aristotle');
+    if (existsSync(join(sibling, 'pyproject.toml')) && existsSync(join(sibling, 'aristotle_mcp'))) {
+      return sibling;
+    }
     const parent = join(dir, '..');
     if (parent === dir) break;
     dir = parent;
@@ -53,7 +58,7 @@ export function resolveMcpProjectDir(sessionsDir: string): string {
   const envFallback = process.env.ARISTOTLE_PROJECT_DIR;
   if (envFallback && existsSync(join(envFallback, 'aristotle_mcp'))) return envFallback;
   // Default install path (matches opencode.json MCP config)
-  const defaultInstall = join(homedir(), '.claude', 'skills', 'aristotle');
+  const defaultInstall = join(homedir(), '.config', 'opencode', 'aristotle');
   if (existsSync(join(defaultInstall, 'aristotle_mcp'))) return defaultInstall;
   return process.cwd();
 }
