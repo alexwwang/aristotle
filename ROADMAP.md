@@ -1,70 +1,38 @@
 # Aristotle Roadmap
 
-> P1–P4 + GEAR 编排已完成。Phase 2（M1/M5-M9）已完成并通过 e2e 验证。Phase 0 Bridge MCP 扩展 + Phase 1 Bridge Plugin 已完成。当前测试总量：318 pytest + 100 vitest + 104 static。本文档记录后续开发计划。
+> **v1.1.0 released.** Phase 2 + Bridge Plugin 完成。当前测试总量：325 pytest + 148 vitest + 103 static + 9 E2E + 64 regression = 649 total。详见 [TESTING.md](./TESTING.md) 和归档的 [TESTING_STATUS-v1.1.0.md](./TESTING_STATUS-v1.1.0.md)。
 
 ---
 
-## V1.1 — 体验优化
+## V1.2 — 功能补全
 
-### V1.1a 触发关键词外置化
+### V1.2a 命令参数解析
 
-**现状：** SKILL.md 已重写为统一 MCP dispatcher（从 90 行精简到 60 行）。触发关键词仍保留在 SKILL.md description 中用于自动建议，但路由逻辑已改为基于 MCP 工具调用。
+**现状：** README 文档中声明了 `last`、`session ses_xxx`、`recent N`、`--focus <hint>` 命令，但 SKILL.md 的 PRE-RESOLVE 段落硬编码了 `target_session_id: ""` 和 `focus: "last"`，用户输入的参数被忽略。
+
+**目标：** 在 SKILL.md 中添加参数解析逻辑，利用 `session_list()` API 解析目标会话。
+
+**改动范围：** 仅 SKILL.md（~15 行解析指令），无需改动 MCP 或 Bridge 代码。
+
+**实现方案：** 详见 `design_plan/pending-params-implementation.md`
+
+### V1.2b 反思器模型配置
+
+**现状：** 反思器使用宿主默认模型，无法单独优化成本或质量。
+
+**目标：** 在 `aristotle-config.json` 中添加 `reflector_model` 配置项。
+
+**改动范围：** `config.py`（新增 `get_reflector_model()`）+ `_orch_start.py`（透传 model）+ `executor.ts`（promptAsync 使用 model）+ SKILL.md（blocking 路径使用 model）。
+
+**优先级链：** `ARISTOTLE_REFLECTOR_MODEL` env → `aristotle-config.json` → 宿主默认（与 `prompt_mode` 一致）
+
+### V1.2c 触发关键词外置化
+
+**现状：** SKILL.md 已重写为统一 MCP dispatcher（97 行）。触发关键词保留在 SKILL.md description 中用于自动建议。
 
 **目标：** 将关键词提取到 `TRIGGERS.md`，支持在使用中积累用户对错误的表达习惯。
 
-**方案要点：**
-- 新建 `TRIGGERS.md`：包含 reflect 触发词 + 多 agent 错误检测词，分语言/分场景
-- SKILL.md description 保留 2-3 个核心触发词，详细列表引用 TRIGGERS.md
-- REFLECT.md STEP F1 的 Passive Trigger 部分从 TRIGGERS.md 读取完整列表
-
 **改动文件：** `TRIGGERS.md`（新建）、`SKILL.md`、`REFLECT.md`
-
-**注：** SKILL.md 调度器重写已完成（M2），但 TRIGGERS.md 外置化未实施。
-
-### ~~V1.1b Subagent session_read 兼容性~~ — 已解决
-
-**原现状：** Reflector 使用 `session_read()` 读取会话内容，部分 model/provider 不暴露该工具。
-
-**解决方案：** Bridge Plugin 的 PRE-RESOLVE snapshot 提取器在主会话（有 `session_read` 访问权）中提取错误上下文快照，通过 `session_file` 传给 Reflector 子代理。Reflector 不再需要 `session_read`，直接从快照文件读取。
-
-**改动文件：** `_orch_start.py`（`session_file` 字段）、`_orch_prompts.py`（prompt 模板）、`plugins/aristotle-bridge/src/snapshot-extractor.ts`
-
-### V1.1c 多模型 E2E 测试
-
-**现状：** live-test.sh 只验证用户指定模型。
-
-**目标：** 覆盖主流 provider/model 组合。
-
-**改动文件：** `test/live-test.sh`
-
----
-
-## V1.2 — Phase 2 收尾
-
-### V1.2a 代码推送与合并
-
-**现状：** Phase 2 全部代码在 `test-coverage` 分支，2 个 commit 未推到远程。
-- `567b793` feat: implement Phase 2 modules (M1/M5/M6/M7/M8/M9) with 66 new tests
-- `7da8269` fix: 4 bugs found by e2e testing + add e2e test script
-
-### V1.2b 人工 P1 Passive Trigger 测试
-
-**现状：** 69/70 e2e 场景已自动化。P1（Passive Trigger 宿主 agent 行为验证）需人工操作。
-
-**步骤：**
-1. 在 Claude Code/OpenCode 中安装 Aristotle skill
-2. 制造错误纠正场景（自我纠正 / 用户纠正 / 方案切换）
-3. 验证 agent 是否建议 `Run /aristotle to reflect`
-4. 验证正常对话不误触发
-
-### V1.2c Phase 2.1 集成测试
-
-**目标：** 端到端工作流验证（含真实 LLM 交互），覆盖自动化测试无法验证的 LLM-in-the-loop 场景。
-
-**关键场景：**
-- Learn 完整流程：`o_prompt` → 真实 LLM → 合法 intent_tags JSON → score → compress
-- Reflect：Reflector/Checker 子 agent 实际产出质量
-- Review Revise：O 收到修改指令后正确改写规则文件
 
 ---
 
@@ -134,31 +102,22 @@
 
 ### V1.4b 启动时上下文优化
 
-**现状：** `/aristotle` 触发时，SKILL.md 完整内容注入父上下文。
+**现状：** `/aristotle` 触发时，SKILL.md 完整内容注入父上下文（5.6 KB）。
 
-**目标：** 父上下文最多一行状态提示，完整协议只传递给子代理。
-
-**已部分实现：** SKILL.md 已精简到 60 行（统一 MCP dispatcher），但仍有优化空间。
+**已部分实现：** SKILL.md 已精简为统一 MCP dispatcher，渐进披露架构下其他协议文件按需加载。
 
 ---
 
 ## Done
 
-| Version | Phase | Content | Archive |
-|---------|-------|---------|---------|
-| v0.1 | — | 架构改进方案（SKILL.md 瘦身、session 管理、模型选择） | `archive/plan-v0.1.md` |
-| v0.2 | — | 架构改进待办清单（context 污染、session 注册、模型对话框） | `archive/todo-v0.2.md` |
-| v1.0 | P1 | Schema 升级 & MCP 工具补齐（8 tools, frontmatter, multi-dimension search） | `archive/progress-v1.0.md` |
-| v1.0 | P2 | Skill 层集成（REVIEW.md MCP 化, REFLECTOR.md 输出扩展, C 角色 schema 校验） | `archive/progress-v1.0.md` |
-| v1.0 | P3 | L + S 增量学习服务（LEARN.md, 被动触发, sync 自愈, 10 tools） | `archive/progress-v1.0.md` |
-| v1.0 | P4 | Δ 决策因子（evolution.py, get_audit_decision, V3c 动态审核, 11 tools, 104 tests） | `archive/progress-v1.0.md` |
-| v1.1 | M1 | MCP 编排核心 — orchestrate_start, orchestrate_on_event, orchestrate_review_action, workflow 状态机 | `a3ab41a` |
-| v1.1 | M2 | SKILL 调度器重写 — 统一 MCP dispatcher（60 行），PRE-RESOLVE + REVIEW FEEDBACK | `a3ab41a` |
-| v1.1 | M3 | 子代理提示词模板 — REFLECTOR/CHECKER/REVISE prompt, SKILL_DIR 配置 | `a3ab41a` |
-| v1.1 | M4 | 测试方案 — reflect/review/sessions/端到端测试，218 pytest + 98 static | `a3ab41a` |
-| v1.2 | Phase 2 | M1补丁/M5-M9 全模块实现 + 4 bug fix + e2e 自动化测试（295 pytest + 104 static + 70 e2e） | `7da8269` |
-| v1.2 | Phase 0 Bridge | MCP 侧扩展：`session_file` 传入、`.bridge-active` marker 检测产出 `use_bridge` 标志、`on_undo` tool、`_orch_event.py` undone 状态短路 + 9 E2E 集成测试（含 e2e→pytest 迁移 14 条，309→318 pytest） | — |
-| v1.2 | Phase 1 Bridge | Bridge Plugin 7 模块 + SKILL.md 集成（PRE-RESOLVE + fire_sub Bridge 路径 + /undo 规则）— 100 vitest | — |
+| Version | Phase | Content |
+|---------|-------|---------|
+| v1.0 | P1–P4 | Schema 升级 & MCP 工具补齐 & Skill 层集成 & L+S 增量学习 & Δ 决策因子 |
+| v1.1 | M1–M4 | GEAR 编排核心 — orchestrate_start/on_event/review_action, workflow 状态机, SKILL 调度器重写, 子代理提示词模板 |
+| v1.1 | Phase 2 (M5–M9) | M1 补丁 + M5 两轮学习 + M6 反馈 + M7 Δ 归一化 + M8 校验 + M9 冲突检测 |
+| v1.1 | Phase 0 Bridge | MCP 侧扩展：session_file 传入、.bridge-active 检测、use_bridge 标志、on_undo tool、9 E2E 集成测试 |
+| v1.1 | Phase 1 Bridge | Bridge Plugin 9 模块 + SKILL.md 集成 + notifyParent 通知 + 148 vitest |
+| v1.1 | 文档重构 | 安装路径统一、Bridge vs Blocking 对比、GEAR 协议映射、渐进披露 KB 大小、配置文件示例、RESET 指南 |
 
 ---
 

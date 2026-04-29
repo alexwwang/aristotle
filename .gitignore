@@ -20,10 +20,6 @@ design_plan/
 # Protocol drafts (not for distribution)
 protocol_draft/
 
-# Status tracking (contains commit hashes that break on filter-repo)
-TESTING_STATUS.md
-TESTING_STATUS.zh-CN.md
-
 # Test artifacts
 test-output.log
 tmp/
