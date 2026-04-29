@@ -120,19 +120,32 @@ fi
 BRIDGE_DEST="$OPENCODE_CONFIG/aristotle-bridge"
 BRIDGE_SRC="$SKILL_SRC/plugins/aristotle-bridge"
 if [ -d "$BRIDGE_SRC" ] && command -v bun &>/dev/null; then
-    echo -e "${BLUE}[5/6]${NC} Building Bridge Plugin..."
+    echo -e "${BLUE}[5/7]${NC} Building Bridge Plugin..."
     cd "$BRIDGE_SRC" && bun install && bun run build
     mkdir -p "$BRIDGE_DEST"
     cp "$BRIDGE_SRC/dist/index.js" "$BRIDGE_DEST/index.js"
     echo -e "${GREEN}✓${NC} Bridge Plugin deployed to $BRIDGE_DEST"
 elif [ -d "$BRIDGE_SRC" ]; then
-    echo -e "${YELLOW}[5/6]${NC} Skipping Bridge Plugin (bun not found). Install bun to enable async reflection."
+    echo -e "${YELLOW}[5/7]${NC} Skipping Bridge Plugin (bun not found). Install bun to enable async reflection."
 else
-    echo -e "${BLUE}[5/6]${NC} Skipping Bridge Plugin (source not found)."
+    echo -e "${BLUE}[5/7]${NC} Skipping Bridge Plugin (source not found)."
 fi
 
-# Step 6: Initialize the aristotle-repo
-    echo -e "${BLUE}[6/6]${NC} Initializing rule repository..."
+# Step 6: Write configuration file
+SESSIONS_DIR="$OPENCODE_CONFIG/aristotle-sessions"
+CONFIG_FILE="$OPENCODE_CONFIG/aristotle-config.json"
+echo -e "${BLUE}[6/7]${NC} Writing configuration to $CONFIG_FILE..."
+
+cat > "$CONFIG_FILE" << EOF
+{
+  "mcp_dir": "$MCP_DEST",
+  "sessions_dir": "$SESSIONS_DIR"
+}
+EOF
+echo -e "${GREEN}✓${NC} Configuration written."
+
+# Step 7: Initialize the aristotle-repo
+    echo -e "${BLUE}[7/7]${NC} Initializing rule repository..."
 if command -v uv &>/dev/null; then
     uv run --project "$MCP_DEST" python -c "from aristotle_mcp.server import init_repo_tool; print(init_repo_tool())"
     echo -e "${GREEN}✓${NC} Rule repository initialized."

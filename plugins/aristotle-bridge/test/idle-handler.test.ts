@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { IdleEventHandler, resolveMcpProjectDir } from '../src/idle-handler.js';
+import { IdleEventHandler } from '../src/idle-handler.js';
+import { resolveMcpProjectDir } from '../src/config.js';
 import type { WorkflowState } from '../src/types.js';
 import { extractLastAssistantText } from '../src/utils.js';
 import { EventEmitter } from 'node:events';
 import { existsSync, readFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
+import { homedir } from 'node:os';
 
 vi.mock('../src/utils.js', () => ({
   extractLastAssistantText: vi.fn(),
@@ -494,29 +496,29 @@ describe('IdleEventHandler', () => {
     expect(store.markError).toHaveBeenCalledWith('wf-1', 'fetch failed');
   });
 
-  // ── resolveMcpProjectDir ───────────────────────────────────────────────
+  // ── resolveMcpProjectDir (auto-detection) ───────────────────────────────
 
-  it('should_use_env_var_when_set', () => {
-    const envDir = '/custom/mcp/dir';
-    process.env.ARISTOTLE_MCP_DIR = envDir;
+  it('should_detect_sibling_aristotle_dir', () => {
     vi.mocked(existsSync).mockImplementation((p: string) => {
-      return p === join(envDir, 'pyproject.toml') || p === join(envDir, 'aristotle_mcp');
+      const s = String(p);
+      return s.endsWith('aristotle/pyproject.toml') || s.endsWith('aristotle/aristotle_mcp');
     });
 
     const result = resolveMcpProjectDir(sessionsDir);
-    expect(result).toBe(envDir);
+    // Should detect sibling "aristotle" dir from "aristotle-sessions"
+    expect(result).toMatch(/aristotle$/);
   });
 
-  it('should_fallback_to_cwd_when_no_env', () => {
+  it('should_fallback_to_default_when_nothing_found', () => {
     delete process.env.ARISTOTLE_MCP_DIR;
     delete process.env.ARISTOTLE_PROJECT_DIR;
     vi.mocked(existsSync).mockReturnValue(false);
 
     const result = resolveMcpProjectDir(sessionsDir);
-    expect(result).toBe(process.cwd());
+    expect(result).toBe(join(homedir(), '.config', 'opencode', 'aristotle'));
   });
 
-  it('should_fallback_to_aristotle_project_dir_env', () => {
+  it('should_use_aristotle_project_dir_env', () => {
     delete process.env.ARISTOTLE_MCP_DIR;
     process.env.ARISTOTLE_PROJECT_DIR = '/tmp/mock-project';
     // Make existsSync return true only for the env fallback check

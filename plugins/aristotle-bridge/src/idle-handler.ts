@@ -1,12 +1,12 @@
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
-import { homedir } from 'node:os';
 import { existsSync, readFileSync, unlinkSync } from 'node:fs';
 import { extractLastAssistantText } from './utils.js';
 import type { WorkflowState } from './types.js';
 import type { WorkflowStore } from './workflow-store.js';
 import type { AsyncTaskExecutor } from './executor.js';
 import { logger } from './logger.js';
+import { resolveConfig } from './config.js';
 
 const TRIGGER_FILENAME = '.trigger-reflect.json';
 const ABORT_TRIGGER_FILENAME = '.trigger-abort.json';
@@ -21,48 +21,6 @@ interface McpResult {
   error?: string;
 }
 
-/**
- * Resolve MCP project directory:
- * 1. ARISTOTLE_MCP_DIR env var (highest priority)
- * 2. Walk up from sessionsDir looking for pyproject.toml + aristotle_mcp/ dir
- *    (defense-in-depth — typically fails for standard installs where aristotle
- *    is not an ancestor of ~/.config/opencode/)
- * 3. Fallback to hard-coded path (primary resolution for most users)
- *
- * Oracle R4 Issue 6: Phase 2 should prioritize _cli.py --print-project-dir
- * to replace the hardcoded fallback with auto-detection.
- */
-export function resolveMcpProjectDir(sessionsDir: string): string {
-  const envDir = process.env.ARISTOTLE_MCP_DIR;
-  if (envDir && existsSync(join(envDir, 'pyproject.toml')) && existsSync(join(envDir, 'aristotle_mcp'))) {
-    return envDir;
-  }
-
-  // Walk up from sessionsDir (~/.config/opencode/aristotle-sessions)
-  let dir = sessionsDir;
-  for (let i = 0; i < 10; i++) {
-    if (existsSync(join(dir, 'pyproject.toml')) && existsSync(join(dir, 'aristotle_mcp'))) {
-      return dir;
-    }
-    // Also check sibling "aristotle" dir (sessions and mcp are peers under ~/.config/opencode/)
-    const sibling = join(dir, 'aristotle');
-    if (existsSync(join(sibling, 'pyproject.toml')) && existsSync(join(sibling, 'aristotle_mcp'))) {
-      return sibling;
-    }
-    const parent = join(dir, '..');
-    if (parent === dir) break;
-    dir = parent;
-  }
-
-  // Fallback: use ARISTOTLE_PROJECT_DIR env var, or default install path
-  const envFallback = process.env.ARISTOTLE_PROJECT_DIR;
-  if (envFallback && existsSync(join(envFallback, 'aristotle_mcp'))) return envFallback;
-  // Default install path (matches opencode.json MCP config)
-  const defaultInstall = join(homedir(), '.config', 'opencode', 'aristotle');
-  if (existsSync(join(defaultInstall, 'aristotle_mcp'))) return defaultInstall;
-  return process.cwd();
-}
-
 export class IdleEventHandler {
   private readonly mcpProjectDir: string;
   private readonly sessionsDir: string;
@@ -74,8 +32,8 @@ export class IdleEventHandler {
     sessionsDir: string,
   ) {
     this.sessionsDir = sessionsDir;
-    this.mcpProjectDir = resolveMcpProjectDir(sessionsDir);
-    logger.debug('mcpProjectDir=%s', this.mcpProjectDir);
+    this.mcpProjectDir = resolveConfig().mcp_dir;
+    logger.debug('mcpProjectDir=%s sessionsDir=%s', this.mcpProjectDir, this.sessionsDir);
   }
 
   async handle(sessionID: string): Promise<void> {

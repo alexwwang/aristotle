@@ -1,13 +1,13 @@
 import { mkdirSync, writeFileSync, existsSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
-import { homedir } from 'node:os';
 import { randomUUID } from 'node:crypto';
+import { resolveConfig } from './config.js';
 
 export class SnapshotExtractor {
   private readonly sessionsDir: string;
 
   constructor(sessionsDir?: string) {
-    this.sessionsDir = sessionsDir ?? join(homedir(), '.config', 'opencode', 'aristotle-sessions');
+    this.sessionsDir = sessionsDir ?? resolveConfig().sessions_dir;
     mkdirSync(this.sessionsDir, { recursive: true });
   }
 

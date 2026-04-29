@@ -1,5 +1,4 @@
 import { join } from 'node:path';
-import { homedir } from 'node:os';
 import { writeFileSync, unlinkSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
@@ -8,8 +7,9 @@ import { WorkflowStore } from './workflow-store.js';
 import { AsyncTaskExecutor } from './executor.js';
 import { IdleEventHandler } from './idle-handler.js';
 import { logger } from './logger.js';
+import { resolveConfig } from './config.js';
 
-const DEFAULT_SESSIONS_DIR = () => join(homedir(), '.config', 'opencode', 'aristotle-sessions');
+const SESSIONS_DIR = () => resolveConfig().sessions_dir;
 
 const AristotleBridgePlugin = async (ctx: any): Promise<any> => {
   const apiMode = await detectApiMode(ctx.client);
@@ -18,7 +18,7 @@ const AristotleBridgePlugin = async (ctx: any): Promise<any> => {
     return {};
   }
 
-  const sessionsDir = ctx.config?.aristotleBridge?.sessionsDir ?? DEFAULT_SESSIONS_DIR();
+  const sessionsDir = ctx.config?.aristotleBridge?.sessionsDir ?? SESSIONS_DIR();
 
   // Create bridge-active marker (dot-prefixed to match MCP side convention)
   const markerPath = join(sessionsDir, '.bridge-active');
