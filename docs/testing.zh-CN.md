@@ -1,13 +1,13 @@
 # Aristotle — 测试指南
 
-> Aristotle MCP 规则引擎 + Bridge 插件测试概览。当前覆盖率：325 pytest + 103 static + 162 vitest + 64 regression = 654 项检查。
+> Aristotle MCP 规则引擎 + Bridge 插件测试概览。当前覆盖率：382 pytest + 103 static + 162 vitest + 64 regression = 711 项检查。
 
 ## 1. 测试套件总览
 
 | 套件 | 命令 | 数量 | 覆盖范围 |
 |------|------|------|----------|
 | 静态测试 | `bash test.sh` | 103 | 文件结构、SKILL.md 内容、hook 逻辑、错误模式检测、渐进披露（字节限制） |
-| Python 测试 | `uv run pytest test/ -v` | 325 | MCP 核心、编排与工作流、进化、frontmatter、git 操作、Bridge MCP |
+| Python 测试 | `uv run pytest test/ -v` | 382 | MCP 核心、编排与工作流、进化、frontmatter、git 操作、Bridge MCP、Review UX |
 | Bridge 插件 | `cd plugins/aristotle-bridge && bunx vitest run` | 162 | 7 个模块：types/utils/api-probe/snapshot-extractor/workflow-store/idle-handler/executor |
 | E2E 自动化 | `bash test/e2e_opencode.sh` | 14 (5 PASS / 9 SKIP) | 真实 opencode 会话：skill 加载、sessions、learn、reflect（需 LLM） |
 | B1 回归 | `bash test/regression_b1_checks.sh` | 64 | B1 修复的部署后验证 |
@@ -48,12 +48,13 @@ uv run pytest test/ -v
 | `test/mcp/test_mcp_server_delta.py` | TestDeltaDecision | 8 | get_audit_decision、confidence 默认值、Δ 审核级别 |
 | `test/mcp/test_mcp_server_reflection.py` | TestPersistDraft, TestCreateReflectionRecord, TestCompleteReflectionRecord | 21 | Draft 持久化、reflection records、状态管理 |
 
-### 3.2 编排与工作流 (test/ — 189 tests)
+### 3.2 编排与工作流 (test/ — 246 tests)
 
 | 测试文件 | 测试类 | 数量 | 测试内容 |
 |----------|--------|------|----------|
 | `test/test_orchestration.py` | TestOrchestrateStart, TestOrchestrateOnEvent, TestWorkflowStateManagement, TestIntegrationMockO, TestSearchParamMapping, TestHelperFunctions, TestOrchestrateStartSessions | 52 | Learn 编排、workflow 状态、sessions、helpers |
 | `test/test_review_actions.py` | TestOrchestrateReviewAction, TestExceptionRevise, TestIntegrationReview | 18 | Review actions、异常路径、集成测试 |
+| `test/test_review_ux.py` | TestParseDraftSummary, TestEnrichRulesMetadata, TestFormatReviewOutput, TestInspectAction, TestShowDraftAction, TestReviseAction, TestRuleSummaryDataModel, TestParseConflicts, TestAuditDecisionsNoneFallback, TestOrchestrateStartReviewBranch | 57 | Review UX：DRAFT 摘要、富化通知、inspect/show draft、staging_rule_paths、confidence 显示、conflicts、rule_summary |
 | `test/test_reflect_workflow.py` | TestOrchestrateStartReflect, TestOrchestrateOnEventReflect, TestExceptionReflect, TestExceptionStart | 19 | Reflect 流程、异常处理 |
 | `test/test_count_propagation.py` | TestReReflectCountPropagation | 4 | Re-reflect count 继承和级联 |
 | `test/test_m1_committed_paths.py` | — | 8 | committed_rule_paths 收集 → 传播 → confirm 快路径 |
@@ -242,7 +243,7 @@ cd plugins/aristotle-bridge && bunx vitest run
 bash test/regression_b1_checks.sh
 ```
 
-期望结果：`325 passed` + `103 passed` + `162 passed` + `64 passed` = **654 项检查，0 失败**。
+期望结果：`382 passed` + `103 passed` + `162 passed` + `64 passed` = **711 项检查，0 失败**。
 ### 8.2 测试前部署
 
 E2E/人工测试前，确保生产环境已更新。完整检查清单和部署步骤见 [deployment.md](deployment.md)。

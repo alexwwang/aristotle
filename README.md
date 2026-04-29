@@ -4,7 +4,7 @@
 [![Release](https://img.shields.io/github/v/release/alexwwang/aristotle?include_prereleases)](https://github.com/alexwwang/aristotle/releases)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
-[![Tests](https://img.shields.io/badge/tests-654%20total-brightgreen)](./docs/testing.md)
+[![Tests](https://img.shields.io/badge/tests-711%20total-brightgreen)](./docs/testing.md)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19660780.svg)](https://doi.org/10.5281/zenodo.19660780)
 
 English | [中文](./README.zh-CN.md)
@@ -169,8 +169,8 @@ Limit the Reflector's scan range within the target session:
 ### Review Workflow
 
 1. **List reflections**: `/aristotle sessions` → shows numbered list with status
-2. **Pick one**: `/aristotle review 2` → loads DRAFT #2 into current session
-3. **Decide**: `confirm` / `revise 1: feedback` / `reject` / `re-reflect`
+2. **Pick one**: `/aristotle review 2` → loads enriched review with Δ audit score, per-rule confidence/risk, conflict warnings, and DRAFT summary
+3. **Decide**: `confirm` / `revise 1: feedback` / `reject` / `re-reflect` / `inspect N` / `show draft`
 4. **Iterate**: repeat for other reflections, or request re-reflection with deeper analysis
 
 > The sequence number (`N`) in `/aristotle review N` comes from the `#` column in `/aristotle sessions` output. It's **not** an OpenCode session ID — it's the position in the reflection records list.
@@ -437,7 +437,7 @@ The full protocol specification — state machine, frontmatter schema, Δ decisi
 | Suite | Command | Count |
 |-------|---------|-------|
 | Static | `bash test.sh` | 103 |
-| Unit/Integration (Python) | `uv run pytest test/ -v` | 325 |
+| Unit/Integration (Python) | `uv run pytest test/ -v` | 382 |
 | Bridge Plugin (TypeScript) | `cd plugins/aristotle-bridge && bunx vitest run` | 162 |
 | E2E Integration | `uv run pytest test/test_e2e_bridge_integration.py -v` | 9 |
 | Regression (deploy verify) | `bash test/regression_b1_checks.sh` | 64 |
@@ -456,6 +456,7 @@ The full protocol specification — state machine, frontmatter schema, Δ decisi
 | **Phase 2 (M1/M5-M9)** | **295** | **104** | **70** |
 | Phase 0 Bridge (MCP ext) | 318 | 103 | 9 |
 | Phase 1 Bridge (Plugin) | 325 | 103 | 9 + 162 vitest |
+| **v1.2.0 Review UX** | **382** | **103** | **9 + 162 vitest** |
 
 ## Project Structure
 

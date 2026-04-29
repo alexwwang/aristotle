@@ -1,12 +1,12 @@
 # Aristotle Roadmap
 
-> **v1.1.0 released.** Phase 2 + Bridge Plugin 完成。当前测试总量：325 pytest + 162 vitest + 103 static + 64 regression = 654 total。详见 [testing.md](./testing.md) 和归档的 [testing-status-v1.1.0.md](./archive/testing-status-v1.1.0.md)。
+> **v1.2.0 released.** Enhanced Review Phase UX — inspect N, show draft, enriched notifications. 当前测试总量：382 pytest + 162 vitest + 103 static + 64 regression = 711 total。详见 [testing.md](./testing.md)。
 
 ---
 
-## V1.2 — 功能补全
+## V1.3 — 功能补全
 
-### V1.2a 命令参数解析
+### V1.3a 命令参数解析
 
 **现状：** README 文档中声明了 `last`、`session ses_xxx`、`recent N`、`--focus <hint>` 命令，但 SKILL.md 的 PRE-RESOLVE 段落硬编码了 `target_session_id: ""` 和 `focus: "last"`，用户输入的参数被忽略。
 
@@ -16,7 +16,7 @@
 
 **实现方案：** 详见 `design_plan/pending-params-implementation.md`
 
-### V1.2b 反思器模型配置
+### V1.3b 反思器模型配置
 
 **现状：** 反思器使用宿主默认模型，无法单独优化成本或质量。
 
@@ -26,7 +26,7 @@
 
 **优先级链：** `ARISTOTLE_REFLECTOR_MODEL` env → `aristotle-config.json` → 宿主默认（与 `prompt_mode` 一致）
 
-### V1.2c 触发关键词外置化
+### V1.3c 触发关键词外置化
 
 **现状：** SKILL.md 已重写为统一 MCP dispatcher（97 行）。触发关键词保留在 SKILL.md description 中用于自动建议。
 
@@ -36,29 +36,29 @@
 
 ---
 
-## V1.3 — 进化等级（设计阶段）
+## V1.4 — 进化等级（设计阶段）
 
 > 需先回答以下问题再实施。不急于编码。
 
-### V1.3a needs_sync 自动闭环
+### V1.4a needs_sync 自动闭环
 
 **现状：** `check_sync_status` 能检测未同步规则，但需手动调用 `sync_rules`。
 
 **目标：** 检测到未同步规则后自动 commit。
 
-### V1.3b LLM 语义冲突检测
+### V1.4b LLM 语义冲突检测
 
 **现状：** `detect_conflicts` 基于精确 triple 匹配（domain + task_goal + failed_skill）。
 
 **目标：** 用 embedding 替代精确匹配，检测语义层面的规则冲突。
 
-### V1.3c 自动触发 Passive Trigger
+### V1.4c 自动触发 Passive Trigger
 
 **现状：** SKILL.md Passive Trigger 段落只建议用户运行 `/aristotle`，不自动调用。
 
 **目标：** 从建议升级为可选的自动调用模式。
 
-### V1.3d 未决问题
+### V1.4d 未决问题
 
 1. **进化的对象** — GEAR 五个 agent 全部 stateless。调整 threshold 不能提升能力，只减少人工审核。真正该进化的是什么？
    - R 的产出质量？（需要 R 能参考自己过去写过的规则）
@@ -88,11 +88,11 @@
 
 ---
 
-## V1.4 — 架构改进（OpenCode 限制相关）
+## V1.5 — 架构改进（OpenCode 限制相关）
 
 > 以下改进依赖 OpenCode 平台能力，部分可能需要上游变更。
 
-### V1.4a 子进程 session 注册为可交互
+### V1.5a 子进程 session 注册为可交互
 
 **现状：** `task()` 创建的 session 非交互式，用户无法通过 `opencode -s <id>` 切入并继续对话。
 
@@ -100,7 +100,7 @@
 
 **依赖：** OpenCode 上游支持（GitHub Issues #4422, #16303, #11012）
 
-### V1.4b 启动时上下文优化
+### V1.5b 启动时上下文优化
 
 **现状：** `/aristotle` 触发时，SKILL.md 完整内容注入父上下文（5.6 KB）。
 
@@ -118,6 +118,7 @@
 | v1.1 | Phase 0 Bridge | MCP 侧扩展：session_file 传入、.bridge-active 检测、use_bridge 标志、on_undo tool、9 E2E 集成测试 |
 | v1.1 | Phase 1 Bridge | Bridge Plugin 9 模块 + SKILL.md 集成 + notifyParent 通知 + 162 vitest |
 | v1.1 | 文档重构 | 安装路径统一、Bridge vs Blocking 对比、GEAR 协议映射、渐进披露 KB 大小、配置文件示例、RESET 指南 |
+| **v1.2** | **Review UX** | **inspect N / show draft / 完善通知内容（Δ + audit_level + confidence + conflicts）/ staging_rule_paths / rule_summary 字段 / 57 新测试** |
 
 ---
 

@@ -1,13 +1,13 @@
 # Aristotle — Testing Guide
 
-> Aristotle MCP rule engine + Bridge plugin test overview. Current coverage: 325 pytest + 103 static + 162 vitest + 64 regression = 654 checks.
+> Aristotle MCP rule engine + Bridge plugin test overview. Current coverage: 382 pytest + 103 static + 162 vitest + 64 regression = 711 checks.
 
 ## 1. Test Suites Overview
 
 | Suite | Command | Count | What It Covers |
 |-------|---------|-------|----------------|
 | Static | `bash test.sh` | 103 | File structure, SKILL.md content, hook logic, error pattern detection, progressive disclosure (byte limit) |
-| Python | `uv run pytest test/ -v` | 325 | MCP core, orchestration & workflows, evolution, frontmatter, git ops, Bridge MCP |
+| Python | `uv run pytest test/ -v` | 382 | MCP core, orchestration & workflows, evolution, frontmatter, git ops, Bridge MCP, review UX |
 | Bridge Plugin | `cd plugins/aristotle-bridge && bunx vitest run` | 162 | 7 modules: types/utils/api-probe/snapshot-extractor/workflow-store/idle-handler/executor |
 | E2E Automated | `bash test/e2e_opencode.sh` | 14 | Real opencode session: skill load, sessions, learn, reflect (requires LLM) |
 | B1 Regression | `bash test/regression_b1_checks.sh` | 64 | Post-deploy verification for B1 fixes |
@@ -48,12 +48,13 @@ uv run pytest test/ -v
 | `test/mcp/test_mcp_server_delta.py` | TestDeltaDecision | 8 | get_audit_decision, confidence defaults, Δ audit levels |
 | `test/mcp/test_mcp_server_reflection.py` | TestPersistDraft, TestCreateReflectionRecord, TestCompleteReflectionRecord | 21 | Draft persistence, reflection records, state management |
 
-### 3.2 Orchestration & Workflows (test/ — 189 tests)
+### 3.2 Orchestration & Workflows (test/ — 246 tests)
 
 | Test File | Test Class | Count | What It Tests |
 |-----------|-----------|-------|---------------|
 | `test/test_orchestration.py` | TestOrchestrateStart, TestOrchestrateOnEvent, TestWorkflowStateManagement, TestIntegrationMockO, TestSearchParamMapping, TestHelperFunctions, TestOrchestrateStartSessions | 52 | Learn orchestration, workflow state, sessions, helpers |
 | `test/test_review_actions.py` | TestOrchestrateReviewAction, TestExceptionRevise, TestIntegrationReview | 18 | Review actions, exception paths, integration |
+| `test/test_review_ux.py` | TestParseDraftSummary, TestEnrichRulesMetadata, TestFormatReviewOutput, TestInspectAction, TestShowDraftAction, TestReviseAction, TestRuleSummaryDataModel, TestParseConflicts, TestAuditDecisionsNoneFallback, TestOrchestrateStartReviewBranch | 57 | Review UX: draft summary, enriched notifications, inspect/show draft, staging_rule_paths, confidence display, conflicts, rule_summary |
 | `test/test_reflect_workflow.py` | TestOrchestrateStartReflect, TestOrchestrateOnEventReflect, TestExceptionReflect, TestExceptionStart | 19 | Reflect flow, exception handling |
 | `test/test_count_propagation.py` | TestReReflectCountPropagation | 4 | Re-reflect count inheritance and cascading |
 | `test/test_m1_committed_paths.py` | — | 8 | committed_rule_paths collection → propagation → confirm fast path |
@@ -243,7 +244,7 @@ cd plugins/aristotle-bridge && bunx vitest run
 bash test/regression_b1_checks.sh
 ```
 
-Expected result: `325 passed` + `103 passed` + `162 passed` + `64 passed` = **654 checks, 0 failures**.
+Expected result: `382 passed` + `103 passed` + `162 passed` + `64 passed` = **711 checks, 0 failures**.
 ### 8.2 Pre-Test Deployment
 
 Before E2E/live testing, ensure the production environment is up to date. See [deployment.md](deployment.md) for the full checklist and deploy steps.
