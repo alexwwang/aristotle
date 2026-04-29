@@ -4,7 +4,7 @@
 [![Release](https://img.shields.io/github/v/release/alexwwang/aristotle?include_prereleases)](https://github.com/alexwwang/aristotle/releases)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
-[![Tests](https://img.shields.io/badge/tests-111%20pytest%20%2B%2067%20static-brightgreen)](./test/test_mcp.py)
+[![Tests](https://img.shields.io/badge/tests-649%20total-brightgreen)](./TESTING.md)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19660780.svg)](https://doi.org/10.5281/zenodo.19660780)
 
 English | [中文](./README.zh-CN.md)
@@ -17,7 +17,7 @@ Activate with `/aristotle` to spawn an isolated subagent that analyzes your sess
 
 ## Features
 
-- **Progressive Disclosure Architecture** — Skill loads only what's needed: router (84 lines) → reflect (106 lines) → review (156 lines). Each phase loads on demand, never wasting context.
+- **Progressive Disclosure Architecture** — Skill loads only what's needed: router (5.6 KB) → reflect (4.6 KB) → review (6.8 KB). Each phase loads on demand, never wasting context.
 - **Isolated Reflection** — Analysis runs in a separate background session; main session context is never polluted
 - **5-Why Root-Cause Analysis** — Structured error categorization across 8 categories (MISUNDERSTOOD_REQUIREMENT, ASSUMED_CONTEXT, PATTERN_VIOLATION, HALLUCINATION, INCOMPLETE_ANALYSIS, WRONG_TOOL_CHOICE, OVERSIMPLIFICATION, SYNTAX_API_ERROR)
 - **DRAFT → Review → Confirm Workflow** — Rules are generated as DRAFTs with location metadata; user reviews in a dedicated session via `/aristotle review N`, confirms, revises, or rejects
@@ -27,54 +27,60 @@ Activate with `/aristotle` to spawn an isolated subagent that analyzes your sess
 - **Bilingual** — Detects error-correction patterns in English and Chinese (zh-CN)
 - **Two-Tier Output** — User-level rules (`~/.config/opencode/aristotle-learnings.md`) apply globally; project-level rules (`.opencode/aristotle-project-learnings.md`) apply per-project
 - **Auto-Suggestion** — Skill description includes error-correction keywords; when detected in conversation, the AI can suggest running `/aristotle` (automatic, no configuration needed)
+- **Bridge Plugin (optional)** — Async polling-based reflection for environments without OMO support. Captures error context via PRE-RESOLVE snapshot extraction, runs Reflector in background, signals completion via idle detection. Supports `/undo` to cancel in-flight reflections.
 
 ## Installation
 
-Aristotle has two components: the **Skill** (protocol files loaded by OpenCode) and the **MCP Server** (Git-backed rule management). Both are installed from the same repo.
+Aristotle has three components, all installed from the same repo:
+
+1. **Skill** — Protocol files loaded by OpenCode (`SKILL.md`, `REFLECT.md`, etc.)
+2. **MCP Server** — Python-based Git-backed rule management (`aristotle_mcp/`)
+3. **Bridge Plugin** (optional) — TypeScript-based async reflection for environments without OMO support (`plugins/aristotle-bridge/`). Only needed if you want polling-based background reflection.
 
 ### Option 1: Manual Install (macOS / Linux)
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/alexwwang/aristotle.git ~/.claude/skills/aristotle
-cd ~/.claude/skills/aristotle
+git clone https://github.com/alexwwang/aristotle.git /tmp/aristotle
+cd /tmp/aristotle
 
-# 2. Run the installer (initializes learnings file)
+# 2. Run the installer (deploys SKILL.md + MCP server + Bridge Plugin)
 bash install.sh
 
-# 3. Install MCP server dependencies
-uv sync
-
-# 4. Add MCP config to opencode.json
+# 3. Add MCP config to opencode.json
 # See "MCP Configuration" section below for the JSON snippet
+
+# 4. (Optional) Register Bridge Plugin in opencode.json
+# Add to the "plugin" array: "file://$HOME/.config/opencode/aristotle-bridge/index.js"
 ```
 
 ### Option 2: Manual Install (Windows)
 
 ```powershell
 # 1. Clone the repo
-git clone https://github.com/alexwwang/aristotle.git "$env:USERPROFILE\.claude\skills\aristotle"
+git clone https://github.com/alexwwang/aristotle.git "$env:TEMP\aristotle"
 
-# 2. Run the installer
-cd "$env:USERPROFILE\.claude\skills\aristotle"
+# 2. Run the installer (deploys SKILL.md + MCP server + Bridge Plugin)
+cd "$env:TEMP\aristotle"
 powershell -ExecutionPolicy Bypass -File install.ps1
 
-# 3. Install MCP server dependencies
-uv sync
-
-# 4. Add MCP config to opencode.json
+# 3. Add MCP config to opencode.json
 # See "MCP Configuration" section below for the JSON snippet
+
+# 4. (Optional) Register Bridge Plugin in opencode.json
+# Add to the "plugin" array: "file://$env:USERPROFILE\.config\opencode\aristotle-bridge\index.js"
 ```
 
 ### Option 3: One-Line Clone (skill only, no MCP)
 
-OpenCode auto-discovers skills from `~/.claude/skills/`. Just clone and it's ready:
+OpenCode discovers skills from paths configured in `opencode.json` (`skills.paths`):
 
 ```bash
-git clone https://github.com/alexwwang/aristotle.git ~/.claude/skills/aristotle
+mkdir -p ~/.config/opencode/skills/aristotle
+curl -sL https://raw.githubusercontent.com/alexwwang/aristotle/main/SKILL.md -o ~/.config/opencode/skills/aristotle/SKILL.md
 ```
 
-> **Note:** This gives you the basic skill without MCP server. You won't get Git version control, Δ audit decisions, or rule status management. Run `uv sync` and add the MCP config (see below) to enable the full feature set. The learnings file will be auto-created on first run.
+> **Note:** This gives you the basic skill without MCP server. You won't get Git version control, Δ audit decisions, or rule status management. Run the installer (`install.sh` or `install.ps1`) to deploy the full feature set. The learnings file will be auto-created on first run.
 
 ### Option 4: Self-Guided Install (paste into OpenCode)
 
@@ -82,38 +88,34 @@ Copy and paste this prompt into any OpenCode session — it will install Aristot
 
 ```
 Install the Aristotle skill with MCP server from https://github.com/alexwwang/aristotle.git:
-1. Clone to ~/.claude/skills/aristotle
+1. Clone to /tmp/aristotle
 2. cd into the cloned directory, run `bash install.sh` (macOS/Linux) or `powershell -File install.ps1` (Windows)
-3. Run `uv sync` to install Python dependencies for the MCP server
-4. Verify: run `bash test.sh` — all assertions must pass
-5. Add MCP config to opencode.json: { "mcp": { "aristotle": { "type": "local", "command": ["uv", "run", "--project", "~/.claude/skills/aristotle", "python", "-m", "aristotle_mcp.server"], "enabled": true } } }
-6. Verify MCP: run `uv run python -c "from aristotle_mcp.server import mcp; print(len(mcp._tool_manager._tools), 'tools loaded')"` — should print "11 tools loaded"
+3. Verify: run `bash test.sh` — all assertions must pass
+4. Add MCP config to opencode.json: { "mcp": { "aristotle": { "type": "local", "command": ["uv", "run", "--project", "$HOME/.config/opencode/aristotle", "python", "-m", "aristotle_mcp.server"], "enabled": true } } }
+5. (Optional) Register Bridge Plugin: add `"file://$HOME/.config/opencode/aristotle-bridge/index.js"` to the `"plugin"` array in opencode.json
+6. Verify MCP: run `uv run --project ~/.config/opencode/aristotle python -c "from aristotle_mcp.server import mcp; print(len(mcp._tool_manager._tools), 'tools loaded')"` — should print "20 tools loaded"
 ```
+
+> **Tip:** You can also install the skill via `opencode.json` without cloning manually. Add the repo URL to `skills.urls`:
+> ```jsonc
+> {
+>   "skills": {
+>     "urls": ["https://github.com/alexwwang/aristotle.git"]
+>   }
+> }
+> ```
+> Then restart OpenCode. The skill will be fetched automatically. You still need to run `uv sync` and add the MCP config separately.
 
 ### MCP Configuration
 
-Add this to your `opencode.json` to enable the MCP server:
+Add this to your `opencode.json` to enable the MCP server (replace `$HOME` with your actual home path):
 
 ```jsonc
 {
   "mcp": {
     "aristotle": {
       "type": "local",
-      "command": ["uv", "run", "--project", "~/.claude/skills/aristotle", "python", "-m", "aristotle_mcp.server"],
-      "enabled": true
-    }
-  }
-}
-```
-
-Or with absolute path:
-
-```jsonc
-{
-  "mcp": {
-    "aristotle": {
-      "type": "local",
-      "command": ["uv", "run", "--project", "/path/to/aristotle", "python", "-m", "aristotle_mcp.server"],
+      "command": ["uv", "run", "--project", "$HOME/.config/opencode/aristotle", "python", "-m", "aristotle_mcp.server"],
       "enabled": true
     }
   }
@@ -129,13 +131,15 @@ Customize the rule repo location with the `ARISTOTLE_REPO_DIR` environment varia
 | Command | Description |
 |---------|-------------|
 | `/aristotle` | Reflect on the **current** session (focus on last exchange) |
-| `/aristotle last` | Reflect on the **previous** session (see Target Resolution below) |
-| `/aristotle session ses_xxx` | Reflect on a specific session by **OpenCode session ID** |
-| `/aristotle recent N` | Reflect on the **Nth** most recent session (N=1 is most recent, not current) |
-| `/aristotle --focus <hint>` | Target a specific area (see Focus Options below) |
-| `/aristotle --model <model>` | Override model for the Reflector |
+| `/aristotle last` | Reflect on the **previous** session (see Target Resolution below) *(pending)* |
+| `/aristotle session ses_xxx` | Reflect on a specific session by **OpenCode session ID** *(pending)* |
+| `/aristotle recent N` | Reflect on the **Nth** most recent session (N=1 is most recent, not current) *(pending)* |
+| `/aristotle --focus <hint>` | Target a specific area (see Focus Options below) *(pending)* |
+| `/aristotle --model <model>` | Override model for the Reflector *(pending — will use config instead, see below)* |
 | `/aristotle sessions` | List all reflection records with status and sequence numbers |
 | `/aristotle review N` | Load DRAFT **#N** into current session for review (N is sequence number from `sessions`) |
+
+> **Note:** Commands marked *(pending)* are documented specifications not yet implemented. Currently, `/aristotle` always reflects on the current session with `focus: "last"`.
 
 ### Target Resolution
 
@@ -177,7 +181,7 @@ Reflect Phase                    Review Phase
 /aristotle                       /aristotle review 1
   │                                │
   ├─ Load REFLECT.md               ├─ Load REVIEW.md
-  │  (106 lines)                   │  (156 lines)
+  │  (4.6 KB)                       │  (6.8 KB)
   │                                │
   ├─ Fire Reflector ──────►        ├─ Read Reflector session
   │  (background task)      DRAFT   │  Extract DRAFT report
@@ -223,6 +227,32 @@ The flat `aristotle-learnings.md` is append-only. No versioning. If a rule turns
 └──────────────────────────────────────────────────┘
 ```
 
+### Execution Modes: Bridge vs. Blocking
+
+Aristotle supports two execution paths for the Reflect→Check (R→C) chain, selected automatically:
+
+```
+Both paths are non-blocking — the main session is never frozen.
+The difference is WHO drives the R→C chain transitions.
+```
+
+| | **Bridge Plugin** (recommended) | **Blocking Path** (fallback) |
+|---|---|---|
+| Activation | `.bridge-active` marker exists | `.bridge-active` missing |
+| Sub-session creation | `promptAsync()` | `task(run_in_background=true)` |
+| R→C chain driver | Bridge Plugin idle handler (automatic) | Main session LLM (manual) |
+| Main session involvement | Zero — fire and forget | Each transition requires LLM call |
+| Token cost to main session | None | One LLM call per chain step |
+| Requires OMO? | No | No (works with or without OMO) |
+
+```
+Bridge path:  Main → aristotle_fire_o(R) → STOP
+              Bridge → [R done] → auto start C → [C done] → notifyParent()
+
+Blocking path: Main → task(R) → [R done, notify Main] → Main LLM calls MCP → task(C) → [C done, notify Main] → ...
+                         ↑ Main session LLM participates at each step ↑
+```
+
 ### Storage Layout
 
 ```
@@ -250,7 +280,7 @@ category: "HALLUCINATION"
 confidence: 0.85
 risk_level: "high"
 
-# GEAR 2.0 retrieval dimensions
+# GEAR intent tags (retrieval dimensions)
 intent_tags:
   domain: "database_operations"
   task_goal: "connection_pool_management"
@@ -292,21 +322,30 @@ _rule()      │
 verified rejected/  (preserves scope + metadata)
 ```
 
-### 11 MCP Tools
+### 20 MCP Tools
 
 | Tool | Purpose |
 |------|---------|
 | `init_repo` | Initialize the Git repo, create directory structure, migrate existing flat rules |
-| `write_rule` | Create a new rule file (status: `pending`) with YAML frontmatter, GEAR 2.0 fields, and confidence score |
+| `write_rule` | Create a new rule file (status: `pending`) with YAML frontmatter, intent tags, and confidence score |
 | `read_rules` | Query rules by status, category, scope, or multi-dimension regex against frontmatter |
 | `stage_rule` | Mark a rule as `staging` (under review) |
 | `commit_rule` | Set status to `verified`, record timestamp, `git add && commit` |
 | `reject_rule` | Move to `rejected/{scope}/` with reason, delete original, commit |
 | `restore_rule` | Restore a rejected rule back to active directory with new status |
 | `list_rules` | Lightweight metadata-only listing with full search dimensions (no rule bodies loaded). Used for relevance scoring before selective content read |
+| `detect_conflicts` | Detect verified rules sharing the same (domain, task_goal, failed_skill) triple |
 | `check_sync_status` | Detect verified rules on disk that are not committed to git |
 | `sync_rules` | Commit unsynced verified rules to git (auto-detect or specify files) |
 | `get_audit_decision` | Compute Δ = confidence × (1 − risk_weight) for a staging rule, return audit level (auto/semi/manual) |
+| `persist_draft` | Persist a DRAFT report to disk for later review and re-reflect (atomic write to `aristotle-drafts/`) |
+| `create_reflection_record` | Append a new reflection record to state file, auto-generate sequence, handle 50-record pruning |
+| `complete_reflection_record` | Update reflection record status after Checker completes |
+| `orchestrate_start` | Initialize workflow for learn/reflect/review/sessions commands, return first action |
+| `orchestrate_on_event` | Receive subagent completion events, update state machine, return next action |
+| `orchestrate_review_action` | Handle user review actions (confirm/reject/revise/re_reflect) |
+| `on_undo` | Handle undo signaling from Bridge Plugin — mark workflow as undone |
+| `report_feedback` | Report feedback for rules and optionally trigger reflection workflow |
 
 ### Streaming Frontmatter Search
 
@@ -344,6 +383,20 @@ O compresses Top-N into minimal summaries → injects into L's context
 
 > The MCP configuration JSON is shown in the top-level "Installation" section above. This section covers technical details only.
 
+### Configuration
+
+Create `~/.config/opencode/aristotle-config.json` to customize behavior:
+
+```jsonc
+{
+  // Reflector prompt mode: "full" | "compact" | "auto"
+  // "auto" selects compact if any model has output limit ≤ 8192 tokens
+  "prompt_mode": "auto"
+}
+```
+
+Priority: `ARISTOTLE_PROMPT_MODE` env var → `aristotle-config.json` → default `"full"`.
+
 ### Migration
 
 When `init_repo` runs for the first time, it automatically detects existing `aristotle-learnings.md` files and migrates their rules into the Git repo. Migration defaults:
@@ -359,7 +412,7 @@ When `init_repo` runs for the first time, it automatically detects existing `ari
 
 After migration, the original file is renamed to `.bak`.
 
-## Design: GEAR 2.0
+## GEAR Protocol
 
 Aristotle is an implementation of **[GEAR (Git-backed Error Analysis & Reflection)](./GEAR.md)** — a protocol for AI agent error reflection, learning, and prevention. Instead of a flat append-only file, rules flow through a state machine with schema validation, intent-driven retrieval, and evolution-based audit levels.
 
@@ -379,50 +432,36 @@ The full protocol specification — state machine, frontmatter schema, Δ decisi
 
 ## Testing
 
-### Static Tests (no session required)
+> **Full test documentation:** See **[TESTING.md](./TESTING.md)** for detailed test suites, coverage breakdowns, and manual test plans.
 
-```bash
-bash test.sh
-```
+| Suite | Command | Count |
+|-------|---------|-------|
+| Static | `bash test.sh` | 103 |
+| Unit/Integration (Python) | `uv run pytest test/ -v` | 325 |
+| Bridge Plugin (TypeScript) | `cd plugins/aristotle-bridge && bunx vitest run` | 148 |
+| E2E Integration | `uv run pytest test/test_e2e_bridge_integration.py -v` | 9 |
+| Regression (deploy verify) | `bash test/regression_b1_checks.sh` | 64 |
 
-63 assertions covering file structure, progressive disclosure, SKILL.md content, hook logic, error pattern detection (English/Chinese/threshold), and architecture guarantees.
+### Test Coverage History
 
-### MCP Server Unit Tests
+> Phase 2 complete. See **[TESTING.md](./TESTING.md)** for detailed test documentation.
 
-```bash
-uv run pytest test/test_mcp.py -v
-```
-
-111 assertions covering all 10 modules/test classes:
-
-| Test Class | Module | Assertions | What It Tests |
-|------------|--------|------------|---------------|
-| `TestConfig` | `config.py` | 12 | Path resolution, env override, RISK_MAP, RISK_WEIGHTS, AUDIT_THRESHOLDS, project hash |
-| `TestEvolution` | `evolution.py` | 10 | compute_delta (all risk levels, edge cases, validation), decide_audit_level (auto/semi/manual), integration |
-| `TestModels` | `models.py` | 16 | RuleMetadata defaults, YAML serialization roundtrip, from_frontmatter_dict, GEAR 2.0 field tests |
-| `TestGitOps` | `git_ops.py` | 9 | init, add+commit, show, log, status, git_show_exists, edge cases |
-| `TestFrontmatter` | `frontmatter.py` | 19 | Atomic write, raw read, field update, stream filter (status/category/keyword/limit), index skip, multi-dimension search tests |
-| `TestMigration` | `migration.py` | 7 | Flat Markdown parsing, repo init, auto-migration with backup |
-| `TestServerTools` | `server.py` | 21 | Full lifecycle (write → stage → commit → read), reject flow, restore_rule, input validation, GEAR 2.0 fields, git check tests |
-| `TestSyncTools` | `server.py` | 7 | check_sync_status (clean/dirty/no repo), sync_rules (auto/specific/nothing), git_show_exists |
-| `TestDeltaDecision` | `server.py` + `evolution.py` | 8 | get_audit_decision (auto/semi/manual), write_rule confidence (default/custom), Δ affects audit level |
-| `TestPathTraversal` | `server.py` | 7 | Path containment for stage/commit/reject/restore/get_audit_decision, absolute + relative traversal, legitimate paths still work |
-
-All tests use isolated temp directories (`tmp_path` fixture) and are safe to run repeatedly.
-
-### E2E Live Tests (requires opencode session)
-
-```bash
-bash test/live-test.sh --model <provider/model>
-```
-
-Creates a real session with known error patterns, triggers `/aristotle`, and verifies the full coordinator → reflector → rule-writing flow. 8 assertions.
+| Milestone | pytest | static | e2e |
+|-----------|--------|--------|-----|
+| Baseline (pre-remediation) | 111 | 67 | — |
+| Post-remediation | 134 | 67 | — |
+| Post-coroutine-O merge | 166 | 84 | — |
+| GEAR Orchestration (M1-M4) | 218 | 98 | — |
+| M4 Exception Path Tests | 227 | 98 | — |
+| **Phase 2 (M1/M5-M9)** | **295** | **104** | **70** |
+| Phase 0 Bridge (MCP ext) | 318 | 103 | 9 |
+| Phase 1 Bridge (Plugin) | 325 | 103 | 9 + 148 vitest |
 
 ## Project Structure
 
 ```
 .
-├── SKILL.md              # Router — argument parsing, phase routing (90 lines)
+├── SKILL.md              # Router — argument parsing, phase routing (5.6 KB)
 ├── REFLECTOR.md          # Subagent protocol — error analysis, DRAFT generation
 ├── REFLECT.md            # Coordinator reflect phase — fire subagent, state tracking, passive trigger
 ├── REVIEW.md             # Coordinator review phase — DRAFT review, rule writing, revision
@@ -431,33 +470,53 @@ Creates a real session with known error patterns, triggers `/aristotle`, and ver
 ├── install.sh            # Installer (macOS/Linux)
 ├── install.ps1           # Installer (Windows)
 ├── pyproject.toml        # Python dependencies for MCP server
-├── test.sh               # Static test suite (63 assertions)
-├── aristotle_mcp/        # MCP server (Git-backed rule management)
+├── test.sh               # Static test suite (103 assertions)
+├── aristotle_mcp/        # MCP server (Git-backed rule management + workflow orchestration)
 │   ├── __init__.py
-│   ├── config.py         # Paths, constants, env vars, RISK_WEIGHTS, AUDIT_THRESHOLDS
+│   ├── config.py         # Paths, constants, env vars, RISK_WEIGHTS, AUDIT_THRESHOLDS, SKILL_DIR
 │   ├── models.py         # RuleMetadata dataclass, YAML serialization
 │   ├── git_ops.py        # Git abstraction (init, add+commit, show, log, status, show_exists)
 │   ├── frontmatter.py    # Streaming frontmatter search, atomic writes
 │   ├── evolution.py      # Δ decision engine (compute_delta, decide_audit_level)
 │   ├── migration.py      # Flat Markdown → Git repo migration
-│   └── server.py         # FastMCP entry point, 11 tools
+│   ├── server.py         # FastMCP entry point, re-exports, tool registration
+│   ├── _utils.py         # Shared utility functions
+│   ├── _tools_rules.py   # 10 rule lifecycle tools (includes detect_conflicts, get_audit_decision)
+│   ├── _tools_sync.py    # 2 sync tools
+│   ├── _tools_reflection.py  # 3 reflection state tools
+│   ├── _tools_undo.py    # on_undo tool (bridge undo signaling)
+│   ├── _tools_feedback.py    # report_feedback tool (rule feedback + auto-reflect)
+│   ├── _orch_prompts.py  # Prompt templates + builders
+│   ├── _orch_state.py    # Workflow persistence + state management
+│   ├── _orch_parsers.py  # Parsers + formatters
+│   ├── _orch_start.py    # orchestrate_start tool (session_file + use_bridge)
+│   ├── _orch_event.py    # orchestrate_on_event tool
+│   └── _orch_review.py   # orchestrate_review_action tool
+├── plugins/
+│   └── aristotle-bridge/ # Bridge Plugin — async reflect via polling (no OMO dependency)
+│       ├── src/          # 9 modules (index/types/utils/api-probe/logger/snapshot-extractor/workflow-store/idle-handler/executor)
+│       ├── test/         # 7 test files, 148 vitest cases
+│       ├── testing.en.md # Bridge-specific test documentation (English)
+│       └── testing.zh.md # Bridge-specific test documentation (Chinese)
 └── test/
-    └── live-test.sh      # E2E live test (8 assertions)
+    ├── regression_b1_checks.sh  # Deploy verification (64 assertions)
+    ├── e2e_opencode.sh          # E2E automation script (14 assertions)
+    └── test_e2e_bridge_integration.py  # Bridge↔MCP integration (9 pytest)
 ```
 
 ## Architecture: Progressive Disclosure
 
-The skill is split into six files. Only `SKILL.md` (90 lines) is loaded on trigger. The other files are loaded on demand:
+The skill is split into six files. Only `SKILL.md` (5.6 KB) is loaded on trigger. The other files are loaded on demand:
 
-| Scenario | Files Loaded | Lines |
-|----------|-------------|-------|
-| `/aristotle` (reflect) | SKILL.md + REFLECT.md | 218 |
-| `/aristotle sessions` | SKILL.md only | 90 |
-| `/aristotle review N` | SKILL.md + REVIEW.md | 268 |
-| `/aristotle review N` (confirm) | SKILL.md + REVIEW.md + CHECKER.md | 332 |
-| `/aristotle learn` | SKILL.md + LEARN.md | 336 |
-| Review + re-reflect | SKILL.md + REVIEW.md + REFLECT.md | 396 |
-| Subagent (internal) | REFLECTOR.md | ~195 |
+| Scenario | Files Loaded | Size |
+|----------|-------------|------|
+| `/aristotle` (reflect) | SKILL.md + REFLECT.md | 10.0 KB |
+| `/aristotle sessions` | SKILL.md only | 5.6 KB |
+| `/aristotle review N` | SKILL.md + REVIEW.md | 12.2 KB |
+| `/aristotle review N` (confirm) | SKILL.md + REVIEW.md + CHECKER.md | 20.9 KB |
+| `/aristotle learn` | SKILL.md + LEARN.md | 14.4 KB |
+| Review + re-reflect | SKILL.md + REVIEW.md + REFLECT.md | 16.7 KB |
+| Subagent (internal) | REFLECTOR.md | 10.2 KB |
 
 ## Known Issues & Contributing
 
@@ -465,19 +524,30 @@ PRs welcome! Here are areas that need improvement:
 
 ### Medium Priority
 
-- **Subagent `session_read` access** — The Reflector subagent uses `session_read()` to read session content, but some model/provider combinations don't expose this tool. Needs a graceful degradation path.
-- **Multi-model E2E testing** — Live test only validates with the user-specified model. Should test across multiple providers/models.
+- **Command parameter parsing** — `last`, `session ses_xxx`, `recent N`, and `--focus <hint>` are documented but not yet implemented. Currently `/aristotle` always reflects on the current session with `focus: "last"`. See `design_plan/pending-params-implementation.md` for the implementation plan.
+- **Reflector model configuration** — The Reflector currently uses the host's default model. Adding a `reflector_model` config option in `aristotle-config.json` (with the same priority chain as `prompt_mode`) would allow users to optimize for cost or quality.
+- **Subagent `session_read` access** — The Reflector subagent previously required `session_read()` to read session content, which some model/provider combinations don't expose. **Mitigated by Bridge Plugin**: the PRE-RESOLVE snapshot extractor captures error context in the main session (which has access) and passes it to the Reflector via `session_file`. Full graceful degradation (fallback to `session_list` + `session_info`) remains a nice-to-have for non-Bridge paths.
 
 ### Nice to Have
 
 - ~~**Rule versioning and expiry**~~ — Resolved by the MCP server (Git-backed). Rules now have full commit history and can be rejected/restored. Expiry/pruning remains a nice-to-have.
 - **`count_matches` cross-platform testing** — The test suite's `count_matches` helper works on GNU grep but should be tested on Alpine (BusyBox), macOS (BSD grep), and other non-GNU environments.
 
+## Reset / Clear Data
+
+If you want to clear all Aristotle data without uninstalling, see [RESET.md](RESET.md).
+
 ## Uninstall
 
 ```bash
 # Remove the skill
-rm -rf ~/.claude/skills/aristotle
+rm -rf ~/.config/opencode/skills/aristotle
+
+# Remove MCP server
+rm -rf ~/.config/opencode/aristotle
+
+# Remove Bridge Plugin (optional)
+rm -rf ~/.config/opencode/aristotle-bridge
 
 # Remove user-level learnings (optional)
 rm -f ~/.config/opencode/aristotle-learnings.md
@@ -491,33 +561,6 @@ rm -rf ~/.config/opencode/aristotle-repo
 
 # Remove MCP config from opencode.json (manual edit)
 # Delete the "aristotle" entry from the "mcp" section
-```
-
-## Why `~/.claude/skills/`? — Skill Discovery Investigation
-
-You might wonder why this skill must be installed under `~/.claude/skills/` rather than `~/.config/opencode/skills/` or other seemingly more natural locations. Here's what we found.
-
-### How OpenCode Discovers Skills (v1.3.15)
-
-OpenCode's skill discovery scans directories in the following order:
-
-1. **`EXTERNAL_DIRS`** — globally scans `~/.claude/` and `~/.agents/` (hardcoded in source as `[".claude", ".agents"]`), looking for `skills/**/SKILL.md`
-2. **`EXTERNAL_DIRS`** at project level — scans `<project>/.claude/` and `<project>/.agents/`
-3. **`configDirs`** — scans `~/.config/opencode/` with pattern `{skill,skills}/**/SKILL.md`
-4. **`skills.paths`** — reads custom paths from `opencode.json` config
-5. **`skills.urls`** — fetches skills from remote URLs
-
-### Root Cause
-
-The `EXTERNAL_DIRS` scanning for `.claude` is the only fully functional discovery path in OpenCode v1.3.15. See [GitHub issues](https://github.com/anomalyco/opencode/issues/16524) for details.
-
-### ⚠️ Pitfall: Don't Symlink the Skills Directory
-
-OpenCode's internal glob traversal does **not follow directory symlinks**. Use a real directory:
-
-```bash
-# ✅ Real directory — always works
-git clone https://github.com/alexwwang/aristotle.git ~/.claude/skills/aristotle
 ```
 
 ## License

@@ -73,19 +73,18 @@ assert_exists "$ARISTOTLE_DIR/CHECKER.md"
 assert_exists "$ARISTOTLE_DIR/aristotle_mcp/evolution.py"
 assert_exists "$ARISTOTLE_DIR/install.sh"
 assert_exists "$ARISTOTLE_DIR/install.ps1"
-assert_exists "$ARISTOTLE_DIR/test/live-test.sh"
 sep
 
-# ═══ T2: SKILL.md Content (Router only) ═══
-info "T2: SKILL.md Content (Router)"; sep
+# ═══ T2: SKILL.md Content (Dispatcher) ═══
+info "T2: SKILL.md Content (Dispatcher)"; sep
 assert_contains "$ARISTOTLE_DIR/SKILL.md" "name: aristotle" "frontmatter: name"
 assert_contains "$ARISTOTLE_DIR/SKILL.md" "description:" "frontmatter: description"
-assert_contains "$ARISTOTLE_DIR/SKILL.md" "CRITICAL ARCHITECTURE RULE" "architecture guard"
-assert_contains "$ARISTOTLE_DIR/SKILL.md" "aristotle-state.json" "state file tracking"
-assert_contains "$ARISTOTLE_DIR/SKILL.md" "--model" "model override flag"
-assert_contains "$ARISTOTLE_DIR/SKILL.md" "/aristotle sessions" "sessions subcommand"
-assert_contains "$ARISTOTLE_DIR/SKILL.md" "REFLECT.md" "routes to REFLECT.md"
-assert_contains "$ARISTOTLE_DIR/SKILL.md" "REVIEW.md" "routes to REVIEW.md"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "orchestrate_start" "dispatcher calls MCP orchestrate_start"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "orchestrate_on_event" "dispatcher calls MCP orchestrate_on_event"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "fire_o" "dispatcher handles fire_o action"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "REFLECT.md" "dispatcher routes reflect to REFLECT.md"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "learn --domain" "dispatcher supports explicit learn params"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "learn <query>" "dispatcher supports natural language learn"
 sep
 
 # ═══ T2b: SKILL.md Auto-Trigger Keywords ═══
@@ -99,23 +98,26 @@ sep
 
 # ═══ T2c: File Size Constraints (Progressive Disclosure) ═══
 info "T2c: File Size Constraints"; sep
-SKILL_LINES=$(wc -l < "$ARISTOTLE_DIR/SKILL.md" | tr -d ' ')
-if [ "$SKILL_LINES" -le 100 ]; then
-    pass "SKILL.md is $SKILL_LINES lines (≤100)"
+# Progressive disclosure: SKILL.md is the dispatcher (thin), loaded into every session.
+# Measure by byte size (not line count) — structural improvements can increase lines
+# while decreasing total size. 8KB threshold ensures dispatcher stays lightweight.
+SKILL_BYTES=$(wc -c < "$ARISTOTLE_DIR/SKILL.md" | tr -d ' ')
+if [ "$SKILL_BYTES" -le 8192 ]; then
+    pass "SKILL.md is $SKILL_BYTES bytes (≤8KB)"
 else
-    fail "SKILL.md is $SKILL_LINES lines (expected ≤100)"
+    fail "SKILL.md is $SKILL_BYTES bytes (expected ≤8KB)"
 fi
-REFLECT_LINES=$(wc -l < "$ARISTOTLE_DIR/REFLECT.md" | tr -d ' ')
-if [ "$REFLECT_LINES" -le 140 ]; then
-    pass "REFLECT.md is $REFLECT_LINES lines (≤140)"
+REFLECT_BYTES=$(wc -c < "$ARISTOTLE_DIR/REFLECT.md" | tr -d ' ')
+if [ "$REFLECT_BYTES" -le 8192 ]; then
+    pass "REFLECT.md is $REFLECT_BYTES bytes (≤8KB)"
 else
-    fail "REFLECT.md is $REFLECT_LINES lines (expected ≤140)"
+    fail "REFLECT.md is $REFLECT_BYTES bytes (expected ≤8KB)"
 fi
-REVIEW_LINES=$(wc -l < "$ARISTOTLE_DIR/REVIEW.md" | tr -d ' ')
-if [ "$REVIEW_LINES" -le 180 ]; then
-    pass "REVIEW.md is $REVIEW_LINES lines (≤180)"
+REVIEW_BYTES=$(wc -c < "$ARISTOTLE_DIR/REVIEW.md" | tr -d ' ')
+if [ "$REVIEW_BYTES" -le 8192 ]; then
+    pass "REVIEW.md is $REVIEW_BYTES bytes (≤8KB)"
 else
-    fail "REVIEW.md is $REVIEW_LINES lines (expected ≤180)"
+    fail "REVIEW.md is $REVIEW_BYTES bytes (expected ≤8KB)"
 fi
 sep
 
@@ -195,9 +197,9 @@ sep
 # ═══ T6: Architecture Guarantees ═══
 info "T6: Architecture Guarantees"; sep
 
-# SKILL.md is router-only — no protocol details
-assert_contains "$ARISTOTLE_DIR/SKILL.md" "NEVER.*perform" "isolation guarantee"
-assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "STEP R1" "router omits R1"
+# SKILL.md is a thin dispatcher — no protocol details
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "Dispatcher" "dispatcher identity"
+assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "STEP R1" "dispatcher omits R1"
 assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "STEP F1" "router omits F1"
 assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "STEP V1" "router omits V1"
 assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "5 Whys Template" "router omits 5-Why template"
@@ -208,12 +210,12 @@ assert_contains "$ARISTOTLE_DIR/REFLECTOR.md" "STEP R1" "reflector: read session
 assert_contains "$ARISTOTLE_DIR/REFLECTOR.md" "STEP R2" "reflector: detect errors"
 assert_contains "$ARISTOTLE_DIR/REFLECTOR.md" "STEP R3" "reflector: 5-Why analysis"
 assert_contains "$ARISTOTLE_DIR/REFLECTOR.md" "STEP R4" "reflector: draft rules"
-assert_not_contains "$ARISTOTLE_DIR/REFLECTOR.md" "STEP R5" "reflector has no R5 (non-interactive)"
+assert_contains "$ARISTOTLE_DIR/REFLECTOR.md" "STEP R5" "reflector: persist draft"
 assert_not_contains "$ARISTOTLE_DIR/REFLECTOR.md" "STEP R6" "reflector has no R6 (non-interactive)"
 assert_contains "$ARISTOTLE_DIR/REFLECTOR.md" "DRAFT" "draft output format"
 assert_contains "$ARISTOTLE_DIR/REFLECTOR.md" "MISUNDERSTOOD_REQUIREMENT" "error categories"
 assert_contains "$ARISTOTLE_DIR/REFLECTOR.md" "5 Whys" "5-Why analysis"
-assert_contains "$ARISTOTLE_DIR/REFLECTOR.md" "session_read" "subagent reads session"
+assert_contains "$ARISTOTLE_DIR/REFLECTOR.md" "SESSION_FILE" "subagent reads session via SESSION_FILE"
 assert_contains "$ARISTOTLE_DIR/REFLECTOR.md" "non-interactive" "non-interactive declaration"
 
 # Reflect protocol lives in REFLECT.md (coordinator fires subagent)
@@ -238,6 +240,94 @@ assert_contains "$ARISTOTLE_DIR/REVIEW.md" "reject" "review: reject mechanism"
 assert_contains "$ARISTOTLE_DIR/REVIEW.md" "Revised:" "review: revision timestamp"
 assert_contains "$ARISTOTLE_DIR/REVIEW.md" "get_audit_decision" "review: V3c Δ decision"
 assert_contains "$ARISTOTLE_DIR/REVIEW.md" "audit_level" "review: dynamic audit level"
+
+# ═══ T-ORCH: MVP Dispatcher SKILL.md static tests ═══
+info "T-ORCH: MVP Dispatcher SKILL.md"; sep
+
+assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "GEAR" "no GEAR protocol name"
+assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "Reflector" "no R role name"
+assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "Searcher" "no S role name"
+assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "intent_tags" "no protocol field name"
+assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "CRITICAL ARCHITECTURE" "no old suppression rules"
+assert_not_contains "$ARISTOTLE_DIR/SKILL.md" "NEVER.*protocol" "no old suppression pattern"
+
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "orchestrate_start" "dispatcher calls orchestrate_start"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "orchestrate_on_event" "dispatcher calls orchestrate_on_event"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "fire_o" "dispatcher handles fire_o action"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "notify" "dispatcher handles notify action"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "ROUTE" "dispatcher has ROUTE section"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "ACTION EXECUTION" "dispatcher has ACTION EXECUTION section"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "If action is" "dispatcher uses conditional branch format"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "DO NOT load" "dispatcher has suppression guard"
+
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "sessions" "dispatcher routes sessions command"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "review" "dispatcher routes review command"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "REVIEW.md" "dispatcher loads REVIEW.md for review"
+
+sep
+
+# ═══ T-M4: SKILL.md Post-Merge Constraints ═══
+info "T-M4: SKILL.md Post-Merge Constraints"; sep
+
+# Size constraint: measure by byte size (not line count) for structural improvements
+SKILL_BYTES=$(wc -c < "$ARISTOTLE_DIR/SKILL.md" | tr -d ' ')
+if [ "$SKILL_BYTES" -le 8192 ]; then
+    pass "SKILL.md is $SKILL_BYTES bytes (≤8KB)"
+else
+    fail "SKILL.md is $SKILL_BYTES bytes (expected ≤8KB)"
+fi
+
+# Protocol file references forbidden outside CRITICAL rule line
+SKILL_BODY=$(grep -v "DO NOT load" "$ARISTOTLE_DIR/SKILL.md")
+echo "$SKILL_BODY" | grep -q "REFLECT.md" && fail "SKILL.md body contains REFLECT.md" || pass "SKILL.md body omits REFLECT.md"
+echo "$SKILL_BODY" | grep -q "REVIEW.md" && fail "SKILL.md body contains REVIEW.md" || pass "SKILL.md body omits REVIEW.md"
+echo "$SKILL_BODY" | grep -q "LEARN.md" && fail "SKILL.md body contains LEARN.md" || pass "SKILL.md body omits LEARN.md"
+echo "$SKILL_BODY" | grep -q "CHECKER.md" && fail "SKILL.md body contains CHECKER.md" || pass "SKILL.md body omits CHECKER.md"
+
+# CRITICAL rule exists — guarantees mechanism names not leaked to user
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "NEVER mention internal mechanism names" "SKILL.md has CRITICAL rule against name leakage"
+# Parse Arguments 区不含机制名（用户可见区域）
+PA_START=$(grep -n "Parse Arguments" "$ARISTOTLE_DIR/SKILL.md" | head -1 | cut -d: -f1)
+PA_END=$(wc -l < "$ARISTOTLE_DIR/SKILL.md" | tr -d ' ')
+PA_BLOCK=$(tail -n +"$PA_START" "$ARISTOTLE_DIR/SKILL.md" | head -n $(($PA_END - $PA_START + 1)))
+echo "$PA_BLOCK" | grep -q "fire_o\b" && fail "Parse Arguments contains fire_o" || pass "Parse Arguments omits fire_o"
+echo "$PA_BLOCK" | grep -q "workflow_id\b" && fail "Parse Arguments contains workflow_id" || pass "Parse Arguments omits workflow_id"
+
+# Required MCP orchestration references
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "orchestrate_start" "SKILL.md references orchestrate_start"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "orchestrate_on_event" "SKILL.md references orchestrate_on_event"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "orchestrate_review_action" "SKILL.md references review action"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "REVIEW FEEDBACK" "SKILL.md has REVIEW FEEDBACK section"
+assert_contains "$ARISTOTLE_DIR/SKILL.md" "PRE-RESOLVE" "SKILL.md has PRE-RESOLVE section"
+
+# Config: SKILL_DIR constant exists
+assert_contains "$ARISTOTLE_DIR/aristotle_mcp/config.py" "SKILL_DIR" "config.py defines SKILL_DIR"
+
+sep
+
+# ═══ T-M8: Passive Trigger (Phase 2 M8) ═══
+info "T-M8: Passive Trigger (Phase 2 M8)"; sep
+
+# TC-M8-01: SKILL.md byte size ≤ 8KB
+SKILL_FILE="$ARISTOTLE_DIR/SKILL.md"
+SKILL_BYTES=$(wc -c < "$SKILL_FILE" | tr -d ' ')
+if [ "$SKILL_BYTES" -le 8192 ]; then
+    pass "TC-M8-01: SKILL.md byte size ($SKILL_BYTES) <= 8KB"
+else
+    fail "TC-M8-01: SKILL.md byte size ($SKILL_BYTES) > 8KB"
+fi
+
+# TC-M8-02: SKILL.md contains PASSIVE TRIGGER section
+assert_contains "$SKILL_FILE" "PASSIVE TRIGGER" "TC-M8-02: SKILL.md contains PASSIVE TRIGGER"
+assert_contains "$SKILL_FILE" "error pattern" "TC-M8-02: SKILL.md contains error pattern"
+assert_contains "$SKILL_FILE" "/aristotle" "TC-M8-02: SKILL.md contains /aristotle"
+
+# TC-M8-03: SKILL.md does NOT contain auto-trigger instructions (best-effort guard)
+# 以下否定断言仅为 best-effort 防护，不能替代技术方案要求的人工审查
+assert_not_contains "$SKILL_FILE" "automatically trigger" "TC-M8-03: SKILL.md does not contain 'automatically trigger'"
+assert_not_contains "$SKILL_FILE" "auto_call" "TC-M8-03: SKILL.md does not contain 'auto_call'"
+
+sep
 
 # Summary
 sep

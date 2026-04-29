@@ -18,39 +18,29 @@ Gather what the subagent needs — do NOT read session content yourself:
   - **Passive trigger (P3.3)** → current session ID, `focus_hint: "last"`, `target_label: "passive-trigger"`
 - `project_directory` — Current working directory (for project-level rules)
 - `user_language` — Detect from user's messages (zh-CN / en-US)
-- `focus_hint` (optional) — User-specified focus area. Can be:
+- `focus_hint` (optional) — User-specified focus area:
   - `last` — Focus on the most recent exchange (default)
-  - `after "some text"` — Focus on messages after the quoted text appears
+  - `after "some text"` — Focus on messages after the quoted text
   - `around N` — Focus on messages around message number N
-  - `error` — Focus on error-correction patterns only (skip clean sections)
-  - `full` — Scan entire session (for short sessions or comprehensive review)
+  - `error` — Focus on error-correction patterns only
+  - `full` — Scan entire session
   - Unspecified → defaults to `last`
 
 ### Passive Trigger (P3.3)
 
 When Aristotle is activated by multi-agent error detection (not an explicit `/aristotle` command):
 
-1. `target_session_id` = current session (the session containing the detected error)
-2. `focus_hint` = `"last"` (focus on the most recent exchange where the error was detected)
+1. `target_session_id` = current session
+2. `focus_hint` = `"last"`
 3. `target_label` = `"passive-trigger"`
-4. Proceed to F3 as normal — the Reflector will analyze the error context
-
-This handles the scenario where agent B reviews agent A's work and detects errors. Aristotle auto-activates to capture the mistake.
-
-### How to Determine focus_hint
-
-1. If user provided explicit hint in command (e.g. `/aristotle --focus after "refactor"`) → use that
-2. If user said something like "reflect on the API error just now" → `focus_hint: "API error"`
-3. If no hint given → default to `last`
+4. Proceed to F3 as normal
 
 ## STEP F2: BUILD TARGET LABEL
-
-Create a short human-readable label for the target session:
 
 ```
 current session     → "current"
 last session        → "last"
-specific session    → "ses_xxx" (last 4 chars of ID)
+specific session    → "ses_xxx" (last 4 chars)
 recent N            → "recent #i/N"
 ```
 
@@ -71,58 +61,75 @@ TARGET_SESSION_ID: ${target_session_id}
 PROJECT_DIRECTORY: ${project_directory}
 USER_LANGUAGE: ${user_language}
 FOCUS_HINT: ${focus_hint}
+DRAFT_SEQUENCE: ${sequence_number}
 ```
 
-If the user specified `--model`, include it in the task() call. Otherwise, do NOT specify a model parameter — the framework will use the current session's model.
+Where `${sequence_number}` comes from STEP F4 result.
 
-## STEP F4: UPDATE STATE FILE
+After calling task(), immediately proceed to STEP F4. Do NOT explain what you are about to do.
 
-After firing the task, update `~/.config/opencode/aristotle-state.json`:
+## STEP F4: CREATE STATE RECORD
 
-1. Read the existing file (or start with `[]`)
-2. Append a new record:
-```json
-{
-  "id": "rec_$(date +%s)",
-  "reflector_session_id": "<from task() result>",
-  "target_session_id": "${target_session_id}",
-  "target_label": "${target_label}",
-  "launched_at": "<ISO 8601 timestamp>",
-  "status": "draft",
-  "rules_count": null
-}
+Call `aristotle_create_reflection_record()` to create a record in
+`~/.config/opencode/aristotle-state.json`:
+
 ```
-3. Write the updated file back
-4. Keep at most the 50 most recent records (prune oldest if exceeded)
+aristotle_create_reflection_record(
+    target_session_id="${target_session_id}",
+    target_label="${target_label}",
+    reflector_session_id="<from task() result>"
+)
+```
+
+This handles sequence numbering, JSON read/write, and 50-record pruning automatically.
+Store the returned `review_index` and `id` for later steps.
+
+**Do NOT display the state file content to the user.**
 
 ## STEP F5: NOTIFY USER
-
-After firing the background task, immediately tell the user:
 
 ```
 🦉 Aristotle Reflector launched [${target_label}].
    task_id: bg_xxxxx | session_id: ses_xxxxx
 
-When the analysis is complete, you'll be notified here.
-Then review the DRAFT report:
-
-  /aristotle review N
+Checker will validate automatically when done.
 ```
 
-**Then STOP.** Do not wait for the result. Do not do any analysis in this session.
+**Then STOP.** Wait for Reflector completion notification.
 
-## STEP F6: HANDLE COMPLETION NOTIFICATION
+## STEP F5.5: FIRE CHECKER SUBAGENT
 
-When the system sends a background task completion notification, output a ONE-LINE reminder:
+When Reflector completes:
+
+1. Get `sequence_number` from STEP F4 result
+2. Fire C subagent via task():
+   - category: "unspecified-low", load_skills: [], run_in_background: true
+   - description: "Aristotle Checker: validate + commit"
+   - prompt:
+     ```
+     You are Aristotle's Checker subagent. Read and execute the full protocol at
+     ${SKILL_DIR}/CHECKER.md (read the file first, then follow it step by step).
+
+     DRAFT_SEQUENCE: ${sequence_number}
+     DRAFT_FILE: ~/.config/opencode/aristotle-drafts/rec_${sequence_number}.md
+     PROJECT_DIRECTORY: ${project_directory}
+     ```
+3. Do NOT output intermediate information. Wait for C's completion notification.
+
+## STEP F6: HANDLE CHECKER COMPLETION
+
+1. Call `aristotle_complete_reflection_record(
+       sequence=${sequence_number},
+       status=<auto_committed/partial_commit/checker_failed>,
+       rules_count=<from C result>
+    )`
+2. Output ONE-LINE notification:
 
 ```
-🦉 Aristotle done [${target_label}]. Review: /aristotle review N
+🦉 Aristotle done [${target_label}]. ${committed} rules committed, ${staged} staged.
+   Review: /aristotle review N
 ```
 
-If `target_label` is `"passive-trigger"`, use this format instead:
+For passive-trigger: `🦉 Aristotle done [auto-detected error]. ...`
 
-```
-🦉 Aristotle done [auto-detected error]. Review: /aristotle review N
-```
-
-**That's it.** Do NOT call `background_output`. Do NOT dump any analysis content.
+**That's it.** Do NOT output DRAFT content, rule details, or any intermediate data.

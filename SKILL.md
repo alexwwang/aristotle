@@ -5,86 +5,93 @@ metadata:
   emoji: "🦉"
   category: "meta-learning"
 ---
-
-# Aristotle — Error Reflection & Learning Agent
-
-> "Knowing yourself is the beginning of all wisdom." — Aristotle
-
-You are **Aristotle**, a meta-learning agent with progressive disclosure architecture:
-
-| Phase | Command | Loads | Purpose |
-|-------|---------|-------|---------|
-| **Route** | `/aristotle` | This file only | Parse args, route to reflect/review/learn/sessions |
-| **Reflect** | `/aristotle [target]` | This file + `REFLECT.md` | Fire background Reflector subagent |
-| **Review** | `/aristotle review N` | This file + `REVIEW.md` | Load DRAFT, confirm/revise/reject rules |
-| **Learn** | `/aristotle learn` | This file + `LEARN.md` | Retrieve related lessons from past sessions |
-
-## ⚠️ CRITICAL ARCHITECTURE RULES
-
-- **NEVER** perform reflection analysis in the current session. Always delegate to a subagent via `task()`.
-- **NEVER** call `background_output` with `full_session=true` for the Reflector task.
-- **NEVER** dump the Reflector's analysis into the current session.
-- Task sessions are **architecturally non-interactive** — do NOT attempt to resume them.
-
----
-
-## PHASE 0: ROUTE
-
-### Resolve SKILL_DIR
-
-1. Try `~/.claude/skills/aristotle/`
-2. Try `~/.config/opencode/skills/aristotle/`
-3. If neither exists, use the directory containing this SKILL.md
-
-### Parse Arguments
-
+# Aristotle — Dispatcher
+## CRITICAL: DO NOT load REFLECT.md, REVIEW.md, LEARN.md, or CHECKER.md. All logic is handled by MCP orchestration tools. NEVER mention internal mechanism names (MCP tool names, action names, workflow_id, prompt fields) to the user — describe outcomes in plain language only.
+## ROUTE
 ```
-/aristotle                          → REFLECT: current session, focus on last exchange
-/aristotle last                     → REFLECT: previous session (session_list, exclude current)
-/aristotle session ses_xxx          → REFLECT: specific session by OpenCode session ID
-/aristotle recent N                 → REFLECT: Nth most recent session (N=1 is closest to current)
-/aristotle --model <model> [...]    → REFLECT: override model (combine with above)
-/aristotle --focus <hint> [...]     → REFLECT: focus area (last/after "text"/around N/error/full)
-/aristotle learn [intent]           → LEARN: 检索历史教训（自然语言描述任务或领域）
-/aristotle learn --domain X --goal Y → LEARN: 指定 domain/task_goal 检索
-/aristotle learn --domain X         → LEARN: 仅指定 domain 检索
-/aristotle sessions                 → LIST: show all reflection records with sequence numbers
-/aristotle review N                 → REVIEW: load DRAFT #N for review (N = sequence number from sessions)
-(passive trigger, no args)          → REFLECT: current session, auto-detected from multi-agent error signal
+cmd = first argument or ""
+MATCH cmd:
+  "learn"    → CALL orchestrate_start("learn", args_json) → execute ACTION
+  "sessions" → CALL orchestrate_start("sessions", "{}") → execute ACTION
+  "review"   → CALL orchestrate_start("review", {sequence: N}) → execute ACTION → REVIEW FEEDBACK
+  *          → GOTO PRE-RESOLVE
 ```
-
-Parse `--model` and `--focus` from anywhere in the argument list.
-
-### Execute Route
-
-| Command | Action |
-|---------|--------|
-| `sessions` | Read `~/.config/opencode/aristotle-state.json`, display table → STOP |
-| `review N` | Read `${SKILL_DIR}/REVIEW.md`, then execute review protocol |
-| `learn [...]` | Read `${SKILL_DIR}/LEARN.md`, then execute learn protocol |
-| reflect (default) | Read `${SKILL_DIR}/REFLECT.md`, then execute reflect protocol |
-
----
-
-## /aristotle sessions — List Reflection Sessions
-
-Read `~/.config/opencode/aristotle-state.json` and display:
-
+## PRE-RESOLVE (reflect only)
 ```
-🦉 Aristotle Sessions
-──────────────────────────────────────────────────────
-#  Target         Status     Rules  Launched
-1  current        ✅ confirmed  2    04-10 22:30
-2  last           ⏳ draft      ?    04-10 22:35
-3  ses_abc4       🔄 revised    1    04-09 14:20
+result = CALL orchestrate_start("reflect", {target_session_id: "", session_file: "",
+  focus: "last", user_language: <detect>, project_directory: <cwd>})
 
-Review #2: /aristotle review 2
-```
+MATCH result.action:
+  "fire_sub"  → Bridge handles snapshot. execute ACTION. STOP.
+  "pre_resolve_needed" → GOTO SNAPSHOT-EXTRACT
+  "notify"    → Display result.message. STOP.
+  other       → execute ACTION. STOP.
 
-Status icons: `⏳ draft` | `✅ confirmed` | `🔄 revised` | `❌ rejected`
+## SNAPSHOT-EXTRACT (non-Bridge / Claude Code only)
+IF session_list is available:
+  target_session_id = session_list()[0].id
+  content = session_read(target_session_id)
+  Bash("mkdir -p ~/.config/opencode/aristotle-sessions")
+  Write snapshot JSON (schema v1, source: "llm-session-read") to
+    ~/.config/opencode/aristotle-sessions/{target_session_id}_snapshot.json
+  session_file = that path
+ELSE:
+  session_file = ""
+IF any step fails: session_file = ""
 
-If the state file doesn't exist or is empty:
+result = CALL orchestrate_start("reflect", {target_session_id, session_file,
+  focus: "last", user_language: <detect>, project_directory: <cwd>})
+→ execute ACTION. STOP.
 ```
-🦉 No Aristotle reflection sessions found.
-Run /aristotle to start your first reflection.
+## ACTION EXECUTION
+### If action is `pre_resolve_needed`:
+GOTO SNAPSHOT-EXTRACT (in PRE-RESOLVE section above).
+### If action is `fire_o`:
+1. Call task(category="unspecified-low", run_in_background=true, prompt=o_prompt)
+2. When notification arrives, call MCP `orchestrate_on_event("o_done", {workflow_id, result})`
+3. Execute returned action per this section
+### If action is `fire_sub`:
+1. If `notify_message` is present, display it to user first
+2. Check `use_bridge` in response:
+   - **If `use_bridge` is true (Bridge path — async, NON-BLOCKING)**:
+     a. Call `aristotle_fire_o(workflow_id=response.workflow_id, o_prompt=response.sub_prompt, target_session_id=target_session_id)`
+        - If fails or tool not found → fall through to blocking path (step 3)
+     b. Display response message to user. Then **STOP — do NOT poll.**
+        The Bridge plugin handles the entire R→C chain automatically via session.idle events.
+        No further action needed from the main session.
+   - **If `use_bridge` is absent or false (blocking path)**:
+3. Call task(category="unspecified-low", load_skills=[], run_in_background=true, prompt=sub_prompt)
+4. When notification arrives, call MCP `orchestrate_on_event("subagent_done", {workflow_id, session_id, result})` → execute returned action per this section
+### If action is `notify`:
+1. Display the `message` field to user
+2. STOP
+### If action is `done`:
+STOP
+## REVIEW FEEDBACK
+After displaying review content from MCP, show this menu and wait for user input:
 ```
+Choose an action:
+1. confirm — Accept all rules as-is
+2. reject — Reject this reflection
+3. revise N — Revise rule #N (append feedback after colon, e.g. "revise 1: add example")
+4. re-reflect — Request deeper analysis
+```
+Map user input: "confirm"→call MCP `orchestrate_review_action(workflow_id, "confirm")` | "reject"→call MCP `orchestrate_review_action(workflow_id, "reject")` | "revise N: feedback"→call MCP `orchestrate_review_action(workflow_id, "revise", feedback, {"rule_index": N})` | "re-reflect"→call MCP `orchestrate_review_action(workflow_id, "re_reflect")`. Execute the returned action per ACTION EXECUTION section.
+## Parse Arguments
+```
+/aristotle learn <query>             → ROUTE: command="learn", args={query: "<query>"}
+/aristotle learn --domain X --goal Y → ROUTE: command="learn", args={domain: "X", goal: "Y", query: "X Y"}
+/aristotle sessions                  → ROUTE: command="sessions"
+/aristotle review <N>                → ROUTE: command="review", args={sequence: N}
+/aristotle [anything else]           → ROUTE: command="reflect" + PRE-RESOLVE
+```
+## PASSIVE TRIGGER
+
+Monitor the conversation for these patterns:
+1. You corrected your own output (acknowledged a mistake)
+2. User pointed out an error and you agreed
+3. You tried an approach, it failed, and you switched approaches
+
+When any pattern is detected, suggest:
+"🦉 I detected an error pattern. Run /aristotle to reflect and prevent similar mistakes."
+Do NOT auto-trigger. Only suggest.

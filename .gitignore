@@ -2,6 +2,11 @@
 .DS_Store
 Thumbs.db
 
+# Agent tooling
+.omc/
+.opencode/
+.sisyphus/
+
 # Editor
 *.swp
 *.swo
@@ -9,12 +14,29 @@ Thumbs.db
 .vscode/
 .idea/
 
+# Design docs (cross-branch reference, not tracked)
+design_plan/
+
+# Protocol drafts (not for distribution)
+protocol_draft/
+
+# Status tracking (contains commit hashes that break on filter-repo)
+TESTING_STATUS.md
+TESTING_STATUS.zh-CN.md
+
 # Test artifacts
 test-output.log
 tmp/
 *.tmp
 
+# Dependencies
+node_modules/
+
+# Build output
+plugins/aristotle-bridge/dist/
+
 # Python
 .venv/
 __pycache__/
 *.egg-info/
+test/logs/

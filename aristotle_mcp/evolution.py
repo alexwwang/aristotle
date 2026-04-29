@@ -9,21 +9,27 @@ Those are deferred to a future phase (see design_plan progress doc).
 
 from __future__ import annotations
 
-from aristotle_mcp.config import AUDIT_THRESHOLDS, RISK_WEIGHTS
+import math
+
+from aristotle_mcp.config import AUDIT_THRESHOLDS, RISK_WEIGHTS, MAX_SAMPLES
 
 
-def compute_delta(confidence: float, risk_level: str) -> float:
+def compute_delta(
+    confidence: float, risk_level: str, sample_size: int | None = None
+) -> float:
     """Compute the Δ decision factor.
 
     Args:
         confidence: R's confidence score for the rule (0.0 – 1.0).
         risk_level: One of "high", "medium", "low" (from RISK_MAP).
+        sample_size: Optional feedback sample size. When provided, the raw
+            delta is log-normalised by ``ln(sample_size+1) / ln(MAX_SAMPLES+1)``.
 
     Returns:
         Δ value clamped to [0.0, 1.0].
 
     Raises:
-        ValueError: If risk_level is not recognised.
+        ValueError: If risk_level is not recognised or sample_size < 0.
     """
     if risk_level not in RISK_WEIGHTS:
         raise ValueError(
@@ -31,8 +37,13 @@ def compute_delta(confidence: float, risk_level: str) -> float:
         )
     if not 0.0 <= confidence <= 1.0:
         raise ValueError(f"confidence must be between 0.0 and 1.0, got {confidence}")
+    if sample_size is not None and sample_size < 0:
+        raise ValueError("sample_size must be >= 0")
     risk_weight = RISK_WEIGHTS[risk_level]
     delta = confidence * (1.0 - risk_weight)
+    if sample_size is not None:
+        norm_factor = math.log(sample_size + 1) / math.log(MAX_SAMPLES + 1)
+        delta = delta * norm_factor
     # Clamp for floating-point safety
     return max(0.0, min(1.0, delta))
 

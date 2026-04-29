@@ -18,19 +18,20 @@ Write-Host ""
 
 # Step 1: Install skill files to ~/.claude/skills/ (reliable auto-discovery path)
 $SkillDest = Join-Path $ClaudeBase 'skills\aristotle'
-Write-Host "[1/3] Installing Aristotle skill to $SkillDest..." -ForegroundColor Cyan
+Write-Host "[1/4] Installing Aristotle skill to $SkillDest..." -ForegroundColor Cyan
 
 New-Item -ItemType Directory -Path $SkillDest -Force | Out-Null
 Copy-Item (Join-Path $SkillSrc 'SKILL.md') (Join-Path $SkillDest 'SKILL.md') -Force
 Copy-Item (Join-Path $SkillSrc 'REFLECTOR.md') (Join-Path $SkillDest 'REFLECTOR.md') -Force
 Copy-Item (Join-Path $SkillSrc 'REFLECT.md') (Join-Path $SkillDest 'REFLECT.md') -Force
 Copy-Item (Join-Path $SkillSrc 'REVIEW.md') (Join-Path $SkillDest 'REVIEW.md') -Force
+Copy-Item (Join-Path $SkillSrc 'CHECKER.md') (Join-Path $SkillDest 'CHECKER.md') -Force
 Write-Host "✓ Skill files installed." -ForegroundColor Green
 
 # Step 2: Initialize learnings file
 $LearningsFile = Join-Path $OpenCodeConfig 'aristotle-learnings.md'
 if (-not (Test-Path $LearningsFile)) {
-    Write-Host "[2/3] Initializing learnings file at $LearningsFile..." -ForegroundColor Cyan
+    Write-Host "[2/4] Initializing learnings file at $LearningsFile..." -ForegroundColor Cyan
     @"
 # Aristotle Learnings (User-Level)
 
@@ -40,21 +41,33 @@ if (-not (Test-Path $LearningsFile)) {
 "@ | Set-Content $LearningsFile -Encoding UTF8
     Write-Host "✓ Learnings file created." -ForegroundColor Green
 } else {
-    Write-Host "[2/3] Learnings file already exists — preserving." -ForegroundColor Cyan
+    Write-Host "[2/4] Learnings file already exists — preserving." -ForegroundColor Cyan
 }
 
 # Step 3: Verify
-Write-Host "[3/3] Verifying installation..." -ForegroundColor Cyan
+Write-Host "[3/4] Verifying installation..." -ForegroundColor Cyan
 $errors = 0
 
 if (-not (Test-Path (Join-Path $SkillDest 'SKILL.md'))) { $errors++; Write-Host "✗ SKILL.md not found" -ForegroundColor Red }
 if (-not (Test-Path (Join-Path $SkillDest 'REFLECTOR.md'))) { $errors++; Write-Host "✗ REFLECTOR.md not found" -ForegroundColor Red }
 if (-not (Test-Path (Join-Path $SkillDest 'REFLECT.md'))) { $errors++; Write-Host "✗ REFLECT.md not found" -ForegroundColor Red }
 if (-not (Test-Path (Join-Path $SkillDest 'REVIEW.md'))) { $errors++; Write-Host "✗ REVIEW.md not found" -ForegroundColor Red }
+if (-not (Test-Path (Join-Path $SkillDest 'CHECKER.md'))) { $errors++; Write-Host "✗ CHECKER.md not found" -ForegroundColor Red }
 if (-not (Test-Path $LearningsFile)) { $errors++; Write-Host "✗ Learnings file not found" -ForegroundColor Red }
 
 if ($errors -eq 0) {
     Write-Host "✓ All files verified." -ForegroundColor Green
+}
+
+# Step 4: Initialize the aristotle-repo
+Write-Host "[4/4] Initializing rule repository..." -ForegroundColor Cyan
+if (Get-Command uv -ErrorAction SilentlyContinue) {
+    uv run --project $ScriptDir python -c "from aristotle_mcp.server import init_repo_tool; print(init_repo_tool())"
+    Write-Host "✓ Rule repository initialized." -ForegroundColor Green
+} else {
+    Write-Host "⚠ 'uv' not found — skipping rule repository initialization." -ForegroundColor Yellow
+    Write-Host "  Install uv (https://docs.astral.sh/uv/) then run:" -ForegroundColor Yellow
+    Write-Host "  uv run --project `"$ScriptDir`" python -c `"from aristotle_mcp.server import init_repo_tool; print(init_repo_tool())`"" -ForegroundColor Yellow
 }
 
 Write-Host ""

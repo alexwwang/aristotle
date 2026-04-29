@@ -7,10 +7,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SKILL_SRC="$SCRIPT_DIR"
 
-# Determine OpenCode skill discovery directory
-# OpenCode hardcodes ~/.claude/skills/ as a discovery path (EXTERNAL_DIRS).
-# This is the most reliable location — zero configuration needed.
-SKILL_BASE="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+# OpenCode discovers skills via skills.paths in opencode.json (~/.config/opencode/skills/).
 OPENCODE_CONFIG="${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}"
 
 # Colors
@@ -24,21 +21,38 @@ echo "🦉 Aristotle — Error Reflection & Learning Agent"
 echo "══════════════════════════════════════════════════"
 echo ""
 
-# Step 1: Install skill to ~/.claude/skills/ (reliable auto-discovery path)
-SKILL_DEST="$SKILL_BASE/skills/aristotle"
-echo -e "${BLUE}[1/3]${NC} Installing Aristotle skill to $SKILL_DEST..."
+# Step 1: Install skill files (SKILL.md + docs)
+SKILL_DEST="$OPENCODE_CONFIG/skills/aristotle"
+MCP_DEST="$OPENCODE_CONFIG/aristotle"
+echo -e "${BLUE}[1/6]${NC} Installing Aristotle skill to $SKILL_DEST..."
 
 mkdir -p "$SKILL_DEST"
 cp "$SKILL_SRC/SKILL.md" "$SKILL_DEST/SKILL.md"
-cp "$SKILL_SRC/REFLECTOR.md" "$SKILL_DEST/REFLECTOR.md"
-cp "$SKILL_SRC/REFLECT.md" "$SKILL_DEST/REFLECT.md"
-cp "$SKILL_SRC/REVIEW.md" "$SKILL_DEST/REVIEW.md"
+
+# Protocol files go to MCP dir (SKILL_DIR resolves to MCP install dir at runtime)
+mkdir -p "$MCP_DEST"
+cp "$SKILL_SRC/REFLECTOR.md" "$MCP_DEST/REFLECTOR.md"
+cp "$SKILL_SRC/REFLECT.md" "$MCP_DEST/REFLECT.md"
+cp "$SKILL_SRC/REVIEW.md" "$MCP_DEST/REVIEW.md"
+cp "$SKILL_SRC/CHECKER.md" "$MCP_DEST/CHECKER.md"
+cp "$SKILL_SRC/LEARN.md" "$MCP_DEST/LEARN.md"
 echo -e "${GREEN}✓${NC} Skill files installed."
 
-# Step 2: Initialize the learnings file
+# Step 2: Deploy MCP server files
+echo -e "${BLUE}[2/6]${NC} Deploying MCP server to $MCP_DEST..."
+
+mkdir -p "$MCP_DEST/aristotle_mcp"
+cp -r "$SKILL_SRC/aristotle_mcp/"* "$MCP_DEST/aristotle_mcp/"
+rm -rf "$MCP_DEST/aristotle_mcp/__pycache__"
+cp "$SKILL_SRC/pyproject.toml" "$MCP_DEST/pyproject.toml"
+cp "$SKILL_SRC/uv.lock" "$MCP_DEST/uv.lock"
+cd "$MCP_DEST" && uv sync
+echo -e "${GREEN}✓${NC} MCP server deployed."
+
+# Step 3: Initialize the learnings file
 LEARNINGS_FILE="$OPENCODE_CONFIG/aristotle-learnings.md"
 if [ ! -f "$LEARNINGS_FILE" ]; then
-    echo -e "${BLUE}[2/3]${NC} Initializing learnings file at $LEARNINGS_FILE..."
+    echo -e "${BLUE}[3/6]${NC} Initializing learnings file at $LEARNINGS_FILE..."
     cat > "$LEARNINGS_FILE" << 'LEARNINGS_INIT'
 # Aristotle Learnings (User-Level)
 
@@ -48,11 +62,11 @@ if [ ! -f "$LEARNINGS_FILE" ]; then
 LEARNINGS_INIT
     echo -e "${GREEN}✓${NC} Learnings file created."
 else
-    echo -e "${BLUE}[2/3]${NC} Learnings file already exists at $LEARNINGS_FILE — preserving."
+    echo -e "${BLUE}[3/6]${NC} Learnings file already exists at $LEARNINGS_FILE — preserving."
 fi
 
-# Step 3: Verify installation
-echo -e "${BLUE}[3/3]${NC} Verifying installation..."
+# Step 4: Verify installation
+echo -e "${BLUE}[4/6]${NC} Verifying installation..."
 
 ERRORS=0
 
@@ -61,18 +75,33 @@ if [ ! -f "$SKILL_DEST/SKILL.md" ]; then
     ERRORS=$((ERRORS+1))
 fi
 
-if [ ! -f "$SKILL_DEST/REFLECTOR.md" ]; then
-    echo -e "${YELLOW}✗${NC} REFLECTOR.md not found at $SKILL_DEST"
+if [ ! -f "$MCP_DEST/REFLECTOR.md" ]; then
+    echo -e "${YELLOW}✗${NC} REFLECTOR.md not found at $MCP_DEST"
     ERRORS=$((ERRORS+1))
 fi
 
-if [ ! -f "$SKILL_DEST/REFLECT.md" ]; then
-    echo -e "${YELLOW}✗${NC} REFLECT.md not found at $SKILL_DEST"
+if [ ! -f "$MCP_DEST/REFLECT.md" ]; then
+    echo -e "${YELLOW}✗${NC} REFLECT.md not found at $MCP_DEST"
     ERRORS=$((ERRORS+1))
 fi
 
-if [ ! -f "$SKILL_DEST/REVIEW.md" ]; then
-    echo -e "${YELLOW}✗${NC} REVIEW.md not found at $SKILL_DEST"
+if [ ! -f "$MCP_DEST/REVIEW.md" ]; then
+    echo -e "${YELLOW}✗${NC} REVIEW.md not found at $MCP_DEST"
+    ERRORS=$((ERRORS+1))
+fi
+
+if [ ! -f "$MCP_DEST/CHECKER.md" ]; then
+    echo -e "${YELLOW}✗${NC} CHECKER.md not found at $MCP_DEST"
+    ERRORS=$((ERRORS+1))
+fi
+
+if [ ! -f "$MCP_DEST/pyproject.toml" ]; then
+    echo -e "${YELLOW}✗${NC} pyproject.toml not found at $MCP_DEST"
+    ERRORS=$((ERRORS+1))
+fi
+
+if [ ! -d "$MCP_DEST/aristotle_mcp" ]; then
+    echo -e "${YELLOW}✗${NC} aristotle_mcp/ not found at $MCP_DEST"
     ERRORS=$((ERRORS+1))
 fi
 
@@ -87,6 +116,32 @@ else
     echo -e "${YELLOW}⚠${NC} $ERRORS issues found. Check the paths above."
 fi
 
+# Step 5: Build and deploy Bridge Plugin (optional)
+BRIDGE_DEST="$OPENCODE_CONFIG/aristotle-bridge"
+BRIDGE_SRC="$SKILL_SRC/plugins/aristotle-bridge"
+if [ -d "$BRIDGE_SRC" ] && command -v bun &>/dev/null; then
+    echo -e "${BLUE}[5/6]${NC} Building Bridge Plugin..."
+    cd "$BRIDGE_SRC" && bun install && bun run build
+    mkdir -p "$BRIDGE_DEST"
+    cp "$BRIDGE_SRC/dist/index.js" "$BRIDGE_DEST/index.js"
+    echo -e "${GREEN}✓${NC} Bridge Plugin deployed to $BRIDGE_DEST"
+elif [ -d "$BRIDGE_SRC" ]; then
+    echo -e "${YELLOW}[5/6]${NC} Skipping Bridge Plugin (bun not found). Install bun to enable async reflection."
+else
+    echo -e "${BLUE}[5/6]${NC} Skipping Bridge Plugin (source not found)."
+fi
+
+# Step 6: Initialize the aristotle-repo
+    echo -e "${BLUE}[6/6]${NC} Initializing rule repository..."
+if command -v uv &>/dev/null; then
+    uv run --project "$MCP_DEST" python -c "from aristotle_mcp.server import init_repo_tool; print(init_repo_tool())"
+    echo -e "${GREEN}✓${NC} Rule repository initialized."
+else
+    echo -e "${YELLOW}⚠${NC} 'uv' not found — skipping rule repository initialization."
+    echo -e "${YELLOW}  Install uv (https://docs.astral.sh/uv/) then run:"
+    echo -e "${YELLOW}  uv run --project \"$MCP_DEST\" python -c \"from aristotle_mcp.server import init_repo_tool; print(init_repo_tool())\""
+fi
+
 echo ""
 echo "══════════════════════════════════════════════════"
 echo -e "${GREEN}🦉 Aristotle installed successfully!${NC}"
@@ -99,5 +154,7 @@ echo "  • Project-level learnings go to .opencode/aristotle-project-learnings.
 echo ""
 echo "To uninstall:"
 echo "  rm -rf $SKILL_DEST"
+echo "  rm -rf $MCP_DEST"
+echo "  rm -rf $BRIDGE_DEST"
 echo "  rm -f $LEARNINGS_FILE"
 echo ""
