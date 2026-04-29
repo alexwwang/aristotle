@@ -15,6 +15,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { logger } from './logger.js';
 
 export interface AristotleConfig {
   /** MCP server install directory (has pyproject.toml + aristotle_mcp/) */
@@ -28,7 +29,12 @@ const DEFAULT_OPencode_DIR = join(homedir(), '.config', 'opencode');
 
 function findConfigFile(): string | null {
   // 1. ARISTOTLE_CONFIG env var (explicit override)
-  if (process.env.ARISTOTLE_CONFIG) return process.env.ARISTOTLE_CONFIG;
+  if (process.env.ARISTOTLE_CONFIG) {
+    if (!existsSync(process.env.ARISTOTLE_CONFIG)) {
+      console.warn(`[aristotle-config] ARISTOTLE_CONFIG=${process.env.ARISTOTLE_CONFIG} does not exist, ignoring`);
+    }
+    return process.env.ARISTOTLE_CONFIG;
+  }
   // 2. Standard location
   const standard = join(DEFAULT_OPencode_DIR, CONFIG_FILENAME);
   if (existsSync(standard)) return standard;
@@ -58,6 +64,7 @@ function detectMcpDir(sessionsDir: string): string {
     if (parent === dir) break;
     dir = parent;
   }
+  logger.debug('[aristotle-config] walk-up found no mcp dir from %s, trying env/default', sessionsDir);
   // 2. ARISTOTLE_PROJECT_DIR env var
   const envFallback = process.env.ARISTOTLE_PROJECT_DIR;
   if (envFallback && existsSync(join(envFallback, 'aristotle_mcp'))) return envFallback;
@@ -69,6 +76,7 @@ let _cachedConfig: AristotleConfig | null = null;
 
 /**
  * Resolve Aristotle paths. Results are cached after first call.
+ * Results are cached for the lifetime of the process. If install.sh re-runs with different paths, restart the host process to pick up changes.
  *
  * Priority: config file > env vars > auto-detection > defaults
  */
@@ -80,14 +88,14 @@ export function resolveConfig(): AristotleConfig {
 
   // Sessions dir: config file > env var > default
   const sessions_dir =
-    fileConfig?.sessions_dir ??
-    process.env.ARISTOTLE_SESSIONS_DIR ??
+    fileConfig?.sessions_dir ||
+    process.env.ARISTOTLE_SESSIONS_DIR ||
     join(DEFAULT_OPencode_DIR, 'aristotle-sessions');
 
   // MCP dir: config file > env var > auto-detect from sessions dir > default
   const mcp_dir =
-    fileConfig?.mcp_dir ??
-    process.env.ARISTOTLE_MCP_DIR ??
+    fileConfig?.mcp_dir ||
+    process.env.ARISTOTLE_MCP_DIR ||
     detectMcpDir(sessions_dir);
 
   _cachedConfig = { mcp_dir, sessions_dir };
@@ -99,10 +107,4 @@ export function clearConfigCache(): void {
   _cachedConfig = null;
 }
 
-/**
- * Convenience wrapper for resolving MCP project directory.
- * Kept for backward compatibility with tests.
- */
-export function resolveMcpProjectDir(sessionsDir: string): string {
-  return detectMcpDir(sessionsDir);
-}
+

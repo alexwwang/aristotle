@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   resolveConfig,
   clearConfigCache,
-  resolveMcpProjectDir,
 } from '../src/config.js';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -91,15 +90,17 @@ describe('config', () => {
   it('should walk up from sessions dir and find pyproject.toml + aristotle_mcp', () => {
     const sessionsDir = '/projects/myapp/aristotle-sessions';
     const parentDir = '/projects/myapp';
+    process.env.ARISTOTLE_SESSIONS_DIR = sessionsDir;
 
     vi.mocked(existsSync).mockImplementation((p: any) => {
       const s = String(p);
+      if (s.endsWith('aristotle-config.json')) return false;
       if (s === join(parentDir, 'pyproject.toml')) return true;
       if (s === join(parentDir, 'aristotle_mcp')) return true;
       return false;
     });
 
-    const result = resolveMcpProjectDir(sessionsDir);
+    const result = resolveConfig().mcp_dir;
     expect(result).toBe(parentDir);
   });
 
@@ -108,15 +109,17 @@ describe('config', () => {
   it('should detect sibling aristotle dir', () => {
     const sessionsDir = '/projects/myapp/aristotle-sessions';
     const siblingDir = '/projects/myapp/aristotle';
+    process.env.ARISTOTLE_SESSIONS_DIR = sessionsDir;
 
     vi.mocked(existsSync).mockImplementation((p: any) => {
       const s = String(p);
+      if (s.endsWith('aristotle-config.json')) return false;
       if (s === join(siblingDir, 'pyproject.toml')) return true;
       if (s === join(siblingDir, 'aristotle_mcp')) return true;
       return false;
     });
 
-    const result = resolveMcpProjectDir(sessionsDir);
+    const result = resolveConfig().mcp_dir;
     expect(result).toBe(siblingDir);
   });
 
@@ -124,23 +127,25 @@ describe('config', () => {
 
   it('should use ARISTOTLE_PROJECT_DIR env fallback', () => {
     const sessionsDir = '/tmp/test-sessions';
+    process.env.ARISTOTLE_SESSIONS_DIR = sessionsDir;
     process.env.ARISTOTLE_PROJECT_DIR = '/tmp/mock-project';
 
     vi.mocked(existsSync).mockImplementation((p: any) => {
+      const s = String(p);
+      if (s.endsWith('aristotle-config.json')) return false;
       return String(p) === join('/tmp/mock-project', 'aristotle_mcp');
     });
 
-    const result = resolveMcpProjectDir(sessionsDir);
+    const result = resolveConfig().mcp_dir;
     expect(result).toBe('/tmp/mock-project');
   });
 
   // ── detectMcpDir — default fallback ────────────────────────────────────
 
   it('should fallback to default when nothing is found', () => {
-    const sessionsDir = '/tmp/test-sessions';
     vi.mocked(existsSync).mockReturnValue(false);
 
-    const result = resolveMcpProjectDir(sessionsDir);
+    const result = resolveConfig().mcp_dir;
     expect(result).toBe(DEFAULT_MCP_DIR);
   });
 
@@ -210,5 +215,35 @@ describe('config', () => {
     const config = resolveConfig();
     expect(config.sessions_dir).toBe('/override/sessions');
     expect(config.mcp_dir).toBe('/override/mcp');
+  });
+
+  // ── ARISTOTLE_CONFIG pointing to nonexistent file ──────────────────────
+
+  it('should warn when ARISTOTLE_CONFIG points to nonexistent file', () => {
+    process.env.ARISTOTLE_CONFIG = '/nonexistent/config.json';
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    vi.mocked(existsSync).mockImplementation((p: any) => {
+      return String(p) !== '/nonexistent/config.json';
+    });
+
+    resolveConfig();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('ARISTOTLE_CONFIG'));
+    warnSpy.mockRestore();
+  });
+
+  // ── partial config file — only mcp_dir set ─────────────────────────────
+
+  it('should auto-detect sessions_dir when config only has mcp_dir', () => {
+    vi.mocked(existsSync).mockImplementation((p: any) => {
+      return String(p) === DEFAULT_CONFIG_PATH;
+    });
+    vi.mocked(readFileSync).mockReturnValue(
+      JSON.stringify({ mcp_dir: '/custom/mcp' })
+    );
+
+    const config = resolveConfig();
+    expect(config.mcp_dir).toBe('/custom/mcp');
+    expect(config.sessions_dir).toBe(DEFAULT_SESSIONS_DIR);
   });
 });

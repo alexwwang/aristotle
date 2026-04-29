@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { IdleEventHandler } from '../src/idle-handler.js';
-import { resolveMcpProjectDir } from '../src/config.js';
+import { resolveConfig, clearConfigCache } from '../src/config.js';
 import type { WorkflowState } from '../src/types.js';
 import { extractLastAssistantText } from '../src/utils.js';
 import { EventEmitter } from 'node:events';
@@ -499,34 +499,50 @@ describe('IdleEventHandler', () => {
   // ── resolveMcpProjectDir (auto-detection) ───────────────────────────────
 
   it('should_detect_sibling_aristotle_dir', () => {
+    clearConfigCache();
+    delete process.env.ARISTOTLE_MCP_DIR;
+    delete process.env.ARISTOTLE_SESSIONS_DIR;
+    process.env.ARISTOTLE_SESSIONS_DIR = sessionsDir;
     vi.mocked(existsSync).mockImplementation((p: string) => {
       const s = String(p);
+      // Ensure no config file exists
+      if (s.endsWith('aristotle-config.json')) return false;
       return s.endsWith('aristotle/pyproject.toml') || s.endsWith('aristotle/aristotle_mcp');
     });
 
-    const result = resolveMcpProjectDir(sessionsDir);
+    const result = resolveConfig().mcp_dir;
     // Should detect sibling "aristotle" dir from "aristotle-sessions"
     expect(result).toMatch(/aristotle$/);
   });
 
   it('should_fallback_to_default_when_nothing_found', () => {
+    clearConfigCache();
     delete process.env.ARISTOTLE_MCP_DIR;
+    delete process.env.ARISTOTLE_SESSIONS_DIR;
     delete process.env.ARISTOTLE_PROJECT_DIR;
-    vi.mocked(existsSync).mockReturnValue(false);
+    vi.mocked(existsSync).mockImplementation((p: string) => {
+      const s = String(p);
+      if (s.endsWith('aristotle-config.json')) return false;
+      return false;
+    });
 
-    const result = resolveMcpProjectDir(sessionsDir);
+    const result = resolveConfig().mcp_dir;
     expect(result).toBe(join(homedir(), '.config', 'opencode', 'aristotle'));
   });
 
   it('should_use_aristotle_project_dir_env', () => {
+    clearConfigCache();
     delete process.env.ARISTOTLE_MCP_DIR;
+    delete process.env.ARISTOTLE_SESSIONS_DIR;
     process.env.ARISTOTLE_PROJECT_DIR = '/tmp/mock-project';
     // Make existsSync return true only for the env fallback check
     vi.mocked(existsSync).mockImplementation((p: any) => {
+      const s = String(p);
+      if (s.endsWith('aristotle-config.json')) return false;
       return String(p).includes('mock-project/aristotle_mcp');
     });
 
-    const result = resolveMcpProjectDir(sessionsDir);
+    const result = resolveConfig().mcp_dir;
     expect(result).toBe('/tmp/mock-project');
     delete process.env.ARISTOTLE_PROJECT_DIR;
   });
