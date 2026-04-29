@@ -7,7 +7,7 @@ include = ["aristotle_mcp*"]
 
 [project]
 name = "aristotle-mcp"
-version = "0.1.0"
+version = "1.2.0"
 description = "Git-based rule management MCP server for Aristotle"
 requires-python = ">=3.10"
 dependencies = [
