@@ -6,6 +6,7 @@
 
 | 文件 | 测试数 | 覆盖 |
 |------|--------|------|
+| config.test.ts | 12 | resolveConfig, detectMcpDir, clearConfigCache |
 | utils.test.ts | 7 | extractLastAssistantText |
 | api-probe.test.ts | 5 | detectApiMode |
 | snapshot-extractor.test.ts | 12 | SnapshotExtractor |
@@ -13,9 +14,26 @@
 | idle-handler.test.ts | 44 | IdleEventHandler |
 | executor.test.ts | 12 | AsyncTaskExecutor |
 | index.test.ts | 23 | AristotleBridgePlugin |
-| **合计** | **148** | |
+| **合计** | **160** | |
 
 ---
+
+## config.test.ts (12 tests)
+
+| 测试名 | 覆盖 |
+|--------|------|
+| should_read_valid_config_file | 配置文件解析，mcp_dir + sessions_dir |
+| should_use_env_vars_when_no_config | ARISTOTLE_SESSIONS_DIR、ARISTOTLE_MCP_DIR 回退 |
+| should_prioritize_config_over_env_vars | 配置文件 > 环境变量优先级 |
+| should_auto_detect_when_no_config_no_env | 默认 sessions_dir + detectMcpDir |
+| should_walk_up_to_find_mcp_dir | 向上遍历自动检测（pyproject.toml + aristotle_mcp） |
+| should_detect_sibling_aristotle_dir | 兄弟目录检测 |
+| should_use_aristotle_project_dir_env | ARISTOTLE_PROJECT_DIR 回退 |
+| should_return_default_when_nothing_found | 默认 ~/.config/opencode/aristotle |
+| should_clear_cached_config | clearConfigCache() 重置单例 |
+| should_handle_corrupted_config_file | 无效 JSON → 优雅回退 |
+| should_handle_readFileSync_error | readFileSync 异常 → 优雅回退 |
+| should_use_aristotle_config_env_for_path | ARISTOTLE_CONFIG 环境变量覆盖配置文件路径 |
 
 ## utils.test.ts (7 tests)
 

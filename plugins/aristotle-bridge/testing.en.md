@@ -6,6 +6,7 @@ Run: `cd plugins/aristotle-bridge && bunx vitest run`
 
 | File | Tests | Coverage |
 |------|-------|----------|
+| config.test.ts | 12 | resolveConfig, detectMcpDir, clearConfigCache |
 | utils.test.ts | 7 | extractLastAssistantText |
 | api-probe.test.ts | 5 | detectApiMode |
 | snapshot-extractor.test.ts | 12 | SnapshotExtractor |
@@ -13,9 +14,26 @@ Run: `cd plugins/aristotle-bridge && bunx vitest run`
 | idle-handler.test.ts | 44 | IdleEventHandler |
 | executor.test.ts | 12 | AsyncTaskExecutor |
 | index.test.ts | 23 | AristotleBridgePlugin |
-| **Total** | **148** | |
+| **Total** | **160** | |
 
 ---
+
+## config.test.ts (12 tests)
+
+| Test | Coverage |
+|------|----------|
+| should_read_valid_config_file | Config file parsing, mcp_dir + sessions_dir |
+| should_use_env_vars_when_no_config | ARISTOTLE_SESSIONS_DIR, ARISTOTLE_MCP_DIR fallback |
+| should_prioritize_config_over_env_vars | Config file > env var priority |
+| should_auto_detect_when_no_config_no_env | Default sessions_dir + detectMcpDir |
+| should_walk_up_to_find_mcp_dir | Walk-up auto-detection (pyproject.toml + aristotle_mcp) |
+| should_detect_sibling_aristotle_dir | Sibling directory check |
+| should_use_aristotle_project_dir_env | ARISTOTLE_PROJECT_DIR fallback |
+| should_return_default_when_nothing_found | Default ~/.config/opencode/aristotle |
+| should_clear_cached_config | clearConfigCache() resets singleton |
+| should_handle_corrupted_config_file | Invalid JSON → graceful fallback |
+| should_handle_readFileSync_error | readFileSync throw → graceful fallback |
+| should_use_aristotle_config_env_for_path | ARISTOTLE_CONFIG env var overrides config file path |
 
 ## utils.test.ts (7 tests)
 
