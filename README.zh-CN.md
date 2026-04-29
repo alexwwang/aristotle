@@ -4,7 +4,7 @@
 [![Release](https://img.shields.io/github/v/release/alexwwang/aristotle?include_prereleases)](https://github.com/alexwwang/aristotle/releases)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
-[![Tests](https://img.shields.io/badge/tests-649%20total-brightgreen)](./TESTING.zh-CN.md)
+[![Tests](https://img.shields.io/badge/tests-649%20total-brightgreen)](./docs/testing.zh-CN.md)
 
 **[English](./README.md)** | 中文
 
@@ -427,7 +427,7 @@ O 压缩 Top-N 为最小摘要 → 注入 L 的上下文
 
 ## GEAR 协议
 
-Aristotle 是 **[GEAR（Git-backed Error Analysis & Reflection）](./GEAR.md)** 协议的一个实现——一个 AI agent 错误反思、学习与预防的协议。不再是扁平的追加写入文件，规则经过状态机流转，带有 schema 校验、意图驱动检索和基于进化模型的审核级别。
+Aristotle 是 **[GEAR（Git-backed Error Analysis & Reflection）](./docs/GEAR.md)** 协议的一个实现——一个 AI agent 错误反思、学习与预防的协议。不再是扁平的追加写入文件，规则经过状态机流转，带有 schema 校验、意图驱动检索和基于进化模型的审核级别。
 
 **GEAR 角色 → Aristotle 映射：**
 
@@ -441,11 +441,11 @@ Aristotle 是 **[GEAR（Git-backed Error Analysis & Reflection）](./GEAR.md)** 
 
 GEAR 协议操作映射到 Aristotle 的 MCP 工具：`produce` → `write_rule`、`stage` → `stage_rule`、`verify` → `commit_rule`、`reject` → `reject_rule`、`restore` → `restore_rule`、`search` → `read_rules`、`sync` → `check_sync_status` + `sync_rules`、`audit_decision` → `get_audit_decision`。
 
-完整的协议规范——状态机、frontmatter schema、Δ 决策因子和一致性要求——详见 **[GEAR.md](./GEAR.md)**。
+完整的协议规范——状态机、frontmatter schema、Δ 决策因子和一致性要求——详见 **[GEAR.md](./docs/GEAR.md)**。
 
 ## 测试
 
-> **完整测试文档：** 详见 **[TESTING.zh-CN.md](./TESTING.zh-CN.md)**，包含详细的测试套件说明、覆盖率分析和人工测试计划。
+> **完整测试文档：** 详见 **[TESTING.zh-CN.md](./docs/testing.zh-CN.md)**，包含详细的测试套件说明、覆盖率分析和人工测试计划。
 
 | 套件 | 命令 | 数量 |
 |------|------|------|
@@ -457,7 +457,7 @@ GEAR 协议操作映射到 Aristotle 的 MCP 工具：`produce` → `write_rule`
 
 ### 测试覆盖率历史
 
-> Phase 2 已完成。详见 **[TESTING.zh-CN.md](./TESTING.zh-CN.md)**。
+> Phase 2 已完成。详见 **[TESTING.zh-CN.md](./docs/testing.zh-CN.md)**。
 
 | 里程碑 | pytest | 静态测试 | e2e |
 |--------|--------|----------|-----|
@@ -548,7 +548,7 @@ GEAR 协议操作映射到 Aristotle 的 MCP 工具：`produce` → `write_rule`
 
 ## 重置 / 清理数据
 
-如果只想清理数据而不卸载，请参阅 [RESET.zh-CN.md](RESET.zh-CN.md)。
+如果只想清理数据而不卸载，请参阅 [RESET.zh-CN.md](./docs/reset.zh-CN.md)。
 
 ## 卸载
 

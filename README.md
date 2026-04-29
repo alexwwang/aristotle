@@ -4,7 +4,7 @@
 [![Release](https://img.shields.io/github/v/release/alexwwang/aristotle?include_prereleases)](https://github.com/alexwwang/aristotle/releases)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
-[![Tests](https://img.shields.io/badge/tests-649%20total-brightgreen)](./TESTING.md)
+[![Tests](https://img.shields.io/badge/tests-649%20total-brightgreen)](./docs/testing.md)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19660780.svg)](https://doi.org/10.5281/zenodo.19660780)
 
 English | [中文](./README.zh-CN.md)
@@ -414,7 +414,7 @@ After migration, the original file is renamed to `.bak`.
 
 ## GEAR Protocol
 
-Aristotle is an implementation of **[GEAR (Git-backed Error Analysis & Reflection)](./GEAR.md)** — a protocol for AI agent error reflection, learning, and prevention. Instead of a flat append-only file, rules flow through a state machine with schema validation, intent-driven retrieval, and evolution-based audit levels.
+Aristotle is an implementation of **[GEAR (Git-backed Error Analysis & Reflection)](./docs/GEAR.md)** — a protocol for AI agent error reflection, learning, and prevention. Instead of a flat append-only file, rules flow through a state machine with schema validation, intent-driven retrieval, and evolution-based audit levels.
 
 **GEAR role → Aristotle mapping:**
 
@@ -428,11 +428,11 @@ Aristotle is an implementation of **[GEAR (Git-backed Error Analysis & Reflectio
 
 GEAR protocol operations map to Aristotle's MCP tools: `produce` → `write_rule`, `stage` → `stage_rule`, `verify` → `commit_rule`, `reject` → `reject_rule`, `restore` → `restore_rule`, `search` → `read_rules`, `sync` → `check_sync_status` + `sync_rules`, `audit_decision` → `get_audit_decision`.
 
-The full protocol specification — state machine, frontmatter schema, Δ decision factor, and conformance requirements — is documented in **[GEAR.md](./GEAR.md)**.
+The full protocol specification — state machine, frontmatter schema, Δ decision factor, and conformance requirements — is documented in **[GEAR.md](./docs/GEAR.md)**.
 
 ## Testing
 
-> **Full test documentation:** See **[TESTING.md](./TESTING.md)** for detailed test suites, coverage breakdowns, and manual test plans.
+> **Full test documentation:** See **[TESTING.md](./docs/testing.md)** for detailed test suites, coverage breakdowns, and manual test plans.
 
 | Suite | Command | Count |
 |-------|---------|-------|
@@ -444,7 +444,7 @@ The full protocol specification — state machine, frontmatter schema, Δ decisi
 
 ### Test Coverage History
 
-> Phase 2 complete. See **[TESTING.md](./TESTING.md)** for detailed test documentation.
+> Phase 2 complete. See **[TESTING.md](./docs/testing.md)** for detailed test documentation.
 
 | Milestone | pytest | static | e2e |
 |-----------|--------|--------|-----|
@@ -535,7 +535,7 @@ PRs welcome! Here are areas that need improvement:
 
 ## Reset / Clear Data
 
-If you want to clear all Aristotle data without uninstalling, see [RESET.md](RESET.md).
+If you want to clear all Aristotle data without uninstalling, see [RESET.md](./docs/reset.md).
 
 ## Uninstall
 

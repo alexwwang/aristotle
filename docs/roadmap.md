@@ -1,6 +1,6 @@
 # Aristotle Roadmap
 
-> **v1.1.0 released.** Phase 2 + Bridge Plugin 完成。当前测试总量：325 pytest + 148 vitest + 103 static + 9 E2E + 64 regression = 649 total。详见 [TESTING.md](./TESTING.md) 和归档的 [TESTING_STATUS-v1.1.0.md](./TESTING_STATUS-v1.1.0.md)。
+> **v1.1.0 released.** Phase 2 + Bridge Plugin 完成。当前测试总量：325 pytest + 148 vitest + 103 static + 9 E2E + 64 regression = 649 total。详见 [testing.md](./testing.md) 和归档的 [testing-status-v1.1.0.md](./archive/testing-status-v1.1.0.md)。
 
 ---
 

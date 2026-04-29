@@ -2,6 +2,8 @@
 
 每次修改代码后，必须逐项验证。任何一项 FAIL 都意味着生产环境未更新。
 
+> For test commands to run *before* deploy, see [testing.md §8.1](testing.md#81-test-commands).
+
 ## 1. Bridge Plugin
 
 | # | 检查项 | 验证命令 | 预期结果 |

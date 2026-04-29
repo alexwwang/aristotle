@@ -244,49 +244,6 @@ bash test/regression_b1_checks.sh
 ```
 
 Expected result: `325 passed` + `103 passed` + `148 passed` + `64 passed` = **640 checks, 0 failures**.
-### 8.2 Pre-Test Deployment Checklist
+### 8.2 Pre-Test Deployment
 
-When code has changed, **before E2E/live testing**, execute the following steps in order:
-
-```bash
-# Step 1: Run automated tests (must pass before deploy)
-cd "$ARISTOTLE_PROJECT_DIR"
-uv run pytest -q
-cd plugins/aristotle-bridge && npx vitest run
-
-# Step 2: Build Bridge Plugin
-cd "$ARISTOTLE_PROJECT_DIR/plugins/aristotle-bridge"
-npx bun build src/index.ts --outdir dist --target node --format esm \
-  --external zod --external effect --external @opencode-ai/plugin
-
-# Step 3: Sync code to install directory (MCP server code)
-mkdir -p "$HOME/.config/opencode/aristotle/aristotle_mcp"
-cp -r "$ARISTOTLE_PROJECT_DIR/aristotle_mcp/"* "$HOME/.config/opencode/aristotle/aristotle_mcp/"
-cp "$ARISTOTLE_PROJECT_DIR/pyproject.toml" "$HOME/.config/opencode/aristotle/pyproject.toml"
-cp "$ARISTOTLE_PROJECT_DIR/uv.lock" "$HOME/.config/opencode/aristotle/uv.lock"
-cd "$HOME/.config/opencode/aristotle" && uv sync
-
-# Step 4: Deploy Bridge Plugin
-cp "$ARISTOTLE_PROJECT_DIR/plugins/aristotle-bridge/dist/index.js" \
-   "$HOME/.config/opencode/aristotle-bridge/index.js"
-
-# Step 5: Clear stale state (before starting opencode)
-echo '[]' > "$HOME/.config/opencode/aristotle-sessions/bridge-workflows.json"
-rm -f "$HOME/.config/opencode/aristotle-sessions/.bridge-active"
-
-# Step 6: Run regression checks (validates Steps 3-4)
-bash "$ARISTOTLE_PROJECT_DIR/test/regression_b1_checks.sh"
-```
-
-> **Required environment variables**: `ARISTOTLE_PROJECT_DIR` — the project root (e.g. set via `export ARISTOTLE_PROJECT_DIR=$(pwd)` from the repo root). All other paths derive from `$HOME`.
-
-| Step | What | Why |
-|------|------|-----|
-| 1 | Run automated tests | Catch regressions before deploy |
-| 2 | Build plugin | Compile TS → JS for opencode |
-| 3 | Sync + uv sync | MCP server runs from install dir |
-| 4 | Deploy plugin | opencode loads from config dir |
-| 5 | Clear state | Stale marker/workflows cause false failures |
-| 6 | Regression check | Verify sync/deploy correctness (64 assertions) |
-
-Expected result: `325 passed` + `103 passed` + `148 passed` + `64 passed` = **640 checks, 0 failures**.
+Before E2E/live testing, ensure the production environment is up to date. See [deployment.md](deployment.md) for the full checklist and deploy steps.
