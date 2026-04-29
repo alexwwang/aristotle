@@ -4,7 +4,7 @@
 [![Release](https://img.shields.io/github/v/release/alexwwang/aristotle?include_prereleases)](https://github.com/alexwwang/aristotle/releases)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
-[![Tests](https://img.shields.io/badge/tests-640%20total-brightgreen)](./docs/testing.md)
+[![Tests](https://img.shields.io/badge/tests-654%20total-brightgreen)](./docs/testing.md)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19660780.svg)](https://doi.org/10.5281/zenodo.19660780)
 
 English | [中文](./README.zh-CN.md)
@@ -438,7 +438,7 @@ The full protocol specification — state machine, frontmatter schema, Δ decisi
 |-------|---------|-------|
 | Static | `bash test.sh` | 103 |
 | Unit/Integration (Python) | `uv run pytest test/ -v` | 325 |
-| Bridge Plugin (TypeScript) | `cd plugins/aristotle-bridge && bunx vitest run` | 148 |
+| Bridge Plugin (TypeScript) | `cd plugins/aristotle-bridge && bunx vitest run` | 162 |
 | E2E Integration | `uv run pytest test/test_e2e_bridge_integration.py -v` | 9 |
 | Regression (deploy verify) | `bash test/regression_b1_checks.sh` | 64 |
 
@@ -455,7 +455,7 @@ The full protocol specification — state machine, frontmatter schema, Δ decisi
 | M4 Exception Path Tests | 227 | 98 | — |
 | **Phase 2 (M1/M5-M9)** | **295** | **104** | **70** |
 | Phase 0 Bridge (MCP ext) | 318 | 103 | 9 |
-| Phase 1 Bridge (Plugin) | 325 | 103 | 9 + 148 vitest |
+| Phase 1 Bridge (Plugin) | 325 | 103 | 9 + 162 vitest |
 
 ## Project Structure
 
@@ -495,7 +495,7 @@ The full protocol specification — state machine, frontmatter schema, Δ decisi
 ├── plugins/
 │   └── aristotle-bridge/ # Bridge Plugin — async reflect via polling (no OMO dependency)
 │       ├── src/          # 9 modules (index/types/utils/api-probe/logger/snapshot-extractor/workflow-store/idle-handler/executor)
-│       ├── test/         # 7 test files, 148 vitest cases
+│       ├── test/         # 8 test files, 162 vitest cases
 │       ├── testing.en.md # Bridge-specific test documentation (English)
 │       └── testing.zh.md # Bridge-specific test documentation (Chinese)
 └── test/

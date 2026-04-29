@@ -4,7 +4,7 @@
 [![Release](https://img.shields.io/github/v/release/alexwwang/aristotle?include_prereleases)](https://github.com/alexwwang/aristotle/releases)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
-[![Tests](https://img.shields.io/badge/tests-640%20total-brightgreen)](./docs/testing.zh-CN.md)
+[![Tests](https://img.shields.io/badge/tests-654%20total-brightgreen)](./docs/testing.zh-CN.md)
 
 **[English](./README.md)** | 中文
 
@@ -451,7 +451,7 @@ GEAR 协议操作映射到 Aristotle 的 MCP 工具：`produce` → `write_rule`
 |------|------|------|
 | 静态测试 | `bash test.sh` | 103 |
 | 单元/集成测试 (Python) | `uv run pytest test/ -v` | 325 |
-| Bridge 插件 (TypeScript) | `cd plugins/aristotle-bridge && bunx vitest run` | 148 |
+| Bridge 插件 (TypeScript) | `cd plugins/aristotle-bridge && bunx vitest run` | 162 |
 | E2E 集成测试 | `uv run pytest test/test_e2e_bridge_integration.py -v` | 9 |
 | 回归测试（部署验证） | `bash test/regression_b1_checks.sh` | 64 |
 
@@ -468,7 +468,7 @@ GEAR 协议操作映射到 Aristotle 的 MCP 工具：`produce` → `write_rule`
 | M4 异常路径测试 | 227 | 98 | — |
 | **Phase 2 (M1/M5-M9)** | **295** | **104** | **70** |
 | Phase 0 Bridge (MCP 扩展) | 318 | 103 | 9 |
-| Phase 1 Bridge (插件) | 325 | 103 | 9 + 148 vitest |
+| Phase 1 Bridge (插件) | 325 | 103 | 9 + 162 vitest |
 
 ## 项目结构
 
@@ -508,7 +508,7 @@ GEAR 协议操作映射到 Aristotle 的 MCP 工具：`produce` → `write_rule`
 ├── plugins/
 │   └── aristotle-bridge/ # Bridge 插件 — 轮询式异步反思（不依赖 OMO）
 │       ├── src/          # 9 个模块（index/types/utils/api-probe/logger/snapshot-extractor/workflow-store/idle-handler/executor）
-│       ├── test/         # 7 个测试文件，148 vitest 用例
+│       ├── test/         # 8 个测试文件，162 vitest 用例
 │       ├── testing.en.md # Bridge 独立测试文档（英文）
 │       └── testing.zh.md # Bridge 独立测试文档（中文）
 └── test/

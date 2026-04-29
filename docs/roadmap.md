@@ -1,6 +1,6 @@
 # Aristotle Roadmap
 
-> **v1.1.0 released.** Phase 2 + Bridge Plugin 完成。当前测试总量：325 pytest + 148 vitest + 103 static + 64 regression = 640 total。详见 [testing.md](./testing.md) 和归档的 [testing-status-v1.1.0.md](./archive/testing-status-v1.1.0.md)。
+> **v1.1.0 released.** Phase 2 + Bridge Plugin 完成。当前测试总量：325 pytest + 162 vitest + 103 static + 64 regression = 654 total。详见 [testing.md](./testing.md) 和归档的 [testing-status-v1.1.0.md](./archive/testing-status-v1.1.0.md)。
 
 ---
 
@@ -116,7 +116,7 @@
 | v1.1 | M1–M4 | GEAR 编排核心 — orchestrate_start/on_event/review_action, workflow 状态机, SKILL 调度器重写, 子代理提示词模板 |
 | v1.1 | Phase 2 (M5–M9) | M1 补丁 + M5 两轮学习 + M6 反馈 + M7 Δ 归一化 + M8 校验 + M9 冲突检测 |
 | v1.1 | Phase 0 Bridge | MCP 侧扩展：session_file 传入、.bridge-active 检测、use_bridge 标志、on_undo tool、9 E2E 集成测试 |
-| v1.1 | Phase 1 Bridge | Bridge Plugin 9 模块 + SKILL.md 集成 + notifyParent 通知 + 148 vitest |
+| v1.1 | Phase 1 Bridge | Bridge Plugin 9 模块 + SKILL.md 集成 + notifyParent 通知 + 162 vitest |
 | v1.1 | 文档重构 | 安装路径统一、Bridge vs Blocking 对比、GEAR 协议映射、渐进披露 KB 大小、配置文件示例、RESET 指南 |
 
 ---

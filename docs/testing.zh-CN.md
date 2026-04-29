@@ -1,6 +1,6 @@
 # Aristotle — 测试指南
 
-> Aristotle MCP 规则引擎 + Bridge 插件测试概览。当前覆盖率：325 pytest + 103 static + 148 vitest + 64 regression = 640 项检查。
+> Aristotle MCP 规则引擎 + Bridge 插件测试概览。当前覆盖率：325 pytest + 103 static + 162 vitest + 64 regression = 654 项检查。
 
 ## 1. 测试套件总览
 
@@ -8,7 +8,7 @@
 |------|------|------|----------|
 | 静态测试 | `bash test.sh` | 103 | 文件结构、SKILL.md 内容、hook 逻辑、错误模式检测、渐进披露（字节限制） |
 | Python 测试 | `uv run pytest test/ -v` | 325 | MCP 核心、编排与工作流、进化、frontmatter、git 操作、Bridge MCP |
-| Bridge 插件 | `cd plugins/aristotle-bridge && bunx vitest run` | 148 | 7 个模块：types/utils/api-probe/snapshot-extractor/workflow-store/idle-handler/executor |
+| Bridge 插件 | `cd plugins/aristotle-bridge && bunx vitest run` | 162 | 7 个模块：types/utils/api-probe/snapshot-extractor/workflow-store/idle-handler/executor |
 | E2E 自动化 | `bash test/e2e_opencode.sh` | 14 (5 PASS / 9 SKIP) | 真实 opencode 会话：skill 加载、sessions、learn、reflect（需 LLM） |
 | B1 回归 | `bash test/regression_b1_checks.sh` | 64 | B1 修复的部署后验证 |
 
@@ -64,7 +64,7 @@ uv run pytest test/ -v
 | `test/test_phase0_snapshot.py` | TestResolveSessionsDir, TestBuildReflectorPrompt, TestOrchestrateStartSessionFile, TestBridgeDetection, TestOnUndo, TestUndoneShortCircuit | 19 | Session 目录解析、reflector prompt SESSION_FILE、Bridge marker 检测、on_undo 工具、undone 状态短路 |
 | `test/test_e2e_bridge_integration.py` | TestContextFixE2E, TestBridgeDetectionE2E, TestAsyncBridgeWorkflowE2E, TestMultiStageBridgeE2E | 9 | Bridge↔MCP 集成：上下文修复、Bridge 检测、异步工作流、多阶段 |
 
-## 4. Bridge 插件测试 (148 vitest)
+## 4. Bridge 插件测试 (162 vitest)
 
 > 完整测试级明细：详见 [plugins/aristotle-bridge/testing.zh.md](plugins/aristotle-bridge/testing.zh.md)
 
@@ -242,7 +242,7 @@ cd plugins/aristotle-bridge && bunx vitest run
 bash test/regression_b1_checks.sh
 ```
 
-期望结果：`325 passed` + `103 passed` + `148 passed` + `64 passed` = **640 项检查，0 失败**。
+期望结果：`325 passed` + `103 passed` + `162 passed` + `64 passed` = **654 项检查，0 失败**。
 ### 8.2 测试前部署
 
 E2E/人工测试前，确保生产环境已更新。完整检查清单和部署步骤见 [deployment.md](deployment.md)。

@@ -1,6 +1,6 @@
 # Aristotle — Testing Guide
 
-> Aristotle MCP rule engine + Bridge plugin test overview. Current coverage: 325 pytest + 103 static + 148 vitest + 64 regression = 640 checks.
+> Aristotle MCP rule engine + Bridge plugin test overview. Current coverage: 325 pytest + 103 static + 162 vitest + 64 regression = 654 checks.
 
 ## 1. Test Suites Overview
 
@@ -8,7 +8,7 @@
 |-------|---------|-------|----------------|
 | Static | `bash test.sh` | 103 | File structure, SKILL.md content, hook logic, error pattern detection, progressive disclosure (byte limit) |
 | Python | `uv run pytest test/ -v` | 325 | MCP core, orchestration & workflows, evolution, frontmatter, git ops, Bridge MCP |
-| Bridge Plugin | `cd plugins/aristotle-bridge && bunx vitest run` | 148 | 7 modules: types/utils/api-probe/snapshot-extractor/workflow-store/idle-handler/executor |
+| Bridge Plugin | `cd plugins/aristotle-bridge && bunx vitest run` | 162 | 7 modules: types/utils/api-probe/snapshot-extractor/workflow-store/idle-handler/executor |
 | E2E Automated | `bash test/e2e_opencode.sh` | 14 | Real opencode session: skill load, sessions, learn, reflect (requires LLM) |
 | B1 Regression | `bash test/regression_b1_checks.sh` | 64 | Post-deploy verification for B1 fixes |
 
@@ -64,7 +64,7 @@ uv run pytest test/ -v
 | `test/test_phase0_snapshot.py` | TestResolveSessionsDir, TestBuildReflectorPrompt, TestOrchestrateStartSessionFile, TestBridgeDetection, TestOnUndo, TestUndoneShortCircuit | 19 | Session dir resolution, reflector prompt SESSION_FILE, Bridge marker detection, on_undo tool, undone state short-circuit |
 | `test/test_e2e_bridge_integration.py` | TestContextFixE2E, TestBridgeDetectionE2E, TestAsyncBridgeWorkflowE2E, TestMultiStageBridgeE2E | 9 | Bridge↔MCP integration: context fix, Bridge detection, async workflow, multi-stage |
 
-## 4. Bridge Plugin Tests (148 vitest)
+## 4. Bridge Plugin Tests (162 vitest)
 
 > Full test-level breakdown: see [plugins/aristotle-bridge/testing.en.md](plugins/aristotle-bridge/testing.en.md)
 
@@ -243,7 +243,7 @@ cd plugins/aristotle-bridge && bunx vitest run
 bash test/regression_b1_checks.sh
 ```
 
-Expected result: `325 passed` + `103 passed` + `148 passed` + `64 passed` = **640 checks, 0 failures**.
+Expected result: `325 passed` + `103 passed` + `162 passed` + `64 passed` = **654 checks, 0 failures**.
 ### 8.2 Pre-Test Deployment
 
 Before E2E/live testing, ensure the production environment is up to date. See [deployment.md](deployment.md) for the full checklist and deploy steps.
