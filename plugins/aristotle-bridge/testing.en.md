@@ -9,11 +9,11 @@ Run: `cd plugins/aristotle-bridge && bunx vitest run`
 | utils.test.ts | 7 | extractLastAssistantText |
 | api-probe.test.ts | 5 | detectApiMode |
 | snapshot-extractor.test.ts | 12 | SnapshotExtractor |
-| workflow-store.test.ts | 35 | WorkflowStore |
-| idle-handler.test.ts | 7 | IdleEventHandler |
+| workflow-store.test.ts | 45 | WorkflowStore |
+| idle-handler.test.ts | 44 | IdleEventHandler |
 | executor.test.ts | 12 | AsyncTaskExecutor |
-| index.test.ts | 22 | AristotleBridgePlugin |
-| **Total** | **100** | |
+| index.test.ts | 23 | AristotleBridgePlugin |
+| **Total** | **148** | |
 
 ---
 
@@ -34,10 +34,10 @@ Run: `cd plugins/aristotle-bridge && bunx vitest run`
 | Test | Coverage |
 |------|----------|
 | should_return_promptAsync_when_api_available | API available returns 'promptAsync' |
-| should_return_null_when_promptAsync_fails | API unavailable returns null |
-| should_delete_probe_session_on_success | Cleanup on success |
-| should_delete_probe_session_on_failure | Cleanup on failure |
-| should_propagate_error_when_probe_session_create_fails | session.create failure throws |
+| should_return_null_when_promptAsync_missing | promptAsync missing returns null |
+| should_return_null_when_session_missing | session missing returns null |
+| should_return_null_when_client_null | client null returns null |
+| should_not_call_promptAsync_only_check_existence | Only checks typeof, does not call |
 
 ## snapshot-extractor.test.ts (12 tests)
 
@@ -56,9 +56,9 @@ Run: `cd plugins/aristotle-bridge && bunx vitest run`
 | should_use_custom_focusHint_in_snapshot | focusHint written |
 | should_cap_limit_at_200_even_when_higher | Limit cap at 200 |
 
-## workflow-store.test.ts (35 tests)
+## workflow-store.test.ts (45 tests)
 
-28 unit + 7 reconcileOnStartup integration
+28 unit + 17 reconcileOnStartup integration
 
 ### Disk Persistence (7)
 | Test | Coverage |
@@ -88,47 +88,132 @@ Run: `cd plugins/aristotle-bridge && bunx vitest run`
 | should_mark_error_with_message | Error + message |
 | should_mark_undone_status | Undone mark |
 
-### Queries (7)
+### Queries (12)
 | Test | Coverage |
 |------|----------|
-| should_find_workflow_by_workflow_id | Find by workflowId |
-| should_find_workflow_by_session_id | Find by sessionId |
 | should_return_only_running_workflows | getActive filter |
 | should_return_empty_active_list_when_no_running_workflows | Empty active |
-| should_return_running/completed/error/undone/cancelled_status | Retrieve polymorphic |
+| should_find_workflow_by_workflow_id | Find by workflowId |
+| should_find_workflow_by_session_id | Find by sessionId |
+| should_return_running_status_for_running_workflow | Retrieve running status |
+| should_return_completed_result | Retrieve completed with result |
+| should_return_empty_string_result_when_completed_without_result | Retrieve completed with empty result |
+| should_return_error_status | Retrieve error status |
 | should_return_error_for_unknown_workflow | Unknown ID |
+| should_return_undone_status | Retrieve undone status |
+| should_return_cancelled_status | Retrieve cancelled status |
 | should_overwrite_on_duplicate_workflow_id | Duplicate ID overwrite |
 
-### reconcileOnStartup (7)
+### reconcileOnStartup (17)
 | Test | Coverage |
 |------|----------|
 | should_mark_running_as_completed_if_assistant_exists | Has assistant -> completed |
-| should_leave_running_when_no_assistant_message_found | No assistant -> keep running |
-| should_leave_running_when_session_has_no_messages | No messages -> keep running |
+| should_leave_running_when_no_assistant_message_found | No assistant -> error |
+| should_leave_running_when_session_has_no_messages | No messages -> error |
 | should_mark_error_for_deleted_session | Session 404 -> error |
 | should_skip_non_running_workflows_during_reconciliation | Skip non-running |
 | should_reconcile_in_batches_of_5 | Batch-5 concurrency |
 | should_continue_on_individual_reconciliation_failure | Single failure no batch impact |
+| should_skip_workflows_from_other_instance_during_reconcile | Instance isolation: skip other |
+| should_stamp_instanceId_on_register | Stamp instanceId on register |
+| should_overwrite_caller_instanceId_on_register | Overwrite spoofed instanceId |
+| should_skip_old_workflows_without_instanceId_during_reconcile | Skip legacy no-instanceId workflows |
+| should_not_touch_chain_pending_from_other_instance | Instance isolation: chain_pending |
+| should_not_log_chain_broken_from_other_instance | Instance isolation: chain_broken |
+| should_mark_error_on_reconcile_timeout | Timeout -> error |
+| should_mark_error_on_malformed_api_response | Malformed response -> error |
+| should_preserve_other_instance_entries_on_saveToDisk | Multi-instance disk merge |
+| should_evict_other_instance_completed_workflows_when_at_capacity | Cross-instance capacity eviction |
 
-## idle-handler.test.ts (7 tests)
+## idle-handler.test.ts (44 tests)
 
+### IdleEventHandler — Skip guards (5)
 | Test | Coverage |
 |------|----------|
 | should_skip_cancelled_workflow | Skip cancelled |
 | should_skip_completed_workflow | Skip completed |
-| should_collect_result_from_completed_session | running -> messages -> markCompleted |
-| should_handle_message_fetch_error_gracefully | API error -> markError |
-| should_skip_unknown_session | Unregistered session -> skip |
 | should_skip_undone_workflow | Skip undone |
 | should_skip_error_workflow | Skip error |
+| should_skip_unknown_session | Unregistered session -> skip |
+
+### IdleEventHandler — R→C Chain driving (9)
+| Test | Coverage |
+|------|----------|
+| should_mark_completed_for_non_chain_agent | Non-chain agent fallback: markCompleted |
+| should_drive_R_to_C_chain | R agent: fire_sub -> launch C |
+| should_mark_chain_broken_on_subprocess_error | Subprocess stderr -> chain_broken |
+| should_mark_chain_broken_on_workflow_id_mismatch | Mismatched workflow_id -> chain_broken |
+| should_mark_chain_broken_on_executor_launch_error_status | Launch returns error -> chain_broken |
+| should_mark_chain_broken_on_executor_launch_throw | Launch throws -> chain_broken |
+| should_mark_completed_on_done_action | R done action -> markCompleted |
+| should_mark_chain_broken_on_notify_action | R notify action -> chain_broken |
+| should_mark_chain_broken_on_unexpected_action | Unknown action -> chain_broken |
+
+### IdleEventHandler — C completion (5)
+| Test | Coverage |
+|------|----------|
+| should_complete_on_C_done | C done action -> markCompleted |
+| should_mark_chain_broken_on_C_notify | C notify action -> chain_broken |
+| should_handle_C_fire_sub_rereflect | C fire_sub R -> re-launch R |
+| should_mark_chain_broken_on_C_launch_error_status | C launch error -> chain_broken |
+| should_mark_chain_broken_when_error_after_chain_pending | Error after chain_pending -> chain_broken |
+
+### IdleEventHandler — Error handling (2)
+| Test | Coverage |
+|------|----------|
+| should_preserve_cancelled_when_abort_race | Abort race: preserve cancelled |
+| should_mark_error_for_non_chain_failure | Non-chain fetch error -> markError |
+
+### IdleEventHandler — resolveMcpProjectDir (3)
+| Test | Coverage |
+|------|----------|
+| should_use_env_var_when_set | ARISTOTLE_MCP_DIR priority |
+| should_fallback_to_cwd_when_no_env | Fallback to process.cwd() |
+| should_fallback_to_aristotle_project_dir_env | Fallback to ARISTOTLE_PROJECT_DIR |
+
+### IdleEventHandler — callMCP error parsing (2)
+| Test | Coverage |
+|------|----------|
+| should_parse_stdout_error_on_nonzero_exit | Nonzero exit: parse stdout JSON error |
+| should_return_node_error_when_no_stdout | Spawn error: return node error message |
+
+### IdleEventHandler — Trigger file — reflect (5)
+| Test | Coverage |
+|------|----------|
+| should_ignore_when_no_trigger_file | No .trigger-reflect.json -> skip |
+| should_process_trigger_and_launch_R | Parse trigger -> orchestrate_start -> launch R |
+| should_delete_trigger_on_parse_error | Invalid JSON -> delete trigger |
+| should_delete_trigger_on_subprocess_error | Subprocess error -> delete trigger |
+| should_delete_trigger_on_R_launch_failure | R launch failure -> delete trigger |
+
+### IdleEventHandler — Trigger file — abort (9)
+| Test | Coverage |
+|------|----------|
+| should_abort_all_active_workflows | Empty trigger -> abort all active |
+| should_abort_specific_workflow_ids_only | Filtered trigger -> abort specific IDs |
+| should_skip_non_running_workflows | Skip completed/error in active list |
+| should_delete_trigger_file_after_processing | Always delete after processing |
+| should_delete_trigger_file_on_parse_error | Invalid JSON -> delete trigger |
+| should_call_session_abort_for_each_workflow | Call session.abort per workflow |
+| should_cancel_without_abort_when_sessionId_missing | Missing sessionId -> cancel only |
+| should_not_cancel_when_no_active_workflows | Empty active -> no-op |
+| should_continue_cancelling_when_one_fails | Partial failure tolerance |
+
+### IdleEventHandler — notifyParent (4)
+| Test | Coverage |
+|------|----------|
+| should_notify_parent_on_R_done | R done -> notify parent |
+| should_notify_parent_on_C_done | C done -> notify parent (review prompt) |
+| should_not_notify_when_parentSessionId_empty | Empty parent -> skip notify |
+| should_not_throw_when_notify_fails | Notify failure is best-effort |
 
 ## executor.test.ts (12 tests)
 
 | Test | Coverage |
 |------|----------|
 | should_create_session_promptAsync_and_register | Full launch flow |
-| should_extract_snapshot_when_targetSessionId_and_not_exists | Extract snapshot when targetSessionId present |
-| should_skip_snapshot_when_already_exists | Skip when snapshot exists |
+| should_extract_snapshot_when_targetSessionId | Extract snapshot when targetSessionId present |
+| should_reuse_snapshot_when_exists_for_this_workflow | Reuse snapshot when exists for this workflowId |
 | should_continue_launch_when_snapshot_extraction_fails | Snapshot failure non-blocking |
 | should_skip_snapshot_when_no_target_session_id | Skip without targetSessionId |
 | should_reject_and_abort_session_when_store_full | Store full -> reject + abort |
@@ -139,7 +224,7 @@ Run: `cd plugins/aristotle-bridge && bunx vitest run`
 | should_return_error_when_session_create_fails | session.create fail returns structured error |
 | should_overwrite_existing_workflow_on_re_register | Duplicate workflowId overwrite |
 
-## index.test.ts (22 tests)
+## index.test.ts (23 tests)
 
 ### Tool Registration (2)
 | Test | Coverage |
@@ -155,12 +240,15 @@ Run: `cd plugins/aristotle-bridge && bunx vitest run`
 | should_ignore_idle_event_without_string_sessionID | Non-string sessionID ignored |
 | should_ignore_idle_event_when_sessionID_is_undefined | Undefined ignored |
 
-### Marker Lifecycle (5)
+### Marker Lifecycle (6)
 | Test | Coverage |
 |------|----------|
 | should_create_bridge_active_marker_on_startup | Create .bridge-active |
 | should_overwrite_stale_marker_on_startup | Overwrite stale marker |
-| should_remove_marker_on_exit/SIGTERM/SIGINT/SIGHUP | Cleanup on exit/signals |
+| should_remove_marker_on_exit | Cleanup on exit |
+| should_remove_marker_on_SIGTERM | Cleanup on SIGTERM |
+| should_remove_marker_on_SIGINT | Cleanup on SIGINT |
+| should_remove_marker_on_SIGHUP | Cleanup on SIGHUP |
 
 ### aristotle_check (2)
 | Test | Coverage |
@@ -168,19 +256,22 @@ Run: `cd plugins/aristotle-bridge && bunx vitest run`
 | should_return_all_running_workflows_when_no_workflow_id | No args -> getActive |
 | should_delegate_to_retrieve_when_workflow_id_provided | With args -> retrieve |
 
-### aristotle_abort (5)
+### aristotle_abort (7)
 | Test | Coverage |
 |------|----------|
 | should_cancel_running_workflow | running -> abort + cancel |
 | should_return_cancelled_for_already_cancelled_workflow | Idempotent: already cancelled |
-| should_return_current_status_for_completed/error/undone_workflow | Terminal state returns current |
+| should_return_current_status_for_completed_workflow | Terminal: completed returns current |
+| should_return_current_status_for_error_workflow | Terminal: error returns current |
+| should_return_current_status_for_undone_workflow | Terminal: undone returns current |
 | should_return_error_for_unknown_workflow_id | Unknown workflow |
 | should_succeed_even_if_abort_api_fails | API failure still cancels |
 
-### aristotle_fire_o (1)
+### aristotle_fire_o (2)
 | Test | Coverage |
 |------|----------|
-| should_fire_o_tool_handler_map_params_to_executor_launch | Param mapping snake->camel |
+| should_default_target_session_id_to_tool_context_sessionID_when_empty | Empty target_session_id defaults to tool context sessionID |
+| should_use_explicit_target_session_id_when_provided | Explicit target_session_id used when provided |
 
 ---
 
