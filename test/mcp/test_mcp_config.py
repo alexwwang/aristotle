@@ -8,7 +8,6 @@ import pytest
 
 
 class TestConfig:
-
     def test_resolve_repo_dir_env_override(self, tmp_repo):
         from aristotle_mcp.config import resolve_repo_dir
 
@@ -32,6 +31,7 @@ class TestConfig:
         # Re-import to pick up new env var
         import importlib
         import aristotle_mcp.config as cfg
+
         importlib.reload(cfg)
         assert str(cfg.SKILL_DIR) == override
         # Restore

@@ -167,6 +167,7 @@ def _build_reflector_prompt(
     token_budget: int = 0,  # kept for backward compat, ignored
 ) -> str:
     from aristotle_mcp.config import resolve_prompt_mode
+
     safe_focus = focus_hint[:200]
 
     effective_mode = resolve_prompt_mode()
@@ -248,7 +249,9 @@ CHECK: <describe how to verify>
 """
 
 
-def _build_scoring_prompt(query: str, domain: str, task_goal: str, rule_path: str) -> str:
+def _build_scoring_prompt(
+    query: str, domain: str, task_goal: str, rule_path: str
+) -> str:
     return SCORING_PROMPT_TEMPLATE.format(
         query=query[:500],
         domain=domain or "general",
@@ -273,9 +276,12 @@ def _build_compress_prompt(
     )
 
 
-def _build_revise_prompt(rule_path: str, original_content: str,
-                          feedback: str, draft_summary: str) -> str:
-    _esc = lambda s: s.replace("{", "{{").replace("}", "}}")
+def _build_revise_prompt(
+    rule_path: str, original_content: str, feedback: str, draft_summary: str
+) -> str:
+    def _esc(s: str) -> str:
+        return s.replace("{", "{{").replace("}", "}}")
+
     safe_feedback = feedback[:2000]
     return REVISE_PROMPT_TEMPLATE.format(
         rule_path=rule_path,

@@ -10,7 +10,7 @@ from pathlib import Path
 
 from aristotle_mcp.server import (
     _load_workflow,
-    _save_workflow,
+    _save_workflow,  # noqa: F401 — re-exported for test imports
     commit_rule,
     init_repo_tool,
     orchestrate_on_event,
@@ -22,10 +22,15 @@ from aristotle_mcp.server import (
 
 # ── General helpers ──────────────────────────────────────────────────
 
+
 def _make_verified_rule(category: str = "HALLUCINATION", **kwargs) -> str:
     """Create + stage + commit a rule, return file_path."""
     init_repo_tool()
-    w = write_rule(content=f"## Test rule for {category}\n**Rule**: check", category=category, **kwargs)
+    w = write_rule(
+        content=f"## Test rule for {category}\n**Rule**: check",
+        category=category,
+        **kwargs,
+    )
     assert w["success"], f"write_rule failed: {w['message']}"
     stage_rule(w["file_path"])
     c = commit_rule(w["file_path"])
@@ -36,7 +41,11 @@ def _make_verified_rule(category: str = "HALLUCINATION", **kwargs) -> str:
 def _make_staging_rule(category: str = "HALLUCINATION", **kwargs) -> str:
     """Create + stage a rule (no commit), return file_path."""
     init_repo_tool()
-    w = write_rule(content=f"## Test rule for {category}\n**Rule**: check", category=category, **kwargs)
+    w = write_rule(
+        content=f"## Test rule for {category}\n**Rule**: check",
+        category=category,
+        **kwargs,
+    )
     stage_rule(w["file_path"])
     return w["file_path"]
 
@@ -49,41 +58,64 @@ def _start_learn_workflow(query: str, **extra_args) -> dict:
 
 # ── Reflect workflow helpers ─────────────────────────────────────────
 
+
 def _start_reflect_workflow(target_session_id="ses_test123", **extra) -> dict:
     args = {"target_session_id": target_session_id, **extra}
     return orchestrate_start("reflect", json.dumps(args))
 
 
-def _fire_r_done_event(workflow_id: str, session_id: str = "ses_r123", result: str = "DRAFT persisted.") -> dict:
+def _fire_r_done_event(
+    workflow_id: str, session_id: str = "ses_r123", result: str = "DRAFT persisted."
+) -> dict:
     # When R finishes successfully, it creates a DRAFT file.
     # Simulate this by auto-creating the DRAFT for the workflow's sequence,
     # but only if the result indicates success (contains "DRAFT" or doesn't
     # indicate early termination).
     w = _load_workflow(workflow_id)
     if w and w.get("sequence"):
-        no_draft_signals = ["No actionable errors", "No session data", "Session was clean"]
+        no_draft_signals = [
+            "No actionable errors",
+            "No session data",
+            "Session was clean",
+        ]
         if not any(sig in result for sig in no_draft_signals):
             _create_draft_file(w["sequence"])
 
-    return orchestrate_on_event("subagent_done", json.dumps({
-        "workflow_id": workflow_id,
-        "session_id": session_id,
-        "result": result,
-    }))
+    return orchestrate_on_event(
+        "subagent_done",
+        json.dumps(
+            {
+                "workflow_id": workflow_id,
+                "session_id": session_id,
+                "result": result,
+            }
+        ),
+    )
 
 
-def _fire_c_done_event(workflow_id: str, result: str = "Committed: 2, Staged: 0") -> dict:
-    return orchestrate_on_event("subagent_done", json.dumps({
-        "workflow_id": workflow_id,
-        "session_id": "ses_c456",
-        "result": result,
-    }))
+def _fire_c_done_event(
+    workflow_id: str, result: str = "Committed: 2, Staged: 0"
+) -> dict:
+    return orchestrate_on_event(
+        "subagent_done",
+        json.dumps(
+            {
+                "workflow_id": workflow_id,
+                "session_id": "ses_c456",
+                "result": result,
+            }
+        ),
+    )
 
 
 # ── Review workflow helpers ──────────────────────────────────────────
 
-def _setup_reflection_record(sequence: int = 1, status: str = "auto_committed", **extra) -> None:
+
+def _setup_reflection_record(
+    sequence: int = 1, status: str = "auto_committed", **extra
+) -> None:
     from aristotle_mcp.config import resolve_repo_dir
+
     state_path = resolve_repo_dir().parent / "aristotle-state.json"
     state_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -105,7 +137,9 @@ def _setup_reflection_record(sequence: int = 1, status: str = "auto_committed", 
         "reflector_session_id": extra.get("reflector_session_id", "ses_r456"),
         "rules_count": extra.get("rules_count", 2),
         "launched_at": extra.get("launched_at", "2026-04-22T10:00:00+08:00"),
-        "draft_file_path": str(resolve_repo_dir().parent / "aristotle-drafts" / f"rec_{sequence}.md"),
+        "draft_file_path": str(
+            resolve_repo_dir().parent / "aristotle-drafts" / f"rec_{sequence}.md"
+        ),
     }
     if "re_reflect_count" in extra:
         target_record["re_reflect_count"] = extra["re_reflect_count"]
@@ -118,12 +152,17 @@ def _setup_reflection_record(sequence: int = 1, status: str = "auto_committed", 
         target_record["re_reflect_count"] = existing["re_reflect_count"]
 
     records[sequence - 1] = target_record
-    state_path.write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
+    state_path.write_text(
+        json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
 
 
-def _create_draft_file(sequence: int, content: str = "## DRAFT Report\nTest content") -> Path:
+def _create_draft_file(
+    sequence: int, content: str = "## DRAFT Report\nTest content"
+) -> Path:
     """Create a DRAFT file on disk."""
     from aristotle_mcp.config import resolve_repo_dir
+
     drafts_dir = resolve_repo_dir().parent / "aristotle-drafts"
     drafts_dir.mkdir(parents=True, exist_ok=True)
     path = drafts_dir / f"rec_{sequence}.md"

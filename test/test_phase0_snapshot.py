@@ -15,11 +15,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
 
 from _orch_helpers import (
     _load_workflow,
-    _start_reflect_workflow,
     init_repo_tool,
     orchestrate_on_event,
     orchestrate_start,
@@ -30,16 +28,20 @@ from _orch_helpers import (
 # UT-1: resolve_sessions_dir
 # ═══════════════════════════════════════════════════════════
 
-class TestResolveSessionsDir:
 
-    def test_should_resolve_sessions_dir_under_opencode_config(self, tmp_path, monkeypatch):
+class TestResolveSessionsDir:
+    def test_should_resolve_sessions_dir_under_opencode_config(
+        self, tmp_path, monkeypatch
+    ):
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
         from aristotle_mcp.config import resolve_sessions_dir
+
         result = resolve_sessions_dir()
         assert result == tmp_path / ".config" / "opencode" / "aristotle-sessions"
 
     def test_should_have_sessions_dir_name_constant(self):
         from aristotle_mcp.config import SESSIONS_DIR_NAME
+
         assert SESSIONS_DIR_NAME == "aristotle-sessions"
 
 
@@ -47,10 +49,11 @@ class TestResolveSessionsDir:
 # UT-2/3: _build_reflector_prompt with session_file
 # ═══════════════════════════════════════════════════════════
 
-class TestBuildReflectorPrompt:
 
+class TestBuildReflectorPrompt:
     def test_should_include_session_file_in_reflector_prompt(self):
         from aristotle_mcp._orch_prompts import _build_reflector_prompt
+
         prompt = _build_reflector_prompt(
             target_session_id="ses_test",
             focus_hint="last",
@@ -65,6 +68,7 @@ class TestBuildReflectorPrompt:
 
     def test_should_handle_empty_session_file_gracefully(self):
         from aristotle_mcp._orch_prompts import _build_reflector_prompt
+
         prompt = _build_reflector_prompt(
             target_session_id="ses_test",
             focus_hint="last",
@@ -78,21 +82,31 @@ class TestBuildReflectorPrompt:
 # UT-4: orchestrate_start passes session_file to prompt
 # ═══════════════════════════════════════════════════════════
 
-class TestOrchestrateStartSessionFile:
 
+class TestOrchestrateStartSessionFile:
     def test_should_pass_session_file_to_reflector_prompt(self, tmp_repo):
-        result = orchestrate_start("reflect", json.dumps({
-            "target_session_id": "ses_target1",
-            "session_file": "/tmp/ses_target1_snapshot.json",
-        }))
+        result = orchestrate_start(
+            "reflect",
+            json.dumps(
+                {
+                    "target_session_id": "ses_target1",
+                    "session_file": "/tmp/ses_target1_snapshot.json",
+                }
+            ),
+        )
         assert result["action"] == "fire_sub"
         assert "/tmp/ses_target1_snapshot.json" in result["sub_prompt"]
 
     def test_should_work_without_session_file(self, tmp_repo):
         """Backward compatibility: session_file is optional."""
-        result = orchestrate_start("reflect", json.dumps({
-            "target_session_id": "ses_target1",
-        }))
+        result = orchestrate_start(
+            "reflect",
+            json.dumps(
+                {
+                    "target_session_id": "ses_target1",
+                }
+            ),
+        )
         assert result["action"] == "fire_sub"
 
 
@@ -100,25 +114,37 @@ class TestOrchestrateStartSessionFile:
 # UT-5/6: use_bridge detection
 # ═══════════════════════════════════════════════════════════
 
-class TestBridgeDetection:
 
-    def test_should_return_use_bridge_true_when_marker_exists(self, tmp_path, monkeypatch):
+class TestBridgeDetection:
+    def test_should_return_use_bridge_true_when_marker_exists(
+        self, tmp_path, monkeypatch
+    ):
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
         sessions_dir = tmp_path / ".config" / "opencode" / "aristotle-sessions"
         sessions_dir.mkdir(parents=True, exist_ok=True)
         (sessions_dir / ".bridge-active").write_text("{}", encoding="utf-8")
 
-        result = orchestrate_start("reflect", json.dumps({
-            "target_session_id": "ses_target1",
-        }))
+        result = orchestrate_start(
+            "reflect",
+            json.dumps(
+                {
+                    "target_session_id": "ses_target1",
+                }
+            ),
+        )
         assert result.get("use_bridge") is True
 
     def test_should_return_use_bridge_false_by_default(self, tmp_path, monkeypatch):
         # No .bridge-active file → use_bridge should be False
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
-        result = orchestrate_start("reflect", json.dumps({
-            "target_session_id": "ses_target1",
-        }))
+        result = orchestrate_start(
+            "reflect",
+            json.dumps(
+                {
+                    "target_session_id": "ses_target1",
+                }
+            ),
+        )
         assert result.get("use_bridge") is False
 
 
@@ -126,17 +152,20 @@ class TestBridgeDetection:
 # UT-7/8/9/10b: on_undo MCP tool
 # ═══════════════════════════════════════════════════════════
 
-class TestOnUndo:
 
+class TestOnUndo:
     def test_should_mark_workflow_undone_on_undo(self, tmp_repo):
         init_repo_tool()
         from aristotle_mcp._tools_undo import on_undo
         from aristotle_mcp.server import _save_workflow
 
-        _save_workflow("wf_test_undo_1", {
-            "phase": "reflecting",
-            "status": "running",
-        })
+        _save_workflow(
+            "wf_test_undo_1",
+            {
+                "phase": "reflecting",
+                "status": "running",
+            },
+        )
         result = on_undo("wf_test_undo_1", undo_scope="session", timestamp=1234567890)
         assert result["status"] == "undone"
         assert result["workflow_id"] == "wf_test_undo_1"
@@ -149,6 +178,7 @@ class TestOnUndo:
     def test_should_return_unknown_for_nonexistent_undo(self, tmp_repo):
         init_repo_tool()
         from aristotle_mcp._tools_undo import on_undo
+
         result = on_undo("wf_nonexistent")
         assert result["status"] == "unknown_workflow"
 
@@ -182,51 +212,74 @@ class TestOnUndo:
 # UT-10: orchestrate_on_event ignores undone workflow
 # ═══════════════════════════════════════════════════════════
 
-class TestUndoneShortCircuit:
 
+class TestUndoneShortCircuit:
     def test_should_ignore_events_for_undone_workflow(self, tmp_repo):
         init_repo_tool()
         from aristotle_mcp.server import _save_workflow
 
-        _save_workflow("wf_" + "a" * 16, {
-            "phase": "reflecting",
-            "status": "undone",
-        })
-        result = orchestrate_on_event("subagent_done", json.dumps({
-            "workflow_id": "wf_" + "a" * 16,
-            "session_id": "ses_late",
-            "result": "Late result that should be ignored",
-        }))
+        _save_workflow(
+            "wf_" + "a" * 16,
+            {
+                "phase": "reflecting",
+                "status": "undone",
+            },
+        )
+        result = orchestrate_on_event(
+            "subagent_done",
+            json.dumps(
+                {
+                    "workflow_id": "wf_" + "a" * 16,
+                    "session_id": "ses_late",
+                    "result": "Late result that should be ignored",
+                }
+            ),
+        )
         assert result["action"] == "notify"
-        assert "undone" in result.get("message", "").lower() or "ignored" in result.get("message", "").lower()
+        assert (
+            "undone" in result.get("message", "").lower()
+            or "ignored" in result.get("message", "").lower()
+        )
 
     def test_should_ignore_events_for_cancelled_workflow(self, tmp_repo):
         init_repo_tool()
         from aristotle_mcp.server import _save_workflow
 
-        _save_workflow("wf_" + "b" * 16, {
-            "phase": "reflecting",
-            "status": "cancelled",
-        })
-        result = orchestrate_on_event("subagent_done", json.dumps({
-            "workflow_id": "wf_" + "b" * 16,
-            "session_id": "ses_late",
-            "result": "Late result that should be ignored",
-        }))
+        _save_workflow(
+            "wf_" + "b" * 16,
+            {
+                "phase": "reflecting",
+                "status": "cancelled",
+            },
+        )
+        result = orchestrate_on_event(
+            "subagent_done",
+            json.dumps(
+                {
+                    "workflow_id": "wf_" + "b" * 16,
+                    "session_id": "ses_late",
+                    "result": "Late result that should be ignored",
+                }
+            ),
+        )
         assert result["action"] == "notify"
-        assert "cancelled" in result.get("message", "").lower() or "ignored" in result.get("message", "").lower()
+        assert (
+            "cancelled" in result.get("message", "").lower()
+            or "ignored" in result.get("message", "").lower()
+        )
 
 
 # ═══════════════════════════════════════════════════════════
 # UT-11: Compact prompt mode selection (config-based)
 # ═══════════════════════════════════════════════════════════
 
-class TestCompactPromptMode:
 
+class TestCompactPromptMode:
     def test_compact_mode_via_env(self, monkeypatch):
         """ARISTOTLE_PROMPT_MODE=compact → compact prompt."""
         monkeypatch.setenv("ARISTOTLE_PROMPT_MODE", "compact")
         from aristotle_mcp._orch_prompts import _build_reflector_prompt
+
         prompt = _build_reflector_prompt(
             target_session_id="ses_test",
             focus_hint="last",
@@ -247,6 +300,7 @@ class TestCompactPromptMode:
         config_file.write_text('{"prompt_mode": "compact"}\n')
 
         from aristotle_mcp._orch_prompts import _build_reflector_prompt
+
         prompt = _build_reflector_prompt(
             target_session_id="ses_test",
             focus_hint="last",
@@ -261,6 +315,7 @@ class TestCompactPromptMode:
     def test_full_mode_by_default(self):
         """No config → default full mode."""
         from aristotle_mcp._orch_prompts import _build_reflector_prompt
+
         prompt = _build_reflector_prompt(
             target_session_id="ses_test",
             focus_hint="last",
@@ -276,6 +331,7 @@ class TestCompactPromptMode:
         """ARISTOTLE_PROMPT_MODE=full → full prompt."""
         monkeypatch.setenv("ARISTOTLE_PROMPT_MODE", "full")
         from aristotle_mcp._orch_prompts import _build_reflector_prompt
+
         prompt = _build_reflector_prompt(
             target_session_id="ses_test",
             focus_hint="last",
@@ -295,6 +351,7 @@ class TestCompactPromptMode:
         config_file.write_text('{"prompt_mode": "full"}\n')
 
         from aristotle_mcp._orch_prompts import _build_reflector_prompt
+
         prompt = _build_reflector_prompt(
             target_session_id="ses_test",
             focus_hint="last",

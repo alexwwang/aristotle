@@ -2,10 +2,11 @@
 
 try:
     from aristotle_mcp import server as _server
-    _has_orchestrate_review_action = hasattr(_server, 'orchestrate_review_action')
-    _has_next_sequence = hasattr(_server, '_next_sequence')
-    _has_ensure_repo_initialized = hasattr(_server, '_ensure_repo_initialized')
-    _has_cleanup_stale_workflows = hasattr(_server, '_cleanup_stale_workflows')
+
+    _has_orchestrate_review_action = hasattr(_server, "orchestrate_review_action")
+    _has_next_sequence = hasattr(_server, "_next_sequence")
+    _has_ensure_repo_initialized = hasattr(_server, "_ensure_repo_initialized")
+    _has_cleanup_stale_workflows = hasattr(_server, "_cleanup_stale_workflows")
     _NEW_APIS_AVAILABLE = (
         _has_orchestrate_review_action
         and _has_next_sequence
@@ -13,7 +14,7 @@ try:
         and _has_cleanup_stale_workflows
     )
     if _NEW_APIS_AVAILABLE:
-        from aristotle_mcp.server import (
+        from aristotle_mcp.server import (  # noqa: F401
             orchestrate_review_action,
             _next_sequence,
             _ensure_repo_initialized,

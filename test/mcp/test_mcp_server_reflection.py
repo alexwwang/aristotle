@@ -331,9 +331,7 @@ class TestCompleteReflectionRecord:
         assert result["success"] is False
         assert "corrupted" in result["message"]
 
-    def test_complete_multiple_records_only_updates_target(
-        self, tmp_path, monkeypatch
-    ):
+    def test_complete_multiple_records_only_updates_target(self, tmp_path, monkeypatch):
         monkeypatch.setenv("ARISTOTLE_REPO_DIR", str(tmp_path / "repo"))
         from aristotle_mcp.server import (
             complete_reflection_record,

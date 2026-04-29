@@ -28,6 +28,7 @@ except (OSError, TypeError):
 
 # ── TC-M7-01: Backward compatibility ─────────────────────────────────
 
+
 class TestComputeDeltaBackwardCompat:
     """M7: compute_delta 向后兼容。"""
 
@@ -44,6 +45,7 @@ class TestComputeDeltaBackwardCompat:
 
 # ── TC-M7-02: sample_size=0 forces Δ=0 ───────────────────────────────
 
+
 @pytest.mark.skipif(
     not _M7_DELTA_HAS_SAMPLE_SIZE,
     reason="M7 sample_size not yet implemented in compute_delta",
@@ -58,6 +60,7 @@ class TestComputeDeltaZeroSample:
 
 
 # ── TC-M7-03: Log-normalization numeric correctness ──────────────────
+
 
 @pytest.mark.skipif(
     not _M7_DELTA_HAS_SAMPLE_SIZE,
@@ -77,9 +80,7 @@ class TestComputeDeltaLogNorm:
     )
     def test_log_norm_values(self, sample_size, expected_approx):
         """log-normalization 在不同 sample_size 下的值。"""
-        delta = compute_delta(
-            confidence=0.9, risk_level="low", sample_size=sample_size
-        )
+        delta = compute_delta(confidence=0.9, risk_level="low", sample_size=sample_size)
         # 手动计算预期值
         norm = math.log(sample_size + 1) / math.log(MAX_SAMPLES + 1)
         expected = 0.9 * (1.0 - 0.2) * norm  # confidence * (1 - risk_weight) * norm
@@ -87,22 +88,19 @@ class TestComputeDeltaLogNorm:
 
     def test_high_risk_never_auto(self):
         """high risk 即使 sample_size=20 也为 manual。"""
-        delta = compute_delta(
-            confidence=0.9, risk_level="high", sample_size=20
-        )
+        delta = compute_delta(confidence=0.9, risk_level="high", sample_size=20)
         level = decide_audit_level(delta)
         assert level == "manual"
 
     def test_low_risk_max_sample_auto(self):
         """low risk + sample_size=20 → auto。"""
-        delta = compute_delta(
-            confidence=0.9, risk_level="low", sample_size=20
-        )
+        delta = compute_delta(confidence=0.9, risk_level="low", sample_size=20)
         level = decide_audit_level(delta)
         assert level == "auto"
 
 
 # ── TC-M7-04: Negative sample_size validation ────────────────────────
+
 
 @pytest.mark.skipif(
     not _M7_DELTA_HAS_SAMPLE_SIZE,
@@ -118,6 +116,7 @@ class TestComputeDeltaValidation:
 
 
 # ── TC-M7-05: get_audit_decision integration ─────────────────────────
+
 
 @pytest.mark.skipif(
     not _M7_AUDIT_HAS_SAMPLE_SIZE,

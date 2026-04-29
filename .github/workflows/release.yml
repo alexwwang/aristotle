@@ -24,7 +24,7 @@ jobs:
         run: uv sync --python 3.12
 
       - name: Run pytest
-        run: uv run pytest test/test_mcp.py -v --tb=short
+        run: uv run pytest test/ -v --tb=short
 
       - name: Run static tests
         run: bash test.sh

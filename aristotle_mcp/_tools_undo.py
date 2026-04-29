@@ -1,4 +1,5 @@
 """Phase 0: on_undo MCP tool — mark workflow as undone."""
+
 from __future__ import annotations
 
 from aristotle_mcp._orch_state import _load_workflow, _save_workflow

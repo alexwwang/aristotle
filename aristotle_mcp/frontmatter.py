@@ -80,7 +80,7 @@ def stream_filter_rules(
             values = " ".join(m.group(2) for m in _KV_RE.finditer(fm_text))
             if not keyword_re.search(values):
                 # Also search content portion (after frontmatter) within the head buffer
-                content_part = head[fm_match.end():] if fm_match else head
+                content_part = head[fm_match.end() :] if fm_match else head
                 if not keyword_re.search(content_part):
                     continue
 

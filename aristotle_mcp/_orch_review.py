@@ -6,7 +6,6 @@ from pathlib import Path
 
 from aristotle_mcp._orch_prompts import _build_reflector_prompt, _build_revise_prompt
 from aristotle_mcp._orch_state import _load_workflow, _save_workflow, _next_sequence
-from aristotle_mcp._orch_parsers import _parse_revised_rule
 from aristotle_mcp._tools_rules import list_rules, commit_rule, reject_rule
 from aristotle_mcp._tools_reflection import complete_reflection_record
 from aristotle_mcp._utils import _safe_resolve
@@ -34,8 +33,11 @@ def orchestrate_review_action(
         return {"action": "notify", "message": "🦉 Workflow not found."}
 
     if workflow.get("phase") != "review":
-        return {"action": "notify", "workflow_id": workflow_id,
-                "message": f"🦉 Workflow not in review phase (current: {workflow.get('phase')})."}
+        return {
+            "action": "notify",
+            "workflow_id": workflow_id,
+            "message": f"🦉 Workflow not in review phase (current: {workflow.get('phase')}).",
+        }
 
     sequence = workflow.get("sequence")
 
@@ -65,7 +67,9 @@ def orchestrate_review_action(
                     committed += 1  # already committed by C
         else:
             # Legacy fallback: keyword search
-            rules_result = list_rules(status_filter="all", keyword=target_session, limit=20)
+            rules_result = list_rules(
+                status_filter="all", keyword=target_session, limit=20
+            )
             for r in rules_result.get("rules", []):
                 meta = r.get("metadata", {})
                 if meta.get("status") == "staging":
@@ -77,8 +81,9 @@ def orchestrate_review_action(
                 elif meta.get("status") == "verified":
                     committed += 1
 
-        complete_reflection_record(sequence=sequence, status="auto_committed",
-                                   rules_count=committed or None)
+        complete_reflection_record(
+            sequence=sequence, status="auto_committed", rules_count=committed or None
+        )
 
         workflow["phase"] = "done"
         _save_workflow(workflow_id, workflow)
@@ -86,7 +91,8 @@ def orchestrate_review_action(
         return {
             "action": "notify",
             "workflow_id": workflow_id,
-            "message": f"✅ Review confirmed. {committed} rules committed." + (f" ⚠️ {failed} failed." if failed else ""),
+            "message": f"✅ Review confirmed. {committed} rules committed."
+            + (f" ⚠️ {failed} failed." if failed else ""),
         }
 
     elif action == "reject":
@@ -116,8 +122,11 @@ def orchestrate_review_action(
     elif action == "revise":
         displayed_rules = workflow.get("displayed_rules", [])
         if not displayed_rules:
-            return {"action": "notify", "workflow_id": workflow_id,
-                    "message": "🦉 No rules available to revise."}
+            return {
+                "action": "notify",
+                "workflow_id": workflow_id,
+                "message": "🦉 No rules available to revise.",
+            }
 
         rule_index = 0
         try:
@@ -127,14 +136,20 @@ def orchestrate_review_action(
             pass
 
         if not rule_index or rule_index < 1 or rule_index > len(displayed_rules):
-            return {"action": "notify", "workflow_id": workflow_id,
-                    "message": f"🦉 Invalid rule index. Choose 1-{len(displayed_rules)}."}
+            return {
+                "action": "notify",
+                "workflow_id": workflow_id,
+                "message": f"🦉 Invalid rule index. Choose 1-{len(displayed_rules)}.",
+            }
 
         rule_path = displayed_rules[rule_index - 1]
         resolved, err = _safe_resolve(rule_path)
         if not resolved or not resolved.exists():
-            return {"action": "notify", "workflow_id": workflow_id,
-                    "message": f"🦉 Rule file not found: {rule_path}"}
+            return {
+                "action": "notify",
+                "workflow_id": workflow_id,
+                "message": f"🦉 Rule file not found: {rule_path}",
+            }
 
         original_content = resolved.read_text(encoding="utf-8")
 
@@ -146,7 +161,9 @@ def orchestrate_review_action(
             if dp.exists():
                 draft_summary = dp.read_text(encoding="utf-8")[:1500]
 
-        o_prompt = _build_revise_prompt(rule_path, original_content, feedback, draft_summary)
+        o_prompt = _build_revise_prompt(
+            rule_path, original_content, feedback, draft_summary
+        )
 
         workflow["pending_role"] = "O"
         workflow["revise_rule_path"] = rule_path
@@ -161,8 +178,11 @@ def orchestrate_review_action(
     elif action == "re_reflect":
         re_reflect_count = workflow.get("re_reflect_count", 0)
         if re_reflect_count >= 3:
-            return {"action": "notify", "workflow_id": workflow_id,
-                    "message": "🦉 Max re-reflect (3) reached. Use /aristotle to start fresh."}
+            return {
+                "action": "notify",
+                "workflow_id": workflow_id,
+                "message": "🦉 Max re-reflect (3) reached. Use /aristotle to start fresh.",
+            }
 
         new_workflow_id = f"wf_{uuid.uuid4().hex[:16]}"
         new_sequence = _next_sequence()
@@ -176,21 +196,24 @@ def orchestrate_review_action(
             user_language=workflow.get("user_language", "en-US"),
         )
 
-        _save_workflow(new_workflow_id, {
-            "phase": "reflecting",
-            "command": "reflect",
-            "target_session_id": target_session_id,
-            "sequence": new_sequence,
-            "pending_role": "R",
-            "record_created": False,
-            "target_label": workflow.get("target_label", "unknown"),
-            "project_directory": workflow.get("project_directory", ""),
-            "focus": workflow.get("focus", "full"),
-            "user_language": workflow.get("user_language", "en-US"),
-            "parent_review_sequence": sequence,
-            "parent_workflow_id": workflow_id,
-            "re_reflect_count": re_reflect_count + 1,
-        })
+        _save_workflow(
+            new_workflow_id,
+            {
+                "phase": "reflecting",
+                "command": "reflect",
+                "target_session_id": target_session_id,
+                "sequence": new_sequence,
+                "pending_role": "R",
+                "record_created": False,
+                "target_label": workflow.get("target_label", "unknown"),
+                "project_directory": workflow.get("project_directory", ""),
+                "focus": workflow.get("focus", "full"),
+                "user_language": workflow.get("user_language", "en-US"),
+                "parent_review_sequence": sequence,
+                "parent_workflow_id": workflow_id,
+                "re_reflect_count": re_reflect_count + 1,
+            },
+        )
 
         workflow["phase"] = "done"
         _save_workflow(workflow_id, workflow)
@@ -204,8 +227,11 @@ def orchestrate_review_action(
         }
 
     else:
-        return {"action": "notify", "workflow_id": workflow_id,
-                "message": f"🦉 Unknown review action: {action}"}
+        return {
+            "action": "notify",
+            "workflow_id": workflow_id,
+            "message": f"🦉 Unknown review action: {action}",
+        }
 
 
 def register_orch_review_tools(mcp) -> None:

@@ -7,7 +7,7 @@ from aristotle_mcp.frontmatter import read_frontmatter_raw, update_frontmatter_f
 from aristotle_mcp._orch_state import _save_workflow, _next_sequence
 from aristotle_mcp._orch_prompts import _build_reflector_prompt
 from aristotle_mcp._tools_rules import list_rules
-from aristotle_mcp.config import resolve_repo_dir, MAX_FEEDBACK_REFLECT
+from aristotle_mcp.config import MAX_FEEDBACK_REFLECT
 
 
 def report_feedback(

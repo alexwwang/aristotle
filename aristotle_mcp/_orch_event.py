@@ -7,9 +7,17 @@ from aristotle_mcp.config import resolve_repo_dir
 from aristotle_mcp.frontmatter import read_frontmatter_raw, update_frontmatter_field
 from aristotle_mcp._orch_prompts import _build_checker_prompt
 from aristotle_mcp._orch_state import _load_workflow, _save_workflow
-from aristotle_mcp._orch_parsers import _parse_checker_result, _parse_revised_rule, _do_search_and_notify
-from aristotle_mcp._tools_rules import list_rules, stage_rule, get_audit_decision, commit_rule
-from aristotle_mcp._tools_reflection import create_reflection_record, complete_reflection_record
+from aristotle_mcp._orch_parsers import _parse_revised_rule, _do_search_and_notify
+from aristotle_mcp._tools_rules import (
+    list_rules,
+    stage_rule,
+    get_audit_decision,
+    commit_rule,
+)
+from aristotle_mcp._tools_reflection import (
+    create_reflection_record,
+    complete_reflection_record,
+)
 from aristotle_mcp._utils import _safe_resolve
 
 
@@ -25,20 +33,35 @@ def orchestrate_on_event(event_type: str, data_json: str) -> dict:
     try:
         data = json.loads(data_json)
     except (json.JSONDecodeError, TypeError):
-        return {"action": "notify", "workflow_id": "", "message": "🦉 Invalid event data."}
+        return {
+            "action": "notify",
+            "workflow_id": "",
+            "message": "🦉 Invalid event data.",
+        }
 
     workflow_id = data.get("workflow_id", "")
     if not re.fullmatch(r"wf_[0-9a-f]{16}", workflow_id):
-        return {"action": "notify", "workflow_id": workflow_id, "message": "🦉 Invalid workflow_id format."}
+        return {
+            "action": "notify",
+            "workflow_id": workflow_id,
+            "message": "🦉 Invalid workflow_id format.",
+        }
     workflow = _load_workflow(workflow_id)
     if not workflow:
-        return {"action": "notify", "workflow_id": workflow_id, "message": f"🦉 Unknown workflow: {workflow_id}"}
+        return {
+            "action": "notify",
+            "workflow_id": workflow_id,
+            "message": f"🦉 Unknown workflow: {workflow_id}",
+        }
 
     # Phase 0: undone/cancelled workflow short-circuit
     if workflow.get("status") in ("undone", "cancelled"):
         reason = "undone" if workflow.get("status") == "undone" else "cancelled"
-        return {"action": "notify", "workflow_id": workflow_id,
-                "message": f"🦉 Workflow {workflow_id} was {reason}. Event ignored."}
+        return {
+            "action": "notify",
+            "workflow_id": workflow_id,
+            "message": f"🦉 Workflow {workflow_id} was {reason}. Event ignored.",
+        }
 
     # ═══ 1. Learn flow: o_done + intent_extraction ═══
     if event_type == "o_done" and workflow.get("phase") == "intent_extraction":
@@ -77,7 +100,12 @@ def orchestrate_on_event(event_type: str, data_json: str) -> dict:
 
                 if original_fm:
                     new_fm = read_frontmatter_raw(resolved) or {}
-                    for key in ("created_at", "source_session", "scope", "project_hash"):
+                    for key in (
+                        "created_at",
+                        "source_session",
+                        "scope",
+                        "project_hash",
+                    ):
                         if key in original_fm and key not in new_fm:
                             update_frontmatter_field(resolved, key, original_fm[key])
 
@@ -134,9 +162,16 @@ def orchestrate_on_event(event_type: str, data_json: str) -> dict:
 
     # ═══ M5: score_done + scoring ═══
     if event_type == "score_done" and workflow.get("phase") == "scoring":
-        from aristotle_mcp._orch_parsers import _parse_scores, _format_scored_rules_for_compress
+        from aristotle_mcp._orch_parsers import (
+            _parse_scores,
+            _format_scored_rules_for_compress,
+        )
         from aristotle_mcp._orch_prompts import _build_compress_prompt
-        from aristotle_mcp.config import COMPRESS_TOP_N, COMPRESS_RULE_MAX_CHARS, COMPRESS_MAX_CHARS
+        from aristotle_mcp.config import (
+            COMPRESS_TOP_N,
+            COMPRESS_RULE_MAX_CHARS,
+            COMPRESS_MAX_CHARS,
+        )
 
         scores = _parse_scores(data)
 
@@ -148,7 +183,11 @@ def orchestrate_on_event(event_type: str, data_json: str) -> dict:
             lines = [f"🦉 Found {workflow.get('result_count', 0)} relevant lesson(s):"]
             for i, c in enumerate(candidates[:5], 1):
                 lines.append(f"  {i}. {c.get('path', '?')}")
-            return {"action": "notify", "workflow_id": workflow_id, "message": "\n".join(lines)}
+            return {
+                "action": "notify",
+                "workflow_id": workflow_id,
+                "message": "\n".join(lines),
+            }
 
         scored_text = _format_scored_rules_for_compress(scores, workflow)
         workflow["phase"] = "compressing"
@@ -199,6 +238,7 @@ def orchestrate_on_event(event_type: str, data_json: str) -> dict:
         # If R was truncated (reason:"length") or correctly found no errors,
         # the DRAFT file won't exist. Don't launch C in that case.
         from pathlib import Path
+
         draft_path = Path(draft_file)
         if not draft_path.exists():
             workflow["phase"] = "done"
@@ -206,11 +246,14 @@ def orchestrate_on_event(event_type: str, data_json: str) -> dict:
 
             # Check R's output for "no errors detected" signal
             r_result = data.get("result", "") or ""
-            no_errors = any(sig in r_result for sig in [
-                "No actionable errors detected",
-                "No errors detected",
-                "session was clean",
-            ])
+            no_errors = any(
+                sig in r_result
+                for sig in [
+                    "No actionable errors detected",
+                    "No errors detected",
+                    "session was clean",
+                ]
+            )
 
             if no_errors:
                 msg = "🦉 Aristotle: No actionable errors detected. Session was clean."
@@ -261,8 +304,7 @@ def orchestrate_on_event(event_type: str, data_json: str) -> dict:
         staged = 0
         for r in rules_result.get("rules", []):
             meta_r = r.get("metadata", {})
-            if (meta_r.get("source_session") == target_session
-                    and r.get("path")):
+            if meta_r.get("source_session") == target_session and r.get("path"):
                 rstatus = meta_r.get("status", "")
                 if rstatus == "verified":
                     committed += 1
@@ -273,6 +315,7 @@ def orchestrate_on_event(event_type: str, data_json: str) -> dict:
 
         # Write paths to reflection record
         from aristotle_mcp._tools_reflection import _update_record_field
+
         _update_record_field(sequence, "committed_rule_paths", rule_paths)
 
         workflow["committed_rule_paths"] = rule_paths

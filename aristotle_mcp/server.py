@@ -1,4 +1,5 @@
 """Aristotle MCP Server - Entry point and tool registry."""
+
 from __future__ import annotations
 
 from mcp.server.fastmcp import FastMCP
@@ -12,15 +13,15 @@ from aristotle_mcp._orch_event import register_orch_event_tools
 from aristotle_mcp._orch_review import register_orch_review_tools
 from aristotle_mcp._tools_undo import register_undo_tools
 
-# Re-export all public symbols for backward compatibility
-from aristotle_mcp._utils import (
+# Re-export all public symbols for backward compatibility (used by tests)
+from aristotle_mcp._utils import (  # noqa: F401
     _now_iso,
     _resolve_path,
     _safe_resolve,
     _unique_filename,
     _rejected_dir_for,
 )
-from aristotle_mcp._tools_rules import (
+from aristotle_mcp._tools_rules import (  # noqa: F401
     get_audit_decision,
     init_repo_tool,
     write_rule,
@@ -31,19 +32,19 @@ from aristotle_mcp._tools_rules import (
     restore_rule,
     list_rules,
 )
-from aristotle_mcp._tools_sync import (
+from aristotle_mcp._tools_sync import (  # noqa: F401
     check_sync_status,
     sync_rules,
 )
-from aristotle_mcp._tools_reflection import (
+from aristotle_mcp._tools_reflection import (  # noqa: F401
     persist_draft,
     create_reflection_record,
     complete_reflection_record,
 )
-from aristotle_mcp._orch_start import orchestrate_start
-from aristotle_mcp._orch_event import orchestrate_on_event
-from aristotle_mcp._orch_review import orchestrate_review_action
-from aristotle_mcp._orch_prompts import (
+from aristotle_mcp._orch_start import orchestrate_start  # noqa: F401
+from aristotle_mcp._orch_event import orchestrate_on_event  # noqa: F401
+from aristotle_mcp._orch_review import orchestrate_review_action  # noqa: F401
+from aristotle_mcp._orch_prompts import (  # noqa: F401
     O_INTENT_PROMPT,
     REFLECTOR_PROMPT_TEMPLATE,
     CHECKER_PROMPT_TEMPLATE,
@@ -53,7 +54,7 @@ from aristotle_mcp._orch_prompts import (
     _build_checker_prompt,
     _build_revise_prompt,
 )
-from aristotle_mcp._orch_state import (
+from aristotle_mcp._orch_state import (  # noqa: F401
     _workflow_dir,
     _save_workflow,
     _load_workflow,
@@ -61,7 +62,7 @@ from aristotle_mcp._orch_state import (
     _ensure_repo_initialized,
     _cleanup_stale_workflows,
 )
-from aristotle_mcp._orch_parsers import (
+from aristotle_mcp._orch_parsers import (  # noqa: F401
     _parse_checker_result,
     _format_review_output,
     _parse_revised_rule,
@@ -69,7 +70,7 @@ from aristotle_mcp._orch_parsers import (
 )
 
 # Re-export config symbols used by tests via _server.X access
-from aristotle_mcp.config import resolve_repo_dir
+from aristotle_mcp.config import resolve_repo_dir  # noqa: F401
 
 mcp = FastMCP("aristotle-mcp")
 

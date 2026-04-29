@@ -14,20 +14,20 @@ Run:
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 # Ensure project root importable
 import sys
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 
 # ═══════════════════════════════════════════════════════════
 # Fixtures
 # ═══════════════════════════════════════════════════════════
+
 
 @pytest.fixture(autouse=True)
 def isolated_sessions_dir(tmp_path, monkeypatch):
@@ -41,6 +41,7 @@ def isolated_sessions_dir(tmp_path, monkeypatch):
     # Also patch the imported reference in _orch_start
     try:
         import aristotle_mcp._orch_start as _os
+
         monkeypatch.setattr(_os, "resolve_sessions_dir", lambda: sessions_dir)
     except ImportError:
         pass
@@ -52,6 +53,7 @@ def isolated_repo(tmp_path, monkeypatch):
     """Redirect repo dir to tmp_path (reuses conftest tmp_repo pattern)."""
     monkeypatch.setenv("ARISTOTLE_REPO_DIR", str(tmp_path))
     from aristotle_mcp.migration import init_repo
+
     init_repo(tmp_path)  # Path object, not str
     return tmp_path
 
@@ -59,6 +61,7 @@ def isolated_repo(tmp_path, monkeypatch):
 # ═══════════════════════════════════════════════════════════
 # E2E-1: Context Fix — Snapshot → MCP Reflect
 # ═══════════════════════════════════════════════════════════
+
 
 class TestContextFixE2E:
     """E2E-1: Verify that a snapshot file is read by MCP reflect workflow.
@@ -85,37 +88,53 @@ class TestContextFixE2E:
             "total_messages": 3,
             "messages": [
                 {"index": 1, "role": "user", "content": "Use prisma migrate dev"},
-                {"index": 2, "role": "assistant", "content": "Running npx prisma migrate dev..."},
+                {
+                    "index": 2,
+                    "role": "assistant",
+                    "content": "Running npx prisma migrate dev...",
+                },
                 {"index": 3, "role": "user", "content": "It deleted my data"},
             ],
         }
         snapshot_path.write_text(json.dumps(snapshot, indent=2))
 
         # 2. Call MCP reflect with session_file
-        result = orchestrate_start("reflect", json.dumps({
-            "target_session_id": session_id,
-            "focus": "last",
-            "project_directory": "/tmp/test-project",
-            "user_language": "en-US",
-            "session_file": str(snapshot_path),
-        }))
+        result = orchestrate_start(
+            "reflect",
+            json.dumps(
+                {
+                    "target_session_id": session_id,
+                    "focus": "last",
+                    "project_directory": "/tmp/test-project",
+                    "user_language": "en-US",
+                    "session_file": str(snapshot_path),
+                }
+            ),
+        )
 
         # 3. Verify prompt contains session_file reference
         assert result["action"] == "fire_sub"
         assert result["sub_role"] == "R"
         sub_prompt = result["sub_prompt"]
-        assert str(snapshot_path) in sub_prompt, \
+        assert str(snapshot_path) in sub_prompt, (
             f"Reflector prompt must reference session_file path. Got: {sub_prompt[:200]}"
-        assert session_id in sub_prompt, \
+        )
+        assert session_id in sub_prompt, (
             "Reflector prompt must reference target_session_id"
+        )
 
     def test_reflect_without_session_file_still_works(self):
         """E2E-1.2: Backward compat — reflect works without session_file."""
         from aristotle_mcp._orch_start import orchestrate_start
 
-        result = orchestrate_start("reflect", json.dumps({
-            "target_session_id": "ses_no_snapshot",
-        }))
+        result = orchestrate_start(
+            "reflect",
+            json.dumps(
+                {
+                    "target_session_id": "ses_no_snapshot",
+                }
+            ),
+        )
 
         assert result["action"] == "fire_sub"
         assert result["sub_role"] == "R"
@@ -147,6 +166,7 @@ class TestContextFixE2E:
 # E2E-2: Bridge Detection + use_bridge Flag
 # ═══════════════════════════════════════════════════════════
 
+
 class TestBridgeDetectionE2E:
     """E2E-2: Verify MCP detects bridge-active marker and returns use_bridge."""
 
@@ -158,12 +178,18 @@ class TestBridgeDetectionE2E:
         marker_path = isolated_sessions_dir / ".bridge-active"
         marker_path.write_text(json.dumps({"pid": 12345, "startedAt": 1000000}))
 
-        result = orchestrate_start("reflect", json.dumps({
-            "target_session_id": "ses_bridge_test",
-        }))
+        result = orchestrate_start(
+            "reflect",
+            json.dumps(
+                {
+                    "target_session_id": "ses_bridge_test",
+                }
+            ),
+        )
 
-        assert result["use_bridge"] is True, \
+        assert result["use_bridge"] is True, (
             f"Expected use_bridge=true when .bridge-active exists. Got: {result.get('use_bridge')}"
+        )
 
     def test_use_bridge_false_when_no_marker(self, isolated_sessions_dir):
         """E2E-2.2: No .bridge-active marker → use_bridge=false."""
@@ -174,12 +200,18 @@ class TestBridgeDetectionE2E:
         if marker_path.exists():
             marker_path.unlink()
 
-        result = orchestrate_start("reflect", json.dumps({
-            "target_session_id": "ses_no_bridge",
-        }))
+        result = orchestrate_start(
+            "reflect",
+            json.dumps(
+                {
+                    "target_session_id": "ses_no_bridge",
+                }
+            ),
+        )
 
-        assert result["use_bridge"] is False, \
+        assert result["use_bridge"] is False, (
             f"Expected use_bridge=false without marker. Got: {result.get('use_bridge')}"
+        )
 
     def test_marker_content_is_valid_json(self, isolated_sessions_dir):
         """E2E-2.3: Bridge marker content matches expected schema."""
@@ -195,6 +227,7 @@ class TestBridgeDetectionE2E:
 # ═══════════════════════════════════════════════════════════
 # E2E-3: Full Async Workflow with Mocked Bridge Tools
 # ═══════════════════════════════════════════════════════════
+
 
 class TestAsyncBridgeWorkflowE2E:
     """E2E-3: Simulate the full async bridge workflow:
@@ -213,10 +246,17 @@ class TestAsyncBridgeWorkflowE2E:
         marker_path.write_text('{"pid": 1, "startedAt": 1}')
 
         # Step 1: MCP reflect → returns use_bridge=true
-        start_result = orchestrate_start("reflect", json.dumps({
-            "target_session_id": "ses_async_e2e",
-            "session_file": str(isolated_sessions_dir / "ses_async_e2e_snapshot.json"),
-        }))
+        start_result = orchestrate_start(
+            "reflect",
+            json.dumps(
+                {
+                    "target_session_id": "ses_async_e2e",
+                    "session_file": str(
+                        isolated_sessions_dir / "ses_async_e2e_snapshot.json"
+                    ),
+                }
+            ),
+        )
 
         assert start_result["action"] == "fire_sub"
         assert start_result["use_bridge"] is True
@@ -232,61 +272,85 @@ class TestAsyncBridgeWorkflowE2E:
         # Here: simulate Reflector finishing
 
         # Step 4: Simulate Reflector done → MCP fires Checker
-        r_done = orchestrate_on_event("subagent_done", json.dumps({
-            "workflow_id": wf_id,
-            "session_id": "ses_reflector_async",
-            "result": "Analyzed session. Found 2 potential issues.",
-        }))
+        r_done = orchestrate_on_event(
+            "subagent_done",
+            json.dumps(
+                {
+                    "workflow_id": wf_id,
+                    "session_id": "ses_reflector_async",
+                    "result": "Analyzed session. Found 2 potential issues.",
+                }
+            ),
+        )
 
-        assert r_done["action"] == "fire_sub", \
+        assert r_done["action"] == "fire_sub", (
             f"After reflector → should fire checker. Got: {r_done.get('action')}"
+        )
         assert r_done["sub_role"] == "C"
         # Checker reuses the same workflow_id — bridge context is already established
 
         # Step 5: Simulate Checker done
-        c_done = orchestrate_on_event("subagent_done", json.dumps({
-            "workflow_id": wf_id,
-            "session_id": "ses_checker_async",
-            "result": "Committed: 1\nStaged: 0",
-        }))
+        c_done = orchestrate_on_event(
+            "subagent_done",
+            json.dumps(
+                {
+                    "workflow_id": wf_id,
+                    "session_id": "ses_checker_async",
+                    "result": "Committed: 1\nStaged: 0",
+                }
+            ),
+        )
 
         assert c_done["action"] == "done"
         msg = c_done.get("notify_message", c_done.get("message", ""))
-        assert "done" in msg.lower() or "aristotle" in msg.lower(), \
+        assert "done" in msg.lower() or "aristotle" in msg.lower(), (
             f"Expected completion message, got: {msg}"
+        )
 
     def test_bridge_poll_then_abort(self, isolated_sessions_dir):
         """E2E-3.2: Abort a running bridge workflow mid-poll."""
         from aristotle_mcp._orch_start import orchestrate_start
         from aristotle_mcp._orch_event import orchestrate_on_event
-        from aristotle_mcp.server import (
-            init_repo_tool, write_rule, stage_rule, commit_rule,
-        )
 
         marker_path = isolated_sessions_dir / ".bridge-active"
         marker_path.write_text('{"pid": 1, "startedAt": 1}')
 
         # Start reflect
-        start = orchestrate_start("reflect", json.dumps({
-            "target_session_id": "ses_abort_test",
-        }))
+        start = orchestrate_start(
+            "reflect",
+            json.dumps(
+                {
+                    "target_session_id": "ses_abort_test",
+                }
+            ),
+        )
         wf_id = start["workflow_id"]
 
         # Simulate reflector done → checker fires
-        r_done = orchestrate_on_event("subagent_done", json.dumps({
-            "workflow_id": wf_id,
-            "session_id": "ses_r",
-            "result": "",
-        }))
+        r_done = orchestrate_on_event(
+            "subagent_done",
+            json.dumps(
+                {
+                    "workflow_id": wf_id,
+                    "session_id": "ses_r",
+                    "result": "",
+                }
+            ),
+        )
 
         assert r_done["action"] == "fire_sub"
 
         # Now simulate the user calling aristotle_abort (via SKILL.md /undo)
         # The abort tool in Bridge plugin would call MCP on_undo
-        undo_result = orchestrate_on_event("o_done", json.dumps({
-            "workflow_id": wf_id,
-            "result": {"status": "cancelled"},
-        }))
+        undo_result = orchestrate_on_event(
+            "o_done",
+            json.dumps(
+                {
+                    "workflow_id": wf_id,
+                    "result": {"status": "cancelled"},
+                }
+            ),
+        )
 
         # Workflow should handle gracefully (unknown event type or cancelled workflow)
         # The exact behavior depends on implementation — just verify no crash
@@ -296,6 +360,7 @@ class TestAsyncBridgeWorkflowE2E:
 # ═══════════════════════════════════════════════════════════
 # E2E-4: Multi-Stage Reflect-Check Loop
 # ═══════════════════════════════════════════════════════════
+
 
 class TestMultiStageBridgeE2E:
     """E2E-4: Verify multi-stage reflect→check loop works with bridge."""
@@ -309,25 +374,40 @@ class TestMultiStageBridgeE2E:
         marker_path.write_text('{"pid": 1, "startedAt": 1}')
 
         # Round 1: reflect
-        start = orchestrate_start("reflect", json.dumps({
-            "target_session_id": "ses_multi_stage",
-        }))
+        start = orchestrate_start(
+            "reflect",
+            json.dumps(
+                {
+                    "target_session_id": "ses_multi_stage",
+                }
+            ),
+        )
         wf_id = start["workflow_id"]
 
         # Reflector done → Checker
-        r1 = orchestrate_on_event("subagent_done", json.dumps({
-            "workflow_id": wf_id,
-            "session_id": "ses_r1",
-            "result": "Initial analysis complete",
-        }))
+        r1 = orchestrate_on_event(
+            "subagent_done",
+            json.dumps(
+                {
+                    "workflow_id": wf_id,
+                    "session_id": "ses_r1",
+                    "result": "Initial analysis complete",
+                }
+            ),
+        )
         assert r1["action"] == "fire_sub"
         assert r1["sub_role"] == "C"
         # Checker reuses bridge context from initial reflect
 
         # Checker done → notify
-        c1 = orchestrate_on_event("subagent_done", json.dumps({
-            "workflow_id": wf_id,
-            "session_id": "ses_c1",
-            "result": "Committed: 0\nStaged: 0",
-        }))
+        c1 = orchestrate_on_event(
+            "subagent_done",
+            json.dumps(
+                {
+                    "workflow_id": wf_id,
+                    "session_id": "ses_c1",
+                    "result": "Committed: 0\nStaged: 0",
+                }
+            ),
+        )
         assert c1["action"] == "done"

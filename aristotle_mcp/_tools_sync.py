@@ -12,7 +12,6 @@ from aristotle_mcp.frontmatter import (
     stream_filter_rules,
 )
 from aristotle_mcp.git_ops import git_show_exists
-from aristotle_mcp._utils import _rejected_dir_for
 
 from aristotle_mcp.git_ops import _run as _git_run
 

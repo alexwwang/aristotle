@@ -107,6 +107,7 @@ MAX_SAMPLES = 20
 
 # ── Reflector prompt mode configuration ──
 
+
 def _resolve_config_path() -> Path:
     """Resolve the Aristotle config file path."""
     config_dir = os.environ.get("OPENCODE_CONFIG_DIR")
@@ -122,6 +123,7 @@ def _read_aristotle_config() -> dict:
         return {}
     try:
         import json
+
         data = json.loads(config_path.read_text(encoding="utf-8"))
         return data if isinstance(data, dict) else {}
     except (json.JSONDecodeError, ValueError, OSError):
@@ -131,6 +133,7 @@ def _read_aristotle_config() -> dict:
 def _write_aristotle_config(config: dict) -> None:
     """Write the Aristotle config file."""
     import json
+
     config_path = _resolve_config_path()
     config_path.parent.mkdir(parents=True, exist_ok=True)
     config_path.write_text(

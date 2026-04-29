@@ -65,9 +65,13 @@ class TestFeedbackSignalUpdate:
         rule_id = w.get("rule_id", "")
 
         # First feedback
-        report_feedback(rule_ids=[rule_id], error_description="err1", auto_reflect=False)
+        report_feedback(
+            rule_ids=[rule_id], error_description="err1", auto_reflect=False
+        )
         # Second feedback
-        report_feedback(rule_ids=[rule_id], error_description="err2", auto_reflect=False)
+        report_feedback(
+            rule_ids=[rule_id], error_description="err2", auto_reflect=False
+        )
 
         from aristotle_mcp.frontmatter import read_frontmatter_raw
 
@@ -186,7 +190,7 @@ class TestFeedbackDepthGuard:
 
         update_frontmatter_field(Path(w["file_path"]), "feedback_count", "3")
 
-        result = report_feedback(
+        report_feedback(
             rule_ids=[w.get("rule_id", "")],
             error_description="error",
             auto_reflect=True,
@@ -296,11 +300,13 @@ class TestM6Models:
         """from_frontmatter_dict correctly handles string-typed sample_size."""
         from aristotle_mcp.models import from_frontmatter_dict
 
-        meta = from_frontmatter_dict({
-            "id": "rec_test",
-            "sample_size": "5",       # string, not int
-            "feedback_count": "2",     # string, not int
-        })
+        meta = from_frontmatter_dict(
+            {
+                "id": "rec_test",
+                "sample_size": "5",  # string, not int
+                "feedback_count": "2",  # string, not int
+            }
+        )
         assert isinstance(meta.sample_size, int)
         assert meta.sample_size == 5
         assert isinstance(meta.feedback_count, int)

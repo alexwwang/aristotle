@@ -22,10 +22,15 @@ from aristotle_mcp.frontmatter import (
     update_frontmatter_field,
     write_rule_file,
 )
-from aristotle_mcp.git_ops import git_add_and_commit, git_show_exists
+from aristotle_mcp.git_ops import git_add_and_commit
 from aristotle_mcp.migration import init_repo, migrate_learnings
 from aristotle_mcp.models import RuleMetadata
-from aristotle_mcp._utils import _now_iso, _safe_resolve, _unique_filename, _rejected_dir_for
+from aristotle_mcp._utils import (
+    _now_iso,
+    _safe_resolve,
+    _unique_filename,
+    _rejected_dir_for,
+)
 
 
 def get_audit_decision(file_path: str) -> dict:
@@ -136,7 +141,10 @@ def write_rule(
     if not (repo_path / ".git").is_dir():
         init_result = init_repo(repo_path)
         if not init_result["success"]:
-            return {"success": False, "message": f"Repo not initialized and auto-init failed: {init_result['message']}"}
+            return {
+                "success": False,
+                "message": f"Repo not initialized and auto-init failed: {init_result['message']}",
+            }
 
     if scope not in VALID_SCOPES:
         return {
@@ -706,7 +714,6 @@ def detect_conflicts(file_path: str) -> list[str]:
     if not domain or not task_goal:
         return []
 
-    self_id = fm.get("id", "")
     result = list_rules(
         status_filter="verified",
         intent_domain=domain,

@@ -61,6 +61,7 @@ def _next_sequence() -> int:
 
 def _ensure_repo_initialized() -> None:
     from aristotle_mcp._tools_rules import init_repo_tool
+
     repo_dir = resolve_repo_dir()
     if not (repo_dir / ".git").exists():
         init_repo_tool()
@@ -85,8 +86,18 @@ def _cleanup_stale_workflows(max_age_hours: int = 24) -> None:
 
             if phase == "done" and updated_dt < cutoff:
                 wf_file.unlink()
-            elif phase in ("reflecting", "checking", "review",
-                           "intent_extraction", "search", "init") and updated_dt < stale_cutoff:
+            elif (
+                phase
+                in (
+                    "reflecting",
+                    "checking",
+                    "review",
+                    "intent_extraction",
+                    "search",
+                    "init",
+                )
+                and updated_dt < stale_cutoff
+            ):
                 wf_file.unlink()
         except (json.JSONDecodeError, ValueError):
             pass

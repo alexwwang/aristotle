@@ -27,13 +27,13 @@ from _orch_helpers import (
     stage_rule,
     write_rule,
 )
-from conftest import _NEW_APIS_AVAILABLE
 
 # M5-specific availability check
 _M5_AVAILABLE = False
 try:
     from aristotle_mcp._orch_parsers import _parse_scores
     from aristotle_mcp.config import SCORING_TOP_N
+
     _M5_AVAILABLE = True
 except (ImportError, AttributeError):
     pass
@@ -90,12 +90,18 @@ class TestSearchAndNotify:
     def test_zero_results_short_circuit_to_done(self):
         """list_rules 返回 0 结果 → 直接 done + notify。"""
         wf_id = "wf_0001a1b2c3d4e5f6"
-        _save_workflow(wf_id, {
-            "phase": "search",
-            "intent_tags": {"domain": "database_operations", "task_goal": "fix timeout"},
-            "keywords": "prisma|timeout|pool",
-            "query": "How to fix Prisma connection pool timeout",
-        })
+        _save_workflow(
+            wf_id,
+            {
+                "phase": "search",
+                "intent_tags": {
+                    "domain": "database_operations",
+                    "task_goal": "fix timeout",
+                },
+                "keywords": "prisma|timeout|pool",
+                "query": "How to fix Prisma connection pool timeout",
+            },
+        )
 
         with patch("aristotle_mcp._tools_rules.list_rules") as mock_lr:
             mock_lr.return_value = {"count": 0, "rules": []}
@@ -111,17 +117,23 @@ class TestSearchAndNotify:
         """不存在的 workflow_id → 返回错误。"""
         result = _do_search_and_notify("wf_9999a1b2c3d4e5f6")
         assert result["action"] == "notify"
-        assert "lost" in result.get("message", "").lower() or "not found" in result.get("message", "").lower()
+        assert (
+            "lost" in result.get("message", "").lower()
+            or "not found" in result.get("message", "").lower()
+        )
 
     def test_zero_results_no_fire_score(self):
         """零结果时不返回 fire_score action。"""
         wf_id = "wf_0002a1b2c3d4e5f6"
-        _save_workflow(wf_id, {
-            "phase": "search",
-            "intent_tags": {"domain": "testing", "task_goal": "mock"},
-            "keywords": "pytest|mock",
-            "query": "pytest mock",
-        })
+        _save_workflow(
+            wf_id,
+            {
+                "phase": "search",
+                "intent_tags": {"domain": "testing", "task_goal": "mock"},
+                "keywords": "pytest|mock",
+                "query": "pytest mock",
+            },
+        )
 
         with patch("aristotle_mcp._tools_rules.list_rules") as mock_lr:
             mock_lr.return_value = {"count": 0, "rules": []}
@@ -144,12 +156,18 @@ class TestSearchAndNotify:
         commit_rule(w["file_path"])
 
         wf_id = "wf_0003a1b2c3d4e5f6"
-        _save_workflow(wf_id, {
-            "phase": "search",
-            "intent_tags": {"domain": "database_operations", "task_goal": "fix timeout"},
-            "keywords": "prisma|timeout",
-            "query": "Prisma connection pool timeout fix",
-        })
+        _save_workflow(
+            wf_id,
+            {
+                "phase": "search",
+                "intent_tags": {
+                    "domain": "database_operations",
+                    "task_goal": "fix timeout",
+                },
+                "keywords": "prisma|timeout",
+                "query": "Prisma connection pool timeout fix",
+            },
+        )
 
         result = _do_search_and_notify(wf_id)
 
@@ -168,16 +186,22 @@ class TestSearchAndNotify:
     def test_candidates_truncated_to_scoring_top_n(self):
         """候选数超过 SCORING_TOP_N 时截断。"""
         wf_id = "wf_0004a1b2c3d4e5f6"
-        _save_workflow(wf_id, {
-            "phase": "search",
-            "intent_tags": {"domain": "general", "task_goal": "fix"},
-            "keywords": "test",
-            "query": "test query",
-        })
+        _save_workflow(
+            wf_id,
+            {
+                "phase": "search",
+                "intent_tags": {"domain": "general", "task_goal": "fix"},
+                "keywords": "test",
+                "query": "test query",
+            },
+        )
 
         # 模拟返回超过 SCORING_TOP_N 条结果
         fake_rules = [
-            {"path": f"/fake/rule_{i}.md", "metadata": {"id": f"rec_{i}", "status": "verified"}}
+            {
+                "path": f"/fake/rule_{i}.md",
+                "metadata": {"id": f"rec_{i}", "status": "verified"},
+            }
             for i in range(SCORING_TOP_N + 5)
         ]
 
@@ -190,12 +214,15 @@ class TestSearchAndNotify:
     def test_workflow_phase_transitions_to_scoring(self):
         """有结果时 workflow phase 变为 scoring。"""
         wf_id = "wf_0005a1b2c3d4e5f6"
-        _save_workflow(wf_id, {
-            "phase": "search",
-            "intent_tags": {"domain": "general", "task_goal": "test"},
-            "keywords": "test",
-            "query": "test",
-        })
+        _save_workflow(
+            wf_id,
+            {
+                "phase": "search",
+                "intent_tags": {"domain": "general", "task_goal": "test"},
+                "keywords": "test",
+                "query": "test",
+            },
+        )
 
         fake_rules = [
             {"path": "/fake/r1.md", "metadata": {"id": "rec_1", "status": "verified"}}
@@ -220,19 +247,29 @@ class TestScoreDoneHandler:
     def test_score_done_transitions_to_compressing(self):
         """score_done 事件触发 scoring → compressing + fire_o。"""
         wf_id = "wf_0006a1b2c3d4e5f6"
-        _save_workflow(wf_id, {
-            "phase": "scoring",
-            "command": "learn",
-            "candidates": [
-                {"rule_id": "rec_1", "path": "/fake/r1.md"},
-            ],
-            "query": "test query",
-        })
+        _save_workflow(
+            wf_id,
+            {
+                "phase": "scoring",
+                "command": "learn",
+                "candidates": [
+                    {"rule_id": "rec_1", "path": "/fake/r1.md"},
+                ],
+                "query": "test query",
+            },
+        )
 
-        result = orchestrate_on_event("score_done", json.dumps({
-            "workflow_id": wf_id,
-            "scores": [{"rule_id": "rec_1", "score": 8, "summary": "Highly relevant"}],
-        }))
+        result = orchestrate_on_event(
+            "score_done",
+            json.dumps(
+                {
+                    "workflow_id": wf_id,
+                    "scores": [
+                        {"rule_id": "rec_1", "score": 8, "summary": "Highly relevant"}
+                    ],
+                }
+            ),
+        )
 
         assert result["action"] == "fire_o"
         assert "o_prompt" in result
@@ -243,24 +280,32 @@ class TestScoreDoneHandler:
     def test_all_default_scores_trigger_degradation(self):
         """所有评分为默认值（5 + 空 summary）→ 降级为单轮通知。"""
         wf_id = "wf_0007a1b2c3d4e5f6"
-        _save_workflow(wf_id, {
-            "phase": "scoring",
-            "command": "learn",
-            "candidates": [
-                {"rule_id": "rec_1", "path": "/fake/r1.md"},
-                {"rule_id": "rec_2", "path": "/fake/r2.md"},
-            ],
-            "result_count": 2,
-            "query": "test query",
-        })
+        _save_workflow(
+            wf_id,
+            {
+                "phase": "scoring",
+                "command": "learn",
+                "candidates": [
+                    {"rule_id": "rec_1", "path": "/fake/r1.md"},
+                    {"rule_id": "rec_2", "path": "/fake/r2.md"},
+                ],
+                "result_count": 2,
+                "query": "test query",
+            },
+        )
 
-        result = orchestrate_on_event("score_done", json.dumps({
-            "workflow_id": wf_id,
-            "scores": [
-                {"rule_id": "rec_1", "score": 5, "summary": ""},
-                {"rule_id": "rec_2", "score": 5, "summary": ""},
-            ],
-        }))
+        result = orchestrate_on_event(
+            "score_done",
+            json.dumps(
+                {
+                    "workflow_id": wf_id,
+                    "scores": [
+                        {"rule_id": "rec_1", "score": 5, "summary": ""},
+                        {"rule_id": "rec_2", "score": 5, "summary": ""},
+                    ],
+                }
+            ),
+        )
 
         # 降级路径：直接 notify，不进入 compressing
         assert result["action"] == "notify"
@@ -272,43 +317,59 @@ class TestScoreDoneHandler:
     def test_partial_failure_proceeds_to_compressing(self):
         """部分评分有效时正常进入 compressing。"""
         wf_id = "wf_0008a1b2c3d4e5f6"
-        _save_workflow(wf_id, {
-            "phase": "scoring",
-            "command": "learn",
-            "candidates": [
-                {"rule_id": "rec_1", "path": "/fake/r1.md"},
-                {"rule_id": "rec_2", "path": "/fake/r2.md"},
-            ],
-            "query": "test query",
-        })
+        _save_workflow(
+            wf_id,
+            {
+                "phase": "scoring",
+                "command": "learn",
+                "candidates": [
+                    {"rule_id": "rec_1", "path": "/fake/r1.md"},
+                    {"rule_id": "rec_2", "path": "/fake/r2.md"},
+                ],
+                "query": "test query",
+            },
+        )
 
-        result = orchestrate_on_event("score_done", json.dumps({
-            "workflow_id": wf_id,
-            "scores": [
-                {"rule_id": "rec_1", "score": 8, "summary": "Relevant"},
-                {"rule_id": "rec_2", "score": 5, "summary": ""},  # 解析失败
-            ],
-        }))
+        result = orchestrate_on_event(
+            "score_done",
+            json.dumps(
+                {
+                    "workflow_id": wf_id,
+                    "scores": [
+                        {"rule_id": "rec_1", "score": 8, "summary": "Relevant"},
+                        {"rule_id": "rec_2", "score": 5, "summary": ""},  # 解析失败
+                    ],
+                }
+            ),
+        )
 
         assert result["action"] == "fire_o"  # 正常进入 compressing
 
     def test_empty_scores_list_triggers_degradation(self):
         """scores: [] 时触发降级为单轮通知。"""
         wf_id = "wf_000ba1b2c3d4e5f6"
-        _save_workflow(wf_id, {
-            "phase": "scoring",
-            "command": "learn",
-            "candidates": [
-                {"rule_id": "rec_1", "path": "/fake/r1.md"},
-            ],
-            "result_count": 1,
-            "query": "test query",
-        })
+        _save_workflow(
+            wf_id,
+            {
+                "phase": "scoring",
+                "command": "learn",
+                "candidates": [
+                    {"rule_id": "rec_1", "path": "/fake/r1.md"},
+                ],
+                "result_count": 1,
+                "query": "test query",
+            },
+        )
 
-        result = orchestrate_on_event("score_done", json.dumps({
-            "workflow_id": wf_id,
-            "scores": [],
-        }))
+        result = orchestrate_on_event(
+            "score_done",
+            json.dumps(
+                {
+                    "workflow_id": wf_id,
+                    "scores": [],
+                }
+            ),
+        )
 
         assert result["action"] == "notify"
         wf = _load_workflow(wf_id)
@@ -317,21 +378,29 @@ class TestScoreDoneHandler:
     def test_default_scores_with_summaries_proceeds_to_compressing(self):
         """score=5 但 summary 非空 → 正常进入 compressing（不降级）。"""
         wf_id = "wf_000ca1b2c3d4e5f6"
-        _save_workflow(wf_id, {
-            "phase": "scoring",
-            "command": "learn",
-            "candidates": [
-                {"rule_id": "rec_1", "path": "/fake/r1.md"},
-            ],
-            "query": "test query",
-        })
+        _save_workflow(
+            wf_id,
+            {
+                "phase": "scoring",
+                "command": "learn",
+                "candidates": [
+                    {"rule_id": "rec_1", "path": "/fake/r1.md"},
+                ],
+                "query": "test query",
+            },
+        )
 
-        result = orchestrate_on_event("score_done", json.dumps({
-            "workflow_id": wf_id,
-            "scores": [
-                {"rule_id": "rec_1", "score": 5, "summary": "parse failed"},
-            ],
-        }))
+        result = orchestrate_on_event(
+            "score_done",
+            json.dumps(
+                {
+                    "workflow_id": wf_id,
+                    "scores": [
+                        {"rule_id": "rec_1", "score": 5, "summary": "parse failed"},
+                    ],
+                }
+            ),
+        )
 
         assert result["action"] == "fire_o"
         wf = _load_workflow(wf_id)
@@ -348,17 +417,27 @@ class TestCompressingHandler:
     def test_compressing_done_returns_compressed(self):
         """compressing 阶段 o_done 返回压缩结果。"""
         wf_id = "wf_0009a1b2c3d4e5f6"
-        _save_workflow(wf_id, {
-            "phase": "compressing",
-            "command": "learn",
-            "result_count": 3,
-        })
+        _save_workflow(
+            wf_id,
+            {
+                "phase": "compressing",
+                "command": "learn",
+                "result_count": 3,
+            },
+        )
 
-        compressed = "## WHEN\nerror=prisma AND code=P2024\n\n## DO\n1. Increase pool size"
-        result = orchestrate_on_event("o_done", json.dumps({
-            "workflow_id": wf_id,
-            "result": compressed,
-        }))
+        compressed = (
+            "## WHEN\nerror=prisma AND code=P2024\n\n## DO\n1. Increase pool size"
+        )
+        result = orchestrate_on_event(
+            "o_done",
+            json.dumps(
+                {
+                    "workflow_id": wf_id,
+                    "result": compressed,
+                }
+            ),
+        )
 
         assert result["action"] == "notify"
         assert compressed in result["message"]
@@ -370,16 +449,24 @@ class TestCompressingHandler:
     def test_compressing_not_caught_by_catch_all(self):
         """phase=compressing 的 o_done 不被 catch-all 拦截。"""
         wf_id = "wf_000aa1b2c3d4e5f6"
-        _save_workflow(wf_id, {
-            "phase": "compressing",
-            "command": "learn",
-            "result_count": 1,
-        })
+        _save_workflow(
+            wf_id,
+            {
+                "phase": "compressing",
+                "command": "learn",
+                "result_count": 1,
+            },
+        )
 
-        result = orchestrate_on_event("o_done", json.dumps({
-            "workflow_id": wf_id,
-            "result": "compressed output",
-        }))
+        result = orchestrate_on_event(
+            "o_done",
+            json.dumps(
+                {
+                    "workflow_id": wf_id,
+                    "result": "compressed output",
+                }
+            ),
+        )
 
         # 不应返回 "Unexpected o_done" 错误
         assert "Unexpected" not in result.get("message", "")
@@ -440,7 +527,7 @@ class TestParseScores:
         }
         result = _parse_scores(data)
         assert result[0]["score"] == 10  # clamped
-        assert result[1]["score"] == 1   # clamped
+        assert result[1]["score"] == 1  # clamped
 
     def test_summary_truncated_to_120(self):
         """summary 被截断到 120 字符。"""
@@ -461,7 +548,9 @@ class TestFormatScoredRules:
         """_format_scored_rules_for_compress 输出包含完整规则文件内容。"""
         init_repo_tool()
         # 创建含实际内容的规则
-        rule_content = "## WHEN\nerror=prisma AND code=P2024\n\n## DO\n1. Increase pool size"
+        rule_content = (
+            "## WHEN\nerror=prisma AND code=P2024\n\n## DO\n1. Increase pool size"
+        )
         w = write_rule(content=rule_content, category="HALLUCINATION")
         assert w.get("success"), f"write_rule failed: {w.get('message', '')}"
         rule_path = w["file_path"]
@@ -521,7 +610,9 @@ class TestPromptTemplates:
     def test_compress_prompt_contains_rules(self):
         """压缩 prompt 包含评分规则文本。"""
         # WHEN/DO/NEVER are template structural keywords, not input data
-        scored_text = "---\nRule: /fake/r1.md (score: 8/10)\nSummary: Relevant\n\n## Rule content"
+        scored_text = (
+            "---\nRule: /fake/r1.md (score: 8/10)\nSummary: Relevant\n\n## Rule content"
+        )
         prompt = _build_compress_prompt(
             query="test query",
             scored_rules_text=scored_text,

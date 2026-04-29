@@ -61,19 +61,25 @@ def orchestrate_start(command: str, args_json: str = "{}") -> dict:
         goal = args.get("goal")
 
         if domain and goal:
-            _save_workflow(workflow_id, {
-                "phase": "search",
-                "command": "learn",
-                "query": query,
-                "intent_tags": {"domain": domain, "task_goal": goal},
-            })
+            _save_workflow(
+                workflow_id,
+                {
+                    "phase": "search",
+                    "command": "learn",
+                    "query": query,
+                    "intent_tags": {"domain": domain, "task_goal": goal},
+                },
+            )
             return _do_search_and_notify(workflow_id)
 
-        _save_workflow(workflow_id, {
-            "phase": "intent_extraction",
-            "command": "learn",
-            "query": query,
-        })
+        _save_workflow(
+            workflow_id,
+            {
+                "phase": "intent_extraction",
+                "command": "learn",
+                "query": query,
+            },
+        )
 
         o_prompt = _build_intent_extraction_prompt(query)
         return {
@@ -109,18 +115,21 @@ def orchestrate_start(command: str, args_json: str = "{}") -> dict:
             session_file=session_file,
         )
 
-        _save_workflow(workflow_id, {
-            "phase": "reflecting",
-            "command": "reflect",
-            "target_session_id": target_session_id,
-            "sequence": sequence,
-            "pending_role": "R",
-            "record_created": False,
-            "target_label": args.get("target_label", "unknown"),
-            "project_directory": project_directory,
-            "focus": focus,
-            "user_language": user_language,
-        })
+        _save_workflow(
+            workflow_id,
+            {
+                "phase": "reflecting",
+                "command": "reflect",
+                "target_session_id": target_session_id,
+                "sequence": sequence,
+                "pending_role": "R",
+                "record_created": False,
+                "target_label": args.get("target_label", "unknown"),
+                "project_directory": project_directory,
+                "focus": focus,
+                "user_language": user_language,
+            },
+        )
 
         return {
             "action": "fire_sub",
@@ -128,7 +137,7 @@ def orchestrate_start(command: str, args_json: str = "{}") -> dict:
             "sub_prompt": r_prompt,
             "sub_role": "R",
             "notify_message": f"🦉 Aristotle Reflector launched [{args.get('target_label', 'unknown')}].\n"
-                             "   Checker will validate automatically when done.",
+            "   Checker will validate automatically when done.",
             "use_bridge": bridge_active,
         }
 
@@ -136,14 +145,19 @@ def orchestrate_start(command: str, args_json: str = "{}") -> dict:
         try:
             sequence = int(args.get("sequence", 0))
         except (ValueError, TypeError):
-            return {"action": "notify", "message": "🦉 Invalid sequence number. Usage: /aristotle review N"}
+            return {
+                "action": "notify",
+                "message": "🦉 Invalid sequence number. Usage: /aristotle review N",
+            }
         if not sequence:
             return {"action": "notify", "message": "🦉 Usage: /aristotle review N"}
 
         state_path = resolve_repo_dir().parent / "aristotle-state.json"
         if not state_path.exists():
-            return {"action": "notify",
-                    "message": "🦉 No reflection records yet. Run /aristotle first."}
+            return {
+                "action": "notify",
+                "message": "🦉 No reflection records yet. Run /aristotle first.",
+            }
 
         try:
             records = json.loads(state_path.read_text(encoding="utf-8"))
@@ -157,9 +171,11 @@ def orchestrate_start(command: str, args_json: str = "{}") -> dict:
                 break
 
         if not target_record:
-            return {"action": "notify",
-                    "message": f"🦉 Reflection #{sequence} not found. "
-                               f"Run /aristotle sessions to list."}
+            return {
+                "action": "notify",
+                "message": f"🦉 Reflection #{sequence} not found. "
+                f"Run /aristotle sessions to list.",
+            }
 
         draft_path = target_record.get("draft_file_path", "")
         draft_content = ""
@@ -177,18 +193,23 @@ def orchestrate_start(command: str, args_json: str = "{}") -> dict:
 
         displayed_rules = [r.get("path", "") for r in rules_result.get("rules", [])]
 
-        message = _format_review_output(sequence, target_record, draft_content, rules_result)
+        message = _format_review_output(
+            sequence, target_record, draft_content, rules_result
+        )
 
-        _save_workflow(workflow_id, {
-            "phase": "review",
-            "command": "review",
-            "sequence": sequence,
-            "target_record": target_record,
-            "displayed_rules": displayed_rules,
-            "target_session_id": target_session,
-            "committed_rule_paths": target_record.get("committed_rule_paths", []),
-            "re_reflect_count": target_record.get("re_reflect_count", 0),
-        })
+        _save_workflow(
+            workflow_id,
+            {
+                "phase": "review",
+                "command": "review",
+                "sequence": sequence,
+                "target_record": target_record,
+                "displayed_rules": displayed_rules,
+                "target_session_id": target_session,
+                "committed_rule_paths": target_record.get("committed_rule_paths", []),
+                "re_reflect_count": target_record.get("re_reflect_count", 0),
+            },
+        )
 
         return {
             "action": "notify",
@@ -224,7 +245,9 @@ def orchestrate_start(command: str, args_json: str = "{}") -> dict:
                 "rejected": "❌",
             }.get(s, "?")
 
-            lines.append(f"  #{i+1} {status_icon} [{target}] {rules} rules — {launched}")
+            lines.append(
+                f"  #{i + 1} {status_icon} [{target}] {rules} rules — {launched}"
+            )
 
         return {
             "action": "notify",

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 
 class TestModels:
     def test_rule_metadata_defaults(self):

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 
 class TestMigration:
     def test_parse_learnings_file_basic(self, tmp_path):

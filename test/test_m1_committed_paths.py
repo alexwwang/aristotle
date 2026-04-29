@@ -38,6 +38,7 @@ if _NEW_APIS_AVAILABLE:
     try:
         # Check if _update_record_field exists (M1 tech spec §3.1 proposes this)
         from aristotle_mcp._tools_reflection import _update_record_field  # noqa: F401
+
         _M1_AVAILABLE = True
     except (ImportError, AttributeError):
         pass
@@ -47,7 +48,10 @@ if _NEW_APIS_AVAILABLE:
 # TC-M1-01: checking 完成后路径写入 workflow + reflection record
 # ═══════════════════════════════════════════════════════
 
-@pytest.mark.skipif(not _M1_AVAILABLE, reason="M1 committed_rule_paths not yet implemented")
+
+@pytest.mark.skipif(
+    not _M1_AVAILABLE, reason="M1 committed_rule_paths not yet implemented"
+)
 class TestCommittedPathsCollection:
     """M1 patch: checking 完成后收集规则路径。"""
 
@@ -92,6 +96,7 @@ class TestCommittedPathsCollection:
 
         # 验证 reflection record 包含 committed_rule_paths
         from aristotle_mcp.config import resolve_repo_dir
+
         state_path = resolve_repo_dir().parent / "aristotle-state.json"
         records = json.loads(state_path.read_text(encoding="utf-8"))
         record = records[seq - 1] if seq <= len(records) else {}
@@ -127,6 +132,7 @@ class TestCommittedPathsCollection:
         # 只应包含 ses_m1_test_03 的规则
         for p in paths:
             from aristotle_mcp.frontmatter import read_frontmatter_raw
+
             fm = read_frontmatter_raw(Path(p))
             assert fm.get("source_session") == "ses_m1_test_03"
 
@@ -147,7 +153,10 @@ class TestCommittedPathsCollection:
 # TC-M1-02: confirm 使用 committed_rule_paths 直接 commit
 # ═══════════════════════════════════════════════════════
 
-@pytest.mark.skipif(not _M1_AVAILABLE, reason="M1 committed_rule_paths not yet implemented")
+
+@pytest.mark.skipif(
+    not _M1_AVAILABLE, reason="M1 committed_rule_paths not yet implemented"
+)
 class TestConfirmUsesCommittedPaths:
     """M1 patch: confirm 优先使用已记录的路径。"""
 
@@ -196,6 +205,7 @@ class TestConfirmUsesCommittedPaths:
 
         # 验证规则已被 commit（状态变为 verified）
         from aristotle_mcp.frontmatter import read_frontmatter_raw
+
         fm = read_frontmatter_raw(Path(rule_path))
         assert fm.get("status") == "verified"
 
@@ -205,7 +215,9 @@ class TestConfirmUsesCommittedPaths:
 
         # Validates pre-M1 behavior AND ensures M1 branch was evaluated
         wf = _load_workflow(review_wf_id)
-        assert "committed_rule_paths" in wf or True  # M1: will assert populated paths after implementation
+        assert (
+            "committed_rule_paths" in wf or True
+        )  # M1: will assert populated paths after implementation
 
         # 预先将规则 commit（模拟 C auto-commit）
         commit_rule(rule_path)
@@ -269,7 +281,10 @@ class TestConfirmUsesCommittedPaths:
 # TC-M1-03: 回归测试
 # ═══════════════════════════════════════════════════════
 
-@pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 committed_rule_paths APIs not available")
+
+@pytest.mark.skipif(
+    not _NEW_APIS_AVAILABLE, reason="M1 committed_rule_paths APIs not available"
+)
 class TestM1Regression:
     """M1 补丁回归：现有功能不退化。"""
 

@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import json
 import time
-from pathlib import Path
 
 import pytest
 
@@ -20,23 +19,23 @@ from _orch_helpers import (
     _load_workflow,
     _save_workflow,
     init_repo_tool,
-    write_rule,
-    stage_rule,
-    commit_rule,
     orchestrate_start,
     orchestrate_on_event,
 )
 from conftest import _NEW_APIS_AVAILABLE
 
 if _NEW_APIS_AVAILABLE:
-    from conftest import _next_sequence, _ensure_repo_initialized, _cleanup_stale_workflows
+    from conftest import (
+        _next_sequence,
+        _ensure_repo_initialized,
+        _cleanup_stale_workflows,
+    )
 
 
 # ═══════════════════════════════════════════════════════
 # TestOrchestrateStart (learn workflow)
 # ═══════════════════════════════════════════════════════
 class TestOrchestrateStart:
-
     def test_learn_with_query_returns_fire_o(self):
         result = _start_learn_workflow("How to fix Prisma connection pool timeouts?")
         assert result["action"] == "fire_o"
@@ -90,7 +89,9 @@ class TestOrchestrateStart:
         assert result["action"] == "fire_o"
 
     def test_reflect_command_returns_placeholder(self):
-        result = orchestrate_start("reflect", json.dumps({"target_session_id": "ses_test"}))
+        result = orchestrate_start(
+            "reflect", json.dumps({"target_session_id": "ses_test"})
+        )
         assert "workflow_id" in result
         assert result.get("action") in ("fire_sub", "notify")
 
@@ -116,18 +117,24 @@ class TestOrchestrateStart:
 # TestOrchestrateOnEvent (learn o_done flow)
 # ═══════════════════════════════════════════════════════
 class TestOrchestrateOnEvent:
-
     def test_o_done_triggers_search(self):
         start = _start_learn_workflow("How to fix Prisma connection pool timeouts?")
         wf_id = start["workflow_id"]
 
-        result = orchestrate_on_event("o_done", json.dumps({
-            "workflow_id": wf_id,
-            "result": json.dumps({
-                "domain": "database_operations",
-                "task_goal": "connection_pool_management",
-            }),
-        }))
+        result = orchestrate_on_event(
+            "o_done",
+            json.dumps(
+                {
+                    "workflow_id": wf_id,
+                    "result": json.dumps(
+                        {
+                            "domain": "database_operations",
+                            "task_goal": "connection_pool_management",
+                        }
+                    ),
+                }
+            ),
+        )
 
         assert result["action"] == "notify"
         assert "workflow_id" in result
@@ -136,18 +143,28 @@ class TestOrchestrateOnEvent:
         start = _start_learn_workflow("test query")
         wf_id = start["workflow_id"]
 
-        result = orchestrate_on_event("o_done", json.dumps({
-            "workflow_id": wf_id,
-            "result": json.dumps({}),
-        }))
+        result = orchestrate_on_event(
+            "o_done",
+            json.dumps(
+                {
+                    "workflow_id": wf_id,
+                    "result": json.dumps({}),
+                }
+            ),
+        )
 
         assert result["action"] == "notify"
 
     def test_unknown_workflow_returns_error(self):
-        result = orchestrate_on_event("o_done", json.dumps({
-            "workflow_id": "wf_0000000000000000",
-            "result": "{}",
-        }))
+        result = orchestrate_on_event(
+            "o_done",
+            json.dumps(
+                {
+                    "workflow_id": "wf_0000000000000000",
+                    "result": "{}",
+                }
+            ),
+        )
         assert result["action"] == "notify"
         assert "Unknown workflow" in result.get("message", "")
 
@@ -155,10 +172,15 @@ class TestOrchestrateOnEvent:
         start = _start_learn_workflow("Prisma pool timeout")
         wf_id = start["workflow_id"]
 
-        orchestrate_on_event("o_done", json.dumps({
-            "workflow_id": wf_id,
-            "result": json.dumps({"domain": "db", "task_goal": "pool"}),
-        }))
+        orchestrate_on_event(
+            "o_done",
+            json.dumps(
+                {
+                    "workflow_id": wf_id,
+                    "result": json.dumps({"domain": "db", "task_goal": "pool"}),
+                }
+            ),
+        )
 
         wf = _load_workflow(wf_id)
         assert wf["phase"] == "done"
@@ -174,10 +196,15 @@ class TestOrchestrateOnEvent:
         wf = _load_workflow(wf_id)
         _save_workflow(wf_id, {**wf, "phase": "done"})
 
-        result = orchestrate_on_event("o_done", json.dumps({
-            "workflow_id": wf_id,
-            "result": json.dumps({"domain": "db"}),
-        }))
+        result = orchestrate_on_event(
+            "o_done",
+            json.dumps(
+                {
+                    "workflow_id": wf_id,
+                    "result": json.dumps({"domain": "db"}),
+                }
+            ),
+        )
 
         assert result["action"] == "notify"
 
@@ -185,23 +212,35 @@ class TestOrchestrateOnEvent:
         start = _start_learn_workflow("test query")
         wf_id = start["workflow_id"]
 
-        result = orchestrate_on_event("o_done", json.dumps({
-            "workflow_id": wf_id,
-            "result": "This is a plain string result, not JSON",
-        }))
+        result = orchestrate_on_event(
+            "o_done",
+            json.dumps(
+                {
+                    "workflow_id": wf_id,
+                    "result": "This is a plain string result, not JSON",
+                }
+            ),
+        )
 
         assert result["action"] == "notify"
 
     def test_o_done_missing_workflow_id(self):
-        result = orchestrate_on_event("o_done", json.dumps({
-            "result": json.dumps({"domain": "db"}),
-        }))
+        result = orchestrate_on_event(
+            "o_done",
+            json.dumps(
+                {
+                    "result": json.dumps({"domain": "db"}),
+                }
+            ),
+        )
         assert result["action"] == "notify"
 
     def test_unknown_event_type_returns_notify(self):
         start = _start_learn_workflow("test query")
         wf_id = start["workflow_id"]
-        result = orchestrate_on_event("unknown_event", json.dumps({"workflow_id": wf_id}))
+        result = orchestrate_on_event(
+            "unknown_event", json.dumps({"workflow_id": wf_id})
+        )
         assert result["action"] == "notify"
 
 
@@ -209,7 +248,6 @@ class TestOrchestrateOnEvent:
 # TestWorkflowStateManagement
 # ═══════════════════════════════════════════════════════
 class TestWorkflowStateManagement:
-
     def test_workflow_dir_created(self, tmp_repo):
         wf_dir = tmp_repo / ".workflows"
         assert not wf_dir.exists()
@@ -252,7 +290,6 @@ class TestWorkflowStateManagement:
 # TestIntegrationMockO
 # ═══════════════════════════════════════════════════════
 class TestIntegrationMockO:
-
     def test_full_learn_flow_with_rules(self):
         _make_verified_rule("HALLUCINATION", scope="user")
         _make_verified_rule("PATTERN_VIOLATION", scope="user")
@@ -260,13 +297,20 @@ class TestIntegrationMockO:
         start = _start_learn_workflow("How to fix Prisma connection pool timeouts?")
         wf_id = start["workflow_id"]
 
-        o_result = orchestrate_on_event("o_done", json.dumps({
-            "workflow_id": wf_id,
-            "result": json.dumps({
-                "domain": "database_operations",
-                "task_goal": "connection_pool_management",
-            }),
-        }))
+        o_result = orchestrate_on_event(
+            "o_done",
+            json.dumps(
+                {
+                    "workflow_id": wf_id,
+                    "result": json.dumps(
+                        {
+                            "domain": "database_operations",
+                            "task_goal": "connection_pool_management",
+                        }
+                    ),
+                }
+            ),
+        )
 
         # M5: when rules are found, _do_search_and_notify returns fire_score
         assert o_result["action"] == "fire_score"
@@ -279,13 +323,20 @@ class TestIntegrationMockO:
         start = _start_learn_workflow("obscure topic with no matching rules")
         wf_id = start["workflow_id"]
 
-        o_result = orchestrate_on_event("o_done", json.dumps({
-            "workflow_id": wf_id,
-            "result": json.dumps({
-                "domain": "unknown",
-                "task_goal": "unknown",
-            }),
-        }))
+        o_result = orchestrate_on_event(
+            "o_done",
+            json.dumps(
+                {
+                    "workflow_id": wf_id,
+                    "result": json.dumps(
+                        {
+                            "domain": "unknown",
+                            "task_goal": "unknown",
+                        }
+                    ),
+                }
+            ),
+        )
 
         assert o_result["action"] == "notify"
         wf = _load_workflow(wf_id)
@@ -324,19 +375,25 @@ class TestIntegrationMockO:
 # TestSearchParamMapping
 # ═══════════════════════════════════════════════════════
 class TestSearchParamMapping:
-
     def test_intent_tags_passed_to_search(self):
         result = _start_learn_workflow("How to fix Prisma connection pool timeouts?")
         wf_id = result["workflow_id"]
 
-        orchestrate_on_event("o_done", json.dumps({
-            "workflow_id": wf_id,
-            "result": json.dumps({
-                "domain": "database_operations",
-                "task_goal": "connection_pool_management",
-                "failed_skill": "prisma_client",
-            }),
-        }))
+        orchestrate_on_event(
+            "o_done",
+            json.dumps(
+                {
+                    "workflow_id": wf_id,
+                    "result": json.dumps(
+                        {
+                            "domain": "database_operations",
+                            "task_goal": "connection_pool_management",
+                            "failed_skill": "prisma_client",
+                        }
+                    ),
+                }
+            ),
+        )
 
         wf = _load_workflow(wf_id)
         assert wf["phase"] == "done"
@@ -345,10 +402,15 @@ class TestSearchParamMapping:
         result = _start_learn_workflow("test query")
         wf_id = result["workflow_id"]
 
-        orchestrate_on_event("o_done", json.dumps({
-            "workflow_id": wf_id,
-            "result": json.dumps({}),
-        }))
+        orchestrate_on_event(
+            "o_done",
+            json.dumps(
+                {
+                    "workflow_id": wf_id,
+                    "result": json.dumps({}),
+                }
+            ),
+        )
 
         wf = _load_workflow(wf_id)
         assert wf["phase"] == "done"
@@ -358,20 +420,28 @@ class TestSearchParamMapping:
 # TestOrchestrateStartSessions
 # ═══════════════════════════════════════════════════════
 class TestOrchestrateStartSessions:
-
-    def _setup_reflection_record_with_status(self, status: str = "auto_committed", sequence: int = 1):
+    def _setup_reflection_record_with_status(
+        self, status: str = "auto_committed", sequence: int = 1
+    ):
         from aristotle_mcp.config import resolve_repo_dir
+
         state_path = resolve_repo_dir().parent / "aristotle-state.json"
-        records = [{
-            "id": f"rec_{sequence}",
-            "status": status,
-            "target_label": "current",
-            "target_session_id": "ses_test123",
-            "reflector_session_id": "ses_r456",
-            "rules_count": 2,
-            "launched_at": "2026-04-22T10:00:00+08:00",
-            "draft_file_path": str(resolve_repo_dir().parent / "aristotle-drafts" / f"rec_{sequence}.md"),
-        }]
+        records = [
+            {
+                "id": f"rec_{sequence}",
+                "status": status,
+                "target_label": "current",
+                "target_session_id": "ses_test123",
+                "reflector_session_id": "ses_r456",
+                "rules_count": 2,
+                "launched_at": "2026-04-22T10:00:00+08:00",
+                "draft_file_path": str(
+                    resolve_repo_dir().parent
+                    / "aristotle-drafts"
+                    / f"rec_{sequence}.md"
+                ),
+            }
+        ]
         state_path.parent.mkdir(parents=True, exist_ok=True)
         state_path.write_text(json.dumps(records), encoding="utf-8")
 
@@ -386,6 +456,7 @@ class TestOrchestrateStartSessions:
     @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="New APIs not yet implemented")
     def test_sessions_empty_state(self):
         from aristotle_mcp.config import resolve_repo_dir
+
         state_path = resolve_repo_dir().parent / "aristotle-state.json"
         if state_path.exists():
             state_path.unlink()
@@ -402,13 +473,16 @@ class TestOrchestrateStartSessions:
         assert not wf_dir.exists()
 
     @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="New APIs not yet implemented")
-    @pytest.mark.parametrize("status,icon", [
-        ("auto_committed", "✅"),
-        ("partial_commit", "📋"),
-        ("processing", "⏳"),
-        ("checker_failed", "❌"),
-        ("rejected", "❌"),
-    ])
+    @pytest.mark.parametrize(
+        "status,icon",
+        [
+            ("auto_committed", "✅"),
+            ("partial_commit", "📋"),
+            ("processing", "⏳"),
+            ("checker_failed", "❌"),
+            ("rejected", "❌"),
+        ],
+    )
     def test_sessions_format_status_icons(self, status, icon):
         self._setup_reflection_record_with_status(status, 1)
         result = orchestrate_start("sessions", "{}")
@@ -419,10 +493,10 @@ class TestOrchestrateStartSessions:
 # TestHelperFunctions
 # ═══════════════════════════════════════════════════════
 class TestHelperFunctions:
-
     @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="New APIs not yet implemented")
     def test_next_sequence_increments(self):
         from aristotle_mcp.config import resolve_repo_dir
+
         state_path = resolve_repo_dir().parent / "aristotle-state.json"
         state_path.parent.mkdir(parents=True, exist_ok=True)
         state_path.write_text(json.dumps([]), encoding="utf-8")
@@ -430,12 +504,15 @@ class TestHelperFunctions:
         assert _next_sequence() == 1
         state_path.write_text(json.dumps([{"id": "rec_1"}]), encoding="utf-8")
         assert _next_sequence() == 2
-        state_path.write_text(json.dumps([{"id": "rec_1"}, {"id": "rec_2"}]), encoding="utf-8")
+        state_path.write_text(
+            json.dumps([{"id": "rec_1"}, {"id": "rec_2"}]), encoding="utf-8"
+        )
         assert _next_sequence() == 3
 
     @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="New APIs not yet implemented")
     def test_next_sequence_first(self):
         from aristotle_mcp.config import resolve_repo_dir
+
         state_path = resolve_repo_dir().parent / "aristotle-state.json"
         state_path.parent.mkdir(parents=True, exist_ok=True)
         state_path.write_text(json.dumps([]), encoding="utf-8")
@@ -446,6 +523,7 @@ class TestHelperFunctions:
         git_dir = tmp_repo / ".git"
         if git_dir.exists():
             import shutil
+
             shutil.rmtree(git_dir)
         assert not git_dir.exists()
 
@@ -463,24 +541,33 @@ class TestHelperFunctions:
     @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="New APIs not yet implemented")
     def test_cleanup_stale_workflows_done(self, tmp_repo):
         from datetime import datetime, timezone, timedelta
+
         wf_dir = tmp_repo / ".workflows"
         wf_dir.mkdir(parents=True)
         old_time = (datetime.now(timezone.utc) - timedelta(hours=25)).isoformat()
         wf_file = wf_dir / "wf_old123.json"
-        wf_file.write_text(json.dumps({"phase": "done", "updated_at": old_time}), encoding="utf-8")
+        wf_file.write_text(
+            json.dumps({"phase": "done", "updated_at": old_time}), encoding="utf-8"
+        )
 
         _cleanup_stale_workflows(max_age_hours=24)
         assert not wf_file.exists()
 
     @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="New APIs not yet implemented")
-    @pytest.mark.parametrize("phase", ["reflecting", "checking", "review", "intent_extraction", "search", "init"])
+    @pytest.mark.parametrize(
+        "phase",
+        ["reflecting", "checking", "review", "intent_extraction", "search", "init"],
+    )
     def test_cleanup_stale_workflows_stuck(self, tmp_repo, phase):
         from datetime import datetime, timezone, timedelta
+
         wf_dir = tmp_repo / ".workflows"
         wf_dir.mkdir(parents=True)
         old_time = (datetime.now(timezone.utc) - timedelta(hours=49)).isoformat()
         wf_file = wf_dir / f"wf_stuck_{phase}.json"
-        wf_file.write_text(json.dumps({"phase": phase, "updated_at": old_time}), encoding="utf-8")
+        wf_file.write_text(
+            json.dumps({"phase": phase, "updated_at": old_time}), encoding="utf-8"
+        )
 
         _cleanup_stale_workflows(max_age_hours=24)
         assert not wf_file.exists()

@@ -37,7 +37,8 @@ except ImportError:
 _MODELS_HAS_CONFLICTS = False
 try:
     from aristotle_mcp.models import RuleMetadata
-    _MODELS_HAS_CONFLICTS = 'conflicts_with' in RuleMetadata.__dataclass_fields__
+
+    _MODELS_HAS_CONFLICTS = "conflicts_with" in RuleMetadata.__dataclass_fields__
 except (ImportError, AttributeError):
     pass
 
@@ -45,7 +46,9 @@ except (ImportError, AttributeError):
 # ═══════════════════════════════════════════════════════
 # TestDetectConflicts
 # ═══════════════════════════════════════════════════════
-@pytest.mark.skipif(not _M9_AVAILABLE, reason="M9 conflict detection APIs not yet implemented")
+@pytest.mark.skipif(
+    not _M9_AVAILABLE, reason="M9 conflict detection APIs not yet implemented"
+)
 class TestDetectConflicts:
     """M9: detect_conflicts detection."""
 
@@ -152,7 +155,9 @@ class TestDetectConflicts:
 # ═══════════════════════════════════════════════════════
 # TestCommitRuleConflictAnnotation
 # ═══════════════════════════════════════════════════════
-@pytest.mark.skipif(not _M9_AVAILABLE, reason="M9 conflict detection APIs not yet implemented")
+@pytest.mark.skipif(
+    not _M9_AVAILABLE, reason="M9 conflict detection APIs not yet implemented"
+)
 class TestCommitRuleConflictAnnotation:
     """M9: commit_rule 后置冲突标注。"""
 
@@ -222,7 +227,7 @@ class TestCommitRuleConflictAnnotation:
             return cw or []
 
         cw1 = parse_cw(fm1)
-        cw2 = parse_cw(fm2)
+        parse_cw(fm2)
 
         id2 = fm2.get("id", "")
         assert id2 in cw1, f"w1 should contain w2's ID ({id2}) in conflicts_with"
@@ -232,7 +237,9 @@ class TestCommitRuleConflictAnnotation:
 # TestConflictsWithParsing
 # ═══════════════════════════════════════════════════════
 # NOTE: These tests depend on models.py RuleMetadata having conflicts_with field (M6 tech spec covers this)
-@pytest.mark.skipif(not _MODELS_HAS_CONFLICTS, reason="RuleMetadata.conflicts_with not yet added")
+@pytest.mark.skipif(
+    not _MODELS_HAS_CONFLICTS, reason="RuleMetadata.conflicts_with not yet added"
+)
 class TestConflictsWithParsing:
     """M9: conflicts_with 格式兼容解析。"""
 
@@ -273,7 +280,9 @@ class TestConflictsWithParsing:
 # ═══════════════════════════════════════════════════════
 # TestCheckingHandlerConflicts
 # ═══════════════════════════════════════════════════════
-@pytest.mark.skipif(not _M9_AVAILABLE, reason="M9 conflict detection APIs not yet implemented")
+@pytest.mark.skipif(
+    not _M9_AVAILABLE, reason="M9 conflict detection APIs not yet implemented"
+)
 class TestCheckingHandlerConflicts:
     """M9: checking 完成后冲突警告出现在通知消息中。"""
 

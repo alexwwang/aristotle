@@ -8,7 +8,6 @@ Product spec ref: §3.2.3.2 re_reflect loop prevention, R4-FIX
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 import pytest
 
@@ -36,7 +35,9 @@ if _NEW_APIS_AVAILABLE:
 class TestReReflectCountPropagation:
     """re_reflect_count cross-workflow propagation (R4 loop prevention)."""
 
-    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
+    @pytest.mark.skipif(
+        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
+    )
     def test_re_reflect_count_increments_to_new_workflow(self):
         init_repo_tool()
         _setup_reflection_record(1)
@@ -55,6 +56,7 @@ class TestReReflectCountPropagation:
         r_done = _fire_r_done_event(new_wf_id, "ses_r2")
 
         from aristotle_mcp.config import resolve_repo_dir
+
         state_path = resolve_repo_dir().parent / "aristotle-state.json"
         records = json.loads(state_path.read_text(encoding="utf-8"))
         assert records[-1]["re_reflect_count"] == 1
@@ -70,7 +72,9 @@ class TestReReflectCountPropagation:
         wf2 = _load_workflow(review2_result["workflow_id"])
         assert wf2["re_reflect_count"] == 1
 
-    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
+    @pytest.mark.skipif(
+        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
+    )
     def test_re_reflect_count_cascades_to_max(self):
         init_repo_tool()
 
@@ -142,10 +146,13 @@ class TestReReflectCountPropagation:
         assert "Max re-reflect" in rr4["message"]
         assert "3" in rr4["message"]
 
-    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
+    @pytest.mark.skipif(
+        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
+    )
     def test_re_reflect_count_inherited_from_record(self):
         init_repo_tool()
         from aristotle_mcp.config import resolve_repo_dir
+
         state_path = resolve_repo_dir().parent / "aristotle-state.json"
         state_path.parent.mkdir(parents=True, exist_ok=True)
         records = [
@@ -156,7 +163,9 @@ class TestReReflectCountPropagation:
                 "target_session_id": "ses_1",
                 "rules_count": 1,
                 "launched_at": "2026-04-22T10:00:00+08:00",
-                "draft_file_path": str(resolve_repo_dir().parent / "aristotle-drafts" / "rec_1.md"),
+                "draft_file_path": str(
+                    resolve_repo_dir().parent / "aristotle-drafts" / "rec_1.md"
+                ),
             },
             {
                 "id": "rec_2",
@@ -165,11 +174,15 @@ class TestReReflectCountPropagation:
                 "target_session_id": "ses_1",
                 "rules_count": 0,
                 "launched_at": "2026-04-22T11:00:00+08:00",
-                "draft_file_path": str(resolve_repo_dir().parent / "aristotle-drafts" / "rec_2.md"),
+                "draft_file_path": str(
+                    resolve_repo_dir().parent / "aristotle-drafts" / "rec_2.md"
+                ),
                 "re_reflect_count": 2,
             },
         ]
-        state_path.write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
+        state_path.write_text(
+            json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
 
         _create_draft_file(2, "## DRAFT for re_reflect test")
 
@@ -185,7 +198,9 @@ class TestReReflectCountPropagation:
         new_wf = _load_workflow(rr["workflow_id"])
         assert new_wf["re_reflect_count"] == 3
 
-    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
+    @pytest.mark.skipif(
+        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
+    )
     def test_re_reflect_count_zero_not_written_to_record(self):
         start = _start_reflect_workflow("ses_first")
         wf_id = start["workflow_id"]
@@ -193,6 +208,7 @@ class TestReReflectCountPropagation:
         _fire_r_done_event(wf_id, "ses_r_first")
 
         from aristotle_mcp.config import resolve_repo_dir
+
         state_path = resolve_repo_dir().parent / "aristotle-state.json"
         records = json.loads(state_path.read_text(encoding="utf-8"))
 
