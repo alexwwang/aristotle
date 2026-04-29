@@ -198,7 +198,7 @@ check "resolveMcpProjectDir is exported" \
 echo ""
 echo "── Deploy: install dir sync ──"
 
-INSTALL_DIR="$HOME/.claude/skills/aristotle"
+INSTALL_DIR="$HOME/.config/opencode/aristotle"
 
 check "install dir exists" \
     "[ -d '$INSTALL_DIR' ]"

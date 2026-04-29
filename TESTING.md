@@ -1,6 +1,6 @@
 # Aristotle — Testing Guide
 
-> Aristotle MCP rule engine + Bridge plugin test overview. Current coverage: 325 pytest + 103 static + 144 vitest + 64 regression = 636 checks.
+> Aristotle MCP rule engine + Bridge plugin test overview. Current coverage: 325 pytest + 103 static + 148 vitest + 64 regression = 640 checks.
 
 ## 1. Test Suites Overview
 
@@ -243,8 +243,7 @@ cd plugins/aristotle-bridge && bunx vitest run
 bash test/regression_b1_checks.sh
 ```
 
-Expected result: `325 passed` + `103 passed` + `144 passed` + `64 passed` = **636 checks, 0 failures**.
-
+Expected result: `325 passed` + `103 passed` + `148 passed` + `64 passed` = **640 checks, 0 failures**.
 ### 8.2 Pre-Test Deployment Checklist
 
 When code has changed, **before E2E/live testing**, execute the following steps in order:
@@ -261,10 +260,11 @@ npx bun build src/index.ts --outdir dist --target node --format esm \
   --external zod --external effect --external @opencode-ai/plugin
 
 # Step 3: Sync code to install directory (MCP server code)
-rsync -av --exclude='.venv' --exclude='.git' --exclude='__pycache__' \
-  --exclude='*.egg-info' --exclude='.pytest_cache' --exclude='.ruff_cache' \
-  "$ARISTOTLE_PROJECT_DIR/" "$HOME/.claude/skills/aristotle/"
-cd "$HOME/.claude/skills/aristotle" && uv sync
+mkdir -p "$HOME/.config/opencode/aristotle/aristotle_mcp"
+cp -r "$ARISTOTLE_PROJECT_DIR/aristotle_mcp/"* "$HOME/.config/opencode/aristotle/aristotle_mcp/"
+cp "$ARISTOTLE_PROJECT_DIR/pyproject.toml" "$HOME/.config/opencode/aristotle/pyproject.toml"
+cp "$ARISTOTLE_PROJECT_DIR/uv.lock" "$HOME/.config/opencode/aristotle/uv.lock"
+cd "$HOME/.config/opencode/aristotle" && uv sync
 
 # Step 4: Deploy Bridge Plugin
 cp "$ARISTOTLE_PROJECT_DIR/plugins/aristotle-bridge/dist/index.js" \
@@ -289,20 +289,4 @@ bash "$ARISTOTLE_PROJECT_DIR/test/regression_b1_checks.sh"
 | 5 | Clear state | Stale marker/workflows cause false failures |
 | 6 | Regression check | Verify sync/deploy correctness (64 assertions) |
 
-Expected result: `325 passed` + `103 passed` + `144 passed` + `64 passed` = **636 checks, 0 failures**.
-
-## 9. Gate #1 Verification (Completed)
-
-**Question**: Does `session.prompt({noReply: true})` inject a system-reminder into the parent session?
-
-**Result**: **No.** `noReply: true` causes a hang bug (OpenCode issues #4431, #14451) — it does not inject messages into the parent session. This was verified via `test/gate1-noReply-verify.sh`.
-
-**Decision**: Bridge Plugin adopted polling mode instead of noReply injection. SKILL.md uses idle detection + `aristotle_check`/`aristotle_abort` tools to manage async reflection without blocking the main session.
-
-## 10. Gate #2 Verification (Completed)
-
-**Question**: Does `session.prompt({noReply: true})` hang? Is the message visible?
-
-**Result**: **No hang, message visible.** Gate #2 verified via `test/gate2-prompt-noReply-verify.sh`: `prompt()` + `noReply:true` returned in 1180ms, marker found in session messages.
-
-**Decision**: Bug #14b uses `notifyParent()` method, calling `client.session.prompt({noReply:true})` after chain completion to notify the parent session. Best-effort: failures are logged but never throw.
+Expected result: `325 passed` + `103 passed` + `148 passed` + `64 passed` = **640 checks, 0 failures**.
