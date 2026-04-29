@@ -147,6 +147,13 @@ Prepare the rules in memory. Present them as DRAFTS.
 
 ---
 
+## Key Findings
+
+For each reflection, provide a one-line error→rule pairing:
+- [error_summary]: [proposed_rule_summary]
+
+---
+
 ## Draft Rules Summary
 
 | # | Severity | Category | Intent Domain | Location | Proposed Rule |

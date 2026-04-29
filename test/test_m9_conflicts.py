@@ -274,7 +274,7 @@ class TestConflictsWithParsing:
         from aristotle_mcp.models import from_frontmatter_dict
 
         meta = from_frontmatter_dict({"id": "rec_test"})
-        assert meta.conflicts_with is None
+        assert meta.conflicts_with == []
 
 
 # ═══════════════════════════════════════════════════════

@@ -15,7 +15,7 @@ from aristotle_mcp._orch_state import (
     _next_sequence,
     _save_workflow,
 )
-from aristotle_mcp._orch_parsers import _do_search_and_notify, _format_review_output
+from aristotle_mcp._orch_parsers import _do_search_and_notify, _enrich_rules_metadata, _format_review_output
 from aristotle_mcp._tools_rules import list_rules
 
 
@@ -191,10 +191,12 @@ def orchestrate_start(command: str, args_json: str = "{}") -> dict:
             limit=20,
         )
 
-        displayed_rules = [r.get("path", "") for r in rules_result.get("rules", [])]
+        staging_rules, verified_rules, audit_decisions = _enrich_rules_metadata(rules_result)
+
+        staging_rule_paths = [r.get("path", "") for r in staging_rules]
 
         message = _format_review_output(
-            sequence, target_record, draft_content, rules_result
+            sequence, target_record, draft_content, staging_rules, verified_rules, audit_decisions
         )
 
         _save_workflow(
@@ -204,7 +206,7 @@ def orchestrate_start(command: str, args_json: str = "{}") -> dict:
                 "command": "review",
                 "sequence": sequence,
                 "target_record": target_record,
-                "displayed_rules": displayed_rules,
+                "staging_rule_paths": staging_rule_paths,
                 "target_session_id": target_session,
                 "committed_rule_paths": target_record.get("committed_rule_paths", []),
                 "re_reflect_count": target_record.get("re_reflect_count", 0),

@@ -134,7 +134,7 @@ class TestOrchestrateReviewAction:
         wf_id = review_result["workflow_id"]
 
         wf = _load_workflow(wf_id)
-        assert len(wf["displayed_rules"]) > 0
+        assert len(wf["staging_rule_paths"]) > 0
 
         result = orchestrate_review_action(
             wf_id,
@@ -176,7 +176,7 @@ class TestOrchestrateReviewAction:
         )
 
         assert result["action"] == "fire_o"
-        displayed = wf["displayed_rules"]
+        displayed = wf["staging_rule_paths"]
         target_path = displayed[1] if len(displayed) > 1 else displayed[0]
         assert target_path in result["o_prompt"]
 
@@ -283,7 +283,7 @@ class TestOrchestrateReviewAction:
         wf_id = review_result["workflow_id"]
 
         wf = _load_workflow(wf_id)
-        assert wf["displayed_rules"] == []
+        assert wf["staging_rule_paths"] == []
 
         result = orchestrate_review_action(
             wf_id,
@@ -311,7 +311,7 @@ class TestOrchestrateReviewAction:
         review_result = orchestrate_start("review", json.dumps({"sequence": 1}))
         wf_id = review_result["workflow_id"]
         wf = _load_workflow(wf_id)
-        n_rules = len(wf["displayed_rules"])
+        n_rules = len(wf["staging_rule_paths"])
         assert n_rules > 0
 
         result = orchestrate_review_action(
@@ -583,7 +583,7 @@ class TestIntegrationReview:
 
         wf = _load_workflow(wf_id)
         assert wf["phase"] == "review"
-        assert len(wf["displayed_rules"]) > 0
+        assert len(wf["staging_rule_paths"]) > 0
         assert "DRAFT Report" in review_result["message"]
 
         confirm_result = orchestrate_review_action(wf_id, "confirm")

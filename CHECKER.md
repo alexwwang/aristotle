@@ -147,7 +147,8 @@ The Checker must perform this transformation when calling `write_rule`.
 
 For each validated Reflection, execute the following sequence using direct tool function calls:
 
-1. Call `aristotle_write_rule(content=..., scope=..., category=..., source_session=..., message_range=..., intent_domain=..., intent_task_goal=..., failed_skill=..., error_summary=..., project_path=..., confidence=0.7)`
+1. Call `aristotle_write_rule(content=..., scope=..., category=..., source_session=..., message_range=..., intent_domain=..., intent_task_goal=..., failed_skill=..., error_summary=..., rule_summary=..., project_path=..., confidence=0.7)`
+   - `rule_summary`: Extract the one-line `**Proposed Rule**` text from the DRAFT's Reflection block
    → Returns `file_path` and `rule_id`
 
 2. Call `aristotle_stage_rule(file_path=<returned path>)`

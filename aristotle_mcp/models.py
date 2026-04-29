@@ -9,9 +9,10 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _parse_conflicts_with(value: object) -> list | None:
+def _parse_conflicts_with(value: object) -> list:
+    """Parse conflicts_with field. Returns empty list for None/invalid inputs."""
     if value is None:
-        return None
+        return []
     if isinstance(value, list):
         return value
     if isinstance(value, str):
@@ -19,10 +20,10 @@ def _parse_conflicts_with(value: object) -> list | None:
 
         try:
             parsed = json.loads(value)
-            return parsed if isinstance(parsed, list) else None
+            return parsed if isinstance(parsed, list) else []
         except (json.JSONDecodeError, ValueError):
-            return None
-    return None
+            return []
+    return []
 
 
 def _yaml_value(value: object) -> str:
@@ -84,6 +85,7 @@ class RuleMetadata:
     intent_tags: dict | None = None  # {"domain": "...", "task_goal": "..."}
     failed_skill: str | None = None  # 关联故障技能 ID
     error_summary: str | None = None  # 错误现场精简总结
+    rule_summary: str | None = None  # One-line proposed rule summary (from DRAFT Key Findings)
 
     # M6/M7: Feedback Signal
     success_rate: float | None = None
@@ -92,7 +94,7 @@ class RuleMetadata:
     feedback_count: int | None = None
 
     # M9: Rule Relations
-    conflicts_with: list | None = None
+    conflicts_with: list = field(default_factory=list)
 
 
 @dataclass
@@ -137,6 +139,7 @@ def to_frontmatter_string(metadata: RuleMetadata) -> str:
         "feedback_count": metadata.feedback_count
         if (metadata.feedback_count or 0) > 0
         else None,
+        "rule_summary": metadata.rule_summary,
         "conflicts_with": metadata.conflicts_with,
     }
     for key, value in md.items():
@@ -175,6 +178,7 @@ def from_frontmatter_dict(data: dict) -> RuleMetadata:
         failure_rate=data.get("failure_rate"),
         sample_size=int(data.get("sample_size", 0) or 0),
         feedback_count=int(data.get("feedback_count", 0) or 0),
+        rule_summary=data.get("rule_summary"),
         conflicts_with=_parse_conflicts_with(data.get("conflicts_with")),
     )
 

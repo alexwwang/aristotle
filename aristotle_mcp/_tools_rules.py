@@ -119,6 +119,7 @@ def write_rule(
     intent_task_goal: str | None = None,
     failed_skill: str | None = None,
     error_summary: str | None = None,
+    rule_summary: str | None = None,
 ) -> dict:
     """Write a new rule file to the repository.
 
@@ -197,6 +198,7 @@ def write_rule(
         intent_tags=intent_tags,
         failed_skill=failed_skill,
         error_summary=error_summary,
+        rule_summary=rule_summary,
     )
 
     result = write_rule_file(file_path, metadata.__dict__, content)

@@ -5,7 +5,16 @@ import re
 from pathlib import Path
 
 from aristotle_mcp._orch_state import _load_workflow, _save_workflow
+from aristotle_mcp._tools_rules import get_audit_decision as _get_audit_decision
 from aristotle_mcp.config import SCORING_TOP_N
+from aristotle_mcp.models import _parse_conflicts_with  # noqa: F401 — used by _format_review_output
+
+# Audit level → display label mapping (AC-4 requires exact labels)
+_AUDIT_LABELS: dict[str, str] = {
+    "auto": "automatic",
+    "semi": "review suggested",
+    "manual": "manual review required",
+}
 
 
 def _parse_checker_result(result: str) -> tuple[int, int]:
@@ -30,46 +39,183 @@ def _format_review_output(
     sequence: int,
     target_record: dict,
     draft_content: str,
-    rules_result: dict,
+    staging_rules: list[dict],
+    verified_rules: list[dict],
+    audit_decisions: list[dict | None],
 ) -> str:
+    """Format enhanced review notification with enriched data."""
     status = target_record.get("status", "?")
     target = target_record.get("target_label", "?")
-    launched = target_record.get("launched_at", "?")[:16]
+    launched = (target_record.get("launched_at") or "?")[:16]
 
     lines = [
         f"🦉 Review #{sequence} — [{target}] {status} — {launched}",
         "",
     ]
 
-    if draft_content:
-        preview = draft_content[:2000]
-        if len(draft_content) > 2000:
-            preview += "\n... (truncated)"
-        lines.append("## DRAFT Report")
-        lines.append(preview)
+    # Header: Δ and audit level
+    non_none = [ad for ad in audit_decisions if ad is not None]
+    if non_none:
+        min_entry = min(non_none, key=lambda x: x.get("delta", 1.0))
+        delta = min_entry.get("delta", 0.0)
+        audit_level = min_entry.get("audit_level", "manual")
+        label = _AUDIT_LABELS.get(audit_level, audit_level)
+        lines.append(f"Δ {delta:.2f} → {label}")
         lines.append("")
 
-    rules = rules_result.get("rules", [])
-    count = rules_result.get("count", 0)
-    if count > 0:
-        lines.append(f"## Associated Rules ({count})")
-        for i, r in enumerate(rules[:10], 1):
+    # DRAFT summary
+    if draft_content:
+        summary_lines, total_chars = _parse_draft_summary(draft_content)
+        lines.append("## DRAFT Summary")
+        for sl in summary_lines:
+            lines.append(f"  {sl}")
+        if total_chars > 0:
+            lines.append(f"  ({total_chars} chars — use 'show draft' for full report)")
+        lines.append("")
+
+    # Staging rules (numbered)
+    if staging_rules:
+        lines.append("## Rules for Review")
+        for i, r in enumerate(staging_rules, 1):
             meta = r.get("metadata", {})
             summary = meta.get("error_summary", r.get("path", "?"))
             cat = meta.get("category", "?")
-            rstatus = meta.get("status", "?")
-            lines.append(f"  {i}. [{cat}/{rstatus}] {summary}")
-    else:
-        lines.append("No associated rules found.")
 
+            # Confidence and risk from audit_decisions (single source of truth)
+            ad = audit_decisions[i - 1] if i - 1 < len(audit_decisions) else None
+            conf = 0.7  # default
+            risk = ""
+            if ad is not None:
+                conf = ad.get("confidence", 0.7)
+                risk = ad.get("risk_level", "").upper()
+
+            rule_line = f"  {i}. [{cat}] {summary}"
+            conf_str = f"{conf:.2f}"
+            if conf_str.endswith("0") and not conf_str.endswith("00"):
+                conf_str = conf_str[:-1]  # "0.70" → "0.7", keep "0.00" as-is
+            detail_parts = [f"conf {conf_str}"]
+            if risk:
+                detail_parts.append(risk)
+            rule_line += f"  ({', '.join(detail_parts)})"
+            lines.append(rule_line)
+
+            # Conflicts
+            raw_cw = meta.get("conflicts_with")
+            if raw_cw is not None:
+                parsed = _parse_conflicts_with(raw_cw)
+                if parsed:
+                    if len(parsed) > 3:
+                        lines.append(f"     Conflicts with: {', '.join(parsed[:3])} +{len(parsed) - 3} more")
+                    else:
+                        lines.append(f"     Conflicts with: {', '.join(parsed)}")
+    else:
+        lines.append("## Rules for Review")
+        lines.append("  No rules require review.")
+
+    # Auto-committed rules (unnumbered)
+    if verified_rules:
+        lines.append("")
+        lines.append("## Auto-committed")
+        for r in verified_rules:
+            meta = r.get("metadata", {})
+            summary = meta.get("error_summary", r.get("path", "?"))
+            cat = meta.get("category", "?")
+            lines.append(f"  • [{cat}] {summary}")
+
+    # Action menu
     lines.append("")
     lines.append("Choose an action:")
     lines.append("  1. confirm — Accept all staging rules")
     lines.append("  2. reject — Reject this reflection")
     lines.append("  3. revise N — Revise rule #N (append feedback after colon)")
     lines.append("  4. re-reflect — Request deeper analysis")
+    lines.append("  5. inspect N — View full rule #N")
+    lines.append("  6. show draft — View full DRAFT report")
 
     return "\n".join(lines)
+
+
+def _parse_draft_summary(draft_content: str) -> tuple[list[str], int]:
+    """Extract Key Findings from DRAFT content.
+
+    Returns:
+        (summary_lines, total_chars) where summary_lines is a list of
+        lines to display and total_chars is the full DRAFT character count.
+    """
+    total_chars = len(draft_content)
+
+    if not draft_content or not draft_content.strip():
+        return (["DRAFT report is empty"], total_chars)
+
+    lines = draft_content.split("\n")
+
+    # Find "## Key Findings" heading (exact match on stripped line)
+    kf_start = None
+    for i, line in enumerate(lines):
+        if line.strip() == "## Key Findings":
+            kf_start = i + 1  # start collecting from next line
+            break
+
+    if kf_start is not None:
+        # Collect list items until heading or non-list non-blank line
+        findings = []
+        for j in range(kf_start, len(lines)):
+            line = lines[j]
+            stripped = line.strip()
+            if stripped.startswith("## "):
+                break  # next heading — stop
+            if not stripped:
+                continue  # blank line — skip
+            if stripped.startswith("- "):
+                findings.append(stripped[2:])
+            else:
+                # Non-blank, non-list, non-heading line — terminate
+                break
+
+        if findings:
+            return (findings, total_chars)
+
+    # Fallback: first 3 non-empty lines
+    non_empty = [line.strip() for line in lines if line.strip()]
+    return (non_empty[:3], total_chars)
+
+
+def _enrich_rules_metadata(rules_result: dict) -> tuple[list[dict], list[dict], list[dict | None]]:
+    """Organize rules into staging/verified and compute audit decisions.
+
+    Input: rules_result is the raw return from list_rules() — each rule
+    has structure {path: str, metadata: dict}.
+
+    Returns:
+        (staging_rules, verified_rules, audit_decisions)
+    """
+    rules = rules_result.get("rules", [])
+
+    staging_rules = []
+    verified_rules = []
+
+    for r in rules:
+        meta = r.get("metadata", {})
+        status = meta.get("status", "")
+        if status == "staging":
+            staging_rules.append(r)
+        elif status == "verified":
+            verified_rules.append(r)
+
+    # Compute audit decisions for staging rules only
+    audit_decisions: list[dict | None] = []
+    for r in staging_rules:
+        rule_path = r.get("path", "")
+        try:
+            result = _get_audit_decision(rule_path)
+            if isinstance(result, dict) and result.get("success"):
+                audit_decisions.append(result)
+            else:
+                audit_decisions.append(None)
+        except (ValueError, TypeError, Exception):
+            audit_decisions.append(None)
+
+    return (staging_rules, verified_rules, audit_decisions)
 
 
 def _parse_revised_rule(content: str) -> tuple[str | None, str | None]:

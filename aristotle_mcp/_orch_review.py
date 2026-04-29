@@ -22,7 +22,7 @@ def orchestrate_review_action(
 
     Args:
         workflow_id: Workflow ID from orchestrate_start("review")
-        action: "confirm" | "reject" | "revise" | "re_reflect"
+        action: "confirm" | "reject" | "revise" | "re_reflect" | "inspect" | "show draft"
         feedback: User feedback text (for revise)
         data_json: Extra data (e.g. {"rule_index": N})
 
@@ -120,7 +120,9 @@ def orchestrate_review_action(
         }
 
     elif action == "revise":
-        displayed_rules = workflow.get("displayed_rules", [])
+        # staging_rule_paths replaces displayed_rules
+        # TODO: remove displayed_rules fallback after one release cycle
+        displayed_rules = workflow.get("staging_rule_paths") or workflow.get("displayed_rules", [])
         if not displayed_rules:
             return {
                 "action": "notify",
@@ -224,6 +226,97 @@ def orchestrate_review_action(
             "sub_prompt": r_prompt,
             "sub_role": "R",
             "notify_message": f"🦉 Re-reflecting (#{re_reflect_count + 1}/3)...",
+        }
+
+    elif action == "inspect":
+        staging_rule_paths = workflow.get("staging_rule_paths")
+        if not staging_rule_paths:
+            return {
+                "action": "notify",
+                "workflow_id": workflow_id,
+                "message": "🦉 Rule inspection not available for this workflow.",
+            }
+
+        rule_index = 0
+        try:
+            extra = json.loads(data_json)
+            rule_index = int(extra.get("rule_index", 0))
+        except (json.JSONDecodeError, TypeError, ValueError):
+            pass
+
+        if not rule_index or rule_index < 1 or rule_index > len(staging_rule_paths):
+            return {
+                "action": "notify",
+                "workflow_id": workflow_id,
+                "message": f"🦉 Invalid rule index. Choose 1-{len(staging_rule_paths)}.",
+            }
+
+        rule_path = staging_rule_paths[rule_index - 1]
+        resolved, err = _safe_resolve(rule_path)
+        if not resolved or not resolved.exists():
+            return {
+                "action": "notify",
+                "workflow_id": workflow_id,
+                "message": "🦉 Rule file not found.",
+            }
+
+        try:
+            body = resolved.read_text(encoding="utf-8")
+        except Exception:
+            body = "(rule file not readable)"
+
+        # Check if the rule body (after frontmatter) is empty
+        rule_body = body
+        if body.startswith("---"):
+            parts = body.split("---", 2)
+            rule_body = parts[2].strip() if len(parts) >= 3 else body
+
+        if not rule_body.strip():
+            body = "(empty rule body)"
+
+        return {
+            "action": "notify",
+            "workflow_id": workflow_id,
+            "message": body,
+        }
+
+    elif action == "show draft":
+        target_record = workflow.get("target_record", {})
+        draft_path = target_record.get("draft_file_path", "")
+        if not draft_path:
+            return {
+                "action": "notify",
+                "workflow_id": workflow_id,
+                "message": "🦉 No DRAFT file path found.",
+            }
+
+        dp = Path(draft_path).expanduser()
+        if not dp.exists():
+            return {
+                "action": "notify",
+                "workflow_id": workflow_id,
+                "message": "🦉 DRAFT file not found.",
+            }
+
+        try:
+            content = dp.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            return {
+                "action": "notify",
+                "workflow_id": workflow_id,
+                "message": "🦉 DRAFT file not readable.",
+            }
+        if not content.strip():
+            return {
+                "action": "notify",
+                "workflow_id": workflow_id,
+                "message": "(empty DRAFT)",
+            }
+
+        return {
+            "action": "notify",
+            "workflow_id": workflow_id,
+            "message": content,
         }
 
     else:
