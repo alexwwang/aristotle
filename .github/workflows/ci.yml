@@ -50,4 +50,6 @@ jobs:
         run: uv run ruff check aristotle_mcp/ test/
 
       - name: Ruff format check
-        run: uv run ruff format --check aristotle_mcp/ test/
+        run: |
+          uv run ruff format aristotle_mcp/ test/
+          git diff --exit-code -- aristotle_mcp/ test/
