@@ -24,12 +24,10 @@ from _orch_helpers import (
     _load_workflow,
     _make_staging_rule,
     _make_verified_rule,
-    _start_review_workflow,
     _create_draft_file,
     _setup_reflection_record,
     init_repo_tool,
     orchestrate_start,
-    orchestrate_on_event,
 )
 
 from aristotle_mcp._orch_parsers import (
@@ -637,7 +635,7 @@ class TestShowDraftAction:
     def test_should_return_full_draft_on_show_draft(self):
         init_repo_tool()
         _setup_reflection_record(1)
-        draft_path = _create_draft_file(1, "## Full DRAFT\nThis is the complete draft.")
+        _create_draft_file(1, "## Full DRAFT\nThis is the complete draft.")
 
         review_result = orchestrate_start("review", json.dumps({"sequence": 1}))
         wf_id = review_result["workflow_id"]
@@ -670,7 +668,7 @@ class TestShowDraftAction:
     def test_should_return_empty_draft_message_for_empty_file(self):
         init_repo_tool()
         _setup_reflection_record(1)
-        draft_path = _create_draft_file(1, "")
+        _create_draft_file(1, "")
 
         review_result = orchestrate_start("review", json.dumps({"sequence": 1}))
         wf_id = review_result["workflow_id"]
