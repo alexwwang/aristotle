@@ -28,9 +28,7 @@ from _orch_helpers import (
 # TestOrchestrateStartReflect — TC-1-04, TC-1-05, TC-1-07, basic
 # ═══════════════════════════════════════════════════════
 class TestOrchestrateStartReflect:
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_reflect_basic(self):
         result = _start_reflect_workflow("ses_target1")
         assert result["action"] == "fire_sub"
@@ -47,9 +45,7 @@ class TestOrchestrateStartReflect:
         assert wf["sequence"] == 1
         assert wf["target_session_id"] == "ses_target1"
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_reflect_sequence_incremented(self):
         r1 = _start_reflect_workflow("ses_1")
         wf1_id = r1["workflow_id"]
@@ -66,9 +62,7 @@ class TestOrchestrateStartReflect:
 
         assert wf1_id != wf2_id
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_reflect_no_target_session_id(self):
         # Ensure no bridge marker affects this test (marker from prior opencode run)
         from aristotle_mcp.config import resolve_sessions_dir
@@ -79,9 +73,7 @@ class TestOrchestrateStartReflect:
         result = orchestrate_start("reflect", json.dumps({}))
         assert result["action"] == "pre_resolve_needed"
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_reflect_focus_hint_in_prompt(self):
         result = _start_reflect_workflow("ses_1", focus="error")
         assert result["action"] == "fire_sub"
@@ -91,14 +83,10 @@ class TestOrchestrateStartReflect:
         result2 = _start_reflect_workflow("ses_2", focus=long_focus)
         assert result2["action"] == "fire_sub"
         prompt = result2["sub_prompt"]
-        focus_line = [
-            line for line in prompt.split("\n") if line.startswith("FOCUS_HINT:")
-        ][0]
+        focus_line = [line for line in prompt.split("\n") if line.startswith("FOCUS_HINT:")][0]
         assert len(focus_line.split("FOCUS_HINT: ")[1]) <= 200
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_reflect_auto_init(self):
         from aristotle_mcp.config import resolve_repo_dir
         import shutil
@@ -112,17 +100,13 @@ class TestOrchestrateStartReflect:
         assert result["action"] == "fire_sub"
         assert git_dir.exists()
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_reflect_invalid_args_json(self):
         result = orchestrate_start("reflect", "not valid json {{{")
         assert result["action"] == "notify"
         assert "Invalid" in result["message"]
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_reflect_with_explicit_session(self):
         result = _start_reflect_workflow("ses_explicit_abc")
         assert result["action"] == "fire_sub"
@@ -130,9 +114,7 @@ class TestOrchestrateStartReflect:
         wf = _load_workflow(result["workflow_id"])
         assert wf["target_session_id"] == "ses_explicit_abc"
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_reflect_workflow_state_saved(self):
         result = _start_reflect_workflow("ses_state_check")
         assert result["action"] == "fire_sub"
@@ -154,9 +136,7 @@ class TestOrchestrateStartReflect:
 # TestOrchestrateOnEventReflect — TC-1-01, TC-1-02, TC-1-03, TC-1-06
 # ═══════════════════════════════════════════════════════
 class TestOrchestrateOnEventReflect:
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_full_reflect_flow(self):
         start = _start_reflect_workflow("ses_target1")
         assert start["action"] == "fire_sub"
@@ -197,9 +177,7 @@ class TestOrchestrateOnEventReflect:
         wf = _load_workflow(wf_id)
         assert wf["phase"] == "done"
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_r_done_creates_reflection_record(self):
         start = _start_reflect_workflow("ses_tgt")
         wf_id = start["workflow_id"]
@@ -225,9 +203,7 @@ class TestOrchestrateOnEventReflect:
         assert result["action"] == "fire_sub"
         assert result["sub_role"] == "C"
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_r_done_draft_file_path_uses_parent(self):
         start = _start_reflect_workflow("ses_tgt")
         wf_id = start["workflow_id"]
@@ -237,19 +213,12 @@ class TestOrchestrateOnEventReflect:
 
         from aristotle_mcp.config import resolve_repo_dir
 
-        expected_draft = str(
-            resolve_repo_dir().parent / "aristotle-drafts" / f"rec_{sequence}.md"
-        )
+        expected_draft = str(resolve_repo_dir().parent / "aristotle-drafts" / f"rec_{sequence}.md")
         assert expected_draft in result["sub_prompt"]
 
-        assert (
-            "aristotle-repo"
-            not in expected_draft.split("aristotle-drafts")[0].split("/")[-2:]
-        )
+        assert "aristotle-repo" not in expected_draft.split("aristotle-drafts")[0].split("/")[-2:]
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_c_done_partial_commit_status(self):
         start = _start_reflect_workflow("ses_tgt")
         wf_id = start["workflow_id"]
@@ -276,9 +245,7 @@ class TestOrchestrateOnEventReflect:
         wf = _load_workflow(wf_id)
         assert wf["phase"] == "done"
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_r_done_without_draft_returns_notify_not_fire_sub(self):
         start = _start_reflect_workflow("ses_tgt")
         wf_id = start["workflow_id"]
@@ -288,9 +255,7 @@ class TestOrchestrateOnEventReflect:
         # Ensure no DRAFT file exists (delete if auto-created by any prior step)
         from aristotle_mcp.config import resolve_repo_dir
 
-        draft_path = (
-            resolve_repo_dir().parent / "aristotle-drafts" / f"rec_{sequence}.md"
-        )
+        draft_path = resolve_repo_dir().parent / "aristotle-drafts" / f"rec_{sequence}.md"
         draft_path.unlink(missing_ok=True)
 
         # Fire event directly to bypass _fire_r_done_event's auto-creation
@@ -305,14 +270,9 @@ class TestOrchestrateOnEventReflect:
             ),
         )
         assert result["action"] == "notify"
-        assert (
-            "did not produce a DRAFT file" in result["message"]
-            or "truncated" in result["message"]
-        )
+        assert "did not produce a DRAFT file" in result["message"] or "truncated" in result["message"]
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_r_done_no_errors_signal_without_draft(self):
         start = _start_reflect_workflow("ses_tgt")
         wf_id = start["workflow_id"]
@@ -321,9 +281,7 @@ class TestOrchestrateOnEventReflect:
 
         from aristotle_mcp.config import resolve_repo_dir
 
-        draft_path = (
-            resolve_repo_dir().parent / "aristotle-drafts" / f"rec_{sequence}.md"
-        )
+        draft_path = resolve_repo_dir().parent / "aristotle-drafts" / f"rec_{sequence}.md"
         draft_path.unlink(missing_ok=True)
 
         result = orchestrate_on_event(
@@ -344,9 +302,7 @@ class TestOrchestrateOnEventReflect:
 # TestExceptionReflect — OnEvent exception paths (§3.8.2)
 # ═══════════════════════════════════════════════════════
 class TestExceptionReflect:
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_c_done_result_parse_failure(self):
         """C 返回不可解析的 result → fallback 不崩溃。"""
         start = _start_reflect_workflow("ses_tgt")
@@ -359,9 +315,7 @@ class TestExceptionReflect:
         wf = _load_workflow(wf_id)
         assert wf["phase"] == "done"
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_invalid_workflow_id_format(self):
         """wf_ + 非十六进制字符 → action=notify 含 "Invalid"。"""
         result = orchestrate_on_event(
@@ -383,9 +337,7 @@ class TestExceptionReflect:
 # TestExceptionStart — Start exception paths (§3.8.3, §3.8.4)
 # ═══════════════════════════════════════════════════════
 class TestExceptionStart:
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_review_state_file_corrupted(self):
         """aristotle-state.json 损坏 → action=notify 含 "corrupted"。"""
         from aristotle_mcp.config import resolve_repo_dir
@@ -399,9 +351,7 @@ class TestExceptionStart:
         assert result["action"] == "notify"
         assert "corrupted" in result["message"].lower()
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_review_invalid_sequence_type(self):
         """sequence="not_a_number" → action=notify 含 "Invalid sequence"。"""
         init_repo_tool()
@@ -410,9 +360,7 @@ class TestExceptionStart:
         assert "invalid" in result["message"].lower()
         assert "sequence" in result["message"].lower()
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_sessions_state_file_corrupted(self):
         """sessions 的 aristotle-state.json 损坏 → action=notify 含 "corrupted"。"""
         from aristotle_mcp.config import resolve_repo_dir

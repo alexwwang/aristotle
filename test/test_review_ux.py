@@ -55,15 +55,7 @@ class TestParseDraftSummary:
     """_parse_draft_summary — extract Key Findings or fallback."""
 
     def test_should_extract_key_findings_items(self):
-        draft = (
-            "## Key Findings\n"
-            "- Finding one\n"
-            "- Finding two\n"
-            "- Finding three\n"
-            "\n"
-            "## Other section\n"
-            "More text here."
-        )
+        draft = "## Key Findings\n- Finding one\n- Finding two\n- Finding three\n\n## Other section\nMore text here."
         findings, total_chars = _parse_draft_summary(draft)
         assert findings == ["Finding one", "Finding two", "Finding three"]
         assert total_chars == len(draft)
@@ -86,27 +78,13 @@ class TestParseDraftSummary:
         assert total_chars == len(draft)
 
     def test_should_terminate_collection_on_non_list_paragraph(self):
-        draft = (
-            "## Key Findings\n"
-            "- First item\n"
-            "\n"
-            "This is a paragraph\n"
-            "- Second item"
-        )
+        draft = "## Key Findings\n- First item\n\nThis is a paragraph\n- Second item"
         findings, total_chars = _parse_draft_summary(draft)
         assert findings == ["First item"]
         assert total_chars == len(draft)
 
     def test_should_allow_blank_lines_between_findings(self):
-        draft = (
-            "## Key Findings\n"
-            "- First item\n"
-            "\n"
-            "\n"
-            "- Second item\n"
-            "\n"
-            "- Third item"
-        )
+        draft = "## Key Findings\n- First item\n\n\n- Second item\n\n- Third item"
         findings, total_chars = _parse_draft_summary(draft)
         assert findings == ["First item", "Second item", "Third item"]
         assert total_chars == len(draft)
@@ -141,7 +119,12 @@ class TestEnrichRulesMetadata:
     def test_should_map_audit_error_to_none(self, monkeypatch):
         """D9: get_audit_decision returns error dict → None in audit_decisions."""
         import aristotle_mcp._orch_parsers as parsers
-        monkeypatch.setattr(parsers, "_get_audit_decision", lambda path: {"success": False, "message": "File not found"})
+
+        monkeypatch.setattr(
+            parsers,
+            "_get_audit_decision",
+            lambda path: {"success": False, "message": "File not found"},
+        )
         rules_result = {"rules": [{"path": "/a", "metadata": {"status": "staging"}}]}
         staging, verified, audit_decisions = _enrich_rules_metadata(rules_result)
         assert audit_decisions[0] is None
@@ -149,8 +132,10 @@ class TestEnrichRulesMetadata:
     def test_should_map_audit_exception_to_none(self, monkeypatch):
         """D10: get_audit_decision raises ValueError → None in audit_decisions."""
         import aristotle_mcp._orch_parsers as parsers
+
         def _raise(path):
             raise ValueError("Invalid confidence value")
+
         monkeypatch.setattr(parsers, "_get_audit_decision", _raise)
         rules_result = {"rules": [{"path": "/a", "metadata": {"status": "staging"}}]}
         staging, verified, audit_decisions = _enrich_rules_metadata(rules_result)
@@ -160,7 +145,10 @@ class TestEnrichRulesMetadata:
         rules_result = {
             "rules": [
                 {"metadata": {"status": "staging", "path": "/first"}, "path": "/first"},
-                {"metadata": {"status": "staging", "path": "/second"}, "path": "/second"},
+                {
+                    "metadata": {"status": "staging", "path": "/second"},
+                    "path": "/second",
+                },
             ]
         }
         staging, verified, audit_decisions = _enrich_rules_metadata(rules_result)
@@ -226,8 +214,18 @@ class TestFormatReviewOutput:
         staging_rules = [r for r in rules_result.get("rules", []) if r["metadata"].get("status") == "staging"]
         verified_rules = []
         audit_decisions = [
-            {"delta": 0.55, "audit_level": "semi", "confidence": 0.8, "risk_level": "low"},
-            {"delta": 0.35, "audit_level": "manual", "confidence": 0.5, "risk_level": "high"},
+            {
+                "delta": 0.55,
+                "audit_level": "semi",
+                "confidence": 0.8,
+                "risk_level": "low",
+            },
+            {
+                "delta": 0.35,
+                "audit_level": "manual",
+                "confidence": 0.5,
+                "risk_level": "high",
+            },
         ]
         output = _format_review_output(1, self._target(), "", staging_rules, verified_rules, audit_decisions)
         assert "0.35" in output  # min delta
@@ -242,7 +240,14 @@ class TestFormatReviewOutput:
             "",
             staging_rules,
             [],
-            [{"delta": 0.5, "audit_level": "semi", "confidence": 0.5, "risk_level": "medium"}],
+            [
+                {
+                    "delta": 0.5,
+                    "audit_level": "semi",
+                    "confidence": 0.5,
+                    "risk_level": "medium",
+                }
+            ],
         )
         assert "Δ" in output_with
 
@@ -271,7 +276,14 @@ class TestFormatReviewOutput:
             }
         ]
         verified_rules = []
-        audit_decisions = [{"delta": 0.3, "audit_level": "manual", "confidence": 0.55, "risk_level": "high"}]
+        audit_decisions = [
+            {
+                "delta": 0.3,
+                "audit_level": "manual",
+                "confidence": 0.55,
+                "risk_level": "high",
+            }
+        ]
         output = _format_review_output(1, self._target(), "", staging_rules, verified_rules, audit_decisions)
         assert "0.55" in output
         assert "HIGH" in output
@@ -295,13 +307,21 @@ class TestFormatReviewOutput:
     def test_should_show_staging_numbered_and_verified_unnumbered(self):
         staging_rules = [
             {
-                "metadata": {"status": "staging", "category": "S1", "error_summary": "staging_error_1"},
+                "metadata": {
+                    "status": "staging",
+                    "category": "S1",
+                    "error_summary": "staging_error_1",
+                },
                 "path": "/s1",
             },
         ]
         verified_rules = [
             {
-                "metadata": {"status": "verified", "category": "V1", "error_summary": "verified_error_1"},
+                "metadata": {
+                    "status": "verified",
+                    "category": "V1",
+                    "error_summary": "verified_error_1",
+                },
                 "path": "/v1",
             },
         ]
@@ -327,13 +347,21 @@ class TestFormatReviewOutput:
         ]
         output = _format_review_output(1, self._target(), "", staging_rules, [], [None] * len(staging_rules))
         for i in range(15):
-            assert (
-                f"CAT_{i}" in output
-            ), f"Rule CAT_{i} missing from output (no cap expected)"
+            assert f"CAT_{i}" in output, f"Rule CAT_{i} missing from output (no cap expected)"
 
     def test_should_display_default_confidence_when_missing(self):
         """AC-2: Missing confidence field → display default 0.7."""
-        staging_rules = [{"path": "/r1", "metadata": {"status": "staging", "error_summary": "test", "category": "HALLUCINATION", "confidence": 0.3}}]
+        staging_rules = [
+            {
+                "path": "/r1",
+                "metadata": {
+                    "status": "staging",
+                    "error_summary": "test",
+                    "category": "HALLUCINATION",
+                    "confidence": 0.3,
+                },
+            }
+        ]
         verified_rules = []
         audit_decisions = [None]  # None → formatter should show 0.7
         output = _format_review_output(1, {}, "## DRAFT", staging_rules, verified_rules, audit_decisions)
@@ -341,7 +369,16 @@ class TestFormatReviewOutput:
 
     def test_should_display_default_confidence_when_non_numeric(self):
         """AC-2: Non-numeric confidence → display default 0.7."""
-        staging_rules = [{"path": "/r1", "metadata": {"status": "staging", "confidence": "high", "error_summary": "test"}}]
+        staging_rules = [
+            {
+                "path": "/r1",
+                "metadata": {
+                    "status": "staging",
+                    "confidence": "high",
+                    "error_summary": "test",
+                },
+            }
+        ]
         verified_rules = []
         audit_decisions = [None]
         output = _format_review_output(1, {}, "## DRAFT", staging_rules, verified_rules, audit_decisions)
@@ -350,11 +387,38 @@ class TestFormatReviewOutput:
     def test_should_display_confidence_at_boundaries(self):
         """AC-2: confidence=0.0 and confidence=1.0 both displayed."""
         staging_rules = [
-            {"path": "/r1", "metadata": {"status": "staging", "confidence": 0.0, "risk_level": "high"}},
-            {"path": "/r2", "metadata": {"status": "staging", "confidence": 1.0, "risk_level": "low"}},
+            {
+                "path": "/r1",
+                "metadata": {
+                    "status": "staging",
+                    "confidence": 0.0,
+                    "risk_level": "high",
+                },
+            },
+            {
+                "path": "/r2",
+                "metadata": {
+                    "status": "staging",
+                    "confidence": 1.0,
+                    "risk_level": "low",
+                },
+            },
         ]
         verified_rules = []
-        audit_decisions = [{"delta": 0.0, "audit_level": "manual", "confidence": 0.0, "risk_level": "high"}, {"delta": 0.8, "audit_level": "auto", "confidence": 1.0, "risk_level": "low"}]
+        audit_decisions = [
+            {
+                "delta": 0.0,
+                "audit_level": "manual",
+                "confidence": 0.0,
+                "risk_level": "high",
+            },
+            {
+                "delta": 0.8,
+                "audit_level": "auto",
+                "confidence": 1.0,
+                "risk_level": "low",
+            },
+        ]
         output = _format_review_output(1, {}, "## DRAFT", staging_rules, verified_rules, audit_decisions)
         assert "0.0" in output
         assert "1.0" in output
@@ -371,7 +435,16 @@ class TestFormatReviewOutput:
     def test_should_truncate_conflicts_over_three(self):
         """AC-3: >3 conflicts → show first 3 + '+N more'."""
         conflicts = json.dumps(["id1", "id2", "id3", "id4", "id5"])
-        staging_rules = [{"path": "/r1", "metadata": {"status": "staging", "conflicts_with": conflicts, "error_summary": "test"}}]
+        staging_rules = [
+            {
+                "path": "/r1",
+                "metadata": {
+                    "status": "staging",
+                    "conflicts_with": conflicts,
+                    "error_summary": "test",
+                },
+            }
+        ]
         verified_rules = []
         audit_decisions = [None]
         output = _format_review_output(1, {}, "## DRAFT", staging_rules, verified_rules, audit_decisions)
@@ -379,7 +452,16 @@ class TestFormatReviewOutput:
 
     def test_should_skip_conflict_line_when_empty(self):
         """AC-3: Empty conflicts_with → no conflict line."""
-        staging_rules = [{"path": "/r1", "metadata": {"status": "staging", "conflicts_with": None, "error_summary": "test"}}]
+        staging_rules = [
+            {
+                "path": "/r1",
+                "metadata": {
+                    "status": "staging",
+                    "conflicts_with": None,
+                    "error_summary": "test",
+                },
+            }
+        ]
         verified_rules = []
         audit_decisions = [None]
         output = _format_review_output(1, {}, "## DRAFT", staging_rules, verified_rules, audit_decisions)
@@ -387,7 +469,16 @@ class TestFormatReviewOutput:
 
     def test_should_skip_conflict_line_when_invalid_json(self):
         """AC-3: Invalid JSON in conflicts_with → no conflict line."""
-        staging_rules = [{"path": "/r1", "metadata": {"status": "staging", "conflicts_with": "not-json", "error_summary": "test"}}]
+        staging_rules = [
+            {
+                "path": "/r1",
+                "metadata": {
+                    "status": "staging",
+                    "conflicts_with": "not-json",
+                    "error_summary": "test",
+                },
+            }
+        ]
         verified_rules = []
         audit_decisions = [None]
         output = _format_review_output(1, {}, "## DRAFT", staging_rules, verified_rules, audit_decisions)
@@ -396,7 +487,16 @@ class TestFormatReviewOutput:
     def test_should_show_deleted_rule_ids_as_is(self):
         """AC-3: Conflict IDs referencing deleted rules shown as-is."""
         conflicts = json.dumps(["deleted_rule_xyz"])
-        staging_rules = [{"path": "/r1", "metadata": {"status": "staging", "conflicts_with": conflicts, "error_summary": "test"}}]
+        staging_rules = [
+            {
+                "path": "/r1",
+                "metadata": {
+                    "status": "staging",
+                    "conflicts_with": conflicts,
+                    "error_summary": "test",
+                },
+            }
+        ]
         verified_rules = []
         audit_decisions = [None]
         output = _format_review_output(1, {}, "## DRAFT", staging_rules, verified_rules, audit_decisions)
@@ -413,8 +513,31 @@ class TestFormatReviewOutput:
     def test_should_map_audit_level_to_exact_labels(self):
         """AC-4: Verify exact label mapping for all 3 levels."""
         # Test "auto" level
-        staging_rules = [{"path": "/r1", "metadata": {"status": "staging", "confidence": 0.8, "risk_level": "low"}}]
-        output_auto = _format_review_output(1, {}, "## DRAFT", staging_rules, [], [{"delta": 0.8, "audit_level": "auto", "confidence": 0.8, "risk_level": "low"}])
+        staging_rules = [
+            {
+                "path": "/r1",
+                "metadata": {
+                    "status": "staging",
+                    "confidence": 0.8,
+                    "risk_level": "low",
+                },
+            }
+        ]
+        output_auto = _format_review_output(
+            1,
+            {},
+            "## DRAFT",
+            staging_rules,
+            [],
+            [
+                {
+                    "delta": 0.8,
+                    "audit_level": "auto",
+                    "confidence": 0.8,
+                    "risk_level": "low",
+                }
+            ],
+        )
         assert _AUDIT_LABELS["auto"] in output_auto
         # Verify "auto" label appears in the Δ header line specifically
         if "Δ" in output_auto:
@@ -422,11 +545,39 @@ class TestFormatReviewOutput:
             assert _AUDIT_LABELS["auto"] in delta_section
 
         # Test "semi" level
-        output_semi = _format_review_output(1, {}, "## DRAFT", staging_rules, [], [{"delta": 0.5, "audit_level": "semi", "confidence": 0.5, "risk_level": "medium"}])
+        output_semi = _format_review_output(
+            1,
+            {},
+            "## DRAFT",
+            staging_rules,
+            [],
+            [
+                {
+                    "delta": 0.5,
+                    "audit_level": "semi",
+                    "confidence": 0.5,
+                    "risk_level": "medium",
+                }
+            ],
+        )
         assert _AUDIT_LABELS["semi"] in output_semi
 
         # Test "manual" level
-        output_manual = _format_review_output(1, {}, "## DRAFT", staging_rules, [], [{"delta": 0.2, "audit_level": "manual", "confidence": 0.2, "risk_level": "high"}])
+        output_manual = _format_review_output(
+            1,
+            {},
+            "## DRAFT",
+            staging_rules,
+            [],
+            [
+                {
+                    "delta": 0.2,
+                    "audit_level": "manual",
+                    "confidence": 0.2,
+                    "risk_level": "high",
+                }
+            ],
+        )
         assert _AUDIT_LABELS["manual"] in output_manual
 
     def test_should_show_char_count_and_show_draft_hint(self):
@@ -439,7 +590,12 @@ class TestFormatReviewOutput:
 
     def test_should_show_no_review_needed_when_zero_staging(self):
         """AC-7: 0 staging → 'No rules require review' + auto-committed section."""
-        verified_rules = [{"path": "/v1", "metadata": {"status": "verified", "error_summary": "verified rule"}}]
+        verified_rules = [
+            {
+                "path": "/v1",
+                "metadata": {"status": "verified", "error_summary": "verified rule"},
+            }
+        ]
         output = _format_review_output(1, {}, "## DRAFT", [], verified_rules, [])
         assert "No rules require review" in output or "auto-committed" in output.lower()
 
@@ -457,12 +613,36 @@ class TestFormatReviewOutput:
     def test_should_compute_min_delta_for_header(self):
         """K9: Min delta → worst (most restrictive) audit level."""
         staging_rules = [
-            {"path": "/r1", "metadata": {"status": "staging", "confidence": 0.8, "risk_level": "low"}},
-            {"path": "/r2", "metadata": {"status": "staging", "confidence": 0.3, "risk_level": "high"}},
+            {
+                "path": "/r1",
+                "metadata": {
+                    "status": "staging",
+                    "confidence": 0.8,
+                    "risk_level": "low",
+                },
+            },
+            {
+                "path": "/r2",
+                "metadata": {
+                    "status": "staging",
+                    "confidence": 0.3,
+                    "risk_level": "high",
+                },
+            },
         ]
         audit_decisions = [
-            {"delta": 0.64, "audit_level": "auto", "confidence": 0.8, "risk_level": "low"},
-            {"delta": 0.06, "audit_level": "manual", "confidence": 0.3, "risk_level": "high"},
+            {
+                "delta": 0.64,
+                "audit_level": "auto",
+                "confidence": 0.8,
+                "risk_level": "low",
+            },
+            {
+                "delta": 0.06,
+                "audit_level": "manual",
+                "confidence": 0.3,
+                "risk_level": "high",
+            },
         ]
         output = _format_review_output(1, {}, "## DRAFT", staging_rules, [], audit_decisions)
         assert "0.06" in output  # min delta displayed
@@ -475,9 +655,7 @@ class TestFormatReviewOutput:
 class TestInspectAction:
     """inspect branch in orchestrate_review_action."""
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_should_return_full_rule_body_on_inspect(self):
         init_repo_tool()
         _setup_reflection_record(1)
@@ -487,16 +665,12 @@ class TestInspectAction:
         review_result = orchestrate_start("review", json.dumps({"sequence": 1}))
         wf_id = review_result["workflow_id"]
 
-        result = orchestrate_review_action(
-            wf_id, "inspect", data_json=json.dumps({"rule_index": 1})
-        )
+        result = orchestrate_review_action(wf_id, "inspect", data_json=json.dumps({"rule_index": 1}))
         assert result["action"] == "notify"
         assert "check" in result["message"].lower()
         assert Path(rule_path).read_text(encoding="utf-8") in result["message"]
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_should_return_invalid_index_error_for_zero(self):
         init_repo_tool()
         _setup_reflection_record(1)
@@ -506,15 +680,11 @@ class TestInspectAction:
         review_result = orchestrate_start("review", json.dumps({"sequence": 1}))
         wf_id = review_result["workflow_id"]
 
-        result = orchestrate_review_action(
-            wf_id, "inspect", data_json=json.dumps({"rule_index": 0})
-        )
+        result = orchestrate_review_action(wf_id, "inspect", data_json=json.dumps({"rule_index": 0}))
         assert result["action"] == "notify"
         assert "invalid" in result["message"].lower()
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_should_return_invalid_index_error_for_negative(self):
         init_repo_tool()
         _setup_reflection_record(1)
@@ -524,15 +694,11 @@ class TestInspectAction:
         review_result = orchestrate_start("review", json.dumps({"sequence": 1}))
         wf_id = review_result["workflow_id"]
 
-        result = orchestrate_review_action(
-            wf_id, "inspect", data_json=json.dumps({"rule_index": -1})
-        )
+        result = orchestrate_review_action(wf_id, "inspect", data_json=json.dumps({"rule_index": -1}))
         assert result["action"] == "notify"
         assert "invalid" in result["message"].lower()
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_should_return_invalid_index_error_for_over_count(self):
         init_repo_tool()
         _setup_reflection_record(1)
@@ -552,9 +718,7 @@ class TestInspectAction:
         assert result["action"] == "notify"
         assert "invalid" in result["message"].lower()
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_should_return_file_not_found_for_deleted_rule(self):
         init_repo_tool()
         _setup_reflection_record(1)
@@ -566,15 +730,11 @@ class TestInspectAction:
 
         Path(rule_path).unlink()
 
-        result = orchestrate_review_action(
-            wf_id, "inspect", data_json=json.dumps({"rule_index": 1})
-        )
+        result = orchestrate_review_action(wf_id, "inspect", data_json=json.dumps({"rule_index": 1}))
         assert result["action"] == "notify"
         assert "not found" in result["message"].lower()
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_should_return_empty_body_message_for_empty_rule(self):
         init_repo_tool()
         _setup_reflection_record(1)
@@ -588,15 +748,11 @@ class TestInspectAction:
         review_result = orchestrate_start("review", json.dumps({"sequence": 1}))
         wf_id = review_result["workflow_id"]
 
-        result = orchestrate_review_action(
-            wf_id, "inspect", data_json=json.dumps({"rule_index": 1})
-        )
+        result = orchestrate_review_action(wf_id, "inspect", data_json=json.dumps({"rule_index": 1}))
         assert result["action"] == "notify"
         assert "empty" in result["message"].lower()
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_should_return_not_available_for_old_workflow(self):
         init_repo_tool()
         _setup_reflection_record(1)
@@ -614,13 +770,9 @@ class TestInspectAction:
 
         _save_workflow(wf_id, wf)
 
-        result = orchestrate_review_action(
-            wf_id, "inspect", data_json=json.dumps({"rule_index": 1})
-        )
+        result = orchestrate_review_action(wf_id, "inspect", data_json=json.dumps({"rule_index": 1}))
         assert result["action"] == "notify"
-        assert "not available" in result["message"].lower() or "old" in result[
-            "message"
-        ].lower()
+        assert "not available" in result["message"].lower() or "old" in result["message"].lower()
 
 
 # ═══════════════════════════════════════════════════════
@@ -629,9 +781,7 @@ class TestInspectAction:
 class TestShowDraftAction:
     """show_draft branch in orchestrate_review_action."""
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_should_return_full_draft_on_show_draft(self):
         init_repo_tool()
         _setup_reflection_record(1)
@@ -645,9 +795,7 @@ class TestShowDraftAction:
         assert "Full DRAFT" in result["message"]
         assert "complete draft" in result["message"].lower()
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_should_return_not_found_for_deleted_draft(self):
         init_repo_tool()
         _setup_reflection_record(1)
@@ -662,9 +810,7 @@ class TestShowDraftAction:
         assert result["action"] == "notify"
         assert "not found" in result["message"].lower()
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_should_return_empty_draft_message_for_empty_file(self):
         init_repo_tool()
         _setup_reflection_record(1)
@@ -684,9 +830,7 @@ class TestShowDraftAction:
 class TestReviseAction:
     """revise action — staging_rule_paths indexing vs fallback."""
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_should_revise_using_staging_rule_paths_index(self):
         init_repo_tool()
         _setup_reflection_record(1)
@@ -715,9 +859,7 @@ class TestReviseAction:
         assert rule_b in result["o_prompt"]
         assert rule_a not in result["o_prompt"]
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_should_fallback_to_displayed_rules_for_old_workflow(self):
         init_repo_tool()
         _setup_reflection_record(1)
@@ -795,6 +937,7 @@ class TestRuleSummaryDataModel:
         assert result["success"]
         from aristotle_mcp.frontmatter import read_frontmatter_raw
         from pathlib import Path
+
         fm = read_frontmatter_raw(Path(result["file_path"]))
         assert fm is not None
         assert fm.get("rule_summary") == "Always verify file paths before editing"
@@ -854,9 +997,7 @@ class TestAuditDecisionsNoneFallback:
 class TestOrchestrateStartReviewBranch:
     """orchestrate_start review command — enriched data flow."""
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_should_store_staging_rule_paths_in_workflow(self):
         init_repo_tool()
         _setup_reflection_record(1)
@@ -872,9 +1013,7 @@ class TestOrchestrateStartReviewBranch:
         assert isinstance(wf["staging_rule_paths"], list)
         assert len(wf["staging_rule_paths"]) >= 1
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_should_pass_enriched_data_to_formatter(self, monkeypatch):
         """K7b: _enrich called and split results passed to _format_review_output."""
         import aristotle_mcp._orch_start as start_mod
@@ -890,9 +1029,7 @@ class TestOrchestrateStartReviewBranch:
             called["enrich"] = True
             return [], [], []
 
-        monkeypatch.setattr(
-            "aristotle_mcp._orch_parsers._enrich_rules_metadata", _mock_enrich
-        )
+        monkeypatch.setattr("aristotle_mcp._orch_parsers._enrich_rules_metadata", _mock_enrich)
         monkeypatch.setattr(start_mod, "_enrich_rules_metadata", _mock_enrich)
 
         def mock_formatter(*args, **kwargs):

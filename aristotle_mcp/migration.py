@@ -44,18 +44,14 @@ def parse_learnings_file(file_path: Path) -> list[dict]:
         # Trim trailing --- separator
         body = re.sub(r"\n---\s*$", "", rest).strip()
 
-        entries.append(
-            {"date": date, "category": category, "title": title, "body": body}
-        )
+        entries.append({"date": date, "category": category, "title": title, "body": body})
 
     return entries
 
 
 def check_git_available() -> dict:
     try:
-        result = subprocess.run(
-            ["git", "--version"], capture_output=True, text=True, timeout=10
-        )
+        result = subprocess.run(["git", "--version"], capture_output=True, text=True, timeout=10)
         if result.returncode == 0:
             return {"success": True, "version": result.stdout.strip()}
         return {"success": False, "message": f"git check failed: {result.stderr}"}
@@ -82,9 +78,7 @@ def init_repo(repo_path: Path) -> dict:
     if not init_result["success"]:
         return init_result
 
-    return git_add_and_commit(
-        repo_path, ".gitignore", "chore: initialize aristotle rule repository"
-    )
+    return git_add_and_commit(repo_path, ".gitignore", "chore: initialize aristotle rule repository")
 
 
 def migrate_learnings(repo_path: Path, project_path: str | None = None) -> dict:
@@ -141,9 +135,7 @@ def migrate_learnings(repo_path: Path, project_path: str | None = None) -> dict:
             error_summary=None,
         )
 
-        body = (
-            f"## [{rule['date']}] {rule['category']} — {rule['title']}\n{rule['body']}"
-        )
+        body = f"## [{rule['date']}] {rule['category']} — {rule['title']}\n{rule['body']}"
         write_rule_file(file_path, metadata.__dict__, body)
 
     commit_result = git_add_and_commit(

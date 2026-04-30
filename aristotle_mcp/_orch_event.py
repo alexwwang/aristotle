@@ -230,9 +230,7 @@ def orchestrate_on_event(event_type: str, data_json: str) -> dict:
                             encoding="utf-8",
                         )
 
-        draft_file = str(
-            resolve_repo_dir().parent / "aristotle-drafts" / f"rec_{sequence}.md"
-        )
+        draft_file = str(resolve_repo_dir().parent / "aristotle-drafts" / f"rec_{sequence}.md")
 
         # ── DRAFT existence check ──
         # If R was truncated (reason:"length") or correctly found no errors,
@@ -336,9 +334,7 @@ def orchestrate_on_event(event_type: str, data_json: str) -> dict:
                         cw = []
                 if cw:
                     rule_id = fm.get("id", "unknown")
-                    conflict_warnings.append(
-                        f"⚠️ Rule {rule_id} conflicts with: {', '.join(cw)}"
-                    )
+                    conflict_warnings.append(f"⚠️ Rule {rule_id} conflicts with: {', '.join(cw)}")
         workflow["conflict_warnings"] = conflict_warnings
 
         status = "auto_committed" if staged == 0 else "partial_commit"

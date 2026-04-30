@@ -100,9 +100,7 @@ def init_repo_tool() -> dict:
     migration = migrate_learnings(repo_path)
     return {
         "success": True,
-        "message": (
-            f"Repository initialized at {repo_path}. Migration: {migration['message']}"
-        ),
+        "message": (f"Repository initialized at {repo_path}. Migration: {migration['message']}"),
         "repo_path": str(repo_path),
     }
 

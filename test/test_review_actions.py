@@ -37,9 +37,7 @@ class TestOrchestrateReviewAction:
 
     # ── Confirm (TC-2-01, TC-2-02) ─────────────────────
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_confirm_commits_staging_rules(self):
         init_repo_tool()
         _setup_reflection_record(1)
@@ -69,9 +67,7 @@ class TestOrchestrateReviewAction:
         records = json.loads(state_path.read_text(encoding="utf-8"))
         assert records[0]["status"] == "auto_committed"
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_confirm_no_staging_rules(self):
         review_result = _start_review_workflow(1)
         wf_id = review_result["workflow_id"]
@@ -87,16 +83,12 @@ class TestOrchestrateReviewAction:
 
     # ── Reject (TC-2-03) ───────────────────────────────
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_reject_rejects_rules_and_updates_state(self):
         init_repo_tool()
         _setup_reflection_record(1)
         _create_draft_file(1)
-        rule_path = _make_staging_rule(
-            "PATTERN_VIOLATION", source_session="ses_test123"
-        )
+        rule_path = _make_staging_rule("PATTERN_VIOLATION", source_session="ses_test123")
 
         review_result = orchestrate_start("review", json.dumps({"sequence": 1}))
         wf_id = review_result["workflow_id"]
@@ -121,9 +113,7 @@ class TestOrchestrateReviewAction:
 
     # ── Revise (TC-2-04 through TC-2-07, TC-2-10, TC-2-11) ──
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_revise_fires_o_with_revise_prompt(self):
         init_repo_tool()
         _setup_reflection_record(1)
@@ -154,9 +144,7 @@ class TestOrchestrateReviewAction:
         assert wf["pending_role"] == "O"
         assert wf.get("revise_rule_path") is not None
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_revise_rule_index_resolved_correctly(self):
         init_repo_tool()
         _setup_reflection_record(1)
@@ -180,9 +168,7 @@ class TestOrchestrateReviewAction:
         target_path = displayed[1] if len(displayed) > 1 else displayed[0]
         assert target_path in result["o_prompt"]
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_revise_o_done_parse_failure(self):
         init_repo_tool()
         _setup_reflection_record(1)
@@ -216,16 +202,12 @@ class TestOrchestrateReviewAction:
         wf = _load_workflow(wf_id)
         assert wf["phase"] == "done"
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_revise_o_done_auto_commits(self):
         init_repo_tool()
         _setup_reflection_record(1)
         _create_draft_file(1)
-        rule_path = _make_staging_rule(
-            "PATTERN_VIOLATION", confidence=0.9, source_session="ses_test123"
-        )
+        rule_path = _make_staging_rule("PATTERN_VIOLATION", confidence=0.9, source_session="ses_test123")
 
         review_result = orchestrate_start("review", json.dumps({"sequence": 1}))
         wf_id = review_result["workflow_id"]
@@ -271,9 +253,7 @@ class TestOrchestrateReviewAction:
         wf = _load_workflow(wf_id)
         assert wf["phase"] == "done"
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_revise_no_rules_available(self):
         init_repo_tool()
         _setup_reflection_record(1)
@@ -298,9 +278,7 @@ class TestOrchestrateReviewAction:
         wf = _load_workflow(wf_id)
         assert wf["phase"] == "review"
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_revise_invalid_rule_index(self):
         init_repo_tool()
         _setup_reflection_record(1)
@@ -326,9 +304,7 @@ class TestOrchestrateReviewAction:
 
     # ── Re-reflect (TC-2-08, TC-2-09, TC-2-12) ────────
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_re_reflect_creates_new_workflow(self):
         review_result = _start_review_workflow(1)
         wf_id = review_result["workflow_id"]
@@ -354,9 +330,7 @@ class TestOrchestrateReviewAction:
         assert wf_new["pending_role"] == "R"
         assert wf_new["record_created"] is False
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_re_reflect_max_count_blocked(self):
         review_result = _start_review_workflow(1, re_reflect_count=3)
         wf_id = review_result["workflow_id"]
@@ -373,9 +347,7 @@ class TestOrchestrateReviewAction:
         wf = _load_workflow(wf_id)
         assert wf["phase"] == "review"
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_review_action_wrong_phase(self):
         start = _start_reflect_workflow("ses_tgt")
         wf_id = start["workflow_id"]
@@ -387,9 +359,7 @@ class TestOrchestrateReviewAction:
 
     # ── Exception paths (§3.8.1) ──────────────────────
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_confirm_commit_rule_exception(self):
         """confirm 时 commit_rule 抛异常 → failed count 递增，不中断流程。"""
         init_repo_tool()
@@ -413,9 +383,7 @@ class TestOrchestrateReviewAction:
         wf = _load_workflow(wf_id)
         assert wf["phase"] == "done"
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_reject_reject_rule_exception(self):
         """reject 时 reject_rule 抛异常 → 静默继续（不崩溃）。"""
         init_repo_tool()
@@ -446,17 +414,13 @@ class TestOrchestrateReviewAction:
 class TestExceptionRevise:
     """Revise 流异常路径：stage_rule 和 commit_rule 异常处理。"""
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_revise_stage_rule_exception(self):
         """revise 后 stage_rule 抛异常 → 静默 pass，不崩溃。"""
         init_repo_tool()
         _setup_reflection_record(1)
         _create_draft_file(1)
-        rule_path = _make_staging_rule(
-            "HALLUCINATION", confidence=0.3, source_session="ses_test123"
-        )
+        rule_path = _make_staging_rule("HALLUCINATION", confidence=0.3, source_session="ses_test123")
 
         review_result = orchestrate_start("review", json.dumps({"sequence": 1}))
         wf_id = review_result["workflow_id"]
@@ -503,17 +467,13 @@ class TestExceptionRevise:
         wf = _load_workflow(wf_id)
         assert wf["phase"] == "done"
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_revise_commit_rule_exception(self):
         """revise 后 commit_rule 抛异常 → message 含 'failed'。"""
         init_repo_tool()
         _setup_reflection_record(1)
         _create_draft_file(1)
-        rule_path = _make_staging_rule(
-            "PATTERN_VIOLATION", confidence=0.9, source_session="ses_test123"
-        )
+        rule_path = _make_staging_rule("PATTERN_VIOLATION", confidence=0.9, source_session="ses_test123")
 
         review_result = orchestrate_start("review", json.dumps({"sequence": 1}))
         wf_id = review_result["workflow_id"]
@@ -568,9 +528,7 @@ class TestExceptionRevise:
 class TestIntegrationReview:
     """End-to-end: reflect → review → confirm, and reflect → review → revise → o_done."""
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_full_review_confirm_flow(self):
         init_repo_tool()
         _setup_reflection_record(1)
@@ -605,16 +563,12 @@ class TestIntegrationReview:
         records = json.loads(state_path.read_text(encoding="utf-8"))
         assert records[0]["status"] == "auto_committed"
 
-    @pytest.mark.skipif(
-        not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented"
-    )
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_full_review_revise_flow(self):
         init_repo_tool()
         _setup_reflection_record(1)
         _create_draft_file(1, "## DRAFT Report\nPattern violation in error handling.")
-        rule_path = _make_staging_rule(
-            "PATTERN_VIOLATION", source_session="ses_test123"
-        )
+        rule_path = _make_staging_rule("PATTERN_VIOLATION", source_session="ses_test123")
 
         review_result = orchestrate_start("review", json.dumps({"sequence": 1}))
         wf_id = review_result["workflow_id"]
@@ -626,9 +580,7 @@ class TestIntegrationReview:
             data_json=json.dumps({"rule_index": 1}),
         )
         assert revise_result["action"] == "fire_o"
-        assert (
-            "USER FEEDBACK: Add specific pattern example" in revise_result["o_prompt"]
-        )
+        assert "USER FEEDBACK: Add specific pattern example" in revise_result["o_prompt"]
         assert "ORIGINAL RULE FILE" in revise_result["o_prompt"]
 
         revised_content = (

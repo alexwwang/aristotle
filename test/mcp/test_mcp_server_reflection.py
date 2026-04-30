@@ -225,9 +225,7 @@ class TestCompleteReflectionRecord:
 
         create_reflection_record("ses_1", "test", "ref_1")
 
-        result = complete_reflection_record(
-            sequence=1, status="auto_committed", rules_count=3
-        )
+        result = complete_reflection_record(sequence=1, status="auto_committed", rules_count=3)
 
         assert result["success"] is True
         assert "auto_committed" in result["message"]
@@ -249,9 +247,7 @@ class TestCompleteReflectionRecord:
         )
 
         create_reflection_record("ses_1", "test", "ref_1")
-        result = complete_reflection_record(
-            sequence=1, status="partial_commit", rules_count=1
-        )
+        result = complete_reflection_record(sequence=1, status="partial_commit", rules_count=1)
 
         assert result["success"] is True
 
@@ -268,9 +264,7 @@ class TestCompleteReflectionRecord:
         )
 
         create_reflection_record("ses_1", "test", "ref_1")
-        result = complete_reflection_record(
-            sequence=1, status="checker_failed", rules_count=0
-        )
+        result = complete_reflection_record(sequence=1, status="checker_failed", rules_count=0)
 
         assert result["success"] is True
 
@@ -342,9 +336,7 @@ class TestCompleteReflectionRecord:
         create_reflection_record("ses_2", "test2", "ref_2")
         create_reflection_record("ses_3", "test3", "ref_3")
 
-        result = complete_reflection_record(
-            sequence=2, status="auto_committed", rules_count=3
-        )
+        result = complete_reflection_record(sequence=2, status="auto_committed", rules_count=3)
 
         assert result["success"] is True
 

@@ -27,9 +27,7 @@ def _parse_checker_result(result: str) -> tuple[int, int]:
         if m:
             staged = int(m.group(1))
     if committed == 0 and staged == 0:
-        m = re.search(
-            r"(\d+)\s+rules?\s+committed.*?(\d+)\s+staged?", result, re.IGNORECASE
-        )
+        m = re.search(r"(\d+)\s+rules?\s+committed.*?(\d+)\s+staged?", result, re.IGNORECASE)
         if m:
             committed, staged = int(m.group(1)), int(m.group(2))
     return committed, staged
@@ -180,7 +178,9 @@ def _parse_draft_summary(draft_content: str) -> tuple[list[str], int]:
     return (non_empty[:3], total_chars)
 
 
-def _enrich_rules_metadata(rules_result: dict) -> tuple[list[dict], list[dict], list[dict | None]]:
+def _enrich_rules_metadata(
+    rules_result: dict,
+) -> tuple[list[dict], list[dict], list[dict | None]]:
     """Organize rules into staging/verified and compute audit decisions.
 
     Input: rules_result is the raw return from list_rules() — each rule
@@ -289,9 +289,7 @@ def _do_search_and_notify(workflow_id: str) -> dict:
     for i, r in enumerate(rules):
         rule_path = r.get("path", "")
         rule_id = r.get("id", f"candidate_{i}")
-        candidates.append(
-            {"rule_id": rule_id, "path": rule_path, "metadata": r.get("metadata", {})}
-        )
+        candidates.append({"rule_id": rule_id, "path": rule_path, "metadata": r.get("metadata", {})})
         prompt = _build_scoring_prompt(
             query=query,
             domain=intent.get("domain", ""),
@@ -304,9 +302,7 @@ def _do_search_and_notify(workflow_id: str) -> dict:
     workflow["candidates"] = candidates
     _save_workflow(workflow_id, workflow)
 
-    notify_msg = (
-        f"🦉 Found {count} relevant lesson(s). Scoring top {len(candidates)}..."
-    )
+    notify_msg = f"🦉 Found {count} relevant lesson(s). Scoring top {len(candidates)}..."
     return {
         "action": "fire_score",
         "workflow_id": workflow_id,
@@ -340,9 +336,7 @@ def _parse_scores(score_done_data: dict) -> list[dict]:
             score = 5
         score = max(1, min(10, score))
         summary = str(summary)[:120]
-        parsed.append(
-            {"rule_id": item.get("rule_id", ""), "score": score, "summary": summary}
-        )
+        parsed.append({"rule_id": item.get("rule_id", ""), "score": score, "summary": summary})
     return parsed
 
 
@@ -380,8 +374,6 @@ def _format_scored_rules_for_compress(scores: list[dict], workflow: dict) -> str
                 content = Path(path).read_text(encoding="utf-8")
             except (OSError, UnicodeDecodeError):
                 content = "<file not readable>"
-        parts.append(
-            f"---\nRule: {path} (score: {sc['score']}/10)\nSummary: {sc['summary']}\n\n{content}"
-        )
+        parts.append(f"---\nRule: {path} (score: {sc['score']}/10)\nSummary: {sc['summary']}\n\n{content}")
 
     return "\n".join(parts)

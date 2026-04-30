@@ -249,9 +249,7 @@ CHECK: <describe how to verify>
 """
 
 
-def _build_scoring_prompt(
-    query: str, domain: str, task_goal: str, rule_path: str
-) -> str:
+def _build_scoring_prompt(query: str, domain: str, task_goal: str, rule_path: str) -> str:
     return SCORING_PROMPT_TEMPLATE.format(
         query=query[:500],
         domain=domain or "general",
@@ -276,9 +274,7 @@ def _build_compress_prompt(
     )
 
 
-def _build_revise_prompt(
-    rule_path: str, original_content: str, feedback: str, draft_summary: str
-) -> str:
+def _build_revise_prompt(rule_path: str, original_content: str, feedback: str, draft_summary: str) -> str:
     def _esc(s: str) -> str:
         return s.replace("{", "{{").replace("}", "}}")
 

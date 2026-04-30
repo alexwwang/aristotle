@@ -117,10 +117,7 @@ class TestSearchAndNotify:
         """不存在的 workflow_id → 返回错误。"""
         result = _do_search_and_notify("wf_9999a1b2c3d4e5f6")
         assert result["action"] == "notify"
-        assert (
-            "lost" in result.get("message", "").lower()
-            or "not found" in result.get("message", "").lower()
-        )
+        assert "lost" in result.get("message", "").lower() or "not found" in result.get("message", "").lower()
 
     def test_zero_results_no_fire_score(self):
         """零结果时不返回 fire_score action。"""
@@ -224,9 +221,7 @@ class TestSearchAndNotify:
             },
         )
 
-        fake_rules = [
-            {"path": "/fake/r1.md", "metadata": {"id": "rec_1", "status": "verified"}}
-        ]
+        fake_rules = [{"path": "/fake/r1.md", "metadata": {"id": "rec_1", "status": "verified"}}]
 
         with patch("aristotle_mcp._tools_rules.list_rules") as mock_lr:
             mock_lr.return_value = {"count": 1, "rules": fake_rules}
@@ -264,9 +259,7 @@ class TestScoreDoneHandler:
             json.dumps(
                 {
                     "workflow_id": wf_id,
-                    "scores": [
-                        {"rule_id": "rec_1", "score": 8, "summary": "Highly relevant"}
-                    ],
+                    "scores": [{"rule_id": "rec_1", "score": 8, "summary": "Highly relevant"}],
                 }
             ),
         )
@@ -426,9 +419,7 @@ class TestCompressingHandler:
             },
         )
 
-        compressed = (
-            "## WHEN\nerror=prisma AND code=P2024\n\n## DO\n1. Increase pool size"
-        )
+        compressed = "## WHEN\nerror=prisma AND code=P2024\n\n## DO\n1. Increase pool size"
         result = orchestrate_on_event(
             "o_done",
             json.dumps(
@@ -548,9 +539,7 @@ class TestFormatScoredRules:
         """_format_scored_rules_for_compress 输出包含完整规则文件内容。"""
         init_repo_tool()
         # 创建含实际内容的规则
-        rule_content = (
-            "## WHEN\nerror=prisma AND code=P2024\n\n## DO\n1. Increase pool size"
-        )
+        rule_content = "## WHEN\nerror=prisma AND code=P2024\n\n## DO\n1. Increase pool size"
         w = write_rule(content=rule_content, category="HALLUCINATION")
         assert w.get("success"), f"write_rule failed: {w.get('message', '')}"
         rule_path = w["file_path"]
@@ -610,9 +599,7 @@ class TestPromptTemplates:
     def test_compress_prompt_contains_rules(self):
         """压缩 prompt 包含评分规则文本。"""
         # WHEN/DO/NEVER are template structural keywords, not input data
-        scored_text = (
-            "---\nRule: /fake/r1.md (score: 8/10)\nSummary: Relevant\n\n## Rule content"
-        )
+        scored_text = "---\nRule: /fake/r1.md (score: 8/10)\nSummary: Relevant\n\n## Rule content"
         prompt = _build_compress_prompt(
             query="test query",
             scored_rules_text=scored_text,

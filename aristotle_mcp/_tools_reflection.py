@@ -169,9 +169,7 @@ def _update_record_field(sequence: int, field: str, value) -> None:
     idx = sequence - 1
     if 0 <= idx < len(records):
         records[idx][field] = value
-        state_path.write_text(
-            json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
+        state_path.write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def register_reflection_tools(mcp) -> None:

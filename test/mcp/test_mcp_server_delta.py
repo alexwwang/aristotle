@@ -118,9 +118,7 @@ class TestDeltaDecision:
 
         init_repo_tool()
 
-        w_high = write_rule(
-            content="high conf", category="PATTERN_VIOLATION", confidence=0.95
-        )
+        w_high = write_rule(content="high conf", category="PATTERN_VIOLATION", confidence=0.95)
         stage_rule(w_high["file_path"])
         r_high = get_audit_decision(w_high["file_path"])
         assert r_high["audit_level"] == "auto"

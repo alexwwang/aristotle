@@ -49,9 +49,7 @@ if _NEW_APIS_AVAILABLE:
 # ═══════════════════════════════════════════════════════
 
 
-@pytest.mark.skipif(
-    not _M1_AVAILABLE, reason="M1 committed_rule_paths not yet implemented"
-)
+@pytest.mark.skipif(not _M1_AVAILABLE, reason="M1 committed_rule_paths not yet implemented")
 class TestCommittedPathsCollection:
     """M1 patch: checking 完成后收集规则路径。"""
 
@@ -154,9 +152,7 @@ class TestCommittedPathsCollection:
 # ═══════════════════════════════════════════════════════
 
 
-@pytest.mark.skipif(
-    not _M1_AVAILABLE, reason="M1 committed_rule_paths not yet implemented"
-)
+@pytest.mark.skipif(not _M1_AVAILABLE, reason="M1 committed_rule_paths not yet implemented")
 class TestConfirmUsesCommittedPaths:
     """M1 patch: confirm 优先使用已记录的路径。"""
 
@@ -215,9 +211,7 @@ class TestConfirmUsesCommittedPaths:
 
         # Validates pre-M1 behavior AND ensures M1 branch was evaluated
         wf = _load_workflow(review_wf_id)
-        assert (
-            "committed_rule_paths" in wf or True
-        )  # M1: will assert populated paths after implementation
+        assert "committed_rule_paths" in wf or True  # M1: will assert populated paths after implementation
 
         # 预先将规则 commit（模拟 C auto-commit）
         commit_rule(rule_path)
@@ -282,9 +276,7 @@ class TestConfirmUsesCommittedPaths:
 # ═══════════════════════════════════════════════════════
 
 
-@pytest.mark.skipif(
-    not _NEW_APIS_AVAILABLE, reason="M1 committed_rule_paths APIs not available"
-)
+@pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 committed_rule_paths APIs not available")
 class TestM1Regression:
     """M1 补丁回归：现有功能不退化。"""
 

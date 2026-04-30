@@ -27,9 +27,7 @@ def stream_filter_rules(
 ) -> list[Path]:
     results: list[Path] = []
     keyword_re = re.compile(keyword, re.IGNORECASE) if keyword else None
-    scope_re = (
-        re.compile(rf'^scope:\s*["\']?({scope})["\']?', re.MULTILINE) if scope else None
-    )
+    scope_re = re.compile(rf'^scope:\s*["\']?({scope})["\']?', re.MULTILINE) if scope else None
 
     for path in base_dir.rglob("*.md"):
         if path.name.startswith("_"):
@@ -84,9 +82,7 @@ def stream_filter_rules(
                 if not keyword_re.search(content_part):
                     continue
 
-        needs_intent_filter = (
-            intent_domain or intent_task_goal or failed_skill or error_summary
-        )
+        needs_intent_filter = intent_domain or intent_task_goal or failed_skill or error_summary
         if needs_intent_filter:
             parsed = None
             try:
@@ -113,19 +109,13 @@ def stream_filter_rules(
                     if not re.search(error_summary, val, re.IGNORECASE):
                         continue
             else:
-                if intent_domain and not re.search(
-                    intent_domain, fm_text, re.IGNORECASE
-                ):
+                if intent_domain and not re.search(intent_domain, fm_text, re.IGNORECASE):
                     continue
-                if intent_task_goal and not re.search(
-                    intent_task_goal, fm_text, re.IGNORECASE
-                ):
+                if intent_task_goal and not re.search(intent_task_goal, fm_text, re.IGNORECASE):
                     continue
                 if failed_skill and not re.search(failed_skill, fm_text, re.IGNORECASE):
                     continue
-                if error_summary and not re.search(
-                    error_summary, fm_text, re.IGNORECASE
-                ):
+                if error_summary and not re.search(error_summary, fm_text, re.IGNORECASE):
                     continue
 
         results.append(path)

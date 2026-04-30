@@ -5,9 +5,7 @@ import subprocess
 from pathlib import Path
 
 
-def _run(
-    repo_path: Path, args: list[str], env_extra: dict[str, str] | None = None
-) -> subprocess.CompletedProcess[str]:
+def _run(repo_path: Path, args: list[str], env_extra: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     if env_extra:
         env.update(env_extra)

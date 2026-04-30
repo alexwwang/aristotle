@@ -15,7 +15,11 @@ from aristotle_mcp._orch_state import (
     _next_sequence,
     _save_workflow,
 )
-from aristotle_mcp._orch_parsers import _do_search_and_notify, _enrich_rules_metadata, _format_review_output
+from aristotle_mcp._orch_parsers import (
+    _do_search_and_notify,
+    _enrich_rules_metadata,
+    _format_review_output,
+)
 from aristotle_mcp._tools_rules import list_rules
 
 
@@ -173,8 +177,7 @@ def orchestrate_start(command: str, args_json: str = "{}") -> dict:
         if not target_record:
             return {
                 "action": "notify",
-                "message": f"🦉 Reflection #{sequence} not found. "
-                f"Run /aristotle sessions to list.",
+                "message": f"🦉 Reflection #{sequence} not found. Run /aristotle sessions to list.",
             }
 
         draft_path = target_record.get("draft_file_path", "")
@@ -196,7 +199,12 @@ def orchestrate_start(command: str, args_json: str = "{}") -> dict:
         staging_rule_paths = [r.get("path", "") for r in staging_rules]
 
         message = _format_review_output(
-            sequence, target_record, draft_content, staging_rules, verified_rules, audit_decisions
+            sequence,
+            target_record,
+            draft_content,
+            staging_rules,
+            verified_rules,
+            audit_decisions,
         )
 
         _save_workflow(
@@ -247,9 +255,7 @@ def orchestrate_start(command: str, args_json: str = "{}") -> dict:
                 "rejected": "❌",
             }.get(s, "?")
 
-            lines.append(
-                f"  #{i + 1} {status_icon} [{target}] {rules} rules — {launched}"
-            )
+            lines.append(f"  #{i + 1} {status_icon} [{target}] {rules} rules — {launched}")
 
         return {
             "action": "notify",

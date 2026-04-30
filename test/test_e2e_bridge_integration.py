@@ -119,9 +119,7 @@ class TestContextFixE2E:
         assert str(snapshot_path) in sub_prompt, (
             f"Reflector prompt must reference session_file path. Got: {sub_prompt[:200]}"
         )
-        assert session_id in sub_prompt, (
-            "Reflector prompt must reference target_session_id"
-        )
+        assert session_id in sub_prompt, "Reflector prompt must reference target_session_id"
 
     def test_reflect_without_session_file_still_works(self):
         """E2E-1.2: Backward compat — reflect works without session_file."""
@@ -251,9 +249,7 @@ class TestAsyncBridgeWorkflowE2E:
             json.dumps(
                 {
                     "target_session_id": "ses_async_e2e",
-                    "session_file": str(
-                        isolated_sessions_dir / "ses_async_e2e_snapshot.json"
-                    ),
+                    "session_file": str(isolated_sessions_dir / "ses_async_e2e_snapshot.json"),
                 }
             ),
         )
@@ -283,9 +279,7 @@ class TestAsyncBridgeWorkflowE2E:
             ),
         )
 
-        assert r_done["action"] == "fire_sub", (
-            f"After reflector → should fire checker. Got: {r_done.get('action')}"
-        )
+        assert r_done["action"] == "fire_sub", f"After reflector → should fire checker. Got: {r_done.get('action')}"
         assert r_done["sub_role"] == "C"
         # Checker reuses the same workflow_id — bridge context is already established
 
@@ -303,9 +297,7 @@ class TestAsyncBridgeWorkflowE2E:
 
         assert c_done["action"] == "done"
         msg = c_done.get("notify_message", c_done.get("message", ""))
-        assert "done" in msg.lower() or "aristotle" in msg.lower(), (
-            f"Expected completion message, got: {msg}"
-        )
+        assert "done" in msg.lower() or "aristotle" in msg.lower(), f"Expected completion message, got: {msg}"
 
     def test_bridge_poll_then_abort(self, isolated_sessions_dir):
         """E2E-3.2: Abort a running bridge workflow mid-poll."""

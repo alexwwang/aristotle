@@ -87,9 +87,7 @@ class TestMigration:
 
         learnings = tmp_path / "aristotle-learnings.md"
         learnings.write_text(
-            "# Header\n"
-            "## [2026-03-01] HALLUCINATION — Fake API\n"
-            "**Context**: test\n**Rule**: verify\n---\n",
+            "# Header\n## [2026-03-01] HALLUCINATION — Fake API\n**Context**: test\n**Rule**: verify\n---\n",
             encoding="utf-8",
         )
         monkeypatch.setattr(

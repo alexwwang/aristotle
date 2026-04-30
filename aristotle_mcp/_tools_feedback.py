@@ -106,9 +106,7 @@ def report_feedback(
             update_frontmatter_field(path, "feedback_count", str(fb_count + 1))
 
         workflow_id = f"wf_{uuid.uuid4().hex[:16]}"
-        found_rule_ids = [
-            r["metadata"]["id"] for r in found_rules if "id" in r.get("metadata", {})
-        ]
+        found_rule_ids = [r["metadata"]["id"] for r in found_rules if "id" in r.get("metadata", {})]
 
         sequence = _next_sequence()
         feedback_depth = max_feedback_count

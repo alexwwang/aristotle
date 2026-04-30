@@ -31,9 +31,7 @@ class TestFrontmatter:
         from aristotle_mcp.frontmatter import write_rule_file, read_frontmatter_raw
 
         target = tmp_path / "fm.md"
-        write_rule_file(
-            target, {"id": "r1", "status": "verified", "confidence": 0.9}, "body"
-        )
+        write_rule_file(target, {"id": "r1", "status": "verified", "confidence": 0.9}, "body")
         fm = read_frontmatter_raw(target)
         assert fm is not None
         assert fm["id"] == "r1"
@@ -88,9 +86,7 @@ class TestFrontmatter:
             {"id": "b", "status": "verified", "category": "PATTERN_VIOLATION"},
             "body",
         )
-        result = stream_filter_rules(
-            tmp_path, status_filter="verified", category="HALLUCINATION"
-        )
+        result = stream_filter_rules(tmp_path, status_filter="verified", category="HALLUCINATION")
         assert len(result) == 1
         assert result[0].name == "a.md"
 
@@ -174,9 +170,7 @@ class TestFrontmatter:
             },
             "body",
         )
-        result = stream_filter_rules(
-            tmp_path, status_filter="verified", intent_domain="database"
-        )
+        result = stream_filter_rules(tmp_path, status_filter="verified", intent_domain="database")
         assert len(result) == 1
         assert result[0].name == "a.md"
 
@@ -193,9 +187,7 @@ class TestFrontmatter:
             },
             "body",
         )
-        result = stream_filter_rules(
-            tmp_path, status_filter="verified", intent_task_goal="pool"
-        )
+        result = stream_filter_rules(tmp_path, status_filter="verified", intent_task_goal="pool")
         assert len(result) == 1
 
     def test_stream_filter_by_failed_skill(self, tmp_path):
@@ -221,9 +213,7 @@ class TestFrontmatter:
             },
             "body",
         )
-        result = stream_filter_rules(
-            tmp_path, status_filter="verified", failed_skill="prisma"
-        )
+        result = stream_filter_rules(tmp_path, status_filter="verified", failed_skill="prisma")
         assert len(result) == 1
         assert result[0].name == "a.md"
 
@@ -240,9 +230,7 @@ class TestFrontmatter:
             },
             "body",
         )
-        result = stream_filter_rules(
-            tmp_path, status_filter="verified", error_summary="timeout"
-        )
+        result = stream_filter_rules(tmp_path, status_filter="verified", error_summary="timeout")
         assert len(result) == 1
 
     def test_stream_filter_multi_dimension_combined(self, tmp_path):
@@ -289,9 +277,7 @@ class TestFrontmatter:
             {"id": "leg", "status": "verified", "category": "TEST"},
             "body",
         )
-        result = stream_filter_rules(
-            tmp_path, status_filter="verified", intent_domain="anything"
-        )
+        result = stream_filter_rules(tmp_path, status_filter="verified", intent_domain="anything")
         assert len(result) == 0
 
     def test_write_and_read_intent_tags_via_serialize(self, tmp_path):

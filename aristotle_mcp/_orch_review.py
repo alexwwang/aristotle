@@ -67,9 +67,7 @@ def orchestrate_review_action(
                     committed += 1  # already committed by C
         else:
             # Legacy fallback: keyword search
-            rules_result = list_rules(
-                status_filter="all", keyword=target_session, limit=20
-            )
+            rules_result = list_rules(status_filter="all", keyword=target_session, limit=20)
             for r in rules_result.get("rules", []):
                 meta = r.get("metadata", {})
                 if meta.get("status") == "staging":
@@ -81,9 +79,7 @@ def orchestrate_review_action(
                 elif meta.get("status") == "verified":
                     committed += 1
 
-        complete_reflection_record(
-            sequence=sequence, status="auto_committed", rules_count=committed or None
-        )
+        complete_reflection_record(sequence=sequence, status="auto_committed", rules_count=committed or None)
 
         workflow["phase"] = "done"
         _save_workflow(workflow_id, workflow)
@@ -163,9 +159,7 @@ def orchestrate_review_action(
             if dp.exists():
                 draft_summary = dp.read_text(encoding="utf-8")[:1500]
 
-        o_prompt = _build_revise_prompt(
-            rule_path, original_content, feedback, draft_summary
-        )
+        o_prompt = _build_revise_prompt(rule_path, original_content, feedback, draft_summary)
 
         workflow["pending_role"] = "O"
         workflow["revise_rule_path"] = rule_path

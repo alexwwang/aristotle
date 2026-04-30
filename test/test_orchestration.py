@@ -89,9 +89,7 @@ class TestOrchestrateStart:
         assert result["action"] == "fire_o"
 
     def test_reflect_command_returns_placeholder(self):
-        result = orchestrate_start(
-            "reflect", json.dumps({"target_session_id": "ses_test"})
-        )
+        result = orchestrate_start("reflect", json.dumps({"target_session_id": "ses_test"}))
         assert "workflow_id" in result
         assert result.get("action") in ("fire_sub", "notify")
 
@@ -238,9 +236,7 @@ class TestOrchestrateOnEvent:
     def test_unknown_event_type_returns_notify(self):
         start = _start_learn_workflow("test query")
         wf_id = start["workflow_id"]
-        result = orchestrate_on_event(
-            "unknown_event", json.dumps({"workflow_id": wf_id})
-        )
+        result = orchestrate_on_event("unknown_event", json.dumps({"workflow_id": wf_id}))
         assert result["action"] == "notify"
 
 
@@ -420,9 +416,7 @@ class TestSearchParamMapping:
 # TestOrchestrateStartSessions
 # ═══════════════════════════════════════════════════════
 class TestOrchestrateStartSessions:
-    def _setup_reflection_record_with_status(
-        self, status: str = "auto_committed", sequence: int = 1
-    ):
+    def _setup_reflection_record_with_status(self, status: str = "auto_committed", sequence: int = 1):
         from aristotle_mcp.config import resolve_repo_dir
 
         state_path = resolve_repo_dir().parent / "aristotle-state.json"
@@ -435,11 +429,7 @@ class TestOrchestrateStartSessions:
                 "reflector_session_id": "ses_r456",
                 "rules_count": 2,
                 "launched_at": "2026-04-22T10:00:00+08:00",
-                "draft_file_path": str(
-                    resolve_repo_dir().parent
-                    / "aristotle-drafts"
-                    / f"rec_{sequence}.md"
-                ),
+                "draft_file_path": str(resolve_repo_dir().parent / "aristotle-drafts" / f"rec_{sequence}.md"),
             }
         ]
         state_path.parent.mkdir(parents=True, exist_ok=True)
@@ -504,9 +494,7 @@ class TestHelperFunctions:
         assert _next_sequence() == 1
         state_path.write_text(json.dumps([{"id": "rec_1"}]), encoding="utf-8")
         assert _next_sequence() == 2
-        state_path.write_text(
-            json.dumps([{"id": "rec_1"}, {"id": "rec_2"}]), encoding="utf-8"
-        )
+        state_path.write_text(json.dumps([{"id": "rec_1"}, {"id": "rec_2"}]), encoding="utf-8")
         assert _next_sequence() == 3
 
     @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="New APIs not yet implemented")
@@ -546,9 +534,7 @@ class TestHelperFunctions:
         wf_dir.mkdir(parents=True)
         old_time = (datetime.now(timezone.utc) - timedelta(hours=25)).isoformat()
         wf_file = wf_dir / "wf_old123.json"
-        wf_file.write_text(
-            json.dumps({"phase": "done", "updated_at": old_time}), encoding="utf-8"
-        )
+        wf_file.write_text(json.dumps({"phase": "done", "updated_at": old_time}), encoding="utf-8")
 
         _cleanup_stale_workflows(max_age_hours=24)
         assert not wf_file.exists()
@@ -565,9 +551,7 @@ class TestHelperFunctions:
         wf_dir.mkdir(parents=True)
         old_time = (datetime.now(timezone.utc) - timedelta(hours=49)).isoformat()
         wf_file = wf_dir / f"wf_stuck_{phase}.json"
-        wf_file.write_text(
-            json.dumps({"phase": phase, "updated_at": old_time}), encoding="utf-8"
-        )
+        wf_file.write_text(json.dumps({"phase": phase, "updated_at": old_time}), encoding="utf-8")
 
         _cleanup_stale_workflows(max_age_hours=24)
         assert not wf_file.exists()

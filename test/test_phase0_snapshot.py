@@ -30,9 +30,7 @@ from _orch_helpers import (
 
 
 class TestResolveSessionsDir:
-    def test_should_resolve_sessions_dir_under_opencode_config(
-        self, tmp_path, monkeypatch
-    ):
+    def test_should_resolve_sessions_dir_under_opencode_config(self, tmp_path, monkeypatch):
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
         from aristotle_mcp.config import resolve_sessions_dir
 
@@ -116,9 +114,7 @@ class TestOrchestrateStartSessionFile:
 
 
 class TestBridgeDetection:
-    def test_should_return_use_bridge_true_when_marker_exists(
-        self, tmp_path, monkeypatch
-    ):
+    def test_should_return_use_bridge_true_when_marker_exists(self, tmp_path, monkeypatch):
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
         sessions_dir = tmp_path / ".config" / "opencode" / "aristotle-sessions"
         sessions_dir.mkdir(parents=True, exist_ok=True)
@@ -236,10 +232,7 @@ class TestUndoneShortCircuit:
             ),
         )
         assert result["action"] == "notify"
-        assert (
-            "undone" in result.get("message", "").lower()
-            or "ignored" in result.get("message", "").lower()
-        )
+        assert "undone" in result.get("message", "").lower() or "ignored" in result.get("message", "").lower()
 
     def test_should_ignore_events_for_cancelled_workflow(self, tmp_repo):
         init_repo_tool()
@@ -263,10 +256,7 @@ class TestUndoneShortCircuit:
             ),
         )
         assert result["action"] == "notify"
-        assert (
-            "cancelled" in result.get("message", "").lower()
-            or "ignored" in result.get("message", "").lower()
-        )
+        assert "cancelled" in result.get("message", "").lower() or "ignored" in result.get("message", "").lower()
 
 
 # ═══════════════════════════════════════════════════════════

@@ -14,9 +14,7 @@ import math
 from aristotle_mcp.config import AUDIT_THRESHOLDS, RISK_WEIGHTS, MAX_SAMPLES
 
 
-def compute_delta(
-    confidence: float, risk_level: str, sample_size: int | None = None
-) -> float:
+def compute_delta(confidence: float, risk_level: str, sample_size: int | None = None) -> float:
     """Compute the Δ decision factor.
 
     Args:
@@ -32,9 +30,7 @@ def compute_delta(
         ValueError: If risk_level is not recognised or sample_size < 0.
     """
     if risk_level not in RISK_WEIGHTS:
-        raise ValueError(
-            f"Unknown risk_level '{risk_level}'. Must be one of {list(RISK_WEIGHTS)}"
-        )
+        raise ValueError(f"Unknown risk_level '{risk_level}'. Must be one of {list(RISK_WEIGHTS)}")
     if not 0.0 <= confidence <= 1.0:
         raise ValueError(f"confidence must be between 0.0 and 1.0, got {confidence}")
     if sample_size is not None and sample_size < 0:

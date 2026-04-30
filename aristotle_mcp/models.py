@@ -133,12 +133,8 @@ def to_frontmatter_string(metadata: RuleMetadata) -> str:
         "error_summary": metadata.error_summary,
         "success_rate": metadata.success_rate,
         "failure_rate": metadata.failure_rate,
-        "sample_size": metadata.sample_size
-        if (metadata.sample_size or 0) > 0
-        else None,
-        "feedback_count": metadata.feedback_count
-        if (metadata.feedback_count or 0) > 0
-        else None,
+        "sample_size": metadata.sample_size if (metadata.sample_size or 0) > 0 else None,
+        "feedback_count": metadata.feedback_count if (metadata.feedback_count or 0) > 0 else None,
         "rule_summary": metadata.rule_summary,
         "conflicts_with": metadata.conflicts_with,
     }

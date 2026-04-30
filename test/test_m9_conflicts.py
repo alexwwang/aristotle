@@ -46,9 +46,7 @@ except (ImportError, AttributeError):
 # ═══════════════════════════════════════════════════════
 # TestDetectConflicts
 # ═══════════════════════════════════════════════════════
-@pytest.mark.skipif(
-    not _M9_AVAILABLE, reason="M9 conflict detection APIs not yet implemented"
-)
+@pytest.mark.skipif(not _M9_AVAILABLE, reason="M9 conflict detection APIs not yet implemented")
 class TestDetectConflicts:
     """M9: detect_conflicts detection."""
 
@@ -155,9 +153,7 @@ class TestDetectConflicts:
 # ═══════════════════════════════════════════════════════
 # TestCommitRuleConflictAnnotation
 # ═══════════════════════════════════════════════════════
-@pytest.mark.skipif(
-    not _M9_AVAILABLE, reason="M9 conflict detection APIs not yet implemented"
-)
+@pytest.mark.skipif(not _M9_AVAILABLE, reason="M9 conflict detection APIs not yet implemented")
 class TestCommitRuleConflictAnnotation:
     """M9: commit_rule 后置冲突标注。"""
 
@@ -237,9 +233,7 @@ class TestCommitRuleConflictAnnotation:
 # TestConflictsWithParsing
 # ═══════════════════════════════════════════════════════
 # NOTE: These tests depend on models.py RuleMetadata having conflicts_with field (M6 tech spec covers this)
-@pytest.mark.skipif(
-    not _MODELS_HAS_CONFLICTS, reason="RuleMetadata.conflicts_with not yet added"
-)
+@pytest.mark.skipif(not _MODELS_HAS_CONFLICTS, reason="RuleMetadata.conflicts_with not yet added")
 class TestConflictsWithParsing:
     """M9: conflicts_with 格式兼容解析。"""
 
@@ -280,9 +274,7 @@ class TestConflictsWithParsing:
 # ═══════════════════════════════════════════════════════
 # TestCheckingHandlerConflicts
 # ═══════════════════════════════════════════════════════
-@pytest.mark.skipif(
-    not _M9_AVAILABLE, reason="M9 conflict detection APIs not yet implemented"
-)
+@pytest.mark.skipif(not _M9_AVAILABLE, reason="M9 conflict detection APIs not yet implemented")
 class TestCheckingHandlerConflicts:
     """M9: checking 完成后冲突警告出现在通知消息中。"""
 

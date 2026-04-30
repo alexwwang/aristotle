@@ -16,11 +16,7 @@ from aristotle_mcp._orch_start import orchestrate_start
 def main():
     if len(sys.argv) < 2:
         sys.stderr.write("Usage: python -m aristotle_mcp._cli <subcommand> <arg>\n")
-        print(
-            json.dumps(
-                {"error": "Usage: python -m aristotle_mcp._cli <subcommand> <arg>"}
-            )
-        )
+        print(json.dumps({"error": "Usage: python -m aristotle_mcp._cli <subcommand> <arg>"}))
         sys.exit(1)
 
     subcommand = sys.argv[1]

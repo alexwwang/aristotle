@@ -64,9 +64,7 @@ def _start_reflect_workflow(target_session_id="ses_test123", **extra) -> dict:
     return orchestrate_start("reflect", json.dumps(args))
 
 
-def _fire_r_done_event(
-    workflow_id: str, session_id: str = "ses_r123", result: str = "DRAFT persisted."
-) -> dict:
+def _fire_r_done_event(workflow_id: str, session_id: str = "ses_r123", result: str = "DRAFT persisted.") -> dict:
     # When R finishes successfully, it creates a DRAFT file.
     # Simulate this by auto-creating the DRAFT for the workflow's sequence,
     # but only if the result indicates success (contains "DRAFT" or doesn't
@@ -93,9 +91,7 @@ def _fire_r_done_event(
     )
 
 
-def _fire_c_done_event(
-    workflow_id: str, result: str = "Committed: 2, Staged: 0"
-) -> dict:
+def _fire_c_done_event(workflow_id: str, result: str = "Committed: 2, Staged: 0") -> dict:
     return orchestrate_on_event(
         "subagent_done",
         json.dumps(
@@ -111,9 +107,7 @@ def _fire_c_done_event(
 # ── Review workflow helpers ──────────────────────────────────────────
 
 
-def _setup_reflection_record(
-    sequence: int = 1, status: str = "auto_committed", **extra
-) -> None:
+def _setup_reflection_record(sequence: int = 1, status: str = "auto_committed", **extra) -> None:
     from aristotle_mcp.config import resolve_repo_dir
 
     state_path = resolve_repo_dir().parent / "aristotle-state.json"
@@ -137,9 +131,7 @@ def _setup_reflection_record(
         "reflector_session_id": extra.get("reflector_session_id", "ses_r456"),
         "rules_count": extra.get("rules_count", 2),
         "launched_at": extra.get("launched_at", "2026-04-22T10:00:00+08:00"),
-        "draft_file_path": str(
-            resolve_repo_dir().parent / "aristotle-drafts" / f"rec_{sequence}.md"
-        ),
+        "draft_file_path": str(resolve_repo_dir().parent / "aristotle-drafts" / f"rec_{sequence}.md"),
     }
     if "re_reflect_count" in extra:
         target_record["re_reflect_count"] = extra["re_reflect_count"]
@@ -152,14 +144,10 @@ def _setup_reflection_record(
         target_record["re_reflect_count"] = existing["re_reflect_count"]
 
     records[sequence - 1] = target_record
-    state_path.write_text(
-        json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    state_path.write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def _create_draft_file(
-    sequence: int, content: str = "## DRAFT Report\nTest content"
-) -> Path:
+def _create_draft_file(sequence: int, content: str = "## DRAFT Report\nTest content") -> Path:
     """Create a DRAFT file on disk."""
     from aristotle_mcp.config import resolve_repo_dir
 

@@ -65,13 +65,9 @@ class TestFeedbackSignalUpdate:
         rule_id = w.get("rule_id", "")
 
         # First feedback
-        report_feedback(
-            rule_ids=[rule_id], error_description="err1", auto_reflect=False
-        )
+        report_feedback(rule_ids=[rule_id], error_description="err1", auto_reflect=False)
         # Second feedback
-        report_feedback(
-            rule_ids=[rule_id], error_description="err2", auto_reflect=False
-        )
+        report_feedback(rule_ids=[rule_id], error_description="err2", auto_reflect=False)
 
         from aristotle_mcp.frontmatter import read_frontmatter_raw
 
@@ -248,10 +244,7 @@ class TestFeedbackDepthGuard:
         )
 
         assert result["action"] == "notify"
-        assert (
-            "no verified rules" in result["message"].lower()
-            or "not found" in result["message"].lower()
-        )
+        assert "no verified rules" in result["message"].lower() or "not found" in result["message"].lower()
 
 
 # ──────────────────────────────────────────────────────────────────────
