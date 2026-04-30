@@ -40,26 +40,6 @@ Staging rules are numbered (1, 2, 3...). Use these numbers for actions below.
 - "show draft" — View full DRAFT report
 - "re-reflect" — Fire new Reflector for deeper analysis
 ```
-🦉 Aristotle Review #N — [target_label]
-════════════════════════════════════════
-
-## DRAFT (Original Reflection Record)
-[Full DRAFT report from file]
-
-## Committed Rules
-[For each rule found:]
-  • Rule [rule_id]: [SHORT_TITLE]
-    Status: ✅ verified / 📋 staging / ❌ rejected
-    Scope: user / project
-    Δ: [delta value]
-    File: [file_path]
-
-## Options
-- "修改 N: feedback" — Revise rule N
-- "reject N" — Reject rule N
-- "confirm" — No changes needed
-- "re-reflect" — Fire new Reflector for deeper analysis
-```
 
 ---
 
@@ -70,14 +50,16 @@ No operation needed. Rules are already committed.
 Output: "✅ No changes. Rules remain as committed."
 
 **If "inspect N":**
-1. Call MCP: `orchestrate_review_action(workflow_id, "inspect", data_json={"rule_index": N})`
+1. Call MCP: `orchestrate_review_action(workflow_id, "inspect", json.dumps({"rule_index": N}))`
 2. Display the returned full rule file content (frontmatter + body) to user
-3. Return to STEP V2 for next action
+3. If the rule is not found or the workflow doesn't support inspection, the response message will explain why — display it and continue
+4. Return to STEP V2 for next action
 
 **If "show draft":**
 1. Call MCP: `orchestrate_review_action(workflow_id, "show draft")`
 2. Display the full DRAFT report content to user
-3. Return to STEP V2 for next action
+3. If the DRAFT file is missing or unreadable, the response message will explain why — display it and continue
+4. Return to STEP V2 for next action
 
 **If "修改 N: feedback" / "revise N: feedback":**
 1. Locate the target rule by N (1-indexed from the displayed list)
