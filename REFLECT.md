@@ -6,7 +6,7 @@ Fire Reflector subagent and handle completion.
 
 ---
 
-## STEP F1: COLLECT CONTEXT
+## STEP F1: COLLECT CONTEXT (do NOT read session content yourself)
 
 ```
 target_session_id:

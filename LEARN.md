@@ -162,7 +162,7 @@ if L learns lessons but still makes same type of error:
 
   O handling:
     mark rules as needs_sync
-    fire NEW Reflector with error scene report as context
+    fire NEW Reflector with error scene report + original session context as context
     R generates improved rule proposal
     C reviews → verified/rejected
     notify L of outcome

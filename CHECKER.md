@@ -85,7 +85,7 @@ structural checks:
      Model Wrong Output: present, non-empty, ≤400 chars
      User Correction OR Error Impact: at least one present
      User Correction ≤150 chars, Error Impact ≤100 chars
-     total Incident ≤1000 chars (preserve Model Wrong Output first, truncate others)
+     total Incident ≤1000 chars (preserve Model Wrong Output → truncate User Request → truncate optional fields)
 
   8. incident quality
      User Request = actual task, not "user made a request"
