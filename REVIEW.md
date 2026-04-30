@@ -26,6 +26,23 @@ When the user runs `/aristotle review N`:
 🦉 Aristotle Review #N — [target_label]
 ════════════════════════════════════════
 
+[Enriched notification from orchestrate_start("review", ...)]
+This includes: Δ audit score, audit level, per-rule confidence/risk,
+conflict warnings, and DRAFT summary with character count.
+
+Staging rules are numbered (1, 2, 3...). Use these numbers for actions below.
+
+## Actions
+- "confirm" — Accept all staging rules (auto-commit)
+- "reject" — Reject this reflection (all staging rules)
+- "修改 N: feedback" / "revise N: feedback" — Revise rule #N
+- "inspect N" — View full rule file #N (frontmatter + body)
+- "show draft" — View full DRAFT report
+- "re-reflect" — Fire new Reflector for deeper analysis
+```
+🦉 Aristotle Review #N — [target_label]
+════════════════════════════════════════
+
 ## DRAFT (Original Reflection Record)
 [Full DRAFT report from file]
 
@@ -51,6 +68,16 @@ When the user runs `/aristotle review N`:
 **If "confirm" / "确认":**
 No operation needed. Rules are already committed.
 Output: "✅ No changes. Rules remain as committed."
+
+**If "inspect N":**
+1. Call MCP: `orchestrate_review_action(workflow_id, "inspect", data_json={"rule_index": N})`
+2. Display the returned full rule file content (frontmatter + body) to user
+3. Return to STEP V2 for next action
+
+**If "show draft":**
+1. Call MCP: `orchestrate_review_action(workflow_id, "show draft")`
+2. Display the full DRAFT report content to user
+3. Return to STEP V2 for next action
 
 **If "修改 N: feedback" / "revise N: feedback":**
 1. Locate the target rule by N (1-indexed from the displayed list)
