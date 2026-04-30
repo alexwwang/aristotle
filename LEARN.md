@@ -15,7 +15,7 @@ Learning retrieval: O receives L's request, extracts intent, queries MCP via S, 
 
 ```
 trigger:
-  /aristotle learn <query>             → natural-language query
+  /aristotle learn <query>             → natural-language query (e.g. "之前做数据库迁移踩过坑吗？")
   /aristotle learn --domain X --goal Y → parameterized
   P3.3 passive signal                  → multi-agent error detected
 
@@ -61,7 +61,7 @@ if intent_tags.domain:     params.intent_domain = domain
 if intent_tags.task_goal:  params.intent_task_goal = task_goal
 if failed_skill:           params.failed_skill = failed_skill
 if error_context:          params.keyword = extract_keywords(error_context)
-                           # extract 2-3 core technical nouns, join with | for regex
+                            # extract 2-4 core technical nouns, join with | for regex
                            # "Prisma connection pool timeout" → "prisma|timeout|pool"
                            # "TypeScript circular import" → "circular|import"
                            # "File not found during build" → "file.*not.*found|build"

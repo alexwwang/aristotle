@@ -18,12 +18,13 @@ orchestrate_start("review", {sequence: N})
 ### Action Menu
 
 ```
-- "confirm"                 — accept all staging rules (auto-commit)
-- "reject"                  — reject this reflection
-- "修改 N: feedback"         — revise rule #N
-- "inspect N"               — view full rule file #N (frontmatter + body)
-- "show draft"              — view full DRAFT report
-- "re-reflect"              → STEP V6
+- "confirm" / "确认"           — accept all staging rules (auto-commit)
+- "reject"                    — reject this reflection
+- "reject N"                  — reject specific rule #N
+- "修改 N: feedback" / "revise N: feedback" — revise rule #N
+- "inspect N"                 — view full rule file #N (frontmatter + body)
+- "show draft"                — view full DRAFT report
+- "re-reflect" / "重新反思"    → STEP V6
 ```
 
 ---
@@ -33,7 +34,8 @@ orchestrate_start("review", {sequence: N})
 ```
 loop:
   match user_input:
-    "confirm"     → "✅ No changes. Rules remain as committed." STOP
+    "confirm" / "确认"
+                  → "✅ No changes. Rules remain as committed." STOP
 
     "inspect N"   → orchestrate_review_action(wf_id, "inspect",
                      json.dumps({"rule_index": N}))
@@ -44,7 +46,8 @@ loop:
                    display result (errors handled by backend messages)
                    → loop
 
-    "修改 N: fb"   → write_rule(updated_content)  // creates pending
+    "修改 N: fb" / "revise N: fb"
+                  → write_rule(updated_content)  // creates pending
                    → stage_rule()                  // staging
                    → STEP V4 (validate)
                    → pass? commit_rule() + "✅ revised"
@@ -54,7 +57,12 @@ loop:
     "reject"      → reject_rule(file_path, reason="user rejected")
                    → "❌ Rule rejected." → STEP V5
 
-    "re-reflect"  → STEP V6
+    "reject N"    → locate rule #N by staging_rule_paths[N-1]
+                   → reject_rule(file_path, reason="user rejected")
+                   → "❌ Rule [rule_id] rejected." → loop
+
+    "re-reflect" / "重新反思"
+                  → STEP V6
 
     natural_lang  → interpret, adjust, re-present → loop
 ```
@@ -65,8 +73,14 @@ loop:
 
 ```
 DRAFT file missing AND session unavailable:
-  → offer: "re-reflect" (fire new Reflector on same target session)
-           "reject"     (discard this record)
+  → display:
+    "🦉 Reflection #N — Session Unavailable"
+    "The DRAFT file and Reflector session for this record are no longer available."
+    Options:
+      1. Re-reflect — fire new Reflector on same target session
+         Run: /aristotle --focus full session <target_session_id>
+      2. Reject — discard this record
+         Say: "reject"
 ```
 
 ---
