@@ -22,6 +22,7 @@ aristotle-mcp = "aristotle_mcp.server:main"
 [dependency-groups]
 dev = [
     "pytest>=9.0.3",
+    "ruff>=0.11,<1",
 ]
 
 [tool.pytest.ini_options]

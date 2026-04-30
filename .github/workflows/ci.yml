@@ -47,7 +47,7 @@ jobs:
         run: uv sync --python 3.12
 
       - name: Ruff check
-        run: uv run --with ruff ruff check aristotle_mcp/ test/
+        run: uv run ruff check aristotle_mcp/ test/
 
       - name: Ruff format check
-        run: uv run --with ruff ruff format --check aristotle_mcp/ test/
+        run: uv run ruff format --check aristotle_mcp/ test/
