@@ -64,7 +64,8 @@ critical checks:
      task_goal = user's original intent, not the error
 
   3. error summary quality
-     concise, specific, distinguishable, consistent with Incident
+     concise, accurate, focused on what went wrong (not why)
+     specific enough to distinguish from other errors, consistent with Incident
 
   4. failed skill accuracy
      reasoning mistake with no tool → null
@@ -174,7 +175,7 @@ STOP. Coordinator reads output and notifies user.
 ```
 all checks pass    → proceed to commit
 schema failure     → auto-correct trivial, then commit
-content inaccuracy:
+content inaccuracy (auto-correct if high confidence, otherwise flag to user):
   category mismatch → auto-correct, show correction
   vague summary     → auto-improve, show improvement
   generic rule      → flag to user, suggest specific wording

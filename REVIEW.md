@@ -1,7 +1,10 @@
-# Aristotle Review Protocol
+# Aristotle Review Protocol (Post-Hoc Review)
 
 > Review phase only. Do NOT load during REFLECT.
 > Operates on already-committed/staged rules processed by Checker.
+
+This file defines how to load DRAFT records and committed rules, present them to the user,
+and handle modifications, rejections, and re-reflections.
 
 ---
 
@@ -9,6 +12,11 @@
 
 ```
 orchestrate_start("review", {sequence: N})
+  internally: read state file → find N-th record → read DRAFT from draft_file_path
+              (DRAFT missing? fallback: session_read(reflector_session_id))
+              (still unavailable? → STEP V3)
+              → read_rules(status="all", source_session=target_session_id)
+                (if no results → fallback: keyword matching against session_id)
   → 404? → "🦉 Reflection #N not found. Run /aristotle sessions to list." STOP
   → ok?  → display enriched notification to user
            (includes Δ, audit_level, per-rule confidence/risk, conflicts, DRAFT summary)
@@ -19,7 +27,7 @@ orchestrate_start("review", {sequence: N})
 
 ```
 - "confirm" / "确认"           — accept all staging rules (auto-commit)
-- "reject"                    — reject this reflection
+- "reject"                    — reject this reflection (all staging rules)
 - "reject N"                  — reject specific rule #N
 - "修改 N: feedback" / "revise N: feedback" — revise rule #N
 - "inspect N"                 — view full rule file #N (frontmatter + body)
@@ -39,7 +47,8 @@ loop:
 
     "inspect N"   → orchestrate_review_action(wf_id, "inspect",
                      json.dumps({"rule_index": N}))
-                   display result (errors handled by backend messages)
+                   display full rule file content (frontmatter + body)
+                   (errors handled by backend messages)
                    → loop
 
     "show draft"  → orchestrate_review_action(wf_id, "show draft")
@@ -47,8 +56,10 @@ loop:
                    → loop
 
     "修改 N: fb" / "revise N: fb"
-                  → write_rule(updated_content)  // creates pending
-                   → stage_rule()                  // staging
+                   → construct revised rule content based on user feedback
+                    → write_rule(updated_content)  // creates pending
+                    (write_rule fails? → output error, return to V2 for alternative feedback)
+                    → stage_rule()                  // staging
                    → STEP V4 (validate)
                    → pass? commit_rule() + "✅ revised"
                    → fail?  present issue → user decides force/cancel/retry
@@ -100,7 +111,7 @@ validate(rule):
     get_audit_decision(file_path) → audit_level
     "auto"   → commit without confirmation
     "semi"   → present diff, wait for user
-    "manual" → mandatory detailed review
+    "manual" → mandatory detailed review with full validation
 
   content:
     consistent with original error from DRAFT
@@ -108,11 +119,11 @@ validate(rule):
     specific and actionable (not "be more careful")
 
   outcome:
-    all pass  → auto-commit, append "Revised: [DATE]" timestamp
-    schema    → auto-correct trivial, then commit
+    all pass  → auto-commit, append _Revised: [DATE]_ timestamp to ALL modified rules
+    schema    → auto-correct trivial, append _Revised: [DATE]_ timestamp, then commit
     content   → present issue:
-                  "⚠️ [problem]"
-                  options: "force" / "cancel" / "修改: feedback"
+                   "⚠️ [problem]"
+                   options: "force" (commit anyway) / "cancel" (keep original) / "修改: feedback"
 ```
 
 ---
@@ -121,6 +132,8 @@ validate(rule):
 
 ```
 after modification or rejection:
+  status: "revised" (if modified) or existing status (if confirmed)
+  rules_count: update if rules were added/removed
   complete_reflection_record(sequence, status, rules_count)
   // do NOT display state file to user
 ```
@@ -132,7 +145,7 @@ after modification or rejection:
 ```
 re-reflect(DRAFT):
   target_session_id = DRAFT.target_session_id
-  load REFLECT.md
+  load ${SKILL_DIR}/REFLECT.md
 
   focus = match user_intent:
     "specific error"  → around [message_number] from DRAFT Location
@@ -144,7 +157,7 @@ re-reflect(DRAFT):
 
 cross-session ("/aristotle review N --cross M"):
   load DRAFT_N + DRAFT_M (fallback to STEP V3 if unavailable)
-  cross-analyze: recurring patterns, systemic mistakes, same root cause
+  cross-analyze: recurring patterns, systemic repeated mistakes, same category/root cause
   check if prior rules should have prevented current errors
   generate merged draft → STEP V2
 ```
@@ -154,11 +167,12 @@ cross-session ("/aristotle review N --cross M"):
 ## Permissions
 
 ```
-review mode allows:
+review mode allows (user explicitly requested this):
   READ   DRAFT files, MCP tools, state file
-  WRITE  rules (append-only, MCP dedup), state file
+  WRITE  rules (APPEND ONLY, NO DUPLICATES — MCP handles dedup via file naming), state file
   CALL   orchestrate_review_action, write_rule, stage_rule,
          commit_rule, reject_rule, get_audit_decision
   FIRE   new Reflector (loads REFLECT.md)
+  VALIDATE user modifications (C role for post-hoc changes)
   DO NOT display state file content to user
 ```

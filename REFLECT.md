@@ -42,8 +42,8 @@ task(category="unspecified-low", load_skills=[], run_in_background=true,
      description="Aristotle: ${target_label}",
      prompt="""
        You are Aristotle's Reflector subagent.
-       Read and execute: ${SKILL_DIR}/REFLECTOR.md
-       TARGET_SESSION_ID: ${target_session_id}
+        Read the file first, then follow it step by step: ${SKILL_DIR}/REFLECTOR.md
+        TARGET_SESSION_ID: ${target_session_id}
        PROJECT_DIRECTORY: ${project_directory}
        USER_LANGUAGE: ${user_language}
        FOCUS_HINT: ${focus_hint}
@@ -87,7 +87,7 @@ task(category="unspecified-low", load_skills=[] (do NOT load aristotle recursive
        description="Aristotle Checker: validate + commit",
        prompt="""
          You are Aristotle's Checker subagent.
-         Read and execute: ${SKILL_DIR}/CHECKER.md
+          Read the file first, then follow it step by step: ${SKILL_DIR}/CHECKER.md
          DRAFT_SEQUENCE: ${sequence_number}
          DRAFT_FILE: ~/.config/opencode/aristotle-drafts/rec_${seq}.md
          PROJECT_DIRECTORY: ${project_directory}
