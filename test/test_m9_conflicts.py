@@ -280,6 +280,11 @@ class TestCheckingHandlerConflicts:
 
     def test_conflict_warning_in_notification(self):
         """冲突规则的 checking 通知包含 ⚠️ 警告。"""
+        start = _start_reflect_workflow("ses_m9_conflict")
+        wf_id = start["workflow_id"]
+        wf = _load_workflow(wf_id)
+        seq = wf["sequence"]
+
         init_repo_tool()
 
         w1 = write_rule(
@@ -289,6 +294,7 @@ class TestCheckingHandlerConflicts:
             intent_task_goal="fix",
             failed_skill="skill_a",
             source_session="ses_m9_conflict",
+            reflection_sequence=seq,
         )
         stage_rule(w1["file_path"])
         commit_rule(w1["file_path"])
@@ -300,12 +306,10 @@ class TestCheckingHandlerConflicts:
             intent_task_goal="fix",
             failed_skill="skill_a",
             source_session="ses_m9_conflict",
+            reflection_sequence=seq,
         )
         stage_rule(w2["file_path"])
         commit_rule(w2["file_path"])
-
-        start = _start_reflect_workflow("ses_m9_conflict")
-        wf_id = start["workflow_id"]
 
         wf = _load_workflow(wf_id)
         wf["committed_rule_paths"] = [w1["file_path"], w2["file_path"]]

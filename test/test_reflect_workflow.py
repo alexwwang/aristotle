@@ -163,10 +163,11 @@ class TestOrchestrateOnEventReflect:
         assert wf["phase"] == "checking"
         assert wf["pending_role"] == "C"
         assert wf["record_created"] is True
+        seq = wf["sequence"]
 
         # C writes and commits 2 rules for this target session
-        _make_verified_rule("HALLUCINATION", source_session="ses_target1")
-        _make_verified_rule("PATTERN_VIOLATION", source_session="ses_target1")
+        _make_verified_rule("HALLUCINATION", source_session="ses_target1", reflection_sequence=seq)
+        _make_verified_rule("PATTERN_VIOLATION", source_session="ses_target1", reflection_sequence=seq)
 
         c_done = _fire_c_done_event(wf_id, "Committed: 2, Staged: 0")
         assert c_done["action"] == "done"
@@ -222,12 +223,14 @@ class TestOrchestrateOnEventReflect:
     def test_c_done_partial_commit_status(self):
         start = _start_reflect_workflow("ses_tgt")
         wf_id = start["workflow_id"]
+        wf = _load_workflow(wf_id)
+        seq = wf["sequence"]
         _fire_r_done_event(wf_id)
 
         # C writes 1 verified + 2 staging rules for this target session
-        _make_verified_rule("HALLUCINATION", source_session="ses_tgt")
-        _make_staging_rule("PATTERN_VIOLATION", source_session="ses_tgt")
-        _make_staging_rule("INCOMPLETE_ANALYSIS", source_session="ses_tgt")
+        _make_verified_rule("HALLUCINATION", source_session="ses_tgt", reflection_sequence=seq)
+        _make_staging_rule("PATTERN_VIOLATION", source_session="ses_tgt", reflection_sequence=seq)
+        _make_staging_rule("INCOMPLETE_ANALYSIS", source_session="ses_tgt", reflection_sequence=seq)
 
         result = _fire_c_done_event(wf_id, "Committed: 1\nStaged: 2")
 
