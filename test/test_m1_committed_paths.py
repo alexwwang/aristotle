@@ -65,10 +65,13 @@ class TestCommittedPathsCollection:
 
         # 3. 先手动创建 staging 规则供 checking handler 收集
         init_repo_tool()
+        wf = _load_workflow(wf_id)
+        seq = wf["sequence"]
         w = write_rule(
             content="## Test rule\n**Rule**: check paths",
             category="HALLUCINATION",
             source_session="ses_m1_test_01",
+            reflection_sequence=seq,
         )
         stage_rule(w["file_path"])
 
@@ -103,36 +106,37 @@ class TestCommittedPathsCollection:
     def test_source_session_exact_match_filters_cross_session(self):
         """收集路径时 source_session 精确匹配，排除其他 session 的规则。"""
         init_repo_tool()
+        start = _start_reflect_workflow("ses_m1_test_03")
+        wf_id = start["workflow_id"]
+        wf = _load_workflow(wf_id)
+        seq = wf["sequence"]
+
         # 创建属于当前 session 的规则
         w1 = write_rule(
             content="## Current session rule",
             category="HALLUCINATION",
             source_session="ses_m1_test_03",
+            reflection_sequence=seq,
         )
         stage_rule(w1["file_path"])
 
-        # 创建属于另一个 session 的规则（不应被收集）
+        # 创建属于另一个 session 的规则（不应被收集——但同 reflection_sequence 会被包含）
         w2 = write_rule(
             content="## Other session rule",
             category="SYNTAX_API_ERROR",
             source_session="ses_m1_test_03_extra",
+            reflection_sequence=seq,
         )
         stage_rule(w2["file_path"])
-
-        start = _start_reflect_workflow("ses_m1_test_03")
-        wf_id = start["workflow_id"]
 
         _fire_r_done_event(wf_id, "ses_r_m1")
         _fire_c_done_event(wf_id, "Committed: 2, Staged: 0")
 
         wf = _load_workflow(wf_id)
         paths = wf["committed_rule_paths"]
-        # 只应包含 ses_m1_test_03 的规则
-        for p in paths:
-            from aristotle_mcp.frontmatter import read_frontmatter_raw
-
-            fm = read_frontmatter_raw(Path(p))
-            assert fm.get("source_session") == "ses_m1_test_03"
+        # DP-002: both rules have same reflection_sequence, so both are collected
+        # source_session filtering is no longer used in checker completion
+        assert len(paths) == 2
 
     def test_empty_path_not_collected(self):
         """空路径不会被收集到 committed_rule_paths。"""
@@ -160,20 +164,21 @@ class TestConfirmUsesCommittedPaths:
         """创建完整的 reflect→review workflow。"""
         init_repo_tool()
 
-        # 创建 staging 规则
-        w = write_rule(
-            content="## Review test rule\n**Rule**: test",
-            category="HALLUCINATION",
-            source_session=session_id,
-        )
-        stage_rule(w["file_path"])
-        rule_path = w["file_path"]
-
-        # 创建 reflect workflow 并完成 R→C
+        # 创建 reflect workflow 先获取 sequence
         start = _start_reflect_workflow(session_id)
         wf_id = start["workflow_id"]
         wf = _load_workflow(wf_id)
         seq = wf["sequence"]
+
+        # 创建 staging 规则（使用已知 sequence）
+        w = write_rule(
+            content="## Review test rule\n**Rule**: test",
+            category="HALLUCINATION",
+            source_session=session_id,
+            reflection_sequence=seq,
+        )
+        stage_rule(w["file_path"])
+        rule_path = w["file_path"]
 
         _fire_r_done_event(wf_id, "ses_r_m1")
         _fire_c_done_event(wf_id, "Committed: 1, Staged: 0")
@@ -231,19 +236,20 @@ class TestConfirmUsesCommittedPaths:
         init_repo_tool()
         session_id = "ses_m1_fallback"
 
-        # 创建 staging 规则
-        w = write_rule(
-            content="## Fallback test rule",
-            category="HALLUCINATION",
-            source_session=session_id,
-        )
-        stage_rule(w["file_path"])
-
-        # 创建 reflect workflow
+        # 创建 reflect workflow（先创建 rec 以获取 seq）
         start = _start_reflect_workflow(session_id)
         wf_id = start["workflow_id"]
         wf = _load_workflow(wf_id)
         seq = wf["sequence"]
+
+        # 创建 staging 规则，关联 reflection_sequence
+        w = write_rule(
+            content="## Fallback test rule",
+            category="HALLUCINATION",
+            source_session=session_id,
+            reflection_sequence=seq,
+        )
+        stage_rule(w["file_path"])
 
         _fire_r_done_event(wf_id, "ses_r_m1")
         _fire_c_done_event(wf_id, "Committed: 1, Staged: 0")
