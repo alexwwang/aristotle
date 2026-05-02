@@ -100,6 +100,9 @@ def orchestrate_on_event(event_type: str, data_json: str) -> dict:
 
                 if original_fm:
                     new_fm = read_frontmatter_raw(resolved) or {}
+                    # DP-002: reflection_sequence is system-controlled — always restore
+                    if "reflection_sequence" in original_fm:
+                        update_frontmatter_field(resolved, "reflection_sequence", original_fm["reflection_sequence"])
                     for key in (
                         "created_at",
                         "source_session",
@@ -295,15 +298,15 @@ def orchestrate_on_event(event_type: str, data_json: str) -> dict:
         # ── M1: collect committed/staged rule paths from disk ──
         # We read actual file status instead of parsing C's text output,
         # because LLM output format is unpredictable.
-        target_session = workflow.get("target_session_id", "")
-        rules_result = list_rules(status_filter="all", keyword=target_session, limit=20)
+        # DP-002: use reflection_sequence for precise per-rec filtering
+        rules_result = list_rules(status_filter="all", reflection_sequence=sequence, limit=0)
         rule_paths = []
         committed = 0
         staged = 0
         for r in rules_result.get("rules", []):
-            meta_r = r.get("metadata", {})
-            if meta_r.get("source_session") == target_session and r.get("path"):
-                rstatus = meta_r.get("status", "")
+            # stream_filter_rules already guarantees reflection_sequence == sequence
+            if r.get("path"):
+                rstatus = (r.get("metadata") or {}).get("status", "")
                 if rstatus == "verified":
                     committed += 1
                     rule_paths.append(r["path"])

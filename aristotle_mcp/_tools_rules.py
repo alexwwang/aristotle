@@ -118,6 +118,7 @@ def write_rule(
     failed_skill: str | None = None,
     error_summary: str | None = None,
     rule_summary: str | None = None,
+    reflection_sequence: int | None = None,
 ) -> dict:
     """Write a new rule file to the repository.
 
@@ -197,6 +198,7 @@ def write_rule(
         failed_skill=failed_skill,
         error_summary=error_summary,
         rule_summary=rule_summary,
+        reflection_sequence=reflection_sequence,
     )
 
     result = write_rule_file(file_path, metadata.__dict__, content)
@@ -227,6 +229,7 @@ def read_rules(
     intent_task_goal: str | None = None,
     failed_skill: str | None = None,
     error_summary: str | None = None,
+    reflection_sequence: int | None = None,
 ) -> dict:
     """Read rules by querying frontmatter with regex matching.
 
@@ -280,7 +283,7 @@ def read_rules(
     remaining = limit
 
     for base_dir in dirs:
-        if remaining <= 0:
+        if limit and remaining <= 0:
             break
 
         paths = stream_filter_rules(
@@ -293,6 +296,7 @@ def read_rules(
             intent_task_goal=intent_task_goal,
             failed_skill=failed_skill,
             error_summary=error_summary,
+            reflection_sequence=reflection_sequence,
         )
         for p in paths:
             data = load_rule_file(p)
@@ -318,6 +322,7 @@ def read_rules(
                     intent_task_goal=intent_task_goal,
                     failed_skill=failed_skill,
                     error_summary=error_summary,
+                    reflection_sequence=reflection_sequence,
                 )
                 for p in paths:
                     data = load_rule_file(p)
@@ -595,6 +600,7 @@ def list_rules(
     error_summary: str | None = None,
     category: str | None = None,
     keyword: str | None = None,
+    reflection_sequence: int | None = None,
 ) -> dict:
     """List rules with metadata only (no content bodies).
 
@@ -647,7 +653,7 @@ def list_rules(
     remaining = limit
 
     for base_dir in dirs:
-        if remaining <= 0:
+        if limit and remaining <= 0:
             break
 
         paths = stream_filter_rules(
@@ -660,6 +666,7 @@ def list_rules(
             error_summary=error_summary,
             category=category,
             keyword=keyword,
+            reflection_sequence=reflection_sequence,
         )
         for p in paths:
             fm = read_frontmatter_raw(p)
@@ -679,6 +686,7 @@ def list_rules(
                     error_summary=error_summary,
                     category=category,
                     keyword=keyword,
+                    reflection_sequence=reflection_sequence,
                 )
                 for p in paths:
                     fm = read_frontmatter_raw(p)

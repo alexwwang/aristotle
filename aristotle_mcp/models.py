@@ -76,6 +76,7 @@ class RuleMetadata:
     confidence: float = 0.7
     risk_level: str = "medium"
     source_session: str | None = None
+    reflection_sequence: int | None = None  # rec_N that produced this rule
     message_range: str | None = None
     created_at: str = field(default_factory=_now_iso)
     verified_at: str | None = None
@@ -122,6 +123,7 @@ def to_frontmatter_string(metadata: RuleMetadata) -> str:
         "confidence": metadata.confidence,
         "risk_level": metadata.risk_level,
         "source_session": metadata.source_session,
+        "reflection_sequence": metadata.reflection_sequence,
         "message_range": metadata.message_range,
         "created_at": metadata.created_at,
         "verified_at": metadata.verified_at,
@@ -161,6 +163,7 @@ def from_frontmatter_dict(data: dict) -> RuleMetadata:
         confidence=data.get("confidence", 0.7),
         risk_level=data.get("risk_level", "medium"),
         source_session=data.get("source_session"),
+        reflection_sequence=int(data["reflection_sequence"]) if data.get("reflection_sequence") is not None else None,
         message_range=data.get("message_range"),
         created_at=data.get("created_at", _now_iso()),
         verified_at=data.get("verified_at"),

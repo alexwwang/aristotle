@@ -169,11 +169,8 @@ def orchestrate_start(command: str, args_json: str = "{}") -> dict:
         except (json.JSONDecodeError, ValueError):
             return {"action": "notify", "message": "🦉 State file corrupted."}
 
-        target_record = None
-        for i, r in enumerate(records):
-            if i + 1 == sequence:
-                target_record = r
-                break
+        target_id = f"rec_{sequence}"
+        target_record = next((r for r in records if r.get("id") == target_id), None)
 
         if not target_record:
             return {
@@ -188,11 +185,10 @@ def orchestrate_start(command: str, args_json: str = "{}") -> dict:
             if dp.exists():
                 draft_content = dp.read_text(encoding="utf-8")
 
-        target_session = target_record.get("target_session_id", "")
         rules_result = list_rules(
             status_filter="all",
-            keyword=target_session,
-            limit=20,
+            reflection_sequence=sequence,
+            limit=0,
         )
 
         staging_rules, verified_rules, audit_decisions = _enrich_rules_metadata(rules_result)
@@ -219,7 +215,7 @@ def orchestrate_start(command: str, args_json: str = "{}") -> dict:
                 "sequence": sequence,
                 "target_record": target_record,
                 "staging_rule_paths": staging_rule_paths,
-                "target_session_id": target_session,
+                "target_session_id": target_record.get("target_session_id", ""),
                 "committed_rule_paths": target_record.get("committed_rule_paths", []),
                 "re_reflect_count": target_record.get("re_reflect_count", 0),
             },

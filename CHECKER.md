@@ -136,6 +136,7 @@ Checker performs this transformation in write_rule call.
 for each validated Reflection:
   1. aristotle_write_rule(
        content, scope, category, source_session, message_range,
+       reflection_sequence=DRAFT_SEQUENCE,
        intent_domain, intent_task_goal, failed_skill, error_summary,
        rule_summary=<Proposed Rule text from DRAFT Reflection>,
        project_path, confidence=0.7)

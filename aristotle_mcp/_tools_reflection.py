@@ -166,10 +166,13 @@ def _update_record_field(sequence: int, field: str, value) -> None:
     if not state_path.exists():
         return
     records = json.loads(state_path.read_text(encoding="utf-8"))
-    idx = sequence - 1
-    if 0 <= idx < len(records):
-        records[idx][field] = value
-        state_path.write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
+    # DP-002: ID-based lookup (not array index) — safe after 50-record pruning
+    target_id = f"rec_{sequence}"
+    for r in records:
+        if r.get("id") == target_id:
+            r[field] = value
+            state_path.write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
+            return
 
 
 def register_reflection_tools(mcp) -> None:

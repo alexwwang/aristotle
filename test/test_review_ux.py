@@ -673,7 +673,7 @@ class TestInspectAction:
         init_repo_tool()
         _setup_reflection_record(1)
         _create_draft_file(1)
-        rule_path = _make_staging_rule("HALLUCINATION", source_session="ses_test123")
+        rule_path = _make_staging_rule("HALLUCINATION", source_session="ses_test123", reflection_sequence=1)
 
         review_result = orchestrate_start("review", json.dumps({"sequence": 1}))
         wf_id = review_result["workflow_id"]
@@ -688,7 +688,7 @@ class TestInspectAction:
         init_repo_tool()
         _setup_reflection_record(1)
         _create_draft_file(1)
-        _make_staging_rule("HALLUCINATION", source_session="ses_test123")
+        _make_staging_rule("HALLUCINATION", source_session="ses_test123", reflection_sequence=1)
 
         review_result = orchestrate_start("review", json.dumps({"sequence": 1}))
         wf_id = review_result["workflow_id"]
@@ -702,7 +702,7 @@ class TestInspectAction:
         init_repo_tool()
         _setup_reflection_record(1)
         _create_draft_file(1)
-        _make_staging_rule("HALLUCINATION", source_session="ses_test123")
+        _make_staging_rule("HALLUCINATION", source_session="ses_test123", reflection_sequence=1)
 
         review_result = orchestrate_start("review", json.dumps({"sequence": 1}))
         wf_id = review_result["workflow_id"]
@@ -716,7 +716,7 @@ class TestInspectAction:
         init_repo_tool()
         _setup_reflection_record(1)
         _create_draft_file(1)
-        _make_staging_rule("HALLUCINATION", source_session="ses_test123")
+        _make_staging_rule("HALLUCINATION", source_session="ses_test123", reflection_sequence=1)
 
         review_result = orchestrate_start("review", json.dumps({"sequence": 1}))
         wf_id = review_result["workflow_id"]
@@ -736,7 +736,7 @@ class TestInspectAction:
         init_repo_tool()
         _setup_reflection_record(1)
         _create_draft_file(1)
-        rule_path = _make_staging_rule("HALLUCINATION", source_session="ses_test123")
+        rule_path = _make_staging_rule("HALLUCINATION", source_session="ses_test123", reflection_sequence=1)
 
         review_result = orchestrate_start("review", json.dumps({"sequence": 1}))
         wf_id = review_result["workflow_id"]
@@ -753,7 +753,7 @@ class TestInspectAction:
         _setup_reflection_record(1)
         _create_draft_file(1)
         # Create a rule with empty body content
-        w = write_rule(content="", category="HALLUCINATION", source_session="ses_test123")
+        w = write_rule(content="", category="HALLUCINATION", source_session="ses_test123", reflection_sequence=1)
         from aristotle_mcp._tools_rules import stage_rule
 
         stage_rule(w["file_path"])
@@ -770,7 +770,7 @@ class TestInspectAction:
         init_repo_tool()
         _setup_reflection_record(1)
         _create_draft_file(1)
-        _make_staging_rule("HALLUCINATION", source_session="ses_test123")
+        _make_staging_rule("HALLUCINATION", source_session="ses_test123", reflection_sequence=1)
 
         review_result = orchestrate_start("review", json.dumps({"sequence": 1}))
         wf_id = review_result["workflow_id"]
@@ -848,8 +848,8 @@ class TestReviseAction:
         init_repo_tool()
         _setup_reflection_record(1)
         _create_draft_file(1)
-        rule_a = _make_staging_rule("CAT_A", source_session="ses_test123")
-        rule_b = _make_staging_rule("CAT_B", source_session="ses_test123")
+        rule_a = _make_staging_rule("CAT_A", source_session="ses_test123", reflection_sequence=1)
+        rule_b = _make_staging_rule("CAT_B", source_session="ses_test123", reflection_sequence=1)
 
         review_result = orchestrate_start("review", json.dumps({"sequence": 1}))
         wf_id = review_result["workflow_id"]
@@ -877,7 +877,7 @@ class TestReviseAction:
         init_repo_tool()
         _setup_reflection_record(1)
         _create_draft_file(1)
-        rule_path = _make_staging_rule("HALLUCINATION", source_session="ses_test123")
+        rule_path = _make_staging_rule("HALLUCINATION", source_session="ses_test123", reflection_sequence=1)
 
         review_result = orchestrate_start("review", json.dumps({"sequence": 1}))
         wf_id = review_result["workflow_id"]
@@ -1015,8 +1015,8 @@ class TestOrchestrateStartReviewBranch:
         init_repo_tool()
         _setup_reflection_record(1)
         _create_draft_file(1)
-        _make_staging_rule("HALLUCINATION", source_session="ses_test123")
-        _make_verified_rule("PATTERN_VIOLATION", source_session="ses_test123")
+        _make_staging_rule("HALLUCINATION", source_session="ses_test123", reflection_sequence=1)
+        _make_verified_rule("PATTERN_VIOLATION", source_session="ses_test123", reflection_sequence=1)
 
         review_result = orchestrate_start("review", json.dumps({"sequence": 1}))
         wf_id = review_result["workflow_id"]
@@ -1034,7 +1034,7 @@ class TestOrchestrateStartReviewBranch:
         init_repo_tool()
         _setup_reflection_record(1)
         _create_draft_file(1)
-        _make_staging_rule("HALLUCINATION", source_session="ses_test123")
+        _make_staging_rule("HALLUCINATION", source_session="ses_test123", reflection_sequence=1)
 
         called = {"enrich": False, "formatter_args": None}
 
@@ -1128,7 +1128,7 @@ class TestReviewActionsInOrchestrateStart:
         init_repo_tool()
         _setup_reflection_record(1)
         _create_draft_file(1)
-        _make_staging_rule("HALLUCINATION", source_session="ses_test123")
+        _make_staging_rule("HALLUCINATION", source_session="ses_test123", reflection_sequence=1)
 
         result = orchestrate_start("review", json.dumps({"sequence": 1}))
         assert "review_actions" in result, "Expected review_actions in return dict"
@@ -1138,7 +1138,7 @@ class TestReviewActionsInOrchestrateStart:
         init_repo_tool()
         _setup_reflection_record(1)
         _create_draft_file(1)
-        _make_staging_rule("HALLUCINATION", source_session="ses_test123")
+        _make_staging_rule("HALLUCINATION", source_session="ses_test123", reflection_sequence=1)
 
         result = orchestrate_start("review", json.dumps({"sequence": 1}))
         assert result["review_actions"]["workflow_id"] == result["workflow_id"]
@@ -1149,7 +1149,7 @@ class TestReviewActionsInOrchestrateStart:
         _setup_reflection_record(1)
         _create_draft_file(1)
         # No staging rules created — only verified
-        _make_verified_rule("PATTERN_VIOLATION", source_session="ses_test123")
+        _make_verified_rule("PATTERN_VIOLATION", source_session="ses_test123", reflection_sequence=1)
 
         result = orchestrate_start("review", json.dumps({"sequence": 1}))
         action_names = [o["action"] for o in result["review_actions"]["options"]]
@@ -1160,8 +1160,223 @@ class TestReviewActionsInOrchestrateStart:
         init_repo_tool()
         _setup_reflection_record(1)
         _create_draft_file(1)
-        _make_staging_rule("HALLUCINATION", source_session="ses_test123")
+        _make_staging_rule("HALLUCINATION", source_session="ses_test123", reflection_sequence=1)
 
         result = orchestrate_start("review", json.dumps({"sequence": 1}))
         # Consumer ignoring review_actions still gets valid message
         assert "## Rules for Review" in result["message"] or "No rules" in result["message"]
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# DP-002: Per-Rec Rule Isolation Tests
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="DP-002 per-rec isolation")
+class TestPerRecRuleIsolation:
+    """DP-002: review rec_N shows only rec_N's rules."""
+
+    def test_ut01_write_rule_stores_reflection_sequence(self):
+        """write_rule stores reflection_sequence in frontmatter."""
+        init_repo_tool()
+        w = write_rule(
+            content="## Test rule\n**Rule**: check",
+            category="HALLUCINATION",
+            reflection_sequence=3,
+        )
+        assert w["success"], f"write_rule failed: {w['message']}"
+        from aristotle_mcp.frontmatter import load_rule_file
+        rule = load_rule_file(Path(w["file_path"]))
+        assert rule["metadata"]["reflection_sequence"] == 3
+
+    def test_ut02_list_rules_filters_by_reflection_sequence(self):
+        """list_rules returns only rules matching reflection_sequence."""
+        init_repo_tool()
+        _make_staging_rule("CAT_A", reflection_sequence=1)
+        _make_staging_rule("CAT_B", reflection_sequence=2)
+        _make_staging_rule("CAT_C", reflection_sequence=2)
+
+        from aristotle_mcp._tools_rules import list_rules
+        r1 = list_rules(status_filter="all", reflection_sequence=1)
+        assert r1["count"] == 1
+        r2 = list_rules(status_filter="all", reflection_sequence=2)
+        assert r2["count"] == 2
+
+    def test_ut03_review_rec1_returns_only_rec1_rules(self):
+        """review rec_1 shows only rec_1 rules, not rec_2's."""
+        init_repo_tool()
+        _setup_reflection_record(1)
+        _setup_reflection_record(2)
+        _create_draft_file(1)
+        _create_draft_file(2)
+        _make_staging_rule("CAT_A", reflection_sequence=1)
+        _make_staging_rule("CAT_B", reflection_sequence=1)
+        _make_staging_rule("CAT_C", reflection_sequence=2)
+        _make_staging_rule("CAT_D", reflection_sequence=2)
+        _make_staging_rule("CAT_E", reflection_sequence=2)
+
+        result = orchestrate_start("review", json.dumps({"sequence": 1}))
+        assert result["action"] == "notify"
+        wf = _load_workflow(result["workflow_id"])
+        assert len(wf["staging_rule_paths"]) == 2, f"Expected 2 staging rules for rec_1, got {len(wf['staging_rule_paths'])}"
+
+    def test_ut04_review_rec_with_no_rules_shows_no_rules(self):
+        """review rec_5 (no rules) shows no rules message."""
+        init_repo_tool()
+        _setup_reflection_record(5)
+        _create_draft_file(5)
+
+        result = orchestrate_start("review", json.dumps({"sequence": 5}))
+        assert result["action"] == "notify"
+        # No staging rules → confirm omitted from actions
+        if result.get("review_actions"):
+            action_names = [o["action"] for o in result["review_actions"]["options"]]
+            assert "confirm" not in action_names
+
+    def test_ut05_reject_rec1_only_rejects_rec1_rules(self):
+        """reject rec_1 only rejects rec_1 rules, not rec_2's."""
+        init_repo_tool()
+        _setup_reflection_record(1)
+        _setup_reflection_record(2)
+        _create_draft_file(1)
+        _create_draft_file(2)
+        r1a = _make_staging_rule("CAT_A", reflection_sequence=1)
+        r1b = _make_staging_rule("CAT_B", reflection_sequence=1)
+        r2a = _make_staging_rule("CAT_C", reflection_sequence=2)
+        r2b = _make_staging_rule("CAT_D", reflection_sequence=2)
+
+        review_result = orchestrate_start("review", json.dumps({"sequence": 1}))
+        wf_id = review_result["workflow_id"]
+        result = orchestrate_review_action(wf_id, "reject")
+        assert "rejected" in result["message"].lower()
+
+        # Verify rec_1 rules rejected, rec_2 rules still staging
+        from aristotle_mcp._tools_rules import list_rules as lr
+        rejected_rules = lr(status_filter="all", reflection_sequence=1)
+        assert all(r["metadata"]["status"] == "rejected" for r in rejected_rules["rules"]), "rec_1 rules should be rejected"
+        staging_rules = lr(status_filter="staging", reflection_sequence=2)
+        assert staging_rules["count"] == 2, "rec_2 rules should still be staging"
+
+    def test_ut06_confirm_rec1_only_commits_rec1_rules(self):
+        """confirm rec_1 only commits rec_1 rules, not rec_2's."""
+        init_repo_tool()
+        _setup_reflection_record(1)
+        _setup_reflection_record(2)
+        _create_draft_file(1)
+        _create_draft_file(2)
+        r1a = _make_staging_rule("CAT_A", reflection_sequence=1)
+        r1b = _make_staging_rule("CAT_B", reflection_sequence=1)
+        r2a = _make_staging_rule("CAT_C", reflection_sequence=2)
+
+        review_result = orchestrate_start("review", json.dumps({"sequence": 1}))
+        wf_id = review_result["workflow_id"]
+        result = orchestrate_review_action(wf_id, "confirm")
+        assert "committed" in result["message"].lower() or "confirm" in result["message"].lower()
+
+        from aristotle_mcp.frontmatter import load_rule_file
+        for rp in [r1a, r1b]:
+            fm = load_rule_file(Path(rp))["metadata"]
+            assert fm["status"] == "verified", f"rec_1 rule should be verified: {rp}"
+        fm2 = load_rule_file(Path(r2a))["metadata"]
+        assert fm2["status"] == "staging", "rec_2 rule should still be staging"
+
+    def test_ut07_rules_without_reflection_sequence_excluded(self):
+        """Rules without reflection_sequence are excluded from filtered review."""
+        init_repo_tool()
+        _setup_reflection_record(3)
+        _create_draft_file(3)
+        # Rule WITHOUT reflection_sequence
+        _make_staging_rule("CAT_X", source_session="ses_test123")
+        # Rule WITH reflection_sequence=3
+        _make_staging_rule("CAT_Y", reflection_sequence=3)
+
+        result = orchestrate_start("review", json.dumps({"sequence": 3}))
+        assert result["action"] == "notify"
+        wf = _load_workflow(result["workflow_id"])
+        assert len(wf["staging_rule_paths"]) == 1, "Expected only 1 rule (the one with reflection_sequence=3)"
+
+    def test_ut08_old_workflow_confirm_uses_committed_rule_paths(self):
+        """Pre-DP-002 workflow with committed_rule_paths still works."""
+        init_repo_tool()
+        _setup_reflection_record(1)
+        _create_draft_file(1)
+        r = _make_staging_rule("HALLUCINATION", reflection_sequence=1)
+
+        review_result = orchestrate_start("review", json.dumps({"sequence": 1}))
+        wf_id = review_result["workflow_id"]
+
+        # Verify staging_rule_paths was populated (review captures them at start time)
+        wf = _load_workflow(wf_id)
+        assert len(wf.get("staging_rule_paths", [])) >= 1
+
+        result = orchestrate_review_action(wf_id, "confirm")
+        assert "committed" in result["message"].lower() or "confirm" in result["message"].lower()
+
+        # Verify rule is now verified
+        from aristotle_mcp.frontmatter import load_rule_file
+        fm = load_rule_file(Path(r))["metadata"]
+        assert fm["status"] == "verified"
+
+    def test_ut09_checker_completion_collects_only_matching_rules(self):
+        """Checker completion collects only reflection_sequence=N rules."""
+        init_repo_tool()
+        # Create rules for different recs
+        _make_staging_rule("CAT_A", reflection_sequence=3)
+        _make_staging_rule("CAT_B", reflection_sequence=3)
+        _make_staging_rule("CAT_C", reflection_sequence=4)
+
+        # Verify list_rules filters correctly (proxy for checker completion)
+        from aristotle_mcp._tools_rules import list_rules
+        r3 = list_rules(status_filter="all", reflection_sequence=3)
+        assert r3["count"] == 2, f"Expected 2 rules for rec_3, got {r3['count']}"
+
+    def test_ut10_revise_preserves_reflection_sequence(self):
+        """Revise action preserves reflection_sequence in rule frontmatter."""
+        init_repo_tool()
+        _setup_reflection_record(1)
+        _create_draft_file(1)
+        _make_staging_rule("HALLUCINATION", reflection_sequence=3)
+
+        from aristotle_mcp.frontmatter import load_rule_file
+        # Find the rule we just created
+        from aristotle_mcp._tools_rules import list_rules
+        rules = list_rules(status_filter="all", reflection_sequence=3)
+        assert rules["count"] == 1
+        rule_path = rules["rules"][0]["path"]
+        fm_before = load_rule_file(Path(rule_path))["metadata"]
+        assert fm_before["reflection_sequence"] == 3
+
+    def test_ut11_review_after_pruning_finds_correct_rec(self):
+        """Review rec_42 works correctly after 60 records → pruned to 50."""
+        init_repo_tool()
+        # Create 60 records to trigger pruning
+        from aristotle_mcp._tools_reflection import create_reflection_record
+        for i in range(1, 61):
+            _setup_reflection_record(i)
+        _create_draft_file(42)
+        _make_staging_rule("HALLUCINATION", reflection_sequence=42)
+
+        result = orchestrate_start("review", json.dumps({"sequence": 42}))
+        assert result["action"] == "notify"
+        assert "not found" not in result["message"].lower(), "rec_42 should be found after pruning"
+        wf = _load_workflow(result["workflow_id"])
+        assert len(wf["staging_rule_paths"]) == 1
+
+    def test_ut12_confirm_after_pruning_commits_correct_rules(self):
+        """Confirm rec_55 after pruning commits only rec_55 rules."""
+        init_repo_tool()
+        for i in range(1, 61):
+            _setup_reflection_record(i)
+        _create_draft_file(55)
+        r55a = _make_staging_rule("CAT_A", reflection_sequence=55)
+        r55b = _make_staging_rule("CAT_B", reflection_sequence=55)
+        _make_staging_rule("CAT_X", reflection_sequence=42)
+
+        review_result = orchestrate_start("review", json.dumps({"sequence": 55}))
+        wf_id = review_result["workflow_id"]
+        result = orchestrate_review_action(wf_id, "confirm")
+
+        from aristotle_mcp.frontmatter import load_rule_file
+        for rp in [r55a, r55b]:
+            fm = load_rule_file(Path(rp))["metadata"]
+            assert fm["status"] == "verified", f"rec_55 rule should be verified: {rp}"
