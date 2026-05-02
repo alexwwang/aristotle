@@ -36,6 +36,7 @@ from aristotle_mcp._orch_parsers import (
     _format_review_output,
     _AUDIT_LABELS,
 )
+
 try:
     from aristotle_mcp._orch_parsers import _build_review_actions
 except ImportError:
@@ -1186,6 +1187,7 @@ class TestPerRecRuleIsolation:
         )
         assert w["success"], f"write_rule failed: {w['message']}"
         from aristotle_mcp.frontmatter import load_rule_file
+
         rule = load_rule_file(Path(w["file_path"]))
         assert rule["metadata"]["reflection_sequence"] == 3
 
@@ -1197,6 +1199,7 @@ class TestPerRecRuleIsolation:
         _make_staging_rule("CAT_C", reflection_sequence=2)
 
         from aristotle_mcp._tools_rules import list_rules
+
         r1 = list_rules(status_filter="all", reflection_sequence=1)
         assert r1["count"] == 1
         r2 = list_rules(status_filter="all", reflection_sequence=2)
@@ -1218,7 +1221,9 @@ class TestPerRecRuleIsolation:
         result = orchestrate_start("review", json.dumps({"sequence": 1}))
         assert result["action"] == "notify"
         wf = _load_workflow(result["workflow_id"])
-        assert len(wf["staging_rule_paths"]) == 2, f"Expected 2 staging rules for rec_1, got {len(wf['staging_rule_paths'])}"
+        assert len(wf["staging_rule_paths"]) == 2, (
+            f"Expected 2 staging rules for rec_1, got {len(wf['staging_rule_paths'])}"
+        )
 
     def test_ut04_review_rec_with_no_rules_shows_no_rules(self):
         """review rec_5 (no rules) shows no rules message."""
@@ -1252,8 +1257,11 @@ class TestPerRecRuleIsolation:
 
         # Verify rec_1 rules rejected, rec_2 rules still staging
         from aristotle_mcp._tools_rules import list_rules as lr
+
         rejected_rules = lr(status_filter="all", reflection_sequence=1)
-        assert all(r["metadata"]["status"] == "rejected" for r in rejected_rules["rules"]), "rec_1 rules should be rejected"
+        assert all(r["metadata"]["status"] == "rejected" for r in rejected_rules["rules"]), (
+            "rec_1 rules should be rejected"
+        )
         staging_rules = lr(status_filter="staging", reflection_sequence=2)
         assert staging_rules["count"] == 2, "rec_2 rules should still be staging"
 
@@ -1274,6 +1282,7 @@ class TestPerRecRuleIsolation:
         assert "committed" in result["message"].lower() or "confirm" in result["message"].lower()
 
         from aristotle_mcp.frontmatter import load_rule_file
+
         for rp in [r1a, r1b]:
             fm = load_rule_file(Path(rp))["metadata"]
             assert fm["status"] == "verified", f"rec_1 rule should be verified: {rp}"
@@ -1314,6 +1323,7 @@ class TestPerRecRuleIsolation:
 
         # Verify rule is now verified
         from aristotle_mcp.frontmatter import load_rule_file
+
         fm = load_rule_file(Path(r))["metadata"]
         assert fm["status"] == "verified"
 
@@ -1327,6 +1337,7 @@ class TestPerRecRuleIsolation:
 
         # Verify list_rules filters correctly (proxy for checker completion)
         from aristotle_mcp._tools_rules import list_rules
+
         r3 = list_rules(status_filter="all", reflection_sequence=3)
         assert r3["count"] == 2, f"Expected 2 rules for rec_3, got {r3['count']}"
 
@@ -1351,25 +1362,34 @@ class TestPerRecRuleIsolation:
         import uuid
 
         wf_id = f"wf_test_{uuid.uuid4().hex[:8]}"
-        _save_workflow(wf_id, {
-            "phase": "review",
-            "command": "review",
-            "sequence": 1,
-            "staging_rule_paths": [rule_path],
-        })
+        _save_workflow(
+            wf_id,
+            {
+                "phase": "review",
+                "command": "review",
+                "sequence": 1,
+                "staging_rule_paths": [rule_path],
+            },
+        )
 
         # O subagent output: revised rule content without reflection_sequence
         revised_content = f"FILE: {rule_path}\n---\nid: test_rule\nstatus: staging\n---\n## Revised rule\nNew content"
-        orchestrate_on_event("o_done", json.dumps({
-            "workflow_id": wf_id,
-            "session_id": "ses_o_test",
-            "result": revised_content,
-        }))
+        orchestrate_on_event(
+            "o_done",
+            json.dumps(
+                {
+                    "workflow_id": wf_id,
+                    "session_id": "ses_o_test",
+                    "result": revised_content,
+                }
+            ),
+        )
 
         # Verify reflection_sequence is preserved after revise
         fm_after = load_rule_file(Path(rule_path))["metadata"]
-        assert fm_after.get("reflection_sequence") == 3, \
+        assert fm_after.get("reflection_sequence") == 3, (
             f"reflection_sequence should be preserved after revise, got {fm_after.get('reflection_sequence')}"
+        )
 
     def test_ut11_review_after_pruning_finds_correct_rec(self):
         """Review rec_42 works correctly after 60 records → pruned to 50."""
@@ -1401,6 +1421,7 @@ class TestPerRecRuleIsolation:
         orchestrate_review_action(wf_id, "confirm")
 
         from aristotle_mcp.frontmatter import load_rule_file
+
         for rp in [r55a, r55b]:
             fm = load_rule_file(Path(rp))["metadata"]
             assert fm["status"] == "verified", f"rec_55 rule should be verified: {rp}"
