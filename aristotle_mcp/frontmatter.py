@@ -24,6 +24,7 @@ def stream_filter_rules(
     intent_task_goal: str | None = None,
     failed_skill: str | None = None,
     error_summary: str | None = None,
+    reflection_sequence: int | None = None,
 ) -> list[Path]:
     results: list[Path] = []
     keyword_re = re.compile(keyword, re.IGNORECASE) if keyword else None
@@ -74,6 +75,17 @@ def stream_filter_rules(
             if not scope_re.search(fm_text):
                 continue
 
+        _reflection_seq_re = None
+        if reflection_sequence is not None:
+            if reflection_sequence < 1:
+                raise ValueError(f"reflection_sequence must be >= 1, got {reflection_sequence}")
+            _reflection_seq_re = re.compile(r'^reflection_sequence:\s*(\d+)', re.MULTILINE)
+
+        if _reflection_seq_re:
+            m = _reflection_seq_re.search(fm_text)
+            if not m or int(m.group(1)) != reflection_sequence:
+                continue
+
         if keyword_re:
             values = " ".join(m.group(2) for m in _KV_RE.finditer(fm_text))
             if not keyword_re.search(values):
@@ -119,7 +131,7 @@ def stream_filter_rules(
                     continue
 
         results.append(path)
-        if len(results) >= limit:
+        if limit and len(results) >= limit:
             break
 
     return results
@@ -135,7 +147,7 @@ def write_rule_file(path: Path, metadata: dict, content: str) -> dict:
     try:
         lines = ["---\n"]
         for key, val in metadata.items():
-            if val is None and key in ("sample_size", "feedback_count"):
+            if val is None and key in ("sample_size", "feedback_count", "reflection_sequence"):
                 continue
             lines.append(f"{key}: {_serialize(val)}\n")
         lines.append("---\n")

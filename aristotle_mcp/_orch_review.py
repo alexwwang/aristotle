@@ -66,8 +66,8 @@ def orchestrate_review_action(
                 elif fm.get("status") == "verified":
                     committed += 1  # already committed by C
         else:
-            # Legacy fallback: keyword search
-            rules_result = list_rules(status_filter="all", keyword=target_session, limit=20)
+            # DP-002: use reflection_sequence instead of broken keyword search
+            rules_result = list_rules(status_filter="all", reflection_sequence=sequence, limit=0)
             for r in rules_result.get("rules", []):
                 meta = r.get("metadata", {})
                 if meta.get("status") == "staging":
@@ -92,8 +92,7 @@ def orchestrate_review_action(
         }
 
     elif action == "reject":
-        target_session = workflow.get("target_session_id", "")
-        rules_result = list_rules(status_filter="all", keyword=target_session, limit=20)
+        rules_result = list_rules(status_filter="all", reflection_sequence=sequence, limit=0)
         rejected = 0
         for r in rules_result.get("rules", []):
             meta = r.get("metadata", {})
