@@ -256,7 +256,8 @@ def orchestrate_start(command: str, args_json: str = "{}") -> dict:
                 "rejected": "❌",
             }.get(s, "?")
 
-            lines.append(f"  #{i + 1} {status_icon} [{target}] {rules} rules — {launched}")
+            rec_id = r.get("id", f"rec_{i + 1}")
+            lines.append(f"  #{rec_id.replace('rec_', '')} {status_icon} [{target}] {rules} rules — {launched}")
 
         return {
             "action": "notify",
