@@ -289,6 +289,7 @@ error_summary: "P2024 connection pool timeout in serverless"
 
 # Standard fields
 source_session: "ses_abc123"
+reflection_sequence: 3
 created_at: "2026-04-10T22:30:00+08:00"
 verified_at: "2026-04-10T22:35:00+08:00"
 verified_by: "auto"
@@ -457,6 +458,7 @@ The full protocol specification — state machine, frontmatter schema, Δ decisi
 | Phase 0 Bridge (MCP ext) | 318 | 103 | 9 |
 | Phase 1 Bridge (Plugin) | 325 | 103 | 9 + 162 vitest |
 | **v1.2.0 Review UX** | **382** | **103** | **9 + 162 vitest** |
+| **v1.3.0 Per-Rec Isolation** | **395** | **103** | **80 pytest + 162 vitest** |
 
 ## Project Structure
 
