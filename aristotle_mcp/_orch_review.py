@@ -42,8 +42,6 @@ def orchestrate_review_action(
     sequence = workflow.get("sequence")
 
     if action == "confirm":
-        target_session = workflow.get("target_session_id", "")
-
         rule_paths = workflow.get("committed_rule_paths", [])
 
         committed = 0
