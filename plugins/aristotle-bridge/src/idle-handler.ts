@@ -148,8 +148,14 @@ export class IdleEventHandler {
       // Oracle R5 Issue 1: all 'notify' from subagent_done are errors/edge cases.
       // (checking completion returns 'done'; only error paths return 'notify')
       const msg = action.message || 'MCP returned notify';
-      this.store.markChainBroken(wf.workflowId, msg);
-      logger.warn('MCP notify (error/edge case): wf=%s msg=%s', wf.workflowId, msg);
+      if (msg.includes('Unknown workflow')) {
+        // MCP cleaned up the workflow file (stale) — remove from store entirely
+        this.store.remove(wf.workflowId);
+        logger.info('stale workflow purged from store: wf=%s', wf.workflowId);
+      } else {
+        this.store.markChainBroken(wf.workflowId, msg);
+        logger.warn('MCP notify (error/edge case): wf=%s msg=%s', wf.workflowId, msg);
+      }
     } else {
       // Unexpected action — mark chain_broken so it's visible
       const msg = `Unexpected MCP action: ${action.action ?? 'undefined'}`;
@@ -184,8 +190,13 @@ export class IdleEventHandler {
     } else if (action.action === 'notify') {
       // Oracle R5 Issue 1: all 'notify' from subagent_done are errors/edge cases
       const msg = action.message || 'MCP returned notify';
-      this.store.markChainBroken(wf.workflowId, msg);
-      logger.warn('MCP notify (error/edge case): wf=%s msg=%s', wf.workflowId, msg);
+      if (msg.includes('Unknown workflow')) {
+        this.store.remove(wf.workflowId);
+        logger.info('stale workflow purged from store: wf=%s', wf.workflowId);
+      } else {
+        this.store.markChainBroken(wf.workflowId, msg);
+        logger.warn('MCP notify (error/edge case): wf=%s msg=%s', wf.workflowId, msg);
+      }
     } else if (action.action === 'fire_sub') {
       // Note: current _orch_event.py checking phase returns 'done' (not fire_sub),
       // but future re-reflect support may return 'fire_sub' here.

@@ -36,6 +36,13 @@ export class WorkflowStore {
     return this.workflows.get(workflowId);
   }
 
+  /** Remove a workflow from the store entirely (for stale/cleaned-up workflows). */
+  remove(workflowId: string): boolean {
+    const deleted = this.workflows.delete(workflowId);
+    if (deleted) this.saveToDisk();
+    return deleted;
+  }
+
   findBySession(sessionId: string): WorkflowState | undefined {
     for (const wf of this.workflows.values()) {
       if (wf.sessionId === sessionId) return wf;
@@ -128,6 +135,24 @@ export class WorkflowStore {
   }
 
   async reconcileOnStartup(client: any): Promise<void> {
+    // Phase 0: Purge stale terminal entries older than 7 days
+    const STALE_TERMINAL_MS = 7 * 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    const staleIds: string[] = [];
+    for (const [id, wf] of this.workflows.entries()) {
+      if (wf.status !== 'running' && wf.status !== 'chain_pending' &&
+          now - wf.startedAt > STALE_TERMINAL_MS) {
+        staleIds.push(id);
+      }
+    }
+    if (staleIds.length > 0) {
+      for (const id of staleIds) {
+        this.workflows.delete(id);
+      }
+      logger.info('purged %d stale terminal workflows (older than 7 days)', staleIds.length);
+      this.saveToDiskRaw();
+    }
+
     // Phase 1: Recover chain_broken workflows (terminal, just log own)
     const chainBroken = [...this.workflows.entries()]
       .filter(([_, wf]) => wf.status === 'chain_broken' && wf.instanceId === this.instanceId);
