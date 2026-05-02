@@ -1338,13 +1338,38 @@ class TestPerRecRuleIsolation:
         _make_staging_rule("HALLUCINATION", reflection_sequence=3)
 
         from aristotle_mcp.frontmatter import load_rule_file
-        # Find the rule we just created
         from aristotle_mcp._tools_rules import list_rules
+
+        # Find the rule we just created
         rules = list_rules(status_filter="all", reflection_sequence=3)
         assert rules["count"] == 1
         rule_path = rules["rules"][0]["path"]
-        fm_before = load_rule_file(Path(rule_path))["metadata"]
-        assert fm_before["reflection_sequence"] == 3
+
+        # Simulate revise via o_done: write new content WITHOUT reflection_sequence
+        from aristotle_mcp._orch_state import _save_workflow
+        from aristotle_mcp.server import orchestrate_on_event
+        import uuid
+
+        wf_id = f"wf_test_{uuid.uuid4().hex[:8]}"
+        _save_workflow(wf_id, {
+            "phase": "review",
+            "command": "review",
+            "sequence": 1,
+            "staging_rule_paths": [rule_path],
+        })
+
+        # O subagent output: revised rule content without reflection_sequence
+        revised_content = f"FILE: {rule_path}\n---\nid: test_rule\nstatus: staging\n---\n## Revised rule\nNew content"
+        result = orchestrate_on_event("o_done", json.dumps({
+            "workflow_id": wf_id,
+            "session_id": "ses_o_test",
+            "result": revised_content,
+        }))
+
+        # Verify reflection_sequence is preserved after revise
+        fm_after = load_rule_file(Path(rule_path))["metadata"]
+        assert fm_after.get("reflection_sequence") == 3, \
+            f"reflection_sequence should be preserved after revise, got {fm_after.get('reflection_sequence')}"
 
     def test_ut11_review_after_pruning_finds_correct_rec(self):
         """Review rec_42 works correctly after 60 records → pruned to 50."""
