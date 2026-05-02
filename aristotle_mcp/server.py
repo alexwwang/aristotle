@@ -65,6 +65,7 @@ from aristotle_mcp._orch_state import (  # noqa: F401
 from aristotle_mcp._orch_parsers import (  # noqa: F401
     _parse_checker_result,
     _format_review_output,
+    _build_review_actions,
     _parse_revised_rule,
     _do_search_and_notify,
 )

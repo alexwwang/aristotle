@@ -120,17 +120,30 @@ def _format_review_output(
             cat = meta.get("category", "?")
             lines.append(f"  • [{cat}] {summary}")
 
-    # Action menu
-    lines.append("")
-    lines.append("Choose an action:")
-    lines.append("  1. confirm — Accept all staging rules")
-    lines.append("  2. reject — Reject this reflection")
-    lines.append("  3. revise N — Revise rule #N (append feedback after colon)")
-    lines.append("  4. re-reflect — Request deeper analysis")
-    lines.append("  5. inspect N — View full rule #N")
-    lines.append("  6. show draft — View full DRAFT report")
+    # No Action Menu — moved to _build_review_actions (DP-001)
 
     return "\n".join(lines)
+
+
+def _build_review_actions(workflow_id: str, has_staging_rules: bool = True) -> dict:
+    """Build structured action menu for review flow.
+
+    Options must stay in sync with REVIEW.md STEP V1 Action Menu section.
+    When has_staging_rules is False, 'confirm' is omitted (nothing to confirm).
+    """
+    options = [
+        {"action": "reject",     "label": "reject",     "description": "Reject this reflection"},
+        {"action": "revise N",   "label": "revise N",   "description": "Revise rule #N (append feedback after colon)"},
+        {"action": "re-reflect", "label": "re-reflect", "description": "Request deeper analysis"},
+        {"action": "inspect N",  "label": "inspect N",  "description": "View full rule #N"},
+        {"action": "show draft", "label": "show draft", "description": "View full DRAFT report"},
+    ]
+    if has_staging_rules:
+        options.insert(0, {"action": "confirm", "label": "confirm", "description": "Accept all staging rules"})
+    return {
+        "workflow_id": workflow_id,
+        "options": options,
+    }
 
 
 def _parse_draft_summary(draft_content: str) -> tuple[list[str], int]:
