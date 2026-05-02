@@ -1240,10 +1240,10 @@ class TestPerRecRuleIsolation:
         _setup_reflection_record(2)
         _create_draft_file(1)
         _create_draft_file(2)
-        r1a = _make_staging_rule("CAT_A", reflection_sequence=1)
-        r1b = _make_staging_rule("CAT_B", reflection_sequence=1)
-        r2a = _make_staging_rule("CAT_C", reflection_sequence=2)
-        r2b = _make_staging_rule("CAT_D", reflection_sequence=2)
+        _make_staging_rule("CAT_A", reflection_sequence=1)
+        _make_staging_rule("CAT_B", reflection_sequence=1)
+        _make_staging_rule("CAT_C", reflection_sequence=2)
+        _make_staging_rule("CAT_D", reflection_sequence=2)
 
         review_result = orchestrate_start("review", json.dumps({"sequence": 1}))
         wf_id = review_result["workflow_id"]
@@ -1360,7 +1360,7 @@ class TestPerRecRuleIsolation:
 
         # O subagent output: revised rule content without reflection_sequence
         revised_content = f"FILE: {rule_path}\n---\nid: test_rule\nstatus: staging\n---\n## Revised rule\nNew content"
-        result = orchestrate_on_event("o_done", json.dumps({
+        orchestrate_on_event("o_done", json.dumps({
             "workflow_id": wf_id,
             "session_id": "ses_o_test",
             "result": revised_content,
@@ -1375,7 +1375,6 @@ class TestPerRecRuleIsolation:
         """Review rec_42 works correctly after 60 records → pruned to 50."""
         init_repo_tool()
         # Create 60 records to trigger pruning
-        from aristotle_mcp._tools_reflection import create_reflection_record
         for i in range(1, 61):
             _setup_reflection_record(i)
         _create_draft_file(42)
@@ -1399,7 +1398,7 @@ class TestPerRecRuleIsolation:
 
         review_result = orchestrate_start("review", json.dumps({"sequence": 55}))
         wf_id = review_result["workflow_id"]
-        result = orchestrate_review_action(wf_id, "confirm")
+        orchestrate_review_action(wf_id, "confirm")
 
         from aristotle_mcp.frontmatter import load_rule_file
         for rp in [r55a, r55b]:
