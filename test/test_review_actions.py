@@ -207,7 +207,9 @@ class TestOrchestrateReviewAction:
         init_repo_tool()
         _setup_reflection_record(1)
         _create_draft_file(1)
-        rule_path = _make_staging_rule("PATTERN_VIOLATION", confidence=0.9, source_session="ses_test123", reflection_sequence=1)
+        rule_path = _make_staging_rule(
+            "PATTERN_VIOLATION", confidence=0.9, source_session="ses_test123", reflection_sequence=1
+        )
 
         review_result = orchestrate_start("review", json.dumps({"sequence": 1}))
         wf_id = review_result["workflow_id"]
@@ -420,7 +422,9 @@ class TestExceptionRevise:
         init_repo_tool()
         _setup_reflection_record(1)
         _create_draft_file(1)
-        rule_path = _make_staging_rule("HALLUCINATION", confidence=0.3, source_session="ses_test123", reflection_sequence=1)
+        rule_path = _make_staging_rule(
+            "HALLUCINATION", confidence=0.3, source_session="ses_test123", reflection_sequence=1
+        )
 
         review_result = orchestrate_start("review", json.dumps({"sequence": 1}))
         wf_id = review_result["workflow_id"]
@@ -473,7 +477,9 @@ class TestExceptionRevise:
         init_repo_tool()
         _setup_reflection_record(1)
         _create_draft_file(1)
-        rule_path = _make_staging_rule("PATTERN_VIOLATION", confidence=0.9, source_session="ses_test123", reflection_sequence=1)
+        rule_path = _make_staging_rule(
+            "PATTERN_VIOLATION", confidence=0.9, source_session="ses_test123", reflection_sequence=1
+        )
 
         review_result = orchestrate_start("review", json.dumps({"sequence": 1}))
         wf_id = review_result["workflow_id"]
