@@ -11,7 +11,7 @@ _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---", re.DOTALL)
 _STATUS_RE = re.compile(r'^status:\s*["\']?(\w+)["\']?', re.MULTILINE)
 _CATEGORY_RE = re.compile(r'^category:\s*["\']?(\w+)["\']?', re.MULTILINE)
 _KV_RE = re.compile(r"^(\w+):\s*(.+)$", re.MULTILINE)
-_REFLECTION_SEQ_RE = re.compile(r'^reflection_sequence:\s*(\d+)', re.MULTILINE)
+_REFLECTION_SEQ_RE = re.compile(r"^reflection_sequence:\s*(\d+)", re.MULTILINE)
 
 
 def stream_filter_rules(

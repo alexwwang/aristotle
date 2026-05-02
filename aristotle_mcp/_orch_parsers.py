@@ -132,10 +132,10 @@ def _build_review_actions(workflow_id: str, has_staging_rules: bool = True) -> d
     When has_staging_rules is False, 'confirm' is omitted (nothing to confirm).
     """
     options = [
-        {"action": "reject",     "label": "reject",     "description": "Reject this reflection"},
-        {"action": "revise N",   "label": "revise N",   "description": "Revise rule #N (append feedback after colon)"},
+        {"action": "reject", "label": "reject", "description": "Reject this reflection"},
+        {"action": "revise N", "label": "revise N", "description": "Revise rule #N (append feedback after colon)"},
         {"action": "re-reflect", "label": "re-reflect", "description": "Request deeper analysis"},
-        {"action": "inspect N",  "label": "inspect N",  "description": "View full rule #N"},
+        {"action": "inspect N", "label": "inspect N", "description": "View full rule #N"},
         {"action": "show draft", "label": "show draft", "description": "View full DRAFT report"},
     ]
     if has_staging_rules:
