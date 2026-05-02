@@ -11,6 +11,7 @@ _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---", re.DOTALL)
 _STATUS_RE = re.compile(r'^status:\s*["\']?(\w+)["\']?', re.MULTILINE)
 _CATEGORY_RE = re.compile(r'^category:\s*["\']?(\w+)["\']?', re.MULTILINE)
 _KV_RE = re.compile(r"^(\w+):\s*(.+)$", re.MULTILINE)
+_REFLECTION_SEQ_RE = re.compile(r'^reflection_sequence:\s*(\d+)', re.MULTILINE)
 
 
 def stream_filter_rules(
@@ -75,14 +76,10 @@ def stream_filter_rules(
             if not scope_re.search(fm_text):
                 continue
 
-        _reflection_seq_re = None
         if reflection_sequence is not None:
             if reflection_sequence < 1:
                 raise ValueError(f"reflection_sequence must be >= 1, got {reflection_sequence}")
-            _reflection_seq_re = re.compile(r'^reflection_sequence:\s*(\d+)', re.MULTILINE)
-
-        if _reflection_seq_re:
-            m = _reflection_seq_re.search(fm_text)
+            m = _REFLECTION_SEQ_RE.search(fm_text)
             if not m or int(m.group(1)) != reflection_sequence:
                 continue
 
