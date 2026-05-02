@@ -36,6 +36,10 @@ from aristotle_mcp._orch_parsers import (
     _format_review_output,
     _AUDIT_LABELS,
 )
+try:
+    from aristotle_mcp._orch_parsers import _build_review_actions
+except ImportError:
+    _build_review_actions = None  # Will fail tests in Phase 0a (Red)
 from aristotle_mcp.models import (
     RuleMetadata,
     _parse_conflicts_with,
@@ -333,9 +337,16 @@ class TestFormatReviewOutput:
         assert "auto-committed" in output.lower() or "verified" in output.lower()
 
     def test_should_include_inspect_and_show_draft_in_action_menu(self):
+        """After DP-001: inspect/show_draft are in _build_review_actions, not in message."""
         output = _format_review_output(1, self._target(), "", [], [], [])
-        assert "inspect" in output.lower()
-        assert "show draft" in output.lower()
+        # Message should NOT contain Action Menu items anymore
+        assert "1. confirm" not in output
+        # Verify _build_review_actions provides these options instead
+        if _build_review_actions is not None:
+            actions = _build_review_actions("wf_test")
+            action_names = [o["action"] for o in actions["options"]]
+            assert "inspect N" in action_names
+            assert "show draft" in action_names
 
     def test_should_show_all_rules_without_cap(self):
         staging_rules = [
@@ -430,7 +441,8 @@ class TestFormatReviewOutput:
         audit_decisions = [None]
         output = _format_review_output(1, {}, "## DRAFT", staging_rules, verified_rules, audit_decisions)
         # Should NOT contain HIGH/MEDIUM/LOW text labels from rule metadata
-        assert "HIGH" not in output.split("inspect")[0]  # before action menu
+        # After DP-001: no Action Menu to split around, entire output is review data
+        assert "HIGH" not in output
 
     def test_should_truncate_conflicts_over_three(self):
         """AC-3: >3 conflicts → show first 3 + '+N more'."""
@@ -581,11 +593,12 @@ class TestFormatReviewOutput:
         assert _AUDIT_LABELS["manual"] in output_manual
 
     def test_should_show_char_count_and_show_draft_hint(self):
-        """AC-5: Output includes char count and 'show draft' hint."""
+        """AC-5: Output includes char count and 'show draft' hint in DRAFT summary."""
         draft = "## Key Findings\n- Finding 1: test rule summary\n- Finding 2: another finding"
         staging_rules = [{"path": "/r1", "metadata": {"status": "staging", "error_summary": "test"}}]
         output = _format_review_output(1, {}, draft, staging_rules, [], [None])
-        assert "show draft" in output.lower()
+        # "show draft" hint comes from the DRAFT summary line (not Action Menu)
+        assert "chars — use 'show draft'" in output, "Expected 'N chars — use show draft' hint in DRAFT summary"
         assert re.search(r"\d+\s*chars", output), "Expected 'N chars' in output"
 
     def test_should_show_no_review_needed_when_zero_staging(self):
@@ -1044,3 +1057,111 @@ class TestOrchestrateStartReviewBranch:
         # Verify formatter received 6 positional args (new signature)
         assert called["formatter_args"] is not None, "Formatter was not called"
         assert len(called["formatter_args"]) == 6, f"Expected 6 args, got {len(called['formatter_args'])}"
+
+
+# ═══════════════════════════════════════════════════════
+# TestBuildReviewActions (DP-001 Phase 0a)
+# ═══════════════════════════════════════════════════════
+class TestBuildReviewActions:
+    """_build_review_actions — structured action menu builder."""
+
+    @pytest.mark.skipif(_build_review_actions is None, reason="_build_review_actions not yet implemented")
+    def test_ut01_returns_dict_with_workflow_id_and_options(self):
+        result = _build_review_actions("wf_test")
+        assert result["workflow_id"] == "wf_test"
+        assert "options" in result
+
+    @pytest.mark.skipif(_build_review_actions is None, reason="_build_review_actions not yet implemented")
+    def test_ut02_returns_six_options_with_staging_rules(self):
+        result = _build_review_actions("wf_test", has_staging_rules=True)
+        assert len(result["options"]) == 6
+
+    @pytest.mark.skipif(_build_review_actions is None, reason="_build_review_actions not yet implemented")
+    def test_ut03_each_option_has_action_label_description(self):
+        result = _build_review_actions("wf_test")
+        for opt in result["options"]:
+            assert "action" in opt
+            assert "label" in opt
+            assert "description" in opt
+
+    @pytest.mark.skipif(_build_review_actions is None, reason="_build_review_actions not yet implemented")
+    def test_ut04_options_match_review_md_spec(self):
+        result = _build_review_actions("wf_test", has_staging_rules=True)
+        action_names = [o["action"] for o in result["options"]]
+        assert action_names == ["confirm", "reject", "revise N", "re-reflect", "inspect N", "show draft"]
+
+    @pytest.mark.skipif(_build_review_actions is None, reason="_build_review_actions not yet implemented")
+    def test_ut04b_no_confirm_when_no_staging_rules(self):
+        result = _build_review_actions("wf_test", has_staging_rules=False)
+        assert len(result["options"]) == 5
+        assert "confirm" not in [o["action"] for o in result["options"]]
+
+
+# ═══════════════════════════════════════════════════════
+# TestFormatReviewOutputNoActionMenu (DP-001 Phase 0b)
+# ═══════════════════════════════════════════════════════
+class TestFormatReviewOutputNoActionMenu:
+    """After DP-001: _format_review_output no longer includes Action Menu."""
+
+    def test_ut05_no_action_menu_items_in_output(self):
+        staging_rules = [{"path": "/r1", "metadata": {"status": "staging", "error_summary": "test"}}]
+        output = _format_review_output(1, {}, "## DRAFT", staging_rules, [], [None])
+        assert "1. confirm" not in output
+        assert "Choose an action" not in output
+
+    def test_ut06_review_data_sections_still_present(self):
+        draft = "## Key Findings\n- Finding A"
+        staging_rules = [{"path": "/r1", "metadata": {"status": "staging", "error_summary": "test"}}]
+        output = _format_review_output(1, {}, draft, staging_rules, [], [None])
+        assert "## DRAFT Summary" in output
+        assert "## Rules for Review" in output
+
+
+# ═══════════════════════════════════════════════════════
+# TestReviewActionsInOrchestrateStart (DP-001 Phase 0c)
+# ═══════════════════════════════════════════════════════
+class TestReviewActionsInOrchestrateStart:
+    """orchestrate_start review — review_actions field in return value."""
+
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
+    def test_ut07_return_includes_review_actions(self):
+        init_repo_tool()
+        _setup_reflection_record(1)
+        _create_draft_file(1)
+        _make_staging_rule("HALLUCINATION", source_session="ses_test123")
+
+        result = orchestrate_start("review", json.dumps({"sequence": 1}))
+        assert "review_actions" in result, "Expected review_actions in return dict"
+
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
+    def test_ut08_review_actions_workflow_id_matches_top_level(self):
+        init_repo_tool()
+        _setup_reflection_record(1)
+        _create_draft_file(1)
+        _make_staging_rule("HALLUCINATION", source_session="ses_test123")
+
+        result = orchestrate_start("review", json.dumps({"sequence": 1}))
+        assert result["review_actions"]["workflow_id"] == result["workflow_id"]
+
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
+    def test_ut09_no_staging_rules_omits_confirm(self):
+        init_repo_tool()
+        _setup_reflection_record(1)
+        _create_draft_file(1)
+        # No staging rules created — only verified
+        _make_verified_rule("PATTERN_VIOLATION", source_session="ses_test123")
+
+        result = orchestrate_start("review", json.dumps({"sequence": 1}))
+        action_names = [o["action"] for o in result["review_actions"]["options"]]
+        assert "confirm" not in action_names, "confirm should be absent when no staging rules"
+
+    @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
+    def test_ut10_message_valid_without_review_actions(self):
+        init_repo_tool()
+        _setup_reflection_record(1)
+        _create_draft_file(1)
+        _make_staging_rule("HALLUCINATION", source_session="ses_test123")
+
+        result = orchestrate_start("review", json.dumps({"sequence": 1}))
+        # Consumer ignoring review_actions still gets valid message
+        assert "## Rules for Review" in result["message"] or "No rules" in result["message"]

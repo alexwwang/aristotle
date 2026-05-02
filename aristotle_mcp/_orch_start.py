@@ -19,6 +19,7 @@ from aristotle_mcp._orch_parsers import (
     _do_search_and_notify,
     _enrich_rules_metadata,
     _format_review_output,
+    _build_review_actions,
 )
 from aristotle_mcp._tools_rules import list_rules
 
@@ -197,6 +198,7 @@ def orchestrate_start(command: str, args_json: str = "{}") -> dict:
         staging_rules, verified_rules, audit_decisions = _enrich_rules_metadata(rules_result)
 
         staging_rule_paths = [r.get("path", "") for r in staging_rules]
+        has_staging = len(staging_rules) > 0
 
         message = _format_review_output(
             sequence,
@@ -206,6 +208,8 @@ def orchestrate_start(command: str, args_json: str = "{}") -> dict:
             verified_rules,
             audit_decisions,
         )
+
+        review_actions = _build_review_actions(workflow_id, has_staging_rules=has_staging)
 
         _save_workflow(
             workflow_id,
@@ -225,6 +229,7 @@ def orchestrate_start(command: str, args_json: str = "{}") -> dict:
             "action": "notify",
             "workflow_id": workflow_id,
             "message": message,
+            "review_actions": review_actions,
         }
 
     elif command == "sessions":

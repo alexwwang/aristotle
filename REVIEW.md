@@ -18,15 +18,18 @@ orchestrate_start("review", {sequence: N})
               → read_rules(status="all", source_session=target_session_id)
                 (if no results → fallback: keyword matching against session_id)
   → 404? → "🦉 Reflection #N not found. Run /aristotle sessions to list." STOP
-  → ok?  → display enriched notification to user
-           (includes Δ, audit_level, per-rule confidence/risk, conflicts, DRAFT summary)
+  → ok?  → display two parts to user:
+           Part A — message field: review data (header, Δ, DRAFT summary, rules)
+           Part B — review_actions field: structured action menu
+                    Present as a numbered list using each option's label and description.
+                    Use review_actions.workflow_id for subsequent orchestrate_review_action calls.
            staging rules are numbered 1, 2, 3… — these N are used below
 ```
 
 ### Action Menu
 
 ```
-- "confirm" / "确认"           — accept all staging rules (auto-commit)
+- "confirm" / "确认"           — accept all staging rules (auto-commit; absent when no staging rules)
 - "reject"                    — reject this reflection (all staging rules)
 - "reject N"                  — reject specific rule #N
 - "修改 N: feedback" / "revise N: feedback" — revise rule #N
@@ -44,6 +47,7 @@ loop:
   match user_input:
     "confirm" / "确认"
                   → "✅ No changes. Rules remain as committed." STOP
+                  (absent from action menu when no staging rules — verified-only review)
 
     "inspect N"   → orchestrate_review_action(wf_id, "inspect",
                      json.dumps({"rule_index": N}))
