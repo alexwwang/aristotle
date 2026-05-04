@@ -66,6 +66,32 @@ for each detected error:
   4. Error Impact:       One-sentence consequence description (≤100 chars, optional)
 ```
 
+### R1d. Verify Subagent Attribution
+
+When the error involves references to subagent results (reviews, analyses, tool outputs),
+check whether the claimed source matches the actual invocation.
+
+**CRITICAL**: If the claimed agent name mismatches but the content matches a real execution
+from a different agent, this is misattribution — not fabrication. The content itself may be
+entirely genuine.
+
+```
+for each subagent reference in Model Wrong Output:
+  1. Extract claimed agent name (e.g., "Oracle-ds4f", "librarian", "fixer")
+  2. Search preceding messages for the actual task/subagent call
+  3. Compare claimed name vs the actual agent name visible in the preceding invocation message
+     - Treat any discrepancy as a mismatch — there is no "close enough" for agent attribution
+  4. If no invocation found for the claimed agent:
+     - Classify as pure HALLUCINATION (the call itself was fabricated)
+  5. If mismatch (invocation found but different agent):
+     - Reclassify: WRONG_TOOL_CHOICE + HALLUCINATION (attribution), NOT pure HALLUCINATION
+     - Document both: which agent was actually called AND which was claimed
+     - Resulting rule should target post-call identity verification, not "don't fabricate"
+
+If multiple misattributions form a pattern (e.g., names systematically swapped),
+note the pattern as a single root cause rather than independent errors.
+```
+
 ---
 
 ## STEP R2: DETECT ERROR CORRECTIONS
@@ -96,7 +122,7 @@ categories:
   MISUNDERSTOOD_REQUIREMENT  — Didn't fully parse user's intent
   ASSUMED_CONTEXT            — Made incorrect assumptions about codebase/domain
   PATTERN_VIOLATION          — Violated existing codebase conventions
-  HALLUCINATION              — Generated code/facts that don't exist
+  HALLUCINATION              — Generated code/facts that don't exist, or falsely attributed existing content
   INCOMPLETE_ANALYSIS        — Didn't explore enough before acting
   WRONG_TOOL_CHOICE          — Used wrong tool or approach
   OVERSIMPLIFICATION         — Ignored edge cases or complexity
