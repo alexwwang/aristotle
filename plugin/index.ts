@@ -3,7 +3,7 @@
 import { assemblePlugin } from '@opencode-ai/core/plugin/registration';
 import { createAristotleRole } from '@opencode-ai/aristotle';
 
-export default function (ctx: any) {
-  const role = createAristotleRole(ctx);
+export default async function (ctx: any) {
+  const role = await createAristotleRole(ctx);
   return assemblePlugin(ctx, [role]);
 }
