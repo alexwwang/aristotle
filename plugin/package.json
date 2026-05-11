@@ -1,0 +1,14 @@
+{
+  "name": "@opencode-ai/agent-platform-plugin",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "bun build index.ts --outdir dist --target node --format esm"
+  },
+  "dependencies": {
+    "@opencode-ai/core": "workspace:*",
+    "@opencode-ai/aristotle": "workspace:*",
+    "@opencode-ai/plugin": "^1.4.0"
+  }
+}

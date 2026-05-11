@@ -1,0 +1,9 @@
+{
+  "name": "opencode-agent-platform",
+  "private": true,
+  "workspaces": ["packages/*", "plugin"],
+  "scripts": {
+    "build": "bun run --filter '*' build",
+    "test": "bun run --filter '*' test"
+  }
+}
