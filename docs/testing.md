@@ -1,13 +1,15 @@
 # Aristotle — Testing Guide
 
-> Aristotle MCP rule engine + Bridge plugin test overview. Current coverage: 382 pytest + 103 static + 162 vitest + 64 regression = 711 checks.
+> Aristotle MCP rule engine + Bridge plugin test overview. Current coverage: 405 pytest + 103 static + 148 core vitest + 115 aristotle vitest + 162 bridge vitest + 64 regression = 997 checks.
 
 ## 1. Test Suites Overview
 
 | Suite | Command | Count | What It Covers |
 |-------|---------|-------|----------------|
 | Static | `bash test.sh` | 103 | File structure, SKILL.md content, hook logic, error pattern detection, progressive disclosure (byte limit) |
-| Python | `uv run pytest test/ -v` | 382 | MCP core, orchestration & workflows, evolution, frontmatter, git ops, Bridge MCP, review UX |
+| Python | `uv run pytest test/ -v` | 405 | MCP core, orchestration & workflows, evolution, frontmatter, git ops, Bridge MCP, review UX |
+| Core Package | `cd packages/core && bunx vitest run` | 148 | 10 modules: logger, config, types, utils, workflow-store, executor, api-probe, session-extractor, plugin registration, plugin config |
+| Aristotle Package | `cd packages/aristotle && bunx vitest run` | 115 | 6 modules: config, idle-handler, executor, snapshot-extractor, index/role, tools |
 | Bridge Plugin | `cd plugins/aristotle-bridge && bunx vitest run` | 162 | 7 modules: types/utils/api-probe/snapshot-extractor/workflow-store/idle-handler/executor |
 | E2E Automated | `bash test/e2e_opencode.sh` | 14 | Real opencode session: skill load, sessions, learn, reflect (requires LLM) |
 | B1 Regression | `bash test/regression_b1_checks.sh` | 64 | Post-deploy verification for B1 fixes |
@@ -26,13 +28,13 @@ bash test.sh
 - Architecture guarantees (dispatcher contains no protocol details, subagent reads session via SESSION_FILE)
 - Phase 2: Passive Trigger paragraph (M8)
 
-## 3. Python Tests (325)
+## 3. Python Tests (405)
 
 ```bash
 uv run pytest test/ -v
 ```
 
-325 tests across 51+ test classes. All tests use isolated temp directories (`tmp_path` fixture) and are safe to run repeatedly.
+405 tests across 51+ test classes. All tests use isolated temp directories (`tmp_path` fixture) and are safe to run repeatedly.
 
 ### 3.1 MCP Core (test/mcp/ — 136 tests)
 
@@ -65,7 +67,45 @@ uv run pytest test/ -v
 | `test/test_phase0_snapshot.py` | TestResolveSessionsDir, TestBuildReflectorPrompt, TestOrchestrateStartSessionFile, TestBridgeDetection, TestOnUndo, TestUndoneShortCircuit | 19 | Session dir resolution, reflector prompt SESSION_FILE, Bridge marker detection, on_undo tool, undone state short-circuit |
 | `test/test_e2e_bridge_integration.py` | TestContextFixE2E, TestBridgeDetectionE2E, TestAsyncBridgeWorkflowE2E, TestMultiStageBridgeE2E | 9 | Bridge↔MCP integration: context fix, Bridge detection, async workflow, multi-stage |
 
-## 4. Bridge Plugin Tests (162 vitest)
+## 4. Core Package Tests (148 vitest)
+
+```bash
+cd packages/core && bunx vitest run
+```
+
+148 tests covering 10 core modules shared across platform roles.
+
+| File | Count | Coverage |
+|------|-------|----------|
+| `logger.test.ts` | 22 | Factory creation, env var override (|| not ??), level filtering, stderr output, redaction |
+| `config.test.ts` | 14 | ConfigResolver: sessionsDir, mcpDir, eager cache, cross-field dependencies |
+| `types.test.ts` | 8 | WorkflowState status transitions, type guards |
+| `utils.test.ts` | 6 | extractLastAssistantText, truncate, formatDuration |
+| `workflow-store.test.ts` | 38 | Disk persistence, 50-cap eviction, reconcile batch-5, instanceId isolation, saveToDisk merge |
+| `executor/index.test.ts` | 8 | Launch flow, snapshot, crash safety, session.create try/catch |
+| `api-probe.test.ts` | 5 | detectApiMode: promptAsync detection, session cleanup |
+| `session-extractor.test.ts` | 16 | Truncation, atomic write, filtering, schema v1 |
+| `registration.test.ts` | 23 | assemblePlugin, tool registration, config injection, event wiring |
+| `plugin-config.test.ts` | 8 | createPluginConfig, defaults, merge |
+
+## 5. Aristotle Package Tests (115 vitest)
+
+```bash
+cd packages/aristotle && bunx vitest run
+```
+
+115 tests covering 6 Aristotle-specific modules.
+
+| File | Count | Coverage |
+|------|-------|----------|
+| `config.test.ts` | 15 | detectMcpDir, ConfigResolver, AristotleLaunchArgs |
+| `idle-handler.test.ts` | 41 | Status guards, R→C chain driving, C completion, error handling, trigger file handling |
+| `executor.test.ts` | 14 | Launch flow, snapshot, crash safety, sub_prompt guard |
+| `snapshot-extractor.test.ts` | 12 | Truncation, atomic write, filtering, schema |
+| `index.test.ts` | 23 | createAristotleRole, tool registration, config injection |
+| `tools.test.ts` | 10 | fire_o, check, abort tool definitions |
+
+## 6. Bridge Plugin Tests (162 vitest)
 
 > Full test-level breakdown: see [plugins/aristotle-bridge/testing.en.md](plugins/aristotle-bridge/testing.en.md)
 
@@ -83,7 +123,7 @@ cd plugins/aristotle-bridge && bunx vitest run
 | `executor.test.ts` | 12 | Launch flow, snapshot, crash safety, session.create try/catch |
 | `index.test.ts` | 23 | 3 tool registrations, event dispatch, .bridge-active marker, abort idempotency |
 
-## 5. E2E & Automation Scripts
+## 7. E2E & Automation Scripts
 
 ### 5.1 E2E Automated (opencode run)
 
@@ -210,7 +250,7 @@ One `/aristotle` invocation covers snapshot extraction, reflect-check loop, sess
 
 **Automation notes**: B3, B4, B6, B8, B9 are file/API assertions. B1, B2, B5 depend on LLM. Can be scripted via `opencode run "message" --format json`.
 
-## 7. Configuration Reference
+## 9. Configuration Reference
 
 ### Test Constants (config.py)
 
@@ -227,7 +267,7 @@ One `/aristotle` invocation covers snapshot extraction, reflect-check loop, sess
 | `AUDIT_THRESHOLDS.semi` | 0.4 | 0.4 < Δ ≤ 0.7 → semi-auto |
 | `RISK_WEIGHTS` | high=0.8, medium=0.5, low=0.2 | Risk weights |
 
-## 8. CI Integration
+## 10. CI Integration
 
 ### 8.1 Test Commands
 
@@ -237,6 +277,10 @@ All test suites can run headless:
 # Quick smoke test (Python + static)
 bash test.sh && uv run pytest test/ -q
 
+# Core + Aristotle packages
+cd packages/core && bunx vitest run
+cd packages/aristotle && bunx vitest run
+
 # Bridge Plugin
 cd plugins/aristotle-bridge && bunx vitest run
 
@@ -244,7 +288,7 @@ cd plugins/aristotle-bridge && bunx vitest run
 bash test/regression_b1_checks.sh
 ```
 
-Expected result: `382 passed` + `103 passed` + `162 passed` + `64 passed` = **711 checks, 0 failures**.
+Expected result: `405 passed` + `103 passed` + `148 passed` + `115 passed` + `162 passed` + `64 passed` = **997 checks, 0 failures**.
 ### 8.2 Pre-Test Deployment
 
 Before E2E/live testing, ensure the production environment is up to date. See [deployment.md](deployment.md) for the full checklist and deploy steps.

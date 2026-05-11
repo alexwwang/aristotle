@@ -1,6 +1,6 @@
 # Aristotle Roadmap
 
-> **v1.2.0 released.** Enhanced Review Phase UX — inspect N, show draft, enriched notifications. 当前测试总量：382 pytest + 162 vitest + 103 static + 64 regression = 711 total。详见 [testing.md](./testing.md)。
+> **Phase 0 核心提取完成。** Core 包（10 模块 148 测试）+ Aristotle 包（6 模块 115 测试）已实现并通过 4 轮 Ralph Loop 审查。当前测试总量：405 pytest + 148 core vitest + 115 aristotle vitest + 162 bridge vitest + 103 static + 64 regression = 997 total。详见 [testing.md](./testing.md)。
 
 ---
 
@@ -119,6 +119,8 @@
 | v1.1 | Phase 1 Bridge | Bridge Plugin 9 模块 + SKILL.md 集成 + notifyParent 通知 + 162 vitest |
 | v1.1 | 文档重构 | 安装路径统一、Bridge vs Blocking 对比、GEAR 协议映射、渐进披露 KB 大小、配置文件示例、RESET 指南 |
 | **v1.2** | **Review UX** | **inspect N / show draft / 完善通知内容（Δ + audit_level + confidence + conflicts）/ staging_rule_paths / rule_summary 字段 / 57 新测试** |
+| **v1.3** | **Per-Rec Isolation** | **隔离 per-rec state / config resolver 重构 / 395 pytest** |
+| **Phase 0** | **Core Extraction** | **Core 包 10 模块 148 测试 + Aristotle 包 6 模块 115 测试 + 4 轮 Ralph Loop 审查（R1:4C+4M → R4:0）+ 997 总测试 + tsc 零错误** |
 
 ---
 

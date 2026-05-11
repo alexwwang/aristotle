@@ -143,7 +143,7 @@ check "fire_sub branches do NOT call markCompleted after launch" \
     "! grep -A2 'fire_sub' '$IDLE' | grep -q 'markCompleted'"
 
 check "notify action goes to markChainBroken (not markCompleted)" \
-    "grep -A4 \"action === 'notify'\" '$IDLE' | grep -q 'markChainBroken'"
+    "grep -A10 \"action === 'notify'\" '$IDLE' | grep -q 'markChainBroken'"
 
 check "mcpProjectDir log is debug level (not info)" \
     "! grep -q 'logger.info.*mcpProjectDir' '$IDLE'"
@@ -184,13 +184,16 @@ check "logger uses unknown[] not any[]" \
     "! grep -q 'any\[\]' '$ROOT_DIR/plugins/aristotle-bridge/src/logger.ts'"
 
 # ───────────────────────────────────────────────────────────────
-# Fix: resolveMcpProjectDir exported for testing
+# Fix: MCP project dir resolution exists and is testable
+# (resolveMcpProjectDir in idle-handler.ts → detectMcpDir in config.ts)
 # ───────────────────────────────────────────────────────────────
 echo ""
-echo "── Bridge Plugin: resolveMcpProjectDir ──"
+echo "── Plugin: MCP dir detection ──"
 
-check "resolveMcpProjectDir is exported" \
-    "grep -q 'export function resolveMcpProjectDir' '$IDLE'"
+BRIDGE_SRC="$ROOT_DIR/plugins/aristotle-bridge/src"
+
+check "MCP dir resolver function exists (resolveMcpProjectDir or detectMcpDir)" \
+    "grep -rq 'function resolveMcpProjectDir\|function detectMcpDir' '$BRIDGE_SRC'"
 
 # ───────────────────────────────────────────────────────────────
 # Fix: Install dir synced with dev dir

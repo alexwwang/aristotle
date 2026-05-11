@@ -4,7 +4,7 @@
 [![Release](https://img.shields.io/github/v/release/alexwwang/aristotle?include_prereleases)](https://github.com/alexwwang/aristotle/releases)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
-[![Tests](https://img.shields.io/badge/tests-711%20total-brightgreen)](./docs/testing.md)
+[![Tests](https://img.shields.io/badge/tests-997%20total-brightgreen)](./docs/testing.md)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19660780.svg)](https://doi.org/10.5281/zenodo.19660780)
 
 English | [中文](./README.zh-CN.md)
@@ -438,7 +438,9 @@ The full protocol specification — state machine, frontmatter schema, Δ decisi
 | Suite | Command | Count |
 |-------|---------|-------|
 | Static | `bash test.sh` | 103 |
-| Unit/Integration (Python) | `uv run pytest test/ -v` | 382 |
+| Unit/Integration (Python) | `uv run pytest test/ -v` | 405 |
+| Core Package (TypeScript) | `cd packages/core && bunx vitest run` | 148 |
+| Aristotle Package (TypeScript) | `cd packages/aristotle && bunx vitest run` | 115 |
 | Bridge Plugin (TypeScript) | `cd plugins/aristotle-bridge && bunx vitest run` | 162 |
 | E2E Integration | `uv run pytest test/test_e2e_bridge_integration.py -v` | 9 |
 | Regression (deploy verify) | `bash test/regression_b1_checks.sh` | 64 |
@@ -447,18 +449,19 @@ The full protocol specification — state machine, frontmatter schema, Δ decisi
 
 > Phase 2 complete. See **[TESTING.md](./docs/testing.md)** for detailed test documentation.
 
-| Milestone | pytest | static | e2e |
-|-----------|--------|--------|-----|
-| Baseline (pre-remediation) | 111 | 67 | — |
-| Post-remediation | 134 | 67 | — |
-| Post-coroutine-O merge | 166 | 84 | — |
-| GEAR Orchestration (M1-M4) | 218 | 98 | — |
-| M4 Exception Path Tests | 227 | 98 | — |
-| **Phase 2 (M1/M5-M9)** | **295** | **104** | **70** |
-| Phase 0 Bridge (MCP ext) | 318 | 103 | 9 |
-| Phase 1 Bridge (Plugin) | 325 | 103 | 9 + 162 vitest |
-| **v1.2.0 Review UX** | **382** | **103** | **9 + 162 vitest** |
-| **v1.3.0 Per-Rec Isolation** | **395** | **103** | **80 pytest + 162 vitest** |
+| Milestone | pytest | static | vitest | e2e |
+|-----------|--------|--------|--------|-----|
+| Baseline (pre-remediation) | 111 | 67 | — | — |
+| Post-remediation | 134 | 67 | — | — |
+| Post-coroutine-O merge | 166 | 84 | — | — |
+| GEAR Orchestration (M1-M4) | 218 | 98 | — | — |
+| M4 Exception Path Tests | 227 | 98 | — | — |
+| **Phase 2 (M1/M5-M9)** | **295** | **104** | — | **70** |
+| Phase 0 Bridge (MCP ext) | 318 | 103 | — | 9 |
+| Phase 1 Bridge (Plugin) | 325 | 103 | — | 9 + 162 vitest |
+| **v1.2.0 Review UX** | **382** | **103** | — | **9 + 162 vitest** |
+| **v1.3.0 Per-Rec Isolation** | **395** | **103** | — | **80 pytest + 162 vitest** |
+| **Phase 0 Core Extraction** | **405** | **103** | **148 core + 115 aristotle** | **9 + 162 bridge + 64 regression** |
 
 ## Project Structure
 
@@ -495,12 +498,21 @@ The full protocol specification — state machine, frontmatter schema, Δ decisi
 │   ├── _orch_start.py    # orchestrate_start tool (session_file + use_bridge)
 │   ├── _orch_event.py    # orchestrate_on_event tool
 │   └── _orch_review.py   # orchestrate_review_action tool
+├── packages/
+│   ├── core/              # Core library — shared mechanism (logger, config, workflow-store, executor, plugin registration)
+│   │   ├── src/           # 10 modules
+│   │   └── test/          # 148 vitest cases
+│   └── aristotle/         # Aristotle role — idle-handler, tools, snapshot-extractor, config
+│       ├── src/           # 6 modules
+│       └── test/          # 115 vitest cases
+├── plugin/
+│   └── index.ts           # New plugin entry — assemblePlugin + createAristotleRole (Phase 0)
 ├── plugins/
-│   └── aristotle-bridge/ # Bridge Plugin — async reflect via polling (no OMO dependency)
-│       ├── src/          # 9 modules (index/types/utils/api-probe/logger/snapshot-extractor/workflow-store/idle-handler/executor)
-│       ├── test/         # 8 test files, 162 vitest cases
-│       ├── testing.en.md # Bridge-specific test documentation (English)
-│       └── testing.zh.md # Bridge-specific test documentation (Chinese)
+│   └── aristotle-bridge/  # Bridge Plugin — async reflect via polling (no OMO dependency)
+│       ├── src/           # 9 modules (index/types/utils/api-probe/logger/snapshot-extractor/workflow-store/idle-handler/executor)
+│       ├── test/          # 8 test files, 162 vitest cases
+│       ├── testing.en.md  # Bridge-specific test documentation (English)
+│       └── testing.zh.md  # Bridge-specific test documentation (Chinese)
 └── test/
     ├── regression_b1_checks.sh  # Deploy verification (64 assertions)
     ├── e2e_opencode.sh          # E2E automation script (14 assertions)
