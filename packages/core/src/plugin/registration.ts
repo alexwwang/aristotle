@@ -110,8 +110,12 @@ export function assemblePlugin(ctx: any, roles: Array<RoleRegistration | null>):
   const hasIdleHandlers = activeRoles.some(r => r.onIdle)
   if (hasIdleHandlers) {
     output.event = async (event: any) => {
-      const actualEvent = event?.event ?? event
-      const sessionId = actualEvent?.sessionId ?? ''
+      const e = event?.event ?? event
+      // Only handle session.idle events — match OpenCode's event format
+      if (e?.type !== 'session.idle') return
+
+      const sessionId = e?.properties?.sessionID ?? ''
+      if (typeof sessionId !== 'string' || !sessionId) return
 
       for (const role of activeRoles) {
         if (role.onIdle) {

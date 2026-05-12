@@ -65,7 +65,7 @@ describe('assemblePlugin', () => {
     const plugin = assemblePlugin(ctx, [role1, role2]);
 
     expect(plugin.event).toBeDefined();
-    await plugin.event!({ sessionId: 'sess-1' });
+    await plugin.event!({ type: 'session.idle', properties: { sessionID: 'sess-1' } });
 
     expect(onIdle1).toHaveBeenCalledWith('sess-1', client);
     expect(onIdle2).toHaveBeenCalledWith('sess-1', client);
@@ -79,7 +79,7 @@ describe('assemblePlugin', () => {
 
     const plugin = assemblePlugin(ctx, [role]);
 
-    await plugin.event!({ sessionId: 'sess-abc' });
+    await plugin.event!({ type: 'session.idle', properties: { sessionID: 'sess-abc' } });
 
     expect(onIdle).toHaveBeenCalledWith('sess-abc', ctx.client);
   });
@@ -93,7 +93,7 @@ describe('assemblePlugin', () => {
 
     const plugin = assemblePlugin(ctx, [role]);
 
-    await plugin.event!({ sessionId: 'sess-1' });
+    await plugin.event!({ type: 'session.idle', properties: { sessionID: 'sess-1' } });
 
     expect(onIdle).toHaveBeenCalledWith('sess-1', client);
   });
@@ -213,7 +213,7 @@ describe('assemblePlugin', () => {
 
     const plugin = assemblePlugin(ctx, [role1, role2]);
 
-    await plugin.event!({ sessionId: 'sess-1' });
+    await plugin.event!({ type: 'session.idle', properties: { sessionID: 'sess-1' } });
 
     expect(onIdle1).toHaveBeenCalled();
     expect(onIdle2).toHaveBeenCalled();
@@ -252,8 +252,8 @@ describe('assemblePlugin', () => {
 
     const plugin = assemblePlugin(ctx, [role]);
 
-    // event with nested .event property
-    await plugin.event!({ event: { sessionId: 'nested-sess' } });
+    // event with nested .event property (OpenCode wraps events this way)
+    await plugin.event!({ event: { type: 'session.idle', properties: { sessionID: 'nested-sess' } } });
 
     expect(onIdle).toHaveBeenCalledWith('nested-sess', ctx.client);
   });
@@ -267,12 +267,38 @@ describe('assemblePlugin', () => {
 
     const plugin = assemblePlugin(ctx, [role]);
 
-    await plugin.event!({ sessionId: 'sess-1' });
+    await plugin.event!({ type: 'session.idle', properties: { sessionID: 'sess-1' } });
 
     expect(onIdle).toHaveBeenCalledWith('sess-1', client);
   });
 
-  // PR-17: should_return_empty_object_when_roles_array_empty
+  // PR-17: should_ignore_non_idle_events
+  it('should_ignore_non_idle_events', async () => {
+    const onIdle = vi.fn().mockResolvedValue(undefined);
+    const role: RoleRegistration = { onIdle };
+    const ctx = { client: {} };
+
+    const plugin = assemblePlugin(ctx, [role]);
+
+    await plugin.event!({ type: 'session.created', properties: { sessionID: 'sess-1' } });
+
+    expect(onIdle).not.toHaveBeenCalled();
+  });
+
+  // PR-18: should_ignore_idle_event_without_sessionID
+  it('should_ignore_idle_event_without_sessionID', async () => {
+    const onIdle = vi.fn().mockResolvedValue(undefined);
+    const role: RoleRegistration = { onIdle };
+    const ctx = { client: {} };
+
+    const plugin = assemblePlugin(ctx, [role]);
+
+    await plugin.event!({ type: 'session.idle', properties: {} });
+
+    expect(onIdle).not.toHaveBeenCalled();
+  });
+
+  // PR-19: should_return_empty_object_when_roles_array_empty
   it('should_return_empty_object_when_roles_array_empty', () => {
     const ctx = { client: {} };
 
@@ -281,7 +307,7 @@ describe('assemblePlugin', () => {
     expect(plugin).toEqual({});
   });
 
-  // PR-18: should_filter_undefined_in_roles_array
+  // PR-20: should_filter_undefined_in_roles_array
   it('should_filter_undefined_in_roles_array', () => {
     const toolDef: ToolDefinition = {
       description: 'Test tool',
