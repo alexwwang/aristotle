@@ -5,8 +5,8 @@
     "": {
       "name": "opencode-agent-platform",
     },
-    "packages/aristotle": {
-      "name": "@opencode-ai/aristotle",
+    "packages/reflection": {
+      "name": "@opencode-ai/reflection",
       "version": "1.2.0",
       "dependencies": {
         "@opencode-ai/core": "workspace:*",
@@ -44,7 +44,7 @@
     "plugin": {
       "name": "@opencode-ai/agent-platform-plugin",
       "dependencies": {
-        "@opencode-ai/aristotle": "workspace:*",
+        "@opencode-ai/reflection": "workspace:*",
         "@opencode-ai/core": "workspace:*",
         "@opencode-ai/plugin": "^1.4.0",
         "@opencode-ai/watchdog": "workspace:*",
@@ -120,7 +120,7 @@
 
     "@opencode-ai/agent-platform-plugin": ["@opencode-ai/agent-platform-plugin@workspace:plugin"],
 
-    "@opencode-ai/aristotle": ["@opencode-ai/aristotle@workspace:packages/aristotle"],
+    "@opencode-ai/reflection": ["@opencode-ai/reflection@workspace:packages/reflection"],
 
     "@opencode-ai/core": ["@opencode-ai/core@workspace:packages/core"],
 

@@ -86,7 +86,7 @@ function assemblePlugin(ctx, roles) {
   return output;
 }
 
-// ../packages/aristotle/src/index.ts
+// ../packages/reflection/src/index.ts
 import { join as join4 } from "node:path";
 import { writeFileSync as writeFileSync2, unlinkSync as unlinkSync2, mkdirSync, readdirSync, statSync } from "node:fs";
 import { randomUUID } from "node:crypto";
@@ -530,7 +530,7 @@ function createStateStore(baseDir, logger3) {
   };
 }
 
-// ../packages/aristotle/src/reflection/snapshot-extractor.ts
+// ../packages/reflection/src/reflection/snapshot-extractor.ts
 import path3 from "node:path";
 
 class SnapshotExtractor {
@@ -608,7 +608,7 @@ class AsyncTaskExecutor {
   }
 }
 
-// ../packages/aristotle/src/executor.ts
+// ../packages/reflection/src/executor.ts
 class AristotleExecutor {
   client;
   store;
@@ -687,7 +687,7 @@ class AristotleExecutor {
   }
 }
 
-// ../packages/aristotle/src/idle-handler.ts
+// ../packages/reflection/src/idle-handler.ts
 import { spawn } from "node:child_process";
 import { join as join2 } from "node:path";
 import { existsSync, readFileSync as readFileSync2, unlinkSync } from "node:fs";
@@ -1030,7 +1030,7 @@ class IdleEventHandler {
   }
 }
 
-// ../packages/aristotle/src/tools.ts
+// ../packages/reflection/src/tools.ts
 import { z } from "zod";
 function createAristotleTools(deps) {
   const { store, executor, client } = deps;
@@ -1099,7 +1099,7 @@ function createAristotleTools(deps) {
   };
 }
 
-// ../packages/aristotle/src/config.ts
+// ../packages/reflection/src/config.ts
 import { existsSync as existsSync2, readFileSync as readFileSync3 } from "node:fs";
 import { homedir } from "node:os";
 import { join as join3 } from "node:path";
@@ -1137,7 +1137,7 @@ function createConfigResolver(options) {
     }
   };
 }
-// ../packages/aristotle/src/config.ts
+// ../packages/reflection/src/config.ts
 var CONFIG_FILENAME = "aristotle-config.json";
 var DEFAULT_OPENCODE_DIR = join3(homedir(), ".config", "opencode");
 function findConfigFile() {
@@ -1197,7 +1197,7 @@ function resolveConfig() {
   return resolver.resolve();
 }
 
-// ../packages/aristotle/src/index.ts
+// ../packages/reflection/src/index.ts
 async function createAristotleRole(ctx) {
   if (typeof ctx?.client?.session?.promptAsync !== "function") {
     return null;

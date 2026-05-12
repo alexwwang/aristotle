@@ -122,7 +122,7 @@ PLUGIN_DEST="$OPENCODE_CONFIG/aristotle-bridge"
 PLUGIN_SRC="$SKILL_SRC/plugin"
 if [ -d "$PLUGIN_SRC" ] && command -v bun &>/dev/null; then
     echo -e "${BLUE}[5/7]${NC} Building Plugin..."
-    cd "$SKILL_SRC" && bun install && bun run --filter '@opencode-ai/core' build 2>/dev/null; bun run --filter '@opencode-ai/aristotle' build 2>/dev/null; cd "$PLUGIN_SRC" && bun run build
+    cd "$SKILL_SRC" && bun install && bun run --filter '@opencode-ai/core' build 2>/dev/null; bun run --filter '@opencode-ai/reflection' build 2>/dev/null; cd "$PLUGIN_SRC" && bun run build
     mkdir -p "$PLUGIN_DEST"
     cp "$PLUGIN_SRC/dist/index.js" "$PLUGIN_DEST/index.js"
     echo -e "${GREEN}✓${NC} Plugin deployed to $PLUGIN_DEST"

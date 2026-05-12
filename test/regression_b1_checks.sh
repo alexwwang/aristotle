@@ -6,7 +6,7 @@
 # This script should pass BEFORE any deployment.
 #
 # Phase D migration: checks now point to packages/core/ and
-# packages/aristotle/ (the new code). Checks that grep old
+# packages/reflection/ (the new code). Checks that grep old
 # plugins/aristotle-bridge/src/ have been migrated or dissolved.
 #
 # Usage: bash test/regression_b1_checks.sh
@@ -129,13 +129,13 @@ check "reconcileOnStartup has 3-phase recovery" \
 
 # ───────────────────────────────────────────────────────────────
 # Fix: idle-handler uses subprocess + chain driving
-# Migrated: packages/aristotle/src/idle-handler.ts
+# Migrated: packages/reflection/src/idle-handler.ts
 # Semantic change: execFile → spawn (Bug #11 fix preserved)
 # ───────────────────────────────────────────────────────────────
 echo ""
 echo "── Aristotle: idle-handler chain driving ──"
 
-IDLE="$ROOT_DIR/packages/aristotle/src/idle-handler.ts"
+IDLE="$ROOT_DIR/packages/reflection/src/idle-handler.ts"
 
 check "idle-handler has callMCP subprocess method" \
     "grep -q 'callMCP' '$IDLE'"
@@ -163,22 +163,22 @@ check "cancelled status is checked in catch block" \
 
 # ───────────────────────────────────────────────────────────────
 # Fix: index.ts passes executor + sessionsDir
-# Architecture changed: index.ts is now role entry in packages/aristotle/
+# Architecture changed: index.ts is now role entry in packages/reflection/
 # IdleEventHandler receives options object with sessionsDir and mcpDir
 # ───────────────────────────────────────────────────────────────
 echo ""
 echo "── Aristotle: role integration ──"
 
-INDEX="$ROOT_DIR/packages/aristotle/src/index.ts"
+INDEX="$ROOT_DIR/packages/reflection/src/index.ts"
 
 check "IdleEventHandler receives sessionsDir and mcpDir" \
     "grep -q 'sessionsDir.*mcpDir' '$INDEX'"
 
 check "aristotle_abort handles chain_broken" \
-    "grep -q 'chain_broken' '$ROOT_DIR/packages/aristotle/src/tools.ts'"
+    "grep -q 'chain_broken' '$ROOT_DIR/packages/reflection/src/tools.ts'"
 
 check "aristotle_abort handles chain_pending" \
-    "grep -q 'chain_pending' '$ROOT_DIR/packages/aristotle/src/tools.ts'"
+    "grep -q 'chain_pending' '$ROOT_DIR/packages/reflection/src/tools.ts'"
 
 # ───────────────────────────────────────────────────────────────
 # Fix: logger.ts exists and uses stderr
@@ -200,12 +200,12 @@ check "logger uses unknown[] not any[]" \
 
 # ───────────────────────────────────────────────────────────────
 # Fix: MCP project dir resolution exists and is testable
-# Migrated: packages/aristotle/src/config.ts (detectMcpDir)
+# Migrated: packages/reflection/src/config.ts (detectMcpDir)
 # ───────────────────────────────────────────────────────────────
 echo ""
 echo "── Aristotle: MCP dir detection ──"
 
-CONFIG="$ROOT_DIR/packages/aristotle/src/config.ts"
+CONFIG="$ROOT_DIR/packages/reflection/src/config.ts"
 
 check "MCP dir resolver function exists (detectMcpDir)" \
     "grep -q 'function detectMcpDir' '$CONFIG'"
@@ -285,12 +285,12 @@ check "core executor does NOT pass agent to promptAsync" \
 # Root cause: plugin.tool was a function returning bare async functions.
 # opencode expects plain object with {description, args: Zod, execute}.
 # LLM could never see plugin tools.
-# Migrated: packages/aristotle/src/tools.ts
+# Migrated: packages/reflection/src/tools.ts
 # ───────────────────────────────────────────────────────────────
 echo ""
 echo "── Tool registration: ToolDefinition format ──"
 
-TOOLS="$ROOT_DIR/packages/aristotle/src/tools.ts"
+TOOLS="$ROOT_DIR/packages/reflection/src/tools.ts"
 
 check "tool is plain object with description field" \
     "grep -q 'description:' '$TOOLS'"
@@ -305,7 +305,7 @@ check "aristotle_fire_o has execute function" \
 # Fix: target_session_id defaults to context.sessionID
 # Root cause: ctx.session?.id is always undefined (PluginInput has no
 # session property). Fixed to use ToolContext.sessionID (2nd execute arg).
-# Migrated: packages/aristotle/src/tools.ts
+# Migrated: packages/reflection/src/tools.ts
 # ───────────────────────────────────────────────────────────────
 echo ""
 echo "── target_session_id default ──"
@@ -365,12 +365,12 @@ check "index.ts generates instanceId with randomUUID" \
 # Fix: executor return message does NOT instruct polling
 # Root cause: "Call aristotle_check to poll status" caused LLM to
 # block main session with repeated check calls.
-# Migrated: packages/aristotle/src/executor.ts
+# Migrated: packages/reflection/src/executor.ts
 # ───────────────────────────────────────────────────────────────
 echo ""
 echo "── Executor: no polling instruction ──"
 
-ARISTOTLE_EXECUTOR="$ROOT_DIR/packages/aristotle/src/executor.ts"
+ARISTOTLE_EXECUTOR="$ROOT_DIR/packages/reflection/src/executor.ts"
 
 check "executor message does not say to poll with check" \
     "! grep -q 'Call.*aristotle_check.*poll.*status' '$ARISTOTLE_EXECUTOR'"

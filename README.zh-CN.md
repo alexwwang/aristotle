@@ -34,7 +34,7 @@ Aristotle 包含三个组件，均从同一仓库安装：
 
 1. **Skill** — OpenCode 加载的协议文件（`SKILL.md`、`REFLECT.md` 等）
 2. **MCP Server** — 基于 Python 的 Git 版本管理规则引擎（`aristotle_mcp/`）
-3. **Plugin** — 基于 TypeScript 的异步反思，由 `packages/core/` + `packages/aristotle/` 组装而成（`plugin/index.ts`）。提供轮询式后台反思和空闲检测。
+3. **Plugin** — 基于 TypeScript 的异步反思，由 `packages/core/` + `packages/reflection/` 组装而成（`plugin/index.ts`）。提供轮询式后台反思和空闲检测。
 
 ### 方式一：手动安装（macOS / Linux）
 
@@ -452,7 +452,7 @@ GEAR 协议操作映射到 Aristotle 的 MCP 工具：`produce` → `write_rule`
 | 静态测试 | `bash test.sh` | 103 |
 | 单元/集成测试 (Python) | `uv run pytest test/ -v` | 405 |
 | Core Package (TypeScript) | `cd packages/core && bunx vitest run` | 150 |
-| Aristotle Package (TypeScript) | `cd packages/aristotle && bunx vitest run` | 115 |
+| Aristotle Package (TypeScript) | `cd packages/reflection && bunx vitest run` | 115 |
 | Legacy Bridge（已归档）(TypeScript) | `cd plugins/aristotle-bridge && bunx vitest run` | 162 |
 | E2E 集成测试 | `uv run pytest test/test_e2e_bridge_integration.py -v` | 9 |
 | 回归测试（部署验证） | `bash test/regression_b1_checks.sh` | 64 |

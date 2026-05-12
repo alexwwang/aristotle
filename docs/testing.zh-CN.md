@@ -9,7 +9,7 @@
 | 静态测试 | `bash test.sh` | 103 | 文件结构、SKILL.md 内容、hook 逻辑、错误模式检测、渐进披露（字节限制） |
 | Python 测试 | `uv run pytest test/ -v` | 405 | MCP 核心、编排与工作流、进化、frontmatter、git 操作、Bridge MCP、Review UX |
 | Core Package | `cd packages/core && bunx vitest run` | 150 | 10 个模块：logger、config、types、utils、workflow-store、executor、api-probe、session-extractor、plugin registration、plugin config |
-| Aristotle Package | `cd packages/aristotle && bunx vitest run` | 115 | 6 个模块：config、idle-handler、executor、snapshot-extractor、index/role、tools |
+| Aristotle Package | `cd packages/reflection && bunx vitest run` | 115 | 6 个模块：config、idle-handler、executor、snapshot-extractor、index/role、tools |
 | Legacy Bridge（已归档） | `cd plugins/aristotle-bridge && bunx vitest run` | 162 | 7 个模块（旧结构）：types/utils/api-probe/snapshot-extractor/workflow-store/idle-handler/executor |
 | E2E 自动化 | `bash test/e2e_opencode.sh` | 14 | 真实 opencode 会话：skill 加载、sessions、learn、reflect（需 LLM） |
 | B1 回归 | `bash test/regression_b1_checks.sh` | 64 | B1 修复的部署后验证 |
@@ -91,7 +91,7 @@ cd packages/core && bunx vitest run
 ## 5. Aristotle Package 测试 (115 vitest)
 
 ```bash
-cd packages/aristotle && bunx vitest run
+cd packages/reflection && bunx vitest run
 ```
 
 115 个测试覆盖 6 个 Aristotle 专用模块。
@@ -107,7 +107,7 @@ cd packages/aristotle && bunx vitest run
 
 ## 6. Legacy Bridge 测试（已归档）(162 vitest)
 
-> 这些测试覆盖已归档的旧代码 `plugins/aristotle-bridge/`。新代码位于 `packages/core/src/`、`packages/aristotle/src/` 和 `plugin/index.ts`。
+> 这些测试覆盖已归档的旧代码 `plugins/aristotle-bridge/`。新代码位于 `packages/core/src/`、`packages/reflection/src/` 和 `plugin/index.ts`。
 
 ```bash
 cd plugins/aristotle-bridge && bunx vitest run

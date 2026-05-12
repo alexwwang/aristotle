@@ -1,7 +1,7 @@
 /**
  * Watchdog plugin tool registration.
  *
- * Follows the same pattern as packages/aristotle/src/tools.ts.
+ * Follows the same pattern as packages/reflection/src/tools.ts.
  * Defines the `tdd_checkpoint` tool that the LLM calls during tdd-pipeline execution.
  */
 import { z } from 'zod'

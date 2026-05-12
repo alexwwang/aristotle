@@ -35,7 +35,7 @@ Aristotle has three components, all installed from the same repo:
 
 1. **Skill** — Protocol files loaded by OpenCode (`SKILL.md`, `REFLECT.md`, etc.)
 2. **MCP Server** — Python-based Git-backed rule management (`aristotle_mcp/`)
-3. **Plugin** — TypeScript-based async reflection assembled from `packages/core/` + `packages/aristotle/` (`plugin/index.ts`). Provides polling-based background reflection with idle detection.
+3. **Plugin** — TypeScript-based async reflection assembled from `packages/core/` + `packages/reflection/` (`plugin/index.ts`). Provides polling-based background reflection with idle detection.
 
 ### Option 1: Manual Install (macOS / Linux)
 
@@ -440,7 +440,7 @@ The full protocol specification — state machine, frontmatter schema, Δ decisi
 | Static | `bash test.sh` | 103 |
 | Unit/Integration (Python) | `uv run pytest test/ -v` | 405 |
 | Core Package (TypeScript) | `cd packages/core && bunx vitest run` | 150 |
-| Aristotle Package (TypeScript) | `cd packages/aristotle && bunx vitest run` | 115 |
+| Aristotle Package (TypeScript) | `cd packages/reflection && bunx vitest run` | 115 |
 | Legacy Bridge (archived) (TypeScript) | `cd plugins/aristotle-bridge && bunx vitest run` | 162 |
 | E2E Integration | `uv run pytest test/test_e2e_bridge_integration.py -v` | 9 |
 | Regression (deploy verify) | `bash test/regression_b1_checks.sh` | 64 |
