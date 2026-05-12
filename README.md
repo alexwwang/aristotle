@@ -4,7 +4,7 @@
 [![Release](https://img.shields.io/github/v/release/alexwwang/aristotle?include_prereleases)](https://github.com/alexwwang/aristotle/releases)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
-[![Tests](https://img.shields.io/badge/tests-997%20total-brightgreen)](./docs/testing.md)
+[![Tests](https://img.shields.io/badge/tests-999%20total-brightgreen)](./docs/testing.md)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19660780.svg)](https://doi.org/10.5281/zenodo.19660780)
 
 English | [中文](./README.zh-CN.md)
@@ -439,7 +439,7 @@ The full protocol specification — state machine, frontmatter schema, Δ decisi
 |-------|---------|-------|
 | Static | `bash test.sh` | 103 |
 | Unit/Integration (Python) | `uv run pytest test/ -v` | 405 |
-| Core Package (TypeScript) | `cd packages/core && bunx vitest run` | 148 |
+| Core Package (TypeScript) | `cd packages/core && bunx vitest run` | 150 |
 | Aristotle Package (TypeScript) | `cd packages/aristotle && bunx vitest run` | 115 |
 | Bridge Plugin (TypeScript) | `cd plugins/aristotle-bridge && bunx vitest run` | 162 |
 | E2E Integration | `uv run pytest test/test_e2e_bridge_integration.py -v` | 9 |
@@ -461,7 +461,7 @@ The full protocol specification — state machine, frontmatter schema, Δ decisi
 | Phase 1 Bridge (Plugin) | 325 | 103 | — | 9 + 162 vitest |
 | **v1.2.0 Review UX** | **382** | **103** | — | **9 + 162 vitest** |
 | **v1.3.0 Per-Rec Isolation** | **395** | **103** | — | **80 pytest + 162 vitest** |
-| **Phase 0 Core Extraction** | **405** | **103** | **148 core + 115 aristotle** | **9 + 162 bridge + 64 regression** |
+| **Phase 0 Core Extraction** | **405** | **103** | **150 core + 115 aristotle** | **9 + 162 bridge + 64 regression** |
 
 ## Project Structure
 
@@ -501,7 +501,7 @@ The full protocol specification — state machine, frontmatter schema, Δ decisi
 ├── packages/
 │   ├── core/              # Core library — shared mechanism (logger, config, workflow-store, executor, plugin registration)
 │   │   ├── src/           # 10 modules
-│   │   └── test/          # 148 vitest cases
+│   │   └── test/          # 150 vitest cases
 │   └── aristotle/         # Aristotle role — idle-handler, tools, snapshot-extractor, config
 │       ├── src/           # 6 modules
 │       └── test/          # 115 vitest cases

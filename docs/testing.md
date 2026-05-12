@@ -1,6 +1,6 @@
 # Aristotle — Testing Guide
 
-> Aristotle MCP rule engine + Bridge plugin test overview. Current coverage: 405 pytest + 103 static + 148 core vitest + 115 aristotle vitest + 162 bridge vitest + 64 regression = 997 checks.
+> Aristotle MCP rule engine + Bridge plugin test overview. Current coverage: 405 pytest + 103 static + 150 core vitest + 115 aristotle vitest + 162 bridge vitest + 64 regression = 999 checks.
 
 ## 1. Test Suites Overview
 
@@ -8,7 +8,7 @@
 |-------|---------|-------|----------------|
 | Static | `bash test.sh` | 103 | File structure, SKILL.md content, hook logic, error pattern detection, progressive disclosure (byte limit) |
 | Python | `uv run pytest test/ -v` | 405 | MCP core, orchestration & workflows, evolution, frontmatter, git ops, Bridge MCP, review UX |
-| Core Package | `cd packages/core && bunx vitest run` | 148 | 10 modules: logger, config, types, utils, workflow-store, executor, api-probe, session-extractor, plugin registration, plugin config |
+| Core Package | `cd packages/core && bunx vitest run` | 150 | 10 modules: logger, config, types, utils, workflow-store, executor, api-probe, session-extractor, plugin registration, plugin config |
 | Aristotle Package | `cd packages/aristotle && bunx vitest run` | 115 | 6 modules: config, idle-handler, executor, snapshot-extractor, index/role, tools |
 | Bridge Plugin | `cd plugins/aristotle-bridge && bunx vitest run` | 162 | 7 modules: types/utils/api-probe/snapshot-extractor/workflow-store/idle-handler/executor |
 | E2E Automated | `bash test/e2e_opencode.sh` | 14 | Real opencode session: skill load, sessions, learn, reflect (requires LLM) |
@@ -67,13 +67,13 @@ uv run pytest test/ -v
 | `test/test_phase0_snapshot.py` | TestResolveSessionsDir, TestBuildReflectorPrompt, TestOrchestrateStartSessionFile, TestBridgeDetection, TestOnUndo, TestUndoneShortCircuit | 19 | Session dir resolution, reflector prompt SESSION_FILE, Bridge marker detection, on_undo tool, undone state short-circuit |
 | `test/test_e2e_bridge_integration.py` | TestContextFixE2E, TestBridgeDetectionE2E, TestAsyncBridgeWorkflowE2E, TestMultiStageBridgeE2E | 9 | Bridge↔MCP integration: context fix, Bridge detection, async workflow, multi-stage |
 
-## 4. Core Package Tests (148 vitest)
+## 4. Core Package Tests (150 vitest)
 
 ```bash
 cd packages/core && bunx vitest run
 ```
 
-148 tests covering 10 core modules shared across platform roles.
+150 tests covering 10 core modules shared across platform roles.
 
 | File | Count | Coverage |
 |------|-------|----------|
@@ -288,7 +288,7 @@ cd plugins/aristotle-bridge && bunx vitest run
 bash test/regression_b1_checks.sh
 ```
 
-Expected result: `405 passed` + `103 passed` + `148 passed` + `115 passed` + `162 passed` + `64 passed` = **997 checks, 0 failures**.
+Expected result: `405 passed` + `103 passed` + `150 passed` + `115 passed` + `162 passed` + `64 passed` = **999 checks, 0 failures**.
 ### 8.2 Pre-Test Deployment
 
 Before E2E/live testing, ensure the production environment is up to date. See [deployment.md](deployment.md) for the full checklist and deploy steps.
