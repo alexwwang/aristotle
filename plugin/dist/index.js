@@ -1245,10 +1245,754 @@ async function createAristotleRole(ctx) {
   };
 }
 
+// ../packages/watchdog/src/pipeline-store.ts
+class PipelineStore {
+  stateStore;
+  logger;
+  constructor(stateStore, logger4) {
+    this.stateStore = stateStore;
+    this.logger = logger4;
+  }
+  validatePathComponents(projectId, runId) {
+    if (projectId.includes("../") || projectId.includes("..\\")) {
+      throw new Error(`Path traversal detected in projectId: ${projectId}`);
+    }
+    if (runId !== undefined && (runId.includes("../") || runId.includes("..\\"))) {
+      throw new Error(`Path traversal detected in runId: ${runId}`);
+    }
+  }
+  projectIndexKey() {
+    return "watchdog/projects";
+  }
+  activeKey(projectId) {
+    return `watchdog/${projectId}/active`;
+  }
+  stateKey(projectId, runId) {
+    return `watchdog/${projectId}/${runId}/state`;
+  }
+  auditKey(projectId, runId) {
+    return `watchdog/${projectId}/${runId}/audit`;
+  }
+  archiveStateKey(projectId, runId) {
+    return `watchdog/${projectId}/archive/${runId}/state`;
+  }
+  archiveAuditKey(projectId, runId) {
+    return `watchdog/${projectId}/archive/${runId}/audit`;
+  }
+  getProjectIds() {
+    const index = this.stateStore.read(this.projectIndexKey());
+    return index?.projectIds ?? [];
+  }
+  addProjectToIndex(projectId) {
+    const index = this.stateStore.read(this.projectIndexKey());
+    const ids = new Set(index?.projectIds ?? []);
+    if (!ids.has(projectId)) {
+      ids.add(projectId);
+      this.stateStore.write(this.projectIndexKey(), {
+        projectIds: Array.from(ids)
+      });
+      this.logger.info("Added project %s to watchdog index", projectId);
+    }
+  }
+  getActiveRun(projectId) {
+    this.validatePathComponents(projectId);
+    return this.stateStore.read(this.activeKey(projectId));
+  }
+  setActiveRun(projectId, run) {
+    this.validatePathComponents(projectId, run.runId);
+    const existing = this.getActiveRun(projectId);
+    if (existing && existing.runId && existing.runId !== run.runId) {
+      this.logger.info("Archiving previous active run %s for project %s", existing.runId, projectId);
+      this.archiveRun(projectId, existing.runId);
+    }
+    this.stateStore.write(this.activeKey(projectId), run);
+    this.addProjectToIndex(projectId);
+    this.logger.info("Set active run %s for project %s", run.runId, projectId);
+  }
+  clearActiveRun(projectId) {
+    this.validatePathComponents(projectId);
+    this.stateStore.write(this.activeKey(projectId), null);
+    this.logger.info("Cleared active run for project %s", projectId);
+  }
+  readState(projectId, runId) {
+    this.validatePathComponents(projectId, runId);
+    return this.stateStore.read(this.stateKey(projectId, runId));
+  }
+  writeState(projectId, runId, state) {
+    this.validatePathComponents(projectId, runId);
+    const key = this.stateKey(projectId, runId);
+    this.stateStore.write(key, state);
+    const readBack = this.stateStore.read(key);
+    if (JSON.stringify(readBack) !== JSON.stringify(state)) {
+      this.logger.error("State read-back mismatch for project %s run %s", projectId, runId);
+    }
+  }
+  appendAudit(projectId, runId, entry) {
+    this.validatePathComponents(projectId, runId);
+    this.stateStore.appendLog(this.auditKey(projectId, runId), entry);
+  }
+  archiveRun(projectId, runId) {
+    this.validatePathComponents(projectId, runId);
+    const state = this.readState(projectId, runId);
+    if (state) {
+      this.stateStore.write(this.archiveStateKey(projectId, runId), state);
+      this.logger.info("Archived state for project %s run %s", projectId, runId);
+    }
+    this.logger.warn("Audit log not archived for project %s run %s (StateStore limitation)", projectId, runId);
+  }
+}
+
+// ../packages/watchdog/src/checkpoint.ts
+import { randomUUID as randomUUID2 } from "node:crypto";
+
+// ../packages/watchdog/src/schema.ts
+var SCHEMA_VERSION = 1;
+
+// ../packages/watchdog/src/constants.ts
+var MAX_RALPH_ROUNDS = 10;
+var MIN_GATE_ROUNDS = 5;
+var EARLY_STOP_CONSECUTIVE = 2;
+var STALE_THRESHOLD_MS = 4 * 60 * 60 * 1000;
+
+// ../packages/watchdog/src/transitions.ts
+function ok() {
+  return { valid: true };
+}
+function fail(violation, guidance) {
+  return { valid: false, violation, guidance };
+}
+function isInt(val) {
+  return typeof val === "number" && Number.isInteger(val);
+}
+function isNonEmptyString(val) {
+  return typeof val === "string" && val.length > 0;
+}
+function isNonNegativeInt(val) {
+  return isInt(val) && val >= 0;
+}
+function checkTally(tally) {
+  if (typeof tally !== "object" || tally === null) {
+    return { ok: false, msg: "tally must be an object" };
+  }
+  const t = tally;
+  for (const key of ["C", "H", "M", "L", "I"]) {
+    if (!(key in t)) {
+      return { ok: false, msg: `tally missing required field '${key}'` };
+    }
+    if (!isNonNegativeInt(t[key])) {
+      return { ok: false, msg: `tally.${key} must be a non-negative integer` };
+    }
+  }
+  return { ok: true };
+}
+var NO_ACTIVE_RUN = "No active pipeline run for this project.";
+var START_FIRST = "Start a pipeline first by calling tdd_checkpoint with event='pipeline_start'.";
+function validateTransition(event, payload, state) {
+  switch (event) {
+    case "pipeline_start": {
+      if (!isNonEmptyString(payload.description)) {
+        return fail("Missing required field", "pipeline_start requires a non-empty string description field.");
+      }
+      break;
+    }
+    case "phase_enter": {
+      if (!isInt(payload.phase) || payload.phase < 1 || payload.phase > 5) {
+        return fail("Invalid phase number", "phase_enter requires phase to be an integer between 1 and 5.");
+      }
+      break;
+    }
+    case "ralph_loop_start": {
+      if (!isInt(payload.phase)) {
+        return fail("Invalid phase", "ralph_loop_start requires phase to be an integer.");
+      }
+      break;
+    }
+    case "ralph_round_complete": {
+      if (!isInt(payload.phase)) {
+        return fail("Invalid phase", "ralph_round_complete requires phase to be an integer.");
+      }
+      if (!isInt(payload.round) || payload.round < 1) {
+        return fail("Invalid round number", "ralph_round_complete requires round to be an integer >= 1.");
+      }
+      const tc = checkTally(payload.tally);
+      if (!tc.ok) {
+        if (tc.msg?.includes("must be")) {
+          return fail("Invalid tally field type", "ralph_round_complete requires tally with C, H, M, L, I as non-negative integers.");
+        }
+        return fail("Missing required field", "ralph_round_complete requires tally with C, H, M, L, I as non-negative integers.");
+      }
+      if (payload.contested_resolutions !== undefined) {
+        if (!Array.isArray(payload.contested_resolutions)) {
+          return fail("Invalid contested_resolutions", "contested_resolutions must be an array.");
+        }
+        for (const item of payload.contested_resolutions) {
+          if (typeof item !== "object" || item === null) {
+            return fail("Invalid contested_resolutions item", "Each contested_resolution must be an object with id and action fields.");
+          }
+          const cr = item;
+          if (!isNonEmptyString(cr.id)) {
+            return fail("Invalid contested_resolutions item", "Each contested_resolution must have a non-empty string id.");
+          }
+          if (!["accepted", "re_raised", "escalated"].includes(cr.action)) {
+            return fail("Invalid contested_resolutions action", "contested_resolution action must be one of: accepted, re_raised, escalated.");
+          }
+        }
+      }
+      if (payload.new_contested !== undefined) {
+        if (!Array.isArray(payload.new_contested)) {
+          return fail("Invalid new_contested", "new_contested must be an array.");
+        }
+        for (const item of payload.new_contested) {
+          if (typeof item !== "object" || item === null) {
+            return fail("Invalid new_contested item", "Each new_contested item must be an object with id and description fields.");
+          }
+          const nc = item;
+          if (!isNonEmptyString(nc.id)) {
+            return fail("Invalid new_contested item", "Each new_contested item must have a non-empty string id.");
+          }
+          if (!isNonEmptyString(nc.description)) {
+            return fail("Invalid new_contested item", "Each new_contested item must have a non-empty string description.");
+          }
+        }
+      }
+      break;
+    }
+    case "ralph_terminate": {
+      if (!isInt(payload.phase)) {
+        return fail("Invalid phase", "ralph_terminate requires phase to be an integer.");
+      }
+      if (!["gate_pass", "early_stop", "max_rounds"].includes(payload.termination)) {
+        return fail("Invalid termination type", "ralph_terminate requires termination to be one of: gate_pass, early_stop, max_rounds.");
+      }
+      break;
+    }
+    case "test_evidence": {
+      if (payload.phase !== 4) {
+        return fail("Invalid phase for test evidence", "test_evidence requires phase to be 4.");
+      }
+      if (!isNonEmptyString(payload.evidence_file)) {
+        return fail("Missing or invalid evidence_file", "test_evidence requires a non-empty string evidence_file field.");
+      }
+      break;
+    }
+    case "user_approval": {
+      if (!isInt(payload.phase)) {
+        return fail("Invalid phase", "user_approval requires phase to be an integer.");
+      }
+      break;
+    }
+    case "phase_complete": {
+      if (!isInt(payload.phase)) {
+        return fail("Invalid phase", "phase_complete requires phase to be an integer.");
+      }
+      break;
+    }
+  }
+  switch (event) {
+    case "pipeline_start": {
+      return ok();
+    }
+    case "phase_enter": {
+      if (state === null) {
+        return fail(NO_ACTIVE_RUN, START_FIRST);
+      }
+      const phase = payload.phase;
+      if (phase === 1) {
+        if (state.phaseStatus !== "idle") {
+          return fail("Pipeline already active", "Phase 1 can only be entered when pipeline status is idle.");
+        }
+      } else {
+        const prev = phase - 1;
+        const prevRec = state.phases[prev];
+        if (!prevRec || !prevRec.userApproved) {
+          return fail(`Phase ${prev} not yet complete`, `Phase ${phase} cannot be entered until phase ${prev} is user-approved.`);
+        }
+        if (state.phaseStatus !== "complete") {
+          return fail("Previous phase not completed", `Phase ${phase} cannot be entered until the previous phase is marked complete.`);
+        }
+      }
+      if (phase === 5 && !state.testEvidenceConfirmed) {
+        return fail("Test evidence not confirmed", "Phase 5 cannot be entered until test evidence is confirmed.");
+      }
+      return ok();
+    }
+    case "ralph_loop_start": {
+      if (state === null)
+        return fail(NO_ACTIVE_RUN, START_FIRST);
+      if (state.currentPhase !== payload.phase) {
+        return fail("Phase mismatch", `ralph_loop_start must target the current phase (${state.currentPhase}).`);
+      }
+      if (state.phaseStatus !== "active") {
+        return fail("Phase not active", "ralph_loop_start can only be called when phase status is active.");
+      }
+      return ok();
+    }
+    case "ralph_round_complete": {
+      if (state === null)
+        return fail(NO_ACTIVE_RUN, START_FIRST);
+      if (state.currentPhase !== payload.phase) {
+        return fail("Phase mismatch", `ralph_round_complete must target the current phase (${state.currentPhase}).`);
+      }
+      if (state.phaseStatus !== "ralph_loop") {
+        return fail("Not in ralph loop", "ralph_round_complete can only be called when phase status is ralph_loop.");
+      }
+      if (state.ralph === null) {
+        return fail("Ralph loop not initialized", "ralph_round_complete requires ralph loop to be started first.");
+      }
+      if (payload.round !== state.ralph.round + 1) {
+        return fail("Round skipping not allowed", `Expected round ${state.ralph.round + 1}, got ${payload.round}.`);
+      }
+      if (state.ralph.openContested.length > 0 && payload.contested_resolutions === undefined) {
+        return fail("Missing contested_resolutions", "There are open contested issues that must be resolved in this round.");
+      }
+      return ok();
+    }
+    case "ralph_terminate": {
+      if (state === null)
+        return fail(NO_ACTIVE_RUN, START_FIRST);
+      if (state.currentPhase !== payload.phase) {
+        return fail("Phase mismatch", `ralph_terminate must target the current phase (${state.currentPhase}).`);
+      }
+      if (state.phaseStatus !== "ralph_loop") {
+        return fail("Not in ralph loop", "ralph_terminate can only be called when phase status is ralph_loop.");
+      }
+      if (state.ralph === null) {
+        return fail("Ralph loop not initialized", "ralph_terminate requires ralph loop to be started first.");
+      }
+      const termination = payload.termination;
+      const ralph = state.ralph;
+      if (termination === "gate_pass") {
+        if (ralph.round < MIN_GATE_ROUNDS) {
+          return fail("Insufficient rounds for gate pass", `Gate pass requires at least ${MIN_GATE_ROUNDS} rounds. Current: ${ralph.round}.`);
+        }
+        const last = ralph.tallyHistory[ralph.tallyHistory.length - 1];
+        if (!last || last.C + last.H + last.M > 0) {
+          return fail("Unresolved issues remain", "Gate pass requires the last tally to have C+H+M equal to 0.");
+        }
+      } else if (termination === "early_stop") {
+        if (ralph.consecutiveZero < EARLY_STOP_CONSECUTIVE) {
+          return fail("Insufficient consecutive zero rounds", `Early stop requires at least ${EARLY_STOP_CONSECUTIVE} consecutive zero rounds. Current: ${ralph.consecutiveZero}.`);
+        }
+      } else if (termination === "max_rounds") {
+        if (ralph.round < MAX_RALPH_ROUNDS) {
+          return fail("Insufficient rounds for max_rounds termination", `max_rounds termination requires at least ${MAX_RALPH_ROUNDS} rounds. Current: ${ralph.round}.`);
+        }
+        const last = ralph.tallyHistory[ralph.tallyHistory.length - 1];
+        if (!last || last.C + last.H + last.M === 0) {
+          return fail("No unresolved issues", "max_rounds termination requires the last tally to have C+H+M greater than 0.");
+        }
+      }
+      return ok();
+    }
+    case "test_evidence": {
+      if (state === null)
+        return fail(NO_ACTIVE_RUN, START_FIRST);
+      if (state.currentPhase < 4) {
+        return fail("Invalid phase for test evidence", "test_evidence can only be submitted in phase 4 or later.");
+      }
+      return ok();
+    }
+    case "user_approval": {
+      if (state === null)
+        return fail(NO_ACTIVE_RUN, START_FIRST);
+      const phase = payload.phase;
+      const rec = state.phases[phase];
+      if (!rec) {
+        return fail(`Phase ${phase} not found`, `user_approval requires phase ${phase} to have been entered.`);
+      }
+      if (!rec.ralphCompleted) {
+        return fail("Ralph loop not completed", `user_approval requires phase ${phase} ralph loop to be completed first.`);
+      }
+      return ok();
+    }
+    case "phase_complete": {
+      if (state === null)
+        return fail(NO_ACTIVE_RUN, START_FIRST);
+      const phase = payload.phase;
+      const rec = state.phases[phase];
+      if (!rec) {
+        return fail(`Phase ${phase} not found`, `phase_complete requires phase ${phase} to have been entered.`);
+      }
+      if (!rec.userApproved) {
+        return fail("Phase not user-approved", `phase_complete requires phase ${phase} to be user-approved first.`);
+      }
+      if (state.phaseStatus !== "awaiting_approval") {
+        return fail("Phase not awaiting approval", "phase_complete can only be called when phase status is awaiting_approval.");
+      }
+      return ok();
+    }
+  }
+}
+function applyTransition(event, payload, state) {
+  const now = typeof payload._now === "string" ? payload._now : new Date().toISOString();
+  switch (event) {
+    case "pipeline_start": {
+      return {
+        version: SCHEMA_VERSION,
+        projectId: payload._projectId,
+        runId: payload._runId,
+        startedAt: now,
+        description: payload.description,
+        currentPhase: 0,
+        phaseStatus: "idle",
+        phases: {},
+        ralph: null,
+        testEvidenceConfirmed: false,
+        lastCheckpointAt: now
+      };
+    }
+    case "phase_enter": {
+      if (state === null) {
+        throw new Error("BUG: state must not be null for phase_enter");
+      }
+      const phase = payload.phase;
+      return {
+        ...state,
+        currentPhase: phase,
+        phaseStatus: "active",
+        phases: {
+          ...state.phases,
+          [phase]: {
+            phase,
+            enteredAt: now,
+            ralphCompleted: false,
+            ralphTermination: null,
+            userApproved: false,
+            approvedAt: null
+          }
+        },
+        lastCheckpointAt: now
+      };
+    }
+    case "ralph_loop_start": {
+      if (state === null) {
+        throw new Error("BUG: state must not be null for ralph_loop_start");
+      }
+      const phase = payload.phase;
+      return {
+        ...state,
+        phaseStatus: "ralph_loop",
+        ralph: {
+          phase,
+          round: 0,
+          consecutiveZero: 0,
+          tallyHistory: [],
+          openContested: [],
+          escalated: false,
+          escalatedAt: null,
+          termination: null
+        },
+        lastCheckpointAt: now
+      };
+    }
+    case "ralph_round_complete": {
+      if (state === null) {
+        throw new Error("BUG: state must not be null for ralph_round_complete");
+      }
+      if (state.ralph === null) {
+        throw new Error("BUG: ralph must not be null for ralph_round_complete");
+      }
+      const phase = payload.phase;
+      const round = payload.round;
+      const tally = payload.tally;
+      const contestedResolutions = payload.contested_resolutions;
+      const newContested = payload.new_contested;
+      const roundTally = {
+        round,
+        C: tally.C,
+        H: tally.H,
+        M: tally.M,
+        L: tally.L,
+        I: tally.I,
+        timestamp: now
+      };
+      const chmZero = tally.C + tally.H + tally.M === 0;
+      const newConsecutiveZero = chmZero ? state.ralph.consecutiveZero + 1 : 0;
+      const resolvedIds = new Set(contestedResolutions?.map((r) => r.id) ?? []);
+      const newOpenContested = [];
+      for (const issue of state.ralph.openContested) {
+        if (resolvedIds.has(issue.id)) {
+          const action = contestedResolutions.find((r) => r.id === issue.id).action;
+          if (action === "accepted") {
+            continue;
+          }
+          newOpenContested.push({
+            ...issue,
+            disputeRounds: issue.disputeRounds + 1
+          });
+        } else {
+          newOpenContested.push({
+            ...issue,
+            disputeRounds: issue.disputeRounds + 1
+          });
+        }
+      }
+      if (newContested) {
+        for (const nc of newContested) {
+          newOpenContested.push({
+            id: nc.id,
+            firstContestedRound: round,
+            disputeRounds: 0,
+            description: nc.description
+          });
+        }
+      }
+      return {
+        ...state,
+        ralph: {
+          ...state.ralph,
+          round,
+          consecutiveZero: newConsecutiveZero,
+          tallyHistory: [...state.ralph.tallyHistory, roundTally],
+          openContested: newOpenContested
+        },
+        lastCheckpointAt: now
+      };
+    }
+    case "ralph_terminate": {
+      if (state === null) {
+        throw new Error("BUG: state must not be null for ralph_terminate");
+      }
+      if (state.ralph === null) {
+        throw new Error("BUG: ralph must not be null for ralph_terminate");
+      }
+      const phase = payload.phase;
+      const termination = payload.termination;
+      return {
+        ...state,
+        phaseStatus: "awaiting_approval",
+        ralph: {
+          ...state.ralph,
+          termination
+        },
+        phases: {
+          ...state.phases,
+          [phase]: {
+            ...state.phases[phase],
+            ralphCompleted: true,
+            ralphTermination: termination
+          }
+        },
+        lastCheckpointAt: now
+      };
+    }
+    case "test_evidence": {
+      if (state === null) {
+        throw new Error("BUG: state must not be null for test_evidence");
+      }
+      return {
+        ...state,
+        testEvidenceConfirmed: true,
+        lastCheckpointAt: now
+      };
+    }
+    case "user_approval": {
+      if (state === null) {
+        throw new Error("BUG: state must not be null for user_approval");
+      }
+      const phase = payload.phase;
+      return {
+        ...state,
+        phases: {
+          ...state.phases,
+          [phase]: {
+            ...state.phases[phase],
+            userApproved: true,
+            approvedAt: now
+          }
+        },
+        lastCheckpointAt: now
+      };
+    }
+    case "phase_complete": {
+      if (state === null) {
+        throw new Error("BUG: state must not be null for phase_complete");
+      }
+      return {
+        ...state,
+        phaseStatus: "complete",
+        ralph: null,
+        lastCheckpointAt: now
+      };
+    }
+  }
+}
+
+// ../packages/watchdog/src/project-id.ts
+import { createHash } from "node:crypto";
+import { resolve } from "node:path";
+function computeProjectId(worktree) {
+  const absolute = resolve(worktree);
+  return createHash("sha256").update(absolute).digest("hex").slice(0, 8);
+}
+
+// ../packages/watchdog/src/checkpoint.ts
+class CheckpointHandler {
+  store;
+  staleThresholdMs;
+  constructor(store, staleThresholdMs) {
+    this.store = store;
+    this.staleThresholdMs = staleThresholdMs;
+  }
+  async handle(event, payloadJson, context) {
+    const projectId = computeProjectId(context.worktree);
+    const sessionId = context.sessionID;
+    const now = new Date().toISOString();
+    let payload;
+    try {
+      payload = JSON.parse(payloadJson);
+      if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
+        throw new Error("not an object");
+      }
+    } catch {
+      return JSON.stringify({
+        ok: false,
+        violation: "Invalid JSON payload",
+        guidance: "The payload must be a valid JSON object."
+      });
+    }
+    const activeRun = this.store.getActiveRun(projectId);
+    if (activeRun && event !== "pipeline_start") {
+      const state = this.store.readState(projectId, activeRun.runId);
+      if (state && isStale(state.lastCheckpointAt, this.staleThresholdMs)) {
+        const summary = summarizeState(state);
+        return JSON.stringify({
+          ok: false,
+          recovery: true,
+          staleState: summary,
+          message: `Found stale pipeline run. Last activity: Phase ${summary.phase} ${summary.phaseStatus}${summary.ralphRound ? ` round ${summary.ralphRound}` : ""}. Options: (1) continue from where you left off — call phase_enter or ralph_round_complete as appropriate, (2) start fresh — call pipeline_start to archive this run and begin a new one.`
+        });
+      }
+    }
+    const currentState = activeRun ? this.store.readState(projectId, activeRun.runId) ?? null : null;
+    if (event === "pipeline_start") {
+      payload._runId = randomUUID2();
+      payload._projectId = projectId;
+    }
+    payload._now = now;
+    const validation = validateTransition(event, payload, currentState);
+    if (!validation.valid) {
+      if (activeRun) {
+        const entry = {
+          timestamp: now,
+          runId: activeRun.runId,
+          projectId,
+          sessionId,
+          event,
+          phase: payload.phase ?? currentState?.currentPhase ?? 0,
+          decision: "BLOCK",
+          violation: validation.violation
+        };
+        this.store.appendAudit(projectId, activeRun.runId, entry);
+      }
+      return JSON.stringify({
+        ok: false,
+        violation: validation.violation,
+        guidance: validation.guidance
+      });
+    }
+    const newState = applyTransition(event, payload, currentState);
+    const runId = newState.runId;
+    if (event === "pipeline_start") {
+      this.store.setActiveRun(projectId, {
+        runId,
+        projectId,
+        startedAt: now
+      });
+    }
+    this.store.writeState(projectId, runId, newState);
+    const auditEntry = {
+      timestamp: now,
+      runId,
+      projectId,
+      sessionId,
+      event,
+      phase: newState.currentPhase,
+      decision: "PASS"
+    };
+    if (payload.round !== undefined) {
+      auditEntry.round = payload.round;
+    }
+    this.store.appendAudit(projectId, runId, auditEntry);
+    if (event === "phase_complete" && payload.phase === 5) {
+      this.store.clearActiveRun(projectId);
+      this.store.archiveRun(projectId, runId);
+    }
+    return JSON.stringify({
+      ok: true,
+      state: summarizeState(newState)
+    });
+  }
+}
+function isStale(lastCheckpointAt, thresholdMs) {
+  const elapsed = Date.now() - new Date(lastCheckpointAt).getTime();
+  return elapsed > thresholdMs;
+}
+function summarizeState(state) {
+  return {
+    phase: state.currentPhase,
+    phaseStatus: state.phaseStatus,
+    ralphRound: state.ralph?.round ?? null,
+    runId: state.runId
+  };
+}
+
+// ../packages/watchdog/src/tools.ts
+import { z as z2 } from "zod";
+function createWatchdogTools(deps) {
+  const { checkpointHandler } = deps;
+  return {
+    tdd_checkpoint: {
+      description: "Report a checkpoint event to the TDD pipeline watchdog. Call this at mandatory points during tdd-pipeline execution: pipeline_start, phase_enter, ralph_loop_start, ralph_round_complete, ralph_terminate, test_evidence, user_approval, phase_complete.",
+      args: {
+        event: z2.string().describe("Checkpoint event type: pipeline_start | phase_enter | ralph_loop_start | ralph_round_complete | ralph_terminate | test_evidence | user_approval | phase_complete"),
+        payload: z2.string().describe("JSON string with event-specific data. See tdd-pipeline SKILL.md for payload schemas.")
+      },
+      execute: async (args, context) => {
+        const worktree = context?.worktree ?? context?.directory ?? "";
+        const sessionID = context?.sessionID ?? context?.session?.id ?? "";
+        return checkpointHandler.handle(args.event, args.payload ?? "{}", { worktree, sessionID });
+      }
+    }
+  };
+}
+
+// ../packages/watchdog/src/index.ts
+async function createWatchdogRole(ctx) {
+  const sessionsDir = ctx.config?.aristotleBridge?.sessionsDir;
+  if (!sessionsDir) {
+    return null;
+  }
+  const logger4 = createLogger("watchdog", "AGENT_PLATFORM_LOG");
+  const stateStore = createStateStore(sessionsDir, logger4);
+  const store = new PipelineStore(stateStore, logger4);
+  const checkpointHandler = new CheckpointHandler(store, STALE_THRESHOLD_MS);
+  try {
+    const projectIds = store.getProjectIds();
+    for (const projectId of projectIds) {
+      const activeRun = store.getActiveRun(projectId);
+      if (activeRun) {
+        const state = store.readState(projectId, activeRun.runId);
+        if (state) {
+          const elapsed = Date.now() - new Date(state.lastCheckpointAt).getTime();
+          if (elapsed > STALE_THRESHOLD_MS) {
+            logger4.warn("Found stale watchdog run for project %s: phase %d, last checkpoint %dms ago", projectId, state.currentPhase, elapsed);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    logger4.warn("Crash recovery scan failed: %s", String(err));
+  }
+  const tools = createWatchdogTools({ checkpointHandler });
+  return { tools };
+}
+
 // index.ts
 async function plugin_default(ctx) {
-  const role = await createAristotleRole(ctx);
-  return assemblePlugin(ctx, [role]);
+  const aristotleRole = await createAristotleRole(ctx);
+  const watchdogRole = await createWatchdogRole(ctx);
+  return assemblePlugin(ctx, [aristotleRole, watchdogRole]);
 }
 export {
   plugin_default as default

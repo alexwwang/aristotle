@@ -9,6 +9,7 @@
   "dependencies": {
     "@opencode-ai/core": "workspace:*",
     "@opencode-ai/aristotle": "workspace:*",
+    "@opencode-ai/watchdog": "workspace:*",
     "@opencode-ai/plugin": "^1.4.0"
   }
 }
