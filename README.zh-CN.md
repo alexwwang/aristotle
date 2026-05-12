@@ -4,7 +4,7 @@
 [![Release](https://img.shields.io/github/v/release/alexwwang/aristotle?include_prereleases)](https://github.com/alexwwang/aristotle/releases)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
-[![Tests](https://img.shields.io/badge/tests-711%20total-brightgreen)](./docs/testing.zh-CN.md)
+[![Tests](https://img.shields.io/badge/tests-999%20total-brightgreen)](./docs/testing.zh-CN.md)
 
 **[English](./README.md)** | 中文
 
@@ -26,7 +26,7 @@
 - **双语支持** — 同时检测英文和中文（zh-CN）的错误纠正模式
 - **双层输出** — 用户级规则（`~/.config/opencode/aristotle-learnings.md`）全局生效；项目级规则（`.opencode/aristotle-project-learnings.md`）按项目生效
 - **自动建议** — 技能描述中包含错误纠正关键词；当对话中出现这些模式时，AI 会自动建议运行 `/aristotle`（无需配置）
-- **Bridge 插件（可选）** — 面向无 OMO 支持环境的异步轮询式反思。通过 PRE-RESOLVE 快照提取捕获错误上下文，后台运行反思器，空闲检测判定完成。支持 `/undo` 取消进行中的反思任务。
+- **Plugin** — 将 Core 库和 Aristotle 角色组装为 OpenCode 插件入口（`plugin/index.ts`）。提供异步轮询式反思、空闲检测和 `/undo` 支持。
 
 ## 安装
 
@@ -34,7 +34,7 @@ Aristotle 包含三个组件，均从同一仓库安装：
 
 1. **Skill** — OpenCode 加载的协议文件（`SKILL.md`、`REFLECT.md` 等）
 2. **MCP Server** — 基于 Python 的 Git 版本管理规则引擎（`aristotle_mcp/`）
-3. **Bridge 插件**（可选）— 基于 TypeScript 的异步反思，面向无 OMO 支持的环境（`plugins/aristotle-bridge/`）。仅在需要轮询式后台反思时安装。
+3. **Plugin** — 基于 TypeScript 的异步反思，由 `packages/core/` + `packages/aristotle/` 组装而成（`plugin/index.ts`）。提供轮询式后台反思和空闲检测。
 
 ### 方式一：手动安装（macOS / Linux）
 
@@ -43,14 +43,14 @@ Aristotle 包含三个组件，均从同一仓库安装：
 git clone https://github.com/alexwwang/aristotle.git /tmp/aristotle
 cd /tmp/aristotle
 
-# 2. 运行安装脚本（部署 SKILL.md + MCP server + Bridge 插件）
+# 2. 运行安装脚本（部署 SKILL.md + MCP server + Plugin）
 bash install.sh
 
 # 3. 添加 MCP 配置到 opencode.json
 # 见下方"MCP 配置"部分的 JSON 示例
 
-# 4.（可选）在 opencode.json 中注册 Bridge 插件
-# 将 "file://$HOME/.config/opencode/aristotle-bridge/index.js" 添加到 "plugin" 数组
+# 4. 在 opencode.json 中注册 Plugin
+# 将 "file://$HOME/.config/opencode/aristotle-plugin/index.js" 添加到 "plugin" 数组
 ```
 
 ### 方式二：手动安装（Windows）
@@ -59,15 +59,15 @@ bash install.sh
 # 1. 克隆仓库
 git clone https://github.com/alexwwang/aristotle.git "$env:TEMP\aristotle"
 
-# 2. 运行安装脚本（部署 SKILL.md + MCP server + Bridge 插件）
+# 2. 运行安装脚本（部署 SKILL.md + MCP server + Plugin）
 cd "$env:TEMP\aristotle"
 powershell -ExecutionPolicy Bypass -File install.ps1
 
 # 3. 添加 MCP 配置到 opencode.json
 # 见下方"MCP 配置"部分的 JSON 示例
 
-# 4.（可选）在 opencode.json 中注册 Bridge 插件
-# 将 "file://$env:USERPROFILE\.config\opencode\aristotle-bridge\index.js" 添加到 "plugin" 数组
+# 4. 在 opencode.json 中注册 Plugin
+# 将 "file://$env:USERPROFILE\.config\opencode\aristotle-plugin\index.js" 添加到 "plugin" 数组
 ```
 
 ### 方式三：直接下载（仅 skill，不含 MCP）
@@ -91,7 +91,7 @@ Install the Aristotle skill with MCP server from https://github.com/alexwwang/ar
 2. cd into the cloned directory, run `bash install.sh` (macOS/Linux) or `powershell -File install.ps1` (Windows)
 3. Verify: run `bash test.sh` — all assertions must pass
 4. Add MCP config to opencode.json: { "mcp": { "aristotle": { "type": "local", "command": ["uv", "run", "--project", "$HOME/.config/opencode/aristotle", "python", "-m", "aristotle_mcp.server"], "enabled": true } } }
-5. (Optional) Register Bridge Plugin: add `"file://$HOME/.config/opencode/aristotle-bridge/index.js"` to the `"plugin"` array in opencode.json
+5. Register Plugin: add `"file://$HOME/.config/opencode/aristotle-plugin/index.js"` to the `"plugin"` array in opencode.json
 6. Verify MCP: run `uv run --project $HOME/.config/opencode/aristotle python -c "from aristotle_mcp.server import mcp; print(len(mcp._tool_manager._tools), 'tools loaded')"` — should print "20 tools loaded"
 ```
 
@@ -450,8 +450,10 @@ GEAR 协议操作映射到 Aristotle 的 MCP 工具：`produce` → `write_rule`
 | 套件 | 命令 | 数量 |
 |------|------|------|
 | 静态测试 | `bash test.sh` | 103 |
-| 单元/集成测试 (Python) | `uv run pytest test/ -v` | 382 |
-| Bridge 插件 (TypeScript) | `cd plugins/aristotle-bridge && bunx vitest run` | 162 |
+| 单元/集成测试 (Python) | `uv run pytest test/ -v` | 405 |
+| Core Package (TypeScript) | `cd packages/core && bunx vitest run` | 150 |
+| Aristotle Package (TypeScript) | `cd packages/aristotle && bunx vitest run` | 115 |
+| Legacy Bridge（已归档）(TypeScript) | `cd plugins/aristotle-bridge && bunx vitest run` | 162 |
 | E2E 集成测试 | `uv run pytest test/test_e2e_bridge_integration.py -v` | 9 |
 | 回归测试（部署验证） | `bash test/regression_b1_checks.sh` | 64 |
 
@@ -506,10 +508,20 @@ GEAR 协议操作映射到 Aristotle 的 MCP 工具：`produce` → `write_rule`
 │   ├── _orch_start.py    # orchestrate_start 工具（session_file + use_bridge）
 │   ├── _orch_event.py    # orchestrate_on_event 工具
 │   └── _orch_review.py   # orchestrate_review_action 工具
+├── packages/
+│   ├── core/             # 核心库 — 共享机制（logger、config、workflow-store、executor、plugin registration）
+│   │   ├── src/          # 10 个模块
+│   │   └── test/         # 150 vitest 用例
+│   └── aristotle/        # Aristotle 角色 — idle-handler、tools、snapshot-extractor、config
+│       ├── src/          # 6 个模块
+│       └── test/         # 115 vitest 用例
+├── plugin/
+│   ├── index.ts          # 插件入口 — assemblePlugin + createAristotleRole
+│   └── dist/             # 构建输出（部署到 opencode 插件路径）
 ├── plugins/
-│   └── aristotle-bridge/ # Bridge 插件 — 轮询式异步反思（不依赖 OMO）
-│       ├── src/          # 9 个模块（index/types/utils/api-probe/logger/snapshot-extractor/workflow-store/idle-handler/executor）
-│       ├── test/         # 8 个测试文件，162 vitest 用例
+│   └── aristotle-bridge/ # Legacy Bridge 插件 — 已归档（旧轮询式异步反思）
+│       ├── src/          # 9 个模块（旧结构）
+│       ├── test/         # 8 个测试文件，162 vitest 用例（已归档）
 │       ├── testing.en.md # Bridge 独立测试文档（英文）
 │       └── testing.zh.md # Bridge 独立测试文档（中文）
 └── test/

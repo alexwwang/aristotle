@@ -27,7 +27,7 @@ Activate with `/aristotle` to spawn an isolated subagent that analyzes your sess
 - **Bilingual** — Detects error-correction patterns in English and Chinese (zh-CN)
 - **Two-Tier Output** — User-level rules (`~/.config/opencode/aristotle-learnings.md`) apply globally; project-level rules (`.opencode/aristotle-project-learnings.md`) apply per-project
 - **Auto-Suggestion** — Skill description includes error-correction keywords; when detected in conversation, the AI can suggest running `/aristotle` (automatic, no configuration needed)
-- **Bridge Plugin (optional)** — Async polling-based reflection for environments without OMO support. Captures error context via PRE-RESOLVE snapshot extraction, runs Reflector in background, signals completion via idle detection. Supports `/undo` to cancel in-flight reflections.
+- **Plugin** — Assembles the Core library and Aristotle role into an OpenCode plugin entry point (`plugin/index.ts`). Provides async polling-based reflection, idle detection, and `/undo` support.
 
 ## Installation
 
@@ -35,7 +35,7 @@ Aristotle has three components, all installed from the same repo:
 
 1. **Skill** — Protocol files loaded by OpenCode (`SKILL.md`, `REFLECT.md`, etc.)
 2. **MCP Server** — Python-based Git-backed rule management (`aristotle_mcp/`)
-3. **Bridge Plugin** (optional) — TypeScript-based async reflection for environments without OMO support (`plugins/aristotle-bridge/`). Only needed if you want polling-based background reflection.
+3. **Plugin** — TypeScript-based async reflection assembled from `packages/core/` + `packages/aristotle/` (`plugin/index.ts`). Provides polling-based background reflection with idle detection.
 
 ### Option 1: Manual Install (macOS / Linux)
 
@@ -44,14 +44,14 @@ Aristotle has three components, all installed from the same repo:
 git clone https://github.com/alexwwang/aristotle.git /tmp/aristotle
 cd /tmp/aristotle
 
-# 2. Run the installer (deploys SKILL.md + MCP server + Bridge Plugin)
+# 2. Run the installer (deploys SKILL.md + MCP server + Plugin)
 bash install.sh
 
 # 3. Add MCP config to opencode.json
 # See "MCP Configuration" section below for the JSON snippet
 
-# 4. (Optional) Register Bridge Plugin in opencode.json
-# Add to the "plugin" array: "file://$HOME/.config/opencode/aristotle-bridge/index.js"
+# 4. Register Plugin in opencode.json
+# Add to the "plugin" array: "file://$HOME/.config/opencode/aristotle-plugin/index.js"
 ```
 
 ### Option 2: Manual Install (Windows)
@@ -60,15 +60,15 @@ bash install.sh
 # 1. Clone the repo
 git clone https://github.com/alexwwang/aristotle.git "$env:TEMP\aristotle"
 
-# 2. Run the installer (deploys SKILL.md + MCP server + Bridge Plugin)
+# 2. Run the installer (deploys SKILL.md + MCP server + Plugin)
 cd "$env:TEMP\aristotle"
 powershell -ExecutionPolicy Bypass -File install.ps1
 
 # 3. Add MCP config to opencode.json
 # See "MCP Configuration" section below for the JSON snippet
 
-# 4. (Optional) Register Bridge Plugin in opencode.json
-# Add to the "plugin" array: "file://$env:USERPROFILE\.config\opencode\aristotle-bridge\index.js"
+# 4. Register Plugin in opencode.json
+# Add to the "plugin" array: "file://$env:USERPROFILE\.config\opencode\aristotle-plugin\index.js"
 ```
 
 ### Option 3: One-Line Clone (skill only, no MCP)
@@ -92,7 +92,7 @@ Install the Aristotle skill with MCP server from https://github.com/alexwwang/ar
 2. cd into the cloned directory, run `bash install.sh` (macOS/Linux) or `powershell -File install.ps1` (Windows)
 3. Verify: run `bash test.sh` — all assertions must pass
 4. Add MCP config to opencode.json: { "mcp": { "aristotle": { "type": "local", "command": ["uv", "run", "--project", "$HOME/.config/opencode/aristotle", "python", "-m", "aristotle_mcp.server"], "enabled": true } } }
-5. (Optional) Register Bridge Plugin: add `"file://$HOME/.config/opencode/aristotle-bridge/index.js"` to the `"plugin"` array in opencode.json
+5. Register Plugin: add `"file://$HOME/.config/opencode/aristotle-plugin/index.js"` to the `"plugin"` array in opencode.json
 6. Verify MCP: run `uv run --project ~/.config/opencode/aristotle python -c "from aristotle_mcp.server import mcp; print(len(mcp._tool_manager._tools), 'tools loaded')"` — should print "20 tools loaded"
 ```
 
@@ -441,7 +441,7 @@ The full protocol specification — state machine, frontmatter schema, Δ decisi
 | Unit/Integration (Python) | `uv run pytest test/ -v` | 405 |
 | Core Package (TypeScript) | `cd packages/core && bunx vitest run` | 150 |
 | Aristotle Package (TypeScript) | `cd packages/aristotle && bunx vitest run` | 115 |
-| Bridge Plugin (TypeScript) | `cd plugins/aristotle-bridge && bunx vitest run` | 162 |
+| Legacy Bridge (archived) (TypeScript) | `cd plugins/aristotle-bridge && bunx vitest run` | 162 |
 | E2E Integration | `uv run pytest test/test_e2e_bridge_integration.py -v` | 9 |
 | Regression (deploy verify) | `bash test/regression_b1_checks.sh` | 64 |
 
@@ -506,11 +506,12 @@ The full protocol specification — state machine, frontmatter schema, Δ decisi
 │       ├── src/           # 6 modules
 │       └── test/          # 115 vitest cases
 ├── plugin/
-│   └── index.ts           # New plugin entry — assemblePlugin + createAristotleRole (Phase 0)
+│   ├── index.ts           # Plugin entry — assemblePlugin + createAristotleRole
+│   └── dist/              # Built output (deployed to opencode plugin path)
 ├── plugins/
-│   └── aristotle-bridge/  # Bridge Plugin — async reflect via polling (no OMO dependency)
-│       ├── src/           # 9 modules (index/types/utils/api-probe/logger/snapshot-extractor/workflow-store/idle-handler/executor)
-│       ├── test/          # 8 test files, 162 vitest cases
+│   └── aristotle-bridge/  # Legacy Bridge Plugin — archived (old async reflect via polling)
+│       ├── src/           # 9 modules (old structure)
+│       ├── test/          # 8 test files, 162 vitest cases (archived)
 │       ├── testing.en.md  # Bridge-specific test documentation (English)
 │       └── testing.zh.md  # Bridge-specific test documentation (Chinese)
 └── test/

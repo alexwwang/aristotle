@@ -1,15 +1,17 @@
 # Aristotle — 测试指南
 
-> Aristotle MCP 规则引擎 + Bridge 插件测试概览。当前覆盖率：382 pytest + 103 static + 162 vitest + 64 regression = 711 项检查。
+> Aristotle MCP 规则引擎测试概览。当前覆盖率：405 pytest + 103 static + 150 core vitest + 115 aristotle vitest + 162 legacy bridge vitest + 64 regression = 999 项检查。
 
 ## 1. 测试套件总览
 
 | 套件 | 命令 | 数量 | 覆盖范围 |
 |------|------|------|----------|
 | 静态测试 | `bash test.sh` | 103 | 文件结构、SKILL.md 内容、hook 逻辑、错误模式检测、渐进披露（字节限制） |
-| Python 测试 | `uv run pytest test/ -v` | 382 | MCP 核心、编排与工作流、进化、frontmatter、git 操作、Bridge MCP、Review UX |
-| Bridge 插件 | `cd plugins/aristotle-bridge && bunx vitest run` | 162 | 7 个模块：types/utils/api-probe/snapshot-extractor/workflow-store/idle-handler/executor |
-| E2E 自动化 | `bash test/e2e_opencode.sh` | 14 (5 PASS / 9 SKIP) | 真实 opencode 会话：skill 加载、sessions、learn、reflect（需 LLM） |
+| Python 测试 | `uv run pytest test/ -v` | 405 | MCP 核心、编排与工作流、进化、frontmatter、git 操作、Bridge MCP、Review UX |
+| Core Package | `cd packages/core && bunx vitest run` | 150 | 10 个模块：logger、config、types、utils、workflow-store、executor、api-probe、session-extractor、plugin registration、plugin config |
+| Aristotle Package | `cd packages/aristotle && bunx vitest run` | 115 | 6 个模块：config、idle-handler、executor、snapshot-extractor、index/role、tools |
+| Legacy Bridge（已归档） | `cd plugins/aristotle-bridge && bunx vitest run` | 162 | 7 个模块（旧结构）：types/utils/api-probe/snapshot-extractor/workflow-store/idle-handler/executor |
+| E2E 自动化 | `bash test/e2e_opencode.sh` | 14 | 真实 opencode 会话：skill 加载、sessions、learn、reflect（需 LLM） |
 | B1 回归 | `bash test/regression_b1_checks.sh` | 64 | B1 修复的部署后验证 |
 
 ## 2. 静态测试 (103)
@@ -26,13 +28,13 @@ bash test.sh
 - 架构保证（dispatcher 不含协议细节、subagent 通过 SESSION_FILE 读取 session）
 - Phase 2：Passive Trigger 段落（M8）
 
-## 3. Python 测试 (325)
+## 3. Python 测试 (405)
 
 ```bash
 uv run pytest test/ -v
 ```
 
-325 个测试，分布在 51+ 个测试类中。所有测试使用隔离的临时目录（`tmp_path` fixture），可安全反复运行。
+405 个测试，分布在 51+ 个测试类中。所有测试使用隔离的临时目录（`tmp_path` fixture），可安全反复运行。
 
 ### 3.1 MCP 核心 (test/mcp/ — 136 tests)
 
@@ -65,9 +67,47 @@ uv run pytest test/ -v
 | `test/test_phase0_snapshot.py` | TestResolveSessionsDir, TestBuildReflectorPrompt, TestOrchestrateStartSessionFile, TestBridgeDetection, TestOnUndo, TestUndoneShortCircuit | 19 | Session 目录解析、reflector prompt SESSION_FILE、Bridge marker 检测、on_undo 工具、undone 状态短路 |
 | `test/test_e2e_bridge_integration.py` | TestContextFixE2E, TestBridgeDetectionE2E, TestAsyncBridgeWorkflowE2E, TestMultiStageBridgeE2E | 9 | Bridge↔MCP 集成：上下文修复、Bridge 检测、异步工作流、多阶段 |
 
-## 4. Bridge 插件测试 (162 vitest)
+## 4. Core Package 测试 (150 vitest)
 
-> 完整测试级明细：详见 [plugins/aristotle-bridge/testing.zh.md](plugins/aristotle-bridge/testing.zh.md)
+```bash
+cd packages/core && bunx vitest run
+```
+
+150 个测试覆盖 10 个跨平台角色共享的核心模块。
+
+| 文件 | 数量 | 覆盖 |
+|------|------|------|
+| `logger.test.ts` | 22 | 工厂创建、环境变量覆盖（|| 非 ??）、级别过滤、stderr 输出、脱敏 |
+| `config.test.ts` | 14 | ConfigResolver：sessionsDir、mcpDir、eager cache、跨字段依赖 |
+| `types.test.ts` | 8 | WorkflowState 状态转换、类型守卫 |
+| `utils.test.ts` | 6 | extractLastAssistantText、truncate、formatDuration |
+| `workflow-store.test.ts` | 38 | 磁盘持久化、50 容量淘汰、reconcile batch-5、instanceId 隔离、saveToDisk merge |
+| `executor/index.test.ts` | 8 | 启动流程、snapshot、crash safety、session.create try/catch |
+| `api-probe.test.ts` | 5 | detectApiMode：promptAsync 检测、session 清理 |
+| `session-extractor.test.ts` | 16 | 截断、原子写入、过滤、schema v1 |
+| `registration.test.ts` | 23 | assemblePlugin、工具注册、配置注入、事件绑定 |
+| `plugin-config.test.ts` | 8 | createPluginConfig、默认值、合并 |
+
+## 5. Aristotle Package 测试 (115 vitest)
+
+```bash
+cd packages/aristotle && bunx vitest run
+```
+
+115 个测试覆盖 6 个 Aristotle 专用模块。
+
+| 文件 | 数量 | 覆盖 |
+|------|------|------|
+| `config.test.ts` | 15 | detectMcpDir、ConfigResolver、AristotleLaunchArgs |
+| `idle-handler.test.ts` | 41 | 状态守卫、R→C 链路驱动、C 完成、错误处理、trigger 文件处理 |
+| `executor.test.ts` | 14 | 启动流程、snapshot、crash safety、sub_prompt 守卫 |
+| `snapshot-extractor.test.ts` | 12 | 截断、原子写入、过滤、schema |
+| `index.test.ts` | 23 | createAristotleRole、工具注册、配置注入 |
+| `tools.test.ts` | 10 | fire_o、check、abort 工具定义 |
+
+## 6. Legacy Bridge 测试（已归档）(162 vitest)
+
+> 这些测试覆盖已归档的旧代码 `plugins/aristotle-bridge/`。新代码位于 `packages/core/src/`、`packages/aristotle/src/` 和 `plugin/index.ts`。
 
 ```bash
 cd plugins/aristotle-bridge && bunx vitest run
@@ -83,9 +123,9 @@ cd plugins/aristotle-bridge && bunx vitest run
 | `executor.test.ts` | 12 | 启动流程、snapshot、crash safety、session.create try/catch |
 | `index.test.ts` | 23 | 3 工具注册、事件分发、.bridge-active marker、abort 幂等 |
 
-## 5. E2E 与自动化脚本
+## 7. E2E 与自动化脚本
 
-### 5.1 E2E 自动化测试 (opencode run)
+### 7.1 E2E 自动化测试 (opencode run)
 
 ```bash
 bash test/e2e_opencode.sh
@@ -103,7 +143,7 @@ bash test/e2e_opencode.sh
 | E2E-6 | 2 | PASS | Bridge marker（需 plugin） |
 | E2E-7 | 3 | PASS | Workflow store（需 plugin） |
 
-### 5.2 B1 R→C 链路 (tmux)
+### 7.2 B1 R→C 链路 (tmux)
 
 一次 opencode 会话覆盖插件加载、异步反思和 undo 清理。**18 个验证点。**
 
@@ -125,7 +165,7 @@ bash test/e2e_opencode.sh
 
 **自动化说明**：A1–A13 通过 tmux + trigger-file 机制驱动。A8 用 `.trigger-reflect.json` + 中性消息触发 idle 事件；A9 用 `.trigger-abort.json` 触发 `checkAbortTrigger()`。A3 依赖 LLM 响应时间——需加充分 sleep 或轮询循环。
 
-### 5.3 B1 回归检查
+### 7.3 B1 回归检查
 
 ```bash
 bash test/regression_b1_checks.sh
@@ -152,9 +192,9 @@ bash test/regression_b1_checks.sh
 
 设计原则：每个修复点一项检查、检查意图而非实现、覆盖配置层、快速且可重复。
 
-## 6. 测试场景
+## 8. 测试场景
 
-### 6.1 Passive Trigger (P1) — 需要实时 LLM
+### 8.1 Passive Trigger (P1) — 需要实时 LLM
 
 > 这是唯一无法自动化的测试场景。需要验证宿主 agent 在真实对话中的行为。
 
@@ -187,7 +227,7 @@ bash test/regression_b1_checks.sh
 - [ ] Agent 从不自动调用 `/aristotle`
 - [ ] 建议文本与 SKILL.md 定义一致
 
-### 6.2 Bridge 插件场景 (M1–M5)
+### 8.2 Bridge 插件场景 (M1–M5)
 
 > **执行策略**：原 5 个场景按自动化可行性合并为 2 轮执行。覆盖完整保留——每个原始验证点均映射到下方步骤。
 
@@ -209,7 +249,7 @@ bash test/regression_b1_checks.sh
 
 **自动化说明**：B3、B4、B6、B8、B9 为文件/API 断言。B1、B2、B5 依赖 LLM。可通过 `opencode run "message" --format json` 实现脚本化交互。
 
-## 7. 配置常量参考
+## 9. 配置常量参考
 
 ### 测试相关常量（config.py）
 
@@ -226,9 +266,9 @@ bash test/regression_b1_checks.sh
 | `AUDIT_THRESHOLDS.semi` | 0.4 | 0.4 < Δ ≤ 0.7 → 半自动 |
 | `RISK_WEIGHTS` | high=0.8, medium=0.5, low=0.2 | 风险权重 |
 
-## 8. CI 集成
+## 10. CI 集成
 
-### 8.1 测试命令
+### 10.1 测试命令
 
 所有测试套件可无头运行：
 
@@ -236,14 +276,11 @@ bash test/regression_b1_checks.sh
 # 快速冒烟测试（Python + 静态）
 bash test.sh && uv run pytest test/ -q
 
-# Bridge 插件
-cd plugins/aristotle-bridge && bunx vitest run
-
 # B1 回归测试（每次部署前必须运行）
 bash test/regression_b1_checks.sh
 ```
 
-期望结果：`382 passed` + `103 passed` + `162 passed` + `64 passed` = **711 项检查，0 失败**。
-### 8.2 测试前部署
+期望结果：`405 passed` + `103 passed` + `150 passed` + `115 passed` + `162 passed` + `64 passed` = **999 项检查，0 失败**。
+### 10.2 测试前部署
 
 E2E/人工测试前，确保生产环境已更新。完整检查清单和部署步骤见 [deployment.md](deployment.md)。

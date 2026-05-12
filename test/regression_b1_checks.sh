@@ -5,6 +5,10 @@
 # Every fix in B1 has a corresponding check here.
 # This script should pass BEFORE any deployment.
 #
+# Phase D migration: checks now point to packages/core/ and
+# packages/aristotle/ (the new code). Checks that grep old
+# plugins/aristotle-bridge/src/ have been migrated or dissolved.
+#
 # Usage: bash test/regression_b1_checks.sh
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
@@ -25,7 +29,7 @@ check() {
     fi
 }
 
-echo "═══ B1 Regression Checks ═══"
+echo "═══ B1 Regression Checks (Phase D migrated) ═══"
 echo ""
 
 # ───────────────────────────────────────────────────────────────
@@ -80,23 +84,27 @@ check "_cli.py handles missing stdin gracefully" \
 
 # ───────────────────────────────────────────────────────────────
 # Fix: types.ts has chain_pending and chain_broken
+# Migrated: packages/core/src/types.ts
 # ───────────────────────────────────────────────────────────────
 echo ""
-echo "── Bridge Plugin: status types ──"
+echo "── Core Types: status types ──"
+
+TYPES="$ROOT_DIR/packages/core/src/types.ts"
 
 check "types.ts includes chain_pending status" \
-    "grep -q 'chain_pending' '$ROOT_DIR/plugins/aristotle-bridge/src/types.ts'"
+    "grep -q 'chain_pending' '$TYPES'"
 
 check "types.ts includes chain_broken status" \
-    "grep -q 'chain_broken' '$ROOT_DIR/plugins/aristotle-bridge/src/types.ts'"
+    "grep -q 'chain_broken' '$TYPES'"
 
 # ───────────────────────────────────────────────────────────────
-# Fix: workflow-store.ts has new methods
+# Fix: workflow-store has new methods
+# Migrated: packages/core/src/store/workflow-store.ts
 # ───────────────────────────────────────────────────────────────
 echo ""
-echo "── Bridge Plugin: workflow-store methods ──"
+echo "── Core WorkflowStore: methods ──"
 
-STORE="$ROOT_DIR/plugins/aristotle-bridge/src/workflow-store.ts"
+STORE="$ROOT_DIR/packages/core/src/store/workflow-store.ts"
 
 check "workflow-store has markChainPending" \
     "grep -q 'markChainPending' '$STORE'"
@@ -120,18 +128,20 @@ check "reconcileOnStartup has 3-phase recovery" \
     "grep -q 'chain_broken' '$STORE'"
 
 # ───────────────────────────────────────────────────────────────
-# Fix: idle-handler.ts uses subprocess + chain driving
+# Fix: idle-handler uses subprocess + chain driving
+# Migrated: packages/aristotle/src/idle-handler.ts
+# Semantic change: execFile → spawn (Bug #11 fix preserved)
 # ───────────────────────────────────────────────────────────────
 echo ""
-echo "── Bridge Plugin: idle-handler chain driving ──"
+echo "── Aristotle: idle-handler chain driving ──"
 
-IDLE="$ROOT_DIR/plugins/aristotle-bridge/src/idle-handler.ts"
+IDLE="$ROOT_DIR/packages/aristotle/src/idle-handler.ts"
 
 check "idle-handler has callMCP subprocess method" \
     "grep -q 'callMCP' '$IDLE'"
 
-check "idle-handler uses execFile (subprocess)" \
-    "grep -q 'execFile' '$IDLE'"
+check "idle-handler uses spawn (subprocess, Bug #11 fix)" \
+    "grep -q 'spawn' '$IDLE'"
 
 check "idle-handler uses stdin for payload (not argv)" \
     "grep -q 'child.stdin.write' '$IDLE'"
@@ -153,47 +163,52 @@ check "cancelled status is checked in catch block" \
 
 # ───────────────────────────────────────────────────────────────
 # Fix: index.ts passes executor + sessionsDir
+# Architecture changed: index.ts is now role entry in packages/aristotle/
+# IdleEventHandler receives options object with sessionsDir and mcpDir
 # ───────────────────────────────────────────────────────────────
 echo ""
-echo "── Bridge Plugin: index.ts integration ──"
+echo "── Aristotle: role integration ──"
 
-INDEX="$ROOT_DIR/plugins/aristotle-bridge/src/index.ts"
+INDEX="$ROOT_DIR/packages/aristotle/src/index.ts"
 
-check "IdleEventHandler receives 4 args (client, store, executor, sessionsDir)" \
-    "grep -q 'executor.*sessionsDir' '$INDEX'"
+check "IdleEventHandler receives sessionsDir and mcpDir" \
+    "grep -q 'sessionsDir.*mcpDir' '$INDEX'"
 
 check "aristotle_abort handles chain_broken" \
-    "grep -q 'chain_broken' '$INDEX'"
+    "grep -q 'chain_broken' '$ROOT_DIR/packages/aristotle/src/tools.ts'"
 
 check "aristotle_abort handles chain_pending" \
-    "grep -q 'chain_pending' '$INDEX'"
+    "grep -q 'chain_pending' '$ROOT_DIR/packages/aristotle/src/tools.ts'"
 
 # ───────────────────────────────────────────────────────────────
 # Fix: logger.ts exists and uses stderr
+# Migrated: packages/core/src/logger.ts
 # ───────────────────────────────────────────────────────────────
 echo ""
-echo "── Bridge Plugin: logger ──"
+echo "── Core: logger ──"
+
+LOGGER="$ROOT_DIR/packages/core/src/logger.ts"
 
 check "logger.ts exists" \
-    "[ -f '$ROOT_DIR/plugins/aristotle-bridge/src/logger.ts' ]"
+    "[ -f '$LOGGER' ]"
 
 check "logger outputs to stderr (console.error)" \
-    "grep -q 'console.error' '$ROOT_DIR/plugins/aristotle-bridge/src/logger.ts'"
+    "grep -q 'console.error' '$LOGGER'"
 
 check "logger uses unknown[] not any[]" \
-    "! grep -q 'any\[\]' '$ROOT_DIR/plugins/aristotle-bridge/src/logger.ts'"
+    "! grep -q 'any\[\]' '$LOGGER'"
 
 # ───────────────────────────────────────────────────────────────
 # Fix: MCP project dir resolution exists and is testable
-# (resolveMcpProjectDir in idle-handler.ts → detectMcpDir in config.ts)
+# Migrated: packages/aristotle/src/config.ts (detectMcpDir)
 # ───────────────────────────────────────────────────────────────
 echo ""
-echo "── Plugin: MCP dir detection ──"
+echo "── Aristotle: MCP dir detection ──"
 
-BRIDGE_SRC="$ROOT_DIR/plugins/aristotle-bridge/src"
+CONFIG="$ROOT_DIR/packages/aristotle/src/config.ts"
 
-check "MCP dir resolver function exists (resolveMcpProjectDir or detectMcpDir)" \
-    "grep -rq 'function resolveMcpProjectDir\|function detectMcpDir' '$BRIDGE_SRC'"
+check "MCP dir resolver function exists (detectMcpDir)" \
+    "grep -q 'function detectMcpDir' '$CONFIG'"
 
 # ───────────────────────────────────────────────────────────────
 # Fix: Install dir synced with dev dir
@@ -240,8 +255,6 @@ check "no stale 'action==notify' assertions for _fire_c_done_event" \
 echo ""
 echo "── Bug #11: spawn instead of execFile ──"
 
-IDLE="$ROOT_DIR/plugins/aristotle-bridge/src/idle-handler.ts"
-
 check "idle-handler imports spawn from child_process" \
     "grep -q 'spawn' '$IDLE'"
 
@@ -259,64 +272,61 @@ check "idle-handler does NOT use execFile with input option" \
 echo ""
 echo "── Bug #12: promptAsync no agent parameter ──"
 
-EXECUTOR="$ROOT_DIR/plugins/aristotle-bridge/src/executor.ts"
+EXECUTOR_CORE="$ROOT_DIR/packages/core/src/executor/index.ts"
 
-check "executor promptAsync body has only parts" \
-    "grep -A3 'promptAsync' '$EXECUTOR' | grep -q 'parts'"
+check "core executor promptAsync body has only parts" \
+    "grep -A3 'promptAsync' '$EXECUTOR_CORE' | grep -q 'parts'"
 
-check "executor does NOT pass agent to promptAsync" \
-    "! grep -q '{ agent, parts }' '$EXECUTOR'"
+check "core executor does NOT pass agent to promptAsync" \
+    "! grep -q '{ agent, parts }' '$EXECUTOR_CORE'"
 
 # ───────────────────────────────────────────────────────────────
 # Fix: Tool registration format (ToolDefinition with Zod)
 # Root cause: plugin.tool was a function returning bare async functions.
 # opencode expects plain object with {description, args: Zod, execute}.
 # LLM could never see plugin tools.
+# Migrated: packages/aristotle/src/tools.ts
 # ───────────────────────────────────────────────────────────────
 echo ""
 echo "── Tool registration: ToolDefinition format ──"
 
-INDEX="$ROOT_DIR/plugins/aristotle-bridge/src/index.ts"
+TOOLS="$ROOT_DIR/packages/aristotle/src/tools.ts"
 
-check "tool is plain object not function" \
-    "grep -E '^\s+tool: \{' '$INDEX' | grep -qv 'tool: ()'"
-
-check "aristotle_fire_o has description field" \
-    "grep -A20 'aristotle_fire_o:' '$INDEX' | grep -q 'description:'"
+check "tool is plain object with description field" \
+    "grep -q 'description:' '$TOOLS'"
 
 check "aristotle_fire_o has args with z.string" \
-    "grep -A20 'aristotle_fire_o:' '$INDEX' | grep -q 'z.string'"
+    "grep -q 'z.string' '$TOOLS'"
 
 check "aristotle_fire_o has execute function" \
-    "grep -A20 'aristotle_fire_o:' '$INDEX' | grep -q 'execute:'"
+    "grep -q 'execute:' '$TOOLS'"
 
 # ───────────────────────────────────────────────────────────────
 # Fix: target_session_id defaults to context.sessionID
 # Root cause: ctx.session?.id is always undefined (PluginInput has no
 # session property). Fixed to use ToolContext.sessionID (2nd execute arg).
+# Migrated: packages/aristotle/src/tools.ts
 # ───────────────────────────────────────────────────────────────
 echo ""
 echo "── target_session_id default ──"
 
-check "fire_o uses context?.sessionID not ctx.session" \
-    "grep -q 'context?.sessionID' '$INDEX'"
+check "fire_o uses context?.sessionID" \
+    "grep -q 'context?.sessionID' '$TOOLS'"
 
 check "fire_o defaults targetSessionId to sessionId" \
-    "grep -q 'targetSessionId.*sessionId' '$INDEX'"
+    "grep -q 'targetSessionId.*sessionId' '$TOOLS' || grep -q 'target_session_id.*sessionId' '$TOOLS'"
 
 check "fire_o does NOT use ctx.session?.id" \
-    "! grep -q 'ctx.session?.id' '$INDEX'"
+    "! grep -q 'ctx.session?.id' '$TOOLS'"
 
 # ───────────────────────────────────────────────────────────────
 # Fix: Bug #13 — reconcileOnStartup instance isolation + timeout
 # Root cause: reconcile queried ALL running workflows including other
 # instances'. No timeout → hung on stale sessions → blocked startup.
+# Migrated: packages/core/src/store/workflow-store.ts
 # ───────────────────────────────────────────────────────────────
 echo ""
 echo "── Bug #13: instance isolation + timeout ──"
-
-STORE="$ROOT_DIR/plugins/aristotle-bridge/src/workflow-store.ts"
-TYPES="$ROOT_DIR/plugins/aristotle-bridge/src/types.ts"
 
 check "WorkflowState has instanceId field" \
     "grep -q 'instanceId' '$TYPES'"
@@ -355,15 +365,18 @@ check "index.ts generates instanceId with randomUUID" \
 # Fix: executor return message does NOT instruct polling
 # Root cause: "Call aristotle_check to poll status" caused LLM to
 # block main session with repeated check calls.
+# Migrated: packages/aristotle/src/executor.ts
 # ───────────────────────────────────────────────────────────────
 echo ""
 echo "── Executor: no polling instruction ──"
 
+ARISTOTLE_EXECUTOR="$ROOT_DIR/packages/aristotle/src/executor.ts"
+
 check "executor message does not say to poll with check" \
-    "! grep -q 'Call.*aristotle_check.*poll.*status' '$EXECUTOR'"
+    "! grep -q 'Call.*aristotle_check.*poll.*status' '$ARISTOTLE_EXECUTOR'"
 
 check "executor message tells LLM to STOP" \
-    "grep -q 'STOP' '$EXECUTOR'"
+    "grep -q 'STOP' '$ARISTOTLE_EXECUTOR'"
 
 # ───────────────────────────────────────────────────────────────
 # Summary

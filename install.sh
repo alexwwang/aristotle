@@ -116,19 +116,20 @@ else
     echo -e "${YELLOW}⚠${NC} $ERRORS issues found. Check the paths above."
 fi
 
-# Step 5: Build and deploy Bridge Plugin (optional)
-BRIDGE_DEST="$OPENCODE_CONFIG/aristotle-bridge"
-BRIDGE_SRC="$SKILL_SRC/plugins/aristotle-bridge"
-if [ -d "$BRIDGE_SRC" ] && command -v bun &>/dev/null; then
-    echo -e "${BLUE}[5/7]${NC} Building Bridge Plugin..."
-    cd "$BRIDGE_SRC" && bun install && bun run build
-    mkdir -p "$BRIDGE_DEST"
-    cp "$BRIDGE_SRC/dist/index.js" "$BRIDGE_DEST/index.js"
-    echo -e "${GREEN}✓${NC} Bridge Plugin deployed to $BRIDGE_DEST"
-elif [ -d "$BRIDGE_SRC" ]; then
-    echo -e "${YELLOW}[5/7]${NC} Skipping Bridge Plugin (bun not found). Install bun to enable async reflection."
+# Step 5: Build and deploy Plugin (Phase D: new architecture)
+# Builds from top-level plugin/ which composes core + aristotle packages
+PLUGIN_DEST="$OPENCODE_CONFIG/aristotle-bridge"
+PLUGIN_SRC="$SKILL_SRC/plugin"
+if [ -d "$PLUGIN_SRC" ] && command -v bun &>/dev/null; then
+    echo -e "${BLUE}[5/7]${NC} Building Plugin..."
+    cd "$SKILL_SRC" && bun install && bun run --filter '@opencode-ai/core' build 2>/dev/null; bun run --filter '@opencode-ai/aristotle' build 2>/dev/null; cd "$PLUGIN_SRC" && bun run build
+    mkdir -p "$PLUGIN_DEST"
+    cp "$PLUGIN_SRC/dist/index.js" "$PLUGIN_DEST/index.js"
+    echo -e "${GREEN}✓${NC} Plugin deployed to $PLUGIN_DEST"
+elif [ -d "$PLUGIN_SRC" ]; then
+    echo -e "${YELLOW}[5/7]${NC} Skipping Plugin (bun not found). Install bun to enable async reflection."
 else
-    echo -e "${BLUE}[5/7]${NC} Skipping Bridge Plugin (source not found)."
+    echo -e "${BLUE}[5/7]${NC} Skipping Plugin (source not found)."
 fi
 
 # Step 6: Write configuration file
@@ -168,6 +169,6 @@ echo ""
 echo "To uninstall:"
 echo "  rm -rf $SKILL_DEST"
 echo "  rm -rf $MCP_DEST"
-echo "  rm -rf $BRIDGE_DEST"
+echo "  rm -rf $PLUGIN_DEST"
 echo "  rm -f $LEARNINGS_FILE"
 echo ""

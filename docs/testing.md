@@ -10,7 +10,7 @@
 | Python | `uv run pytest test/ -v` | 405 | MCP core, orchestration & workflows, evolution, frontmatter, git ops, Bridge MCP, review UX |
 | Core Package | `cd packages/core && bunx vitest run` | 150 | 10 modules: logger, config, types, utils, workflow-store, executor, api-probe, session-extractor, plugin registration, plugin config |
 | Aristotle Package | `cd packages/aristotle && bunx vitest run` | 115 | 6 modules: config, idle-handler, executor, snapshot-extractor, index/role, tools |
-| Bridge Plugin | `cd plugins/aristotle-bridge && bunx vitest run` | 162 | 7 modules: types/utils/api-probe/snapshot-extractor/workflow-store/idle-handler/executor |
+| Legacy Bridge (archived) | `cd plugins/aristotle-bridge && bunx vitest run` | 162 | 7 modules (old structure): types/utils/api-probe/snapshot-extractor/workflow-store/idle-handler/executor |
 | E2E Automated | `bash test/e2e_opencode.sh` | 14 | Real opencode session: skill load, sessions, learn, reflect (requires LLM) |
 | B1 Regression | `bash test/regression_b1_checks.sh` | 64 | Post-deploy verification for B1 fixes |
 
@@ -105,9 +105,9 @@ cd packages/aristotle && bunx vitest run
 | `index.test.ts` | 23 | createAristotleRole, tool registration, config injection |
 | `tools.test.ts` | 10 | fire_o, check, abort tool definitions |
 
-## 6. Bridge Plugin Tests (162 vitest)
+## 6. Legacy Bridge Tests (archived) (162 vitest)
 
-> Full test-level breakdown: see [plugins/aristotle-bridge/testing.en.md](plugins/aristotle-bridge/testing.en.md)
+> These tests cover the old `plugins/aristotle-bridge/` code which has been archived. The new code lives in `packages/core/src/`, `packages/aristotle/src/`, and `plugin/index.ts`.
 
 ```bash
 cd plugins/aristotle-bridge && bunx vitest run
@@ -280,9 +280,6 @@ bash test.sh && uv run pytest test/ -q
 # Core + Aristotle packages
 cd packages/core && bunx vitest run
 cd packages/aristotle && bunx vitest run
-
-# Bridge Plugin
-cd plugins/aristotle-bridge && bunx vitest run
 
 # B1 Regression (run before every deployment)
 bash test/regression_b1_checks.sh
