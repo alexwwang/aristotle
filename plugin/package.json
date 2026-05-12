@@ -4,7 +4,7 @@
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
-    "build": "bun build index.ts --outdir dist --target node --format esm"
+    "build": "bun build index.ts --outdir dist --target node --format esm --external zod"
   },
   "dependencies": {
     "@opencode-ai/core": "workspace:*",
