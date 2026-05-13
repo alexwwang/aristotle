@@ -984,4 +984,40 @@ describe('full pipeline flow', () => {
     expect(state!.ralph).toBeNull()
     expect(state!.testEvidenceConfirmed).toBe(true)
   })
+
+  // ── M5: currentPhase guard for user_approval and phase_complete ──
+
+  describe('currentPhase guard (M5)', () => {
+    it('user_approval rejects when phase does not match currentPhase', () => {
+      const state = makeState({
+        currentPhase: 3,
+        phaseStatus: 'awaiting_approval',
+        phases: {
+          3: { phase: 3, enteredAt: NOW, ralphCompleted: true, ralphTermination: 'gate_pass', userApproved: false, approvedAt: null },
+          1: { phase: 1, enteredAt: NOW, ralphCompleted: true, ralphTermination: 'gate_pass', userApproved: true, approvedAt: NOW },
+        },
+      })
+      const result = validateTransition('user_approval', { phase: 1 }, state)
+      expect(result.valid).toBe(false)
+      if (!result.valid) {
+        expect(result.violation).toMatch(/wrong phase.*current is 3.*got 1/i)
+      }
+    })
+
+    it('phase_complete rejects when phase does not match currentPhase', () => {
+      const state = makeState({
+        currentPhase: 3,
+        phaseStatus: 'awaiting_approval',
+        phases: {
+          3: { phase: 3, enteredAt: NOW, ralphCompleted: true, ralphTermination: 'gate_pass', userApproved: true, approvedAt: NOW },
+          1: { phase: 1, enteredAt: NOW, ralphCompleted: true, ralphTermination: 'gate_pass', userApproved: true, approvedAt: NOW },
+        },
+      })
+      const result = validateTransition('phase_complete', { phase: 1 }, state)
+      expect(result.valid).toBe(false)
+      if (!result.valid) {
+        expect(result.violation).toMatch(/wrong phase.*current is 3.*got 1/i)
+      }
+    })
+  })
 })

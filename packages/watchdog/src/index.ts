@@ -10,6 +10,9 @@
  * 4. Create tools
  * 5. Return RoleRegistration
  */
+import { join } from 'node:path'
+import { homedir } from 'node:os'
+import { mkdirSync, existsSync, readFileSync } from 'node:fs'
 import type { RoleRegistration } from '@opencode-ai/core/plugin/registration'
 import { createStateStore } from '@opencode-ai/core/store/state-store'
 import { createLogger } from '@opencode-ai/core/logger'
@@ -18,13 +21,30 @@ import { CheckpointHandler } from './checkpoint.js'
 import { createWatchdogTools } from './tools.js'
 import { STALE_THRESHOLD_MS } from './constants.js'
 
+const DEFAULT_SESSIONS_DIR = join(homedir(), '.config', 'opencode', 'aristotle-sessions')
+const CONFIG_PATH = join(homedir(), '.config', 'opencode', 'aristotle-config.json')
+
+/** Read sessions_dir from aristotle-config.json (mirrors reflection/config.ts) */
+function readConfigSessionsDir(): string | null {
+  try {
+    if (existsSync(CONFIG_PATH)) {
+      const config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'))
+      return config.sessions_dir ?? null
+    }
+  } catch { /* ignore parse errors */ }
+  return null
+}
+
 export async function createWatchdogRole(ctx: any): Promise<RoleRegistration | null> {
   // 1. Resolve config — reuse the same sessionsDir as aristotle
+  //    Priority: plugin config > config file > env var > default path (mirrors reflection/config.ts)
   const sessionsDir = ctx.config?.aristotleBridge?.sessionsDir
-  if (!sessionsDir) {
-    // No sessions dir configured — watchdog can't operate
-    return null
-  }
+    ?? readConfigSessionsDir()
+    ?? process.env.ARISTOTLE_SESSIONS_DIR
+    ?? DEFAULT_SESSIONS_DIR
+
+  // Ensure sessions directory exists (mirrors reflection/src/index.ts)
+  mkdirSync(sessionsDir, { recursive: true })
 
   // 2. Create dependencies (DI)
   const logger = createLogger('watchdog', 'AGENT_PLATFORM_LOG')

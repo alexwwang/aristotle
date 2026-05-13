@@ -61,24 +61,24 @@ export class CheckpointHandler {
     // ── 2. Find active run ────────────────────────────────────────────
     const activeRun = this.store.getActiveRun(projectId)
 
-    // ── 3. Stale check (§4.3, §7.2) ───────────────────────────────────
+    // ── 3. Read current state (M6: read once, reuse for stale + validation)
+    const currentState: PipelineState | null =
+      activeRun ? (this.store.readState(projectId, activeRun.runId) ?? null) : null
+
+    // ── 4. Stale check (§4.3, §7.2) ───────────────────────────────────
     //    H-5: pipeline_start bypasses stale check (escape hatch)
     if (activeRun && event !== 'pipeline_start') {
-      const state = this.store.readState(projectId, activeRun.runId)
-      if (state && isStale(state.lastCheckpointAt, this.staleThresholdMs)) {
-        const summary = summarizeState(state)
+      if (currentState && isStale(currentState.lastCheckpointAt, this.staleThresholdMs)) {
+        const summary = summarizeState(currentState)
+        const elapsed = formatElapsed(Date.now() - new Date(currentState.lastCheckpointAt).getTime())
         return JSON.stringify({
           ok: false,
           recovery: true,
           staleState: summary,
-          message: `Found stale pipeline run. Last activity: Phase ${summary.phase} ${summary.phaseStatus}${summary.ralphRound ? ` round ${summary.ralphRound}` : ''}. Options: (1) continue from where you left off — call phase_enter or ralph_round_complete as appropriate, (2) start fresh — call pipeline_start to archive this run and begin a new one.`,
+          message: `Found stale pipeline run from ${elapsed} ago. Last activity: Phase ${summary.phase} ${formatPhaseStatus(summary.phaseStatus)}${summary.ralphRound ? ` round ${summary.ralphRound}` : ''}. Options: (1) continue from where you left off — call phase_enter or ralph_round_complete as appropriate, (2) start fresh — call pipeline_start to archive this run and begin a new one.`,
         } satisfies CheckpointRecovery)
       }
     }
-
-    // ── 4. Read current state ─────────────────────────────────────────
-    const currentState: PipelineState | null =
-      activeRun ? (this.store.readState(projectId, activeRun.runId) ?? null) : null
 
     // ── 5. Inject metadata into payload ───────────────────────────────
     if (event === 'pipeline_start') {
@@ -91,6 +91,15 @@ export class CheckpointHandler {
     const validation = validateTransition(event, payload, currentState)
 
     if (!validation.valid) {
+      // M1: When activeRun exists but state file is missing/corrupted, give specific message
+      if (activeRun && currentState === null && validation.violation === 'No active pipeline run for this project.') {
+        return JSON.stringify({
+          ok: false,
+          violation: `Pipeline state file missing or corrupted for run ${activeRun.runId}.`,
+          guidance: 'Start a fresh pipeline with pipeline_start to archive the broken run.',
+        } satisfies CheckpointViolation)
+      }
+
       // Audit BLOCK
       if (activeRun) {
         const entry: AuditLogEntry = {
@@ -113,11 +122,23 @@ export class CheckpointHandler {
       } satisfies CheckpointViolation)
     }
 
-    // ── 7. Apply transition ───────────────────────────────────────────
-    const newState = applyTransition(event, payload, currentState)
+    // ── 7. Apply transition (M3: defensive try/catch) ──────────────────
+    let newState: PipelineState
+    try {
+      newState = applyTransition(event, payload, currentState)
+    } catch (err) {
+      return JSON.stringify({
+        ok: false,
+        violation: `Internal state error: ${String(err)}`,
+        guidance: 'This is an unexpected error. Start a fresh pipeline with pipeline_start.',
+      } satisfies CheckpointViolation)
+    }
     const runId = newState.runId
 
-    // For pipeline_start: register active run
+    // Write state FIRST (M10: before setActiveRun to avoid partial-write window)
+    this.store.writeState(projectId, runId, newState)
+
+    // For pipeline_start: register active run AFTER state is persisted
     if (event === 'pipeline_start') {
       this.store.setActiveRun(projectId, {
         runId,
@@ -125,9 +146,6 @@ export class CheckpointHandler {
         startedAt: now,
       })
     }
-
-    // Write state
-    this.store.writeState(projectId, runId, newState)
 
     // Audit PASS
     const auditEntry: AuditLogEntry = {
@@ -171,4 +189,22 @@ function summarizeState(state: PipelineState): PipelineStateSummary {
     ralphRound: state.ralph?.round ?? null,
     runId: state.runId,
   }
+}
+
+function formatElapsed(ms: number): string {
+  const hours = Math.floor(ms / (60 * 60 * 1000))
+  const minutes = Math.floor((ms % (60 * 60 * 1000)) / (60 * 1000))
+  if (hours > 0) return `${hours}h${minutes > 0 ? ` ${minutes}m` : ''}`
+  return `${minutes}m`
+}
+
+function formatPhaseStatus(status: string): string {
+  const map: Record<string, string> = {
+    idle: 'idle',
+    active: 'active',
+    ralph_loop: 'Ralph loop',
+    awaiting_approval: 'awaiting approval',
+    complete: 'complete',
+  }
+  return map[status] ?? status
 }

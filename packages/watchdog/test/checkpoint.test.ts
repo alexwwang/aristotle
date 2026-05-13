@@ -21,6 +21,7 @@ import { computeProjectId } from '../src/project-id.js'
 import { CheckpointHandler } from '../src/checkpoint.js'
 import type { PipelineStore } from '../src/pipeline-store.js'
 import type { PipelineState, ActiveRun, AuditLogEntry } from '../src/schema.js'
+import { createWatchdogTools } from '../src/tools.js'
 
 // ── Mock PipelineStore ─────────────────────────────────────────────────────
 
@@ -500,6 +501,110 @@ describe('CheckpointHandler', () => {
         const entry = auditCall[2] as AuditLogEntry
         expect(entry.round).toBe(1)
       }
+    })
+  })
+
+  // ── M2: Integration test — state flows through handler without mock replacement ──
+
+  describe('integration: state continuity', () => {
+    it('pipeline_start → phase_enter → ralph_loop_start flows without mock state replacement', async () => {
+      // Use the mock store's actual write/read flow — do NOT call _setState between steps.
+      // This catches bugs in applyTransition that produce unusable state.
+
+      // 1. pipeline_start
+      let result = await handler.handle(
+        'pipeline_start',
+        JSON.stringify({ description: 'integration test' }),
+        CONTEXT,
+      )
+      let parsed = parseResult(result)
+      expect(parsed.ok).toBe(true)
+
+      // Extract runId from setActiveRun call (the handler called mockStore.setActiveRun)
+      const setActiveRunCall = mockStore.setActiveRun.mock.calls.at(-1)
+      const runId = setActiveRunCall![1].runId
+
+      // Extract the state that the handler actually wrote
+      const writeCall = mockStore.writeState.mock.calls.at(-1)
+      const writtenState = writeCall![2] as PipelineState
+
+      // Set active run + state from the handler's actual output
+      mockStore._setActiveRun(PROJECT_ID, { runId, projectId: PROJECT_ID, startedAt: writtenState.startedAt })
+      mockStore._setState(PROJECT_ID, runId, writtenState)
+
+      // 2. phase_enter(1)
+      result = await handler.handle('phase_enter', JSON.stringify({ phase: 1 }), CONTEXT)
+      parsed = parseResult(result)
+      expect(parsed.ok).toBe(true)
+      if (parsed.ok) {
+        expect(parsed.state.phase).toBe(1)
+        expect(parsed.state.phaseStatus).toBe('active')
+      }
+
+      // Feed back the handler's output
+      const afterEnter = mockStore.writeState.mock.calls.at(-1)![2] as PipelineState
+      mockStore._setState(PROJECT_ID, runId, afterEnter)
+
+      // 3. ralph_loop_start(1)
+      result = await handler.handle('ralph_loop_start', JSON.stringify({ phase: 1 }), CONTEXT)
+      parsed = parseResult(result)
+      expect(parsed.ok).toBe(true)
+      if (parsed.ok) {
+        expect(parsed.state.phaseStatus).toBe('ralph_loop')
+      }
+    })
+  })
+
+  // ── M1: Corrupted state test ──
+
+  describe('corrupted state', () => {
+    it('returns specific message when activeRun exists but state file is missing', async () => {
+      mockStore._setActiveRun(PROJECT_ID, {
+        runId: 'run-corrupted', projectId: PROJECT_ID, startedAt: NOW,
+      })
+      // Do NOT set state — readState returns null
+
+      const result = await handler.handle(
+        'phase_enter',
+        JSON.stringify({ phase: 1 }),
+        CONTEXT,
+      )
+      const parsed = parseResult(result)
+      expect(parsed.ok).toBe(false)
+      if (!parsed.ok && 'violation' in parsed) {
+        expect(parsed.violation).toContain('missing or corrupted')
+        expect(parsed.guidance).toContain('pipeline_start')
+      }
+    })
+  })
+
+  // ── M4: tools.ts smoke test ──
+
+  describe('createWatchdogTools (M4 smoke test)', () => {
+    it('creates tdd_checkpoint tool that returns violation for empty worktree context', async () => {
+      const tools = createWatchdogTools({ checkpointHandler: handler as any })
+      const tool = tools.tdd_checkpoint
+
+      // Empty context — no worktree/directory → defensive guard returns violation
+      const result = await tool.execute!(
+        { event: 'pipeline_start', payload: '{}' },
+        {}, // no worktree, no directory
+      )
+      const parsed = JSON.parse(result as string)
+      expect(parsed.ok).toBe(false)
+      expect(parsed.violation).toContain('Cannot determine project root')
+    })
+
+    it('creates tdd_checkpoint tool that delegates to handler for valid context', async () => {
+      const tools = createWatchdogTools({ checkpointHandler: handler as any })
+      const tool = tools.tdd_checkpoint
+
+      const result = await tool.execute!(
+        { event: 'pipeline_start', payload: JSON.stringify({ description: 'smoke test' }) },
+        { worktree: WORKTREE, sessionID: SESSION_ID },
+      )
+      const parsed = JSON.parse(result as string)
+      expect(parsed.ok).toBe(true)
     })
   })
 })

@@ -122,13 +122,17 @@ export class PipelineStore {
     const key = this.stateKey(projectId, runId);
     this.stateStore.write<PipelineState>(key, state);
 
-    // Read-back verification (C-4)
+    // Read-back verification (C-4) — H-fix #9: throw on mismatch
+    // Prevents silent data loss: better a visible failure than false success.
     const readBack = this.stateStore.read<PipelineState>(key);
     if (JSON.stringify(readBack) !== JSON.stringify(state)) {
       this.logger.error(
         'State read-back mismatch for project %s run %s',
         projectId,
         runId,
+      );
+      throw new Error(
+        `State persistence failed: read-back mismatch for project ${projectId} run ${runId}`,
       );
     }
   }

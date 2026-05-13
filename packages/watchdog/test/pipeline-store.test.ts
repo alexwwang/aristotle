@@ -170,17 +170,13 @@ describe('PipelineStore', () => {
       expect(readBack).toEqual(state)
     })
 
-    it('logs error when read-back verification fails', () => {
-      // Create a mock store that returns corrupted data on second read
+    it('throws on read-back verification failure', () => {
+      // Create a mock store that returns corrupted data on read-back
       let readCount = 0
       const corruptStore: StateStore = {
         read<T>(_key: string): T | null {
           readCount++
-          if (readCount === 1) return null as T | null // first read in getActiveRun etc.
-          if (readCount === 2) {
-            // first read in writeState (before write)
-            return null as T | null
-          }
+          if (readCount <= 2) return null as T | null // first reads return null
           // read-back verification — return corrupted data
           return { corrupted: true } as T | null
         },
@@ -191,8 +187,11 @@ describe('PipelineStore', () => {
 
       const store = new PipelineStore(corruptStore, mockLogger)
       const state = makeState()
-      store.writeState('testproj', 'run-001', state)
 
+      // H-fix #9: writeState throws (and logs) on read-back mismatch
+      expect(() => store.writeState('testproj', 'run-001', state)).toThrow(
+        /State persistence failed.*read-back mismatch/,
+      )
       expect(mockLogger.error).toHaveBeenCalledWith(
         'State read-back mismatch for project %s run %s',
         'testproj',

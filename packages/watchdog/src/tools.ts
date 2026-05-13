@@ -25,6 +25,18 @@ export function createWatchdogTools(deps: CreateWatchdogToolsDeps): Record<strin
       execute: async (args: any, context: any) => {
         const worktree = context?.worktree ?? context?.directory ?? ''
         const sessionID = context?.sessionID ?? context?.session?.id ?? ''
+
+        // H-fix #1: Defensive guard — reject if project root cannot be determined.
+        // Prevents silent fallback to process.cwd() producing wrong project ID
+        // when neither worktree nor directory exist on OpenCode's context.
+        if (!worktree) {
+          return JSON.stringify({
+            ok: false,
+            violation: 'Cannot determine project root: context provides neither worktree nor directory. Report this to the user.',
+            guidance: 'The checkpoint tool requires a workspace context. Ensure you are running in a project directory.',
+          })
+        }
+
         return checkpointHandler.handle(
           args.event as any,
           args.payload ?? '{}',

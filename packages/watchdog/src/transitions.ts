@@ -420,6 +420,12 @@ export function validateTransition(
     case 'user_approval': {
       if (state === null) return fail(NO_ACTIVE_RUN, START_FIRST)
       const phase = payload.phase as number
+      if (phase !== state.currentPhase) {
+        return fail(
+          `Wrong phase: current is ${state.currentPhase}, got ${phase}`,
+          `user_approval must target the current phase (${state.currentPhase}).`,
+        )
+      }
       const rec = state.phases[phase]
       if (!rec) {
         return fail(
@@ -439,6 +445,12 @@ export function validateTransition(
     case 'phase_complete': {
       if (state === null) return fail(NO_ACTIVE_RUN, START_FIRST)
       const phase = payload.phase as number
+      if (phase !== state.currentPhase) {
+        return fail(
+          `Wrong phase: current is ${state.currentPhase}, got ${phase}`,
+          `phase_complete must target the current phase (${state.currentPhase}).`,
+        )
+      }
       const rec = state.phases[phase]
       if (!rec) {
         return fail(
