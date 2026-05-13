@@ -60,7 +60,7 @@ function checkTally(tally: unknown): { ok: boolean; msg?: string } {
   return { ok: true }
 }
 
-const NO_ACTIVE_RUN = 'No active pipeline run for this project.' as const
+export const NO_ACTIVE_RUN = 'No active pipeline run for this project.' as const
 const START_FIRST =
   "Start a pipeline first by calling tdd_checkpoint with event='pipeline_start'." as const
 

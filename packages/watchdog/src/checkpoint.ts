@@ -25,7 +25,7 @@ import type {
   PipelineStateSummary,
   AuditLogEntry,
 } from './schema.js'
-import { validateTransition, applyTransition } from './transitions.js'
+import { validateTransition, applyTransition, NO_ACTIVE_RUN } from './transitions.js'
 import { computeProjectId } from './project-id.js'
 
 export class CheckpointHandler {
@@ -92,11 +92,24 @@ export class CheckpointHandler {
 
     if (!validation.valid) {
       // M1: When activeRun exists but state file is missing/corrupted, give specific message
-      if (activeRun && currentState === null && validation.violation === 'No active pipeline run for this project.') {
+      if (activeRun && currentState === null && validation.violation === NO_ACTIVE_RUN) {
+        // Audit BLOCK for corrupted-state detection
+        const entry: AuditLogEntry = {
+          timestamp: now,
+          runId: activeRun.runId,
+          projectId,
+          sessionId,
+          event,
+          phase: 0,
+          decision: 'BLOCK',
+          violation: `Pipeline state file missing or corrupted for run ${activeRun.runId}.`,
+        }
+        this.store.appendAudit(projectId, activeRun.runId, entry)
+
         return JSON.stringify({
           ok: false,
           violation: `Pipeline state file missing or corrupted for run ${activeRun.runId}.`,
-          guidance: 'Start a fresh pipeline with pipeline_start to archive the broken run.',
+          guidance: 'Start a fresh pipeline with pipeline_start to begin a new run. The previous run index entry will be overwritten.',
         } satisfies CheckpointViolation)
       }
 
