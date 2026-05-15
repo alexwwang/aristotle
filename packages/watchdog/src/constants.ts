@@ -6,3 +6,6 @@ export const MAX_PHASE = 5
 
 /** Max consecutive articulation failures before degradation. */
 export const ARTICULATION_MAX_FAILURES = 3
+
+/** Max entries in SessionBuffer before FIFO eviction. */
+export const SESSION_BUFFER_MAX_SIZE = 1000

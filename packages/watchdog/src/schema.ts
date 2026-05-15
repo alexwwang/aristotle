@@ -8,6 +8,7 @@ export type CheckpointEvent =
   | 'test_evidence'
   | 'user_approval'
   | 'phase_complete'
+  | 'why_articulation'
 
 /** State machine version for forward-compatible reads */
 export const SCHEMA_VERSION = 1
@@ -42,7 +43,11 @@ export interface PhaseRecord {
   articulationAttempted?: boolean
   articulationVerified?: boolean
   articulationDegraded?: boolean
-  articulationDimensions?: ArticulationDimension[]
+  articulationDimensions?: {
+    what_it_protects: boolean
+    key_risks: boolean
+    why_approach_works: boolean
+  }
 }
 
 export type RalphTermination = 'early_stop' | 'gate_pass' | 'max_rounds'
@@ -137,7 +142,7 @@ export interface ObservationEntry {
   sessionId: string
   type: string
   round?: number
-  toolName?: string
+  tool?: string
   callID?: string
   metadata?: Record<string, unknown>
 }

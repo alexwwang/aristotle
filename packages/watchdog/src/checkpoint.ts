@@ -276,7 +276,7 @@ export class CheckpointHandler {
       sessionId,
       event,
       phase: newState.currentPhase,
-      decision: articulationViolated ? 'BLOCK' : 'PASS',
+      decision: 'PASS',
     }
     if (articulationViolated) {
       auditEntry.violation = `Articulation incomplete: ${articulationResult?.missingDimension ?? 'unknown'} missing.`
@@ -291,6 +291,7 @@ export class CheckpointHandler {
       this.store.clearActiveRun(projectId)
       this.store.archiveRun(projectId, runId)
       this.cache?.clear()
+      this.observer?.clearDegradation(projectId, runId)
     }
 
     // ── 13. Articulation violation return ─────────────────────────────
