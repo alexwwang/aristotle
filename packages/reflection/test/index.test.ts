@@ -9,19 +9,19 @@ import { IdleEventHandler } from '../src/idle-handler.js';
 import { resolveConfig } from '../src/config.js';
 
 vi.mock('@opencode-ai/core/store/workflow-store', () => ({
-  WorkflowStore: vi.fn(),
+  WorkflowStore: vi.fn(function() {}),
 }));
 
 vi.mock('../src/executor.js', () => ({
-  AristotleExecutor: vi.fn(),
+  AristotleExecutor: vi.fn(function() {}),
 }));
 
 vi.mock('../src/idle-handler.js', () => ({
-  IdleEventHandler: vi.fn(),
+  IdleEventHandler: vi.fn(function() {}),
 }));
 
 vi.mock('../src/reflection/snapshot-extractor.js', () => ({
-  SnapshotExtractor: vi.fn(),
+  SnapshotExtractor: vi.fn(function() {}),
 }));
 
 vi.mock('../src/config.js', () => ({
@@ -99,9 +99,9 @@ describe('createAristotleRole', () => {
       handle: vi.fn().mockResolvedValue(undefined),
     };
 
-    vi.mocked(WorkflowStore).mockImplementation(() => mockStore);
-    vi.mocked(AristotleExecutor).mockImplementation(() => mockExecutor);
-    vi.mocked(IdleEventHandler).mockImplementation(() => mockIdleHandler);
+    vi.mocked(WorkflowStore).mockImplementation(function() { return mockStore; });
+    vi.mocked(AristotleExecutor).mockImplementation(function() { return mockExecutor; });
+    vi.mocked(IdleEventHandler).mockImplementation(function() { return mockIdleHandler; });
     vi.mocked(resolveConfig).mockReturnValue({
       mcp_dir: '/tmp/test-mcp',
       sessions_dir: tempDir,
