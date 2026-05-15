@@ -131,12 +131,24 @@ export class CheckpointHandler {
         })
       }
       // C-2: single-pipeline constraint
-      if (activeRun && currentState && !isStale(currentState.lastCheckpointAt, this.staleThresholdMs)) {
-        return JSON.stringify({
-          ok: false,
-          violation: 'A pipeline is already active for this project.',
-          guidance: 'Only one pipeline per project is allowed. Complete or cancel the current pipeline first.',
-        })
+      //      Non-stale: reject unconditionally. Stale: only owner may restart.
+      if (activeRun && currentState) {
+        if (!isStale(currentState.lastCheckpointAt, this.staleThresholdMs)) {
+          // Non-stale active pipeline — reject any new pipeline_start
+          return JSON.stringify({
+            ok: false,
+            violation: 'A pipeline is already active for this project.',
+            guidance: 'Only one pipeline per project is allowed. Complete or cancel the current pipeline first.',
+          })
+        }
+        // Stale pipeline — only the owner may restart
+        if (hasOwner(currentState) && currentState.ownerSessionId !== sessionId) {
+          return JSON.stringify({
+            ok: false,
+            violation: 'A stale pipeline exists but belongs to another session.',
+            guidance: 'Only the orchestrator can restart a stale pipeline. Sub-agents cannot create new pipelines.',
+          })
+        }
       }
       payload._runId = randomUUID()
       payload._projectId = projectId

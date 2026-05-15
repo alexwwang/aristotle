@@ -40,7 +40,7 @@ export interface OwnedPipelineState extends PipelineState {
 
 /** Type guard: narrows PipelineState to OwnedPipelineState when ownerSessionId is present. */
 export function hasOwner(state: PipelineState | null): state is OwnedPipelineState {
-  return state !== null && typeof state.ownerSessionId === 'string'
+  return state !== null && typeof state.ownerSessionId === 'string' && state.ownerSessionId.length > 0
 }
 
 export type PhaseStatus = 'idle' | 'active' | 'ralph_loop' | 'awaiting_approval' | 'complete'

@@ -882,6 +882,109 @@ describe('CheckpointHandler Phase 2', () => {
       expect(result.violation).toContain('belongs to another session')
       expect(result).not.toHaveProperty('recovery')
     })
+
+    // ── TC-C-41: Sub-agent pipeline_start rejected on non-stale active pipeline ──
+    it('TC-C-41: Sub-agent pipeline_start rejected on non-stale active pipeline', async () => {
+      const localStore = createMockStore()
+      const localCache = createMockCache()
+      const localObserver = createMockObserver()
+      localObserver.isDegraded.mockReturnValue(true)
+
+      const activeRuns = new Map<string, any>()
+      const states = new Map<string, any>()
+      localStore.getActiveRun.mockImplementation((pid: string) => activeRuns.get(pid) ?? null)
+      localStore.setActiveRun.mockImplementation((pid: string, run: any) => activeRuns.set(pid, run))
+      localStore.readState.mockImplementation((pid: string, rid: string) => states.get(`${pid}/${rid}`) ?? null)
+      localStore.writeState.mockImplementation((pid: string, rid: string, state: any) => states.set(`${pid}/${rid}`, state))
+
+      const localHandler = new CheckpointHandler(localStore, STALE_THRESHOLD_MS, localCache, localObserver)
+
+      // Owner creates pipeline
+      const ownerCtx = { worktree: WORKTREE, sessionID: 'sess-orchestrator' }
+      await localHandler.handle('pipeline_start', JSON.stringify({ description: 'test' }), ownerCtx)
+
+      // Sub-agent tries pipeline_start — should be rejected (non-stale, active)
+      const subAgentCtx = { worktree: WORKTREE, sessionID: 'sess-sub-agent' }
+      const result = parseResult(await localHandler.handle(
+        'pipeline_start',
+        JSON.stringify({ description: 'hijack' }),
+        subAgentCtx,
+      ))
+
+      expect(result.ok).toBe(false)
+      expect(result.violation).toContain('already active')
+    })
+
+    // ── TC-C-42: Sub-agent pipeline_start rejected on stale pipeline (ownership) ──
+    it('TC-C-42: Sub-agent pipeline_start rejected on stale pipeline (ownership)', async () => {
+      const localStore = createMockStore()
+      const localCache = createMockCache()
+      const localObserver = createMockObserver()
+      localObserver.isDegraded.mockReturnValue(true)
+
+      const activeRuns = new Map<string, any>()
+      const states = new Map<string, any>()
+      localStore.getActiveRun.mockImplementation((pid: string) => activeRuns.get(pid) ?? null)
+      localStore.setActiveRun.mockImplementation((pid: string, run: any) => activeRuns.set(pid, run))
+      localStore.readState.mockImplementation((pid: string, rid: string) => states.get(`${pid}/${rid}`) ?? null)
+      localStore.writeState.mockImplementation((pid: string, rid: string, state: any) => states.set(`${pid}/${rid}`, state))
+
+      const localHandler = new CheckpointHandler(localStore, STALE_THRESHOLD_MS, localCache, localObserver)
+
+      // Owner creates pipeline
+      const ownerCtx = { worktree: WORKTREE, sessionID: 'sess-orchestrator' }
+      await localHandler.handle('pipeline_start', JSON.stringify({ description: 'test' }), ownerCtx)
+
+      // Make pipeline stale
+      const activeRun = activeRuns.get(PROJECT_ID)
+      const state = states.get(`${PROJECT_ID}/${activeRun.runId}`)
+      state.lastCheckpointAt = '2020-01-01T00:00:00.000Z'
+
+      // Sub-agent tries pipeline_start on stale pipeline — should be rejected (ownership)
+      const subAgentCtx = { worktree: WORKTREE, sessionID: 'sess-sub-agent' }
+      const result = parseResult(await localHandler.handle(
+        'pipeline_start',
+        JSON.stringify({ description: 'hijack' }),
+        subAgentCtx,
+      ))
+
+      expect(result.ok).toBe(false)
+      expect(result.violation).toContain('belongs to another session')
+    })
+
+    // ── TC-C-43: Owner can restart own stale pipeline ──
+    it('TC-C-43: Owner can restart own stale pipeline', async () => {
+      const localStore = createMockStore()
+      const localCache = createMockCache()
+      const localObserver = createMockObserver()
+      localObserver.isDegraded.mockReturnValue(true)
+
+      const activeRuns = new Map<string, any>()
+      const states = new Map<string, any>()
+      localStore.getActiveRun.mockImplementation((pid: string) => activeRuns.get(pid) ?? null)
+      localStore.setActiveRun.mockImplementation((pid: string, run: any) => activeRuns.set(pid, run))
+      localStore.readState.mockImplementation((pid: string, rid: string) => states.get(`${pid}/${rid}`) ?? null)
+      localStore.writeState.mockImplementation((pid: string, rid: string, state: any) => states.set(`${pid}/${rid}`, state))
+
+      const localHandler = new CheckpointHandler(localStore, STALE_THRESHOLD_MS, localCache, localObserver)
+
+      const ownerCtx = { worktree: WORKTREE, sessionID: 'sess-orchestrator' }
+      await localHandler.handle('pipeline_start', JSON.stringify({ description: 'test' }), ownerCtx)
+
+      // Make pipeline stale
+      const activeRun = activeRuns.get(PROJECT_ID)
+      const state = states.get(`${PROJECT_ID}/${activeRun.runId}`)
+      state.lastCheckpointAt = '2020-01-01T00:00:00.000Z'
+
+      // Owner restarts — should succeed
+      const result = parseResult(await localHandler.handle(
+        'pipeline_start',
+        JSON.stringify({ description: 'restart' }),
+        ownerCtx,
+      ))
+
+      expect(result.ok).toBe(true)
+    })
   })
 
   // ── Semantic Assertion Tests (SA) ────────────────────────────────────
