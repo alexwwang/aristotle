@@ -985,6 +985,97 @@ describe('CheckpointHandler Phase 2', () => {
 
       expect(result.ok).toBe(true)
     })
+
+    // ── TC-C-41b: Owner pipeline_start with active non-stale pipeline → rejected ──
+    it('TC-C-41b: Owner pipeline_start rejected on own non-stale pipeline (single-pipeline constraint applies to all)', async () => {
+      const localStore = createMockStore()
+      const localCache = createMockCache()
+      const localObserver = createMockObserver()
+      localObserver.isDegraded.mockReturnValue(true)
+
+      const activeRuns = new Map<string, any>()
+      const states = new Map<string, any>()
+      localStore.getActiveRun.mockImplementation((pid: string) => activeRuns.get(pid) ?? null)
+      localStore.setActiveRun.mockImplementation((pid: string, run: any) => activeRuns.set(pid, run))
+      localStore.readState.mockImplementation((pid: string, rid: string) => states.get(`${pid}/${rid}`) ?? null)
+      localStore.writeState.mockImplementation((pid: string, rid: string, state: any) => states.set(`${pid}/${rid}`, state))
+
+      const localHandler = new CheckpointHandler(localStore, STALE_THRESHOLD_MS, localCache, localObserver)
+
+      const ownerCtx = { worktree: WORKTREE, sessionID: 'sess-owner' }
+      await localHandler.handle('pipeline_start', JSON.stringify({ description: 'test' }), ownerCtx)
+
+      // Owner calls pipeline_start again on own non-stale pipeline
+      const result = parseResult(await localHandler.handle(
+        'pipeline_start',
+        JSON.stringify({ description: 'another' }),
+        ownerCtx,
+      ))
+
+      expect(result.ok).toBe(false)
+      expect(result.violation).toContain('already active')
+    })
+
+    // ── TC-C-45: pipeline_start with corrupted state → rejected (fail-closed) ──
+    it('TC-C-45: pipeline_start rejected when activeRun exists but state is null (corrupted)', async () => {
+      const localStore = createMockStore()
+      const localCache = createMockCache()
+      const localObserver = createMockObserver()
+      localObserver.isDegraded.mockReturnValue(true)
+
+      // activeRun exists but readState returns null (corrupted/missing state file)
+      localStore.getActiveRun.mockReturnValue({ runId: 'run-corrupt', projectId: PROJECT_ID, startedAt: NOW })
+      localStore.readState.mockReturnValue(null)
+
+      const localHandler = new CheckpointHandler(localStore, STALE_THRESHOLD_MS, localCache, localObserver)
+
+      const anyCtx = { worktree: WORKTREE, sessionID: 'sess-anyone' }
+      const result = parseResult(await localHandler.handle(
+        'pipeline_start',
+        JSON.stringify({ description: 'test' }),
+        anyCtx,
+      ))
+
+      expect(result.ok).toBe(false)
+      expect(result.violation).toContain('missing or corrupted')
+    })
+
+    // ── TC-C-46: Phase 1 stale pipeline → non-owner pipeline_start allowed ──
+    it('TC-C-46: Phase 1 stale pipeline (no ownerSessionId) allows non-owner pipeline_start', async () => {
+      const localStore = createMockStore()
+      const localCache = createMockCache()
+      const localObserver = createMockObserver()
+      localObserver.isDegraded.mockReturnValue(true)
+
+      const activeRuns = new Map<string, any>()
+      const states = new Map<string, any>()
+      localStore.getActiveRun.mockImplementation((pid: string) => activeRuns.get(pid) ?? null)
+      localStore.setActiveRun.mockImplementation((pid: string, run: any) => activeRuns.set(pid, run))
+      localStore.readState.mockImplementation((pid: string, rid: string) => states.get(`${pid}/${rid}`) ?? null)
+      localStore.writeState.mockImplementation((pid: string, rid: string, state: any) => states.set(`${pid}/${rid}`, state))
+
+      const localHandler = new CheckpointHandler(localStore, STALE_THRESHOLD_MS, localCache, localObserver)
+
+      // Create pipeline (simulates Phase 1 state with no ownerSessionId)
+      const ownerCtx = { worktree: WORKTREE, sessionID: 'sess-original' }
+      await localHandler.handle('pipeline_start', JSON.stringify({ description: 'phase1' }), ownerCtx)
+
+      // Simulate Phase 1 state: remove ownerSessionId + make stale
+      const activeRun = activeRuns.get(PROJECT_ID)
+      const state = states.get(`${PROJECT_ID}/${activeRun.runId}`)
+      delete state.ownerSessionId
+      state.lastCheckpointAt = '2020-01-01T00:00:00.000Z'
+
+      // Non-owner calls pipeline_start on stale Phase 1 pipeline → allowed
+      const otherCtx = { worktree: WORKTREE, sessionID: 'sess-other' }
+      const result = parseResult(await localHandler.handle(
+        'pipeline_start',
+        JSON.stringify({ description: 'restart' }),
+        otherCtx,
+      ))
+
+      expect(result.ok).toBe(true)
+    })
   })
 
   // ── Semantic Assertion Tests (SA) ────────────────────────────────────
