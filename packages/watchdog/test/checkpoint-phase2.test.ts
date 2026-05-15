@@ -737,6 +737,112 @@ describe('CheckpointHandler Phase 2', () => {
         expect(result.violation).not.toContain('belongs to another session')
       }
     })
+
+    // ── TC-C-32: Owner session checkpoint → allowed ─────────────────────────
+    it('TC-C-32: Owner session can perform checkpoints', async () => {
+      const localStore = createMockStore()
+      const localCache = createMockCache()
+      const localObserver = createMockObserver()
+      localObserver.isDegraded.mockReturnValue(true)
+
+      const activeRuns = new Map<string, any>()
+      const states = new Map<string, any>()
+      localStore.getActiveRun.mockImplementation((pid: string) => activeRuns.get(pid) ?? null)
+      localStore.setActiveRun.mockImplementation((pid: string, run: any) => activeRuns.set(pid, run))
+      localStore.readState.mockImplementation((pid: string, rid: string) => states.get(`${pid}/${rid}`) ?? null)
+      localStore.writeState.mockImplementation((pid: string, rid: string, state: any) => states.set(`${pid}/${rid}`, state))
+
+      const localHandler = new CheckpointHandler(localStore, STALE_THRESHOLD_MS, localCache, localObserver)
+
+      // Owner creates pipeline
+      const ownerCtx = { worktree: WORKTREE, sessionID: 'sess-owner' }
+      const startResult = parseResult(await localHandler.handle('pipeline_start', JSON.stringify({ description: 'test' }), ownerCtx))
+      expect(startResult.ok).toBe(true)
+
+      // Owner advances phase — should succeed
+      const enterResult = parseResult(await localHandler.handle('phase_enter', JSON.stringify({ phase: 1 }), ownerCtx))
+      expect(enterResult.ok).toBe(true)
+    })
+
+    // ── TC-C-33: Sub-agent checkpoint → rejected ────────────────────────────
+    it('TC-C-33: Sub-agent checkpoint rejected with guidance', async () => {
+      const localStore = createMockStore()
+      const localCache = createMockCache()
+      const localObserver = createMockObserver()
+      localObserver.isDegraded.mockReturnValue(true)
+
+      const activeRuns = new Map<string, any>()
+      const states = new Map<string, any>()
+      localStore.getActiveRun.mockImplementation((pid: string) => activeRuns.get(pid) ?? null)
+      localStore.setActiveRun.mockImplementation((pid: string, run: any) => activeRuns.set(pid, run))
+      localStore.readState.mockImplementation((pid: string, rid: string) => states.get(`${pid}/${rid}`) ?? null)
+      localStore.writeState.mockImplementation((pid: string, rid: string, state: any) => states.set(`${pid}/${rid}`, state))
+
+      const localHandler = new CheckpointHandler(localStore, STALE_THRESHOLD_MS, localCache, localObserver)
+
+      // Owner creates pipeline
+      const ownerCtx = { worktree: WORKTREE, sessionID: 'sess-orchestrator' }
+      await localHandler.handle('pipeline_start', JSON.stringify({ description: 'test' }), ownerCtx)
+
+      // Sub-agent tries to advance phase
+      const subAgentCtx = { worktree: WORKTREE, sessionID: 'sess-sub-agent' }
+      const result = parseResult(await localHandler.handle(
+        'phase_enter',
+        JSON.stringify({ phase: 1 }),
+        subAgentCtx,
+      ))
+
+      expect(result.ok).toBe(false)
+      expect(result.violation).toContain('belongs to another session')
+      expect(result.guidance).toBeDefined()
+    })
+
+    // ── TC-C-35: Audit BLOCK logged on owner_mismatch ──────────────────────
+    it('TC-C-35: Owner mismatch logged as audit BLOCK', async () => {
+      const localStore = createMockStore()
+      const localCache = createMockCache()
+      const localObserver = createMockObserver()
+      localObserver.isDegraded.mockReturnValue(true)
+
+      const activeRuns = new Map<string, any>()
+      const states = new Map<string, any>()
+      localStore.getActiveRun.mockImplementation((pid: string) => activeRuns.get(pid) ?? null)
+      localStore.setActiveRun.mockImplementation((pid: string, run: any) => activeRuns.set(pid, run))
+      localStore.readState.mockImplementation((pid: string, rid: string) => states.get(`${pid}/${rid}`) ?? null)
+      localStore.writeState.mockImplementation((pid: string, rid: string, state: any) => states.set(`${pid}/${rid}`, state))
+
+      const localHandler = new CheckpointHandler(localStore, STALE_THRESHOLD_MS, localCache, localObserver)
+
+      // Owner creates pipeline
+      const ownerCtx = { worktree: WORKTREE, sessionID: 'sess-orchestrator' }
+      await localHandler.handle('pipeline_start', JSON.stringify({ description: 'test' }), ownerCtx)
+
+      // Sub-agent attempts checkpoint
+      const subAgentCtx = { worktree: WORKTREE, sessionID: 'sess-sub-agent' }
+      await localHandler.handle('phase_enter', JSON.stringify({ phase: 1 }), subAgentCtx)
+
+      expect(localStore.appendAudit).toHaveBeenCalledWith(
+        PROJECT_ID,
+        expect.any(String),
+        expect.objectContaining({
+          decision: 'BLOCK',
+          violation: expect.stringContaining('owner_mismatch'),
+        }),
+      )
+    })
+
+    // ── TC-C-39: pipeline_start with empty sessionID → rejected ─────────────
+    it('TC-C-39: pipeline_start with empty sessionID rejected', async () => {
+      const emptyCtx = { worktree: WORKTREE, sessionID: '' }
+      const result = parseResult(await handler.handle(
+        'pipeline_start',
+        JSON.stringify({ description: 'test' }),
+        emptyCtx,
+      ))
+
+      expect(result.ok).toBe(false)
+      expect(result.violation).toBeDefined()
+    })
   })
 
   // ── Semantic Assertion Tests (SA) ────────────────────────────────────
