@@ -72,7 +72,7 @@ export async function createWatchdogRole(ctx: any): Promise<RoleRegistration | n
   const store = new PipelineStore(stateStore, logger)
 
   // 6. Create shared infrastructure
-  const multiAgent = detectMultiAgent(ctx)
+  const multiAgent = detectMultiAgent({ directory: worktreeRoot })
   const cache = new PipelineStateCache(store, logger, worktreeRoot, multiAgent)
   const sessionBuffer = new SessionBuffer(SESSION_BUFFER_MAX_SIZE)
 
