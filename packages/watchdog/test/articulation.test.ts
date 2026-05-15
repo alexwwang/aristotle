@@ -102,4 +102,27 @@ describe('validateArticulation', () => {
     // The missingDimension should be the first failing dimension, not a length error
     expect(result.missingDimension).toBeDefined()
   })
+
+  // ── SC-2: dimensions output shape matches schema contract ────────────────
+  it('SC-2: validateArticulation returns boolean map matching PhaseRecord schema', () => {
+    const text =
+      'This protects user data because it guards against injection. ' +
+      'Key risks include edge cases. The approach works because parameterized queries are effective.'
+    const result = validateArticulation(text)
+
+    // Verify dimensions is a boolean map (not a string array)
+    expect(typeof result.dimensions).toBe('object')
+    expect(Array.isArray(result.dimensions)).toBe(false)
+
+    // Verify all 3 required keys exist with boolean values
+    expect(result.dimensions).toHaveProperty('what_it_protects')
+    expect(result.dimensions).toHaveProperty('key_risks')
+    expect(result.dimensions).toHaveProperty('why_approach_works')
+    expect(typeof result.dimensions.what_it_protects).toBe('boolean')
+    expect(typeof result.dimensions.key_risks).toBe('boolean')
+    expect(typeof result.dimensions.why_approach_works).toBe('boolean')
+
+    // Verify no extra keys
+    expect(Object.keys(result.dimensions)).toHaveLength(3)
+  })
 })

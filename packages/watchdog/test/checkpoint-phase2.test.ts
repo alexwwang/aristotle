@@ -34,6 +34,12 @@ function getLastWrittenState(store: any): any {
   return calls[calls.length - 1][2]
 }
 
+/** Advance pipeline to phase N with ralph_loop active (phaseStatus = 'active' after ralph_loop_start). */
+async function advanceToPhaseActive(handler: CheckpointHandler, phase: number): Promise<void> {
+  await handler.handle('phase_enter', JSON.stringify({ phase }), CONTEXT)
+  await handler.handle('ralph_loop_start', JSON.stringify({ phase }), CONTEXT)
+}
+
 // ── Test Setup ──────────────────────────────────────────────────────────────
 
 describe('CheckpointHandler Phase 2', () => {
@@ -730,6 +736,108 @@ describe('CheckpointHandler Phase 2', () => {
         expect(result.violation).not.toContain('owner_mismatch')
         expect(result.violation).not.toContain('belongs to another session')
       }
+    })
+  })
+
+  // ── Semantic Assertion Tests (SA) ────────────────────────────────────
+
+  describe('design semantic assertions', () => {
+    // ── SA-1: phase_complete(5) calls observer.clearDegradation ─────────
+    it('SA-1: phase_complete(5) calls observer.clearDegradation', async () => {
+      // Need fresh handler with observer attached — reset store state first
+      const localStore = createMockStore()
+      const localCache = createMockCache()
+      const localObserver = createMockObserver()
+      // Degraded observer skips AC-2 observation checks so we can walk the pipeline
+      // without wiring up reviewer-spawn observations.
+      localObserver.isDegraded.mockReturnValue(true)
+
+      // Wire up real storage behavior
+      const activeRuns = new Map<string, any>()
+      const states = new Map<string, any>()
+      localStore.getActiveRun.mockImplementation((pid: string) => activeRuns.get(pid) ?? null)
+      localStore.setActiveRun.mockImplementation((pid: string, run: any) => activeRuns.set(pid, run))
+      localStore.clearActiveRun.mockImplementation((pid: string) => activeRuns.delete(pid))
+      localStore.readState.mockImplementation((pid: string, rid: string) => states.get(`${pid}/${rid}`) ?? null)
+      localStore.writeState.mockImplementation((pid: string, rid: string, state: any) => states.set(`${pid}/${rid}`, state))
+
+      const localHandler = new CheckpointHandler(
+        localStore, STALE_THRESHOLD_MS, localCache, localObserver,
+      )
+
+      await localHandler.handle('pipeline_start', JSON.stringify({ description: 'test' }), CONTEXT)
+      for (let phase = 1; phase <= 5; phase++) {
+        await localHandler.handle('phase_enter', JSON.stringify({ phase }), CONTEXT)
+        await localHandler.handle('ralph_loop_start', JSON.stringify({ phase }), CONTEXT)
+        // Two zero-tally rounds to satisfy early_stop termination requirement
+        await localHandler.handle('ralph_round_complete', JSON.stringify({
+          phase, round: 1, tally: { C: 0, H: 0, M: 0, L: 0, I: 0 },
+        }), CONTEXT)
+        await localHandler.handle('ralph_round_complete', JSON.stringify({
+          phase, round: 2, tally: { C: 0, H: 0, M: 0, L: 0, I: 0 },
+        }), CONTEXT)
+        await localHandler.handle('ralph_terminate', JSON.stringify({
+          phase, termination: 'early_stop',
+        }), CONTEXT)
+        await localHandler.handle('user_approval', JSON.stringify({ phase, approved: true }), CONTEXT)
+        // test_evidence payload requires phase === 4 and a non-empty evidence_file
+        if (phase === 4) {
+          await localHandler.handle('test_evidence', JSON.stringify({ phase: 4, evidence_file: 'test.log' }), CONTEXT)
+        }
+        // Complete phases 1-4 so the next phase_enter is allowed
+        if (phase < 5) {
+          await localHandler.handle('phase_complete', JSON.stringify({ phase }), CONTEXT)
+        }
+      }
+
+      const result = await localHandler.handle('phase_complete', JSON.stringify({ phase: 5 }), CONTEXT)
+      expect(parseResult(result).ok).toBe(true)
+
+      expect(localObserver.clearDegradation).toHaveBeenCalledWith(PROJECT_ID, expect.any(String))
+    })
+
+    // ── SA-2: why_articulation failure records audit decision PASS ──────
+    it('SA-2: why_articulation failure records audit PASS (state was written)', async () => {
+      const localObserver = createMockObserver()
+      const localCache = createMockCache()
+      // Use fresh store to avoid state leakage; wire up real Map-backed storage
+      const localStore = createMockStore()
+      const activeRuns = new Map<string, any>()
+      const states = new Map<string, any>()
+      localStore.getActiveRun.mockImplementation((pid: string) => activeRuns.get(pid) ?? null)
+      localStore.setActiveRun.mockImplementation((pid: string, run: any) => activeRuns.set(pid, run))
+      localStore.clearActiveRun.mockImplementation((pid: string) => activeRuns.delete(pid))
+      localStore.readState.mockImplementation((pid: string, rid: string) => states.get(`${pid}/${rid}`) ?? null)
+      localStore.writeState.mockImplementation((pid: string, rid: string, state: any) => states.set(`${pid}/${rid}`, state))
+      localStore.appendAudit.mockImplementation(() => {})
+
+      const handler = new CheckpointHandler(
+        localStore, STALE_THRESHOLD_MS, localCache, localObserver,
+      )
+
+      // Setup pipeline: pipeline_start → phase_enter(1) leaves phaseStatus='active'
+      await handler.handle('pipeline_start', JSON.stringify({ description: 'test' }), CONTEXT)
+      await handler.handle('phase_enter', JSON.stringify({ phase: 1 }), CONTEXT)
+
+      // Clear audit history so we only see the why_articulation audit
+      localStore.appendAudit.mockClear()
+
+      // Call why_articulation with insufficient text
+      const result = await handler.handle(
+        'why_articulation',
+        JSON.stringify({ phase: 1, articulation: 'too short' }),
+        CONTEXT,
+      )
+      const parsed = parseResult(result)
+      expect(parsed.ok).toBe(false) // articulation content failed
+
+      // Audit must record PASS — state was written (Phase 1 invariant: PASS = state written)
+      // Use toHaveBeenCalledWith on the cleared mock so only why_articulation's audit is checked
+      expect(localStore.appendAudit).toHaveBeenCalledWith(
+        PROJECT_ID,
+        expect.any(String),
+        expect.objectContaining({ decision: 'PASS' }),
+      )
     })
   })
 })

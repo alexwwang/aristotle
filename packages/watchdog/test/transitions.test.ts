@@ -680,6 +680,9 @@ describe('applyTransition', () => {
       ralphTermination: null,
       userApproved: false,
       approvedAt: null,
+      articulationAttempted: false,
+      articulationVerified: false,
+      articulationDegraded: false,
     })
     expect(newState.lastCheckpointAt).toBe(NOW)
   })
@@ -986,6 +989,30 @@ describe('full pipeline flow', () => {
   })
 
   // ── M5: currentPhase guard for user_approval and phase_complete ──
+
+  // ── SC-4: phase_enter initializes articulation fields with defaults ───
+  describe('SC-4: phase_enter PhaseRecord includes articulation defaults (§8.4)', () => {
+    it('phase_enter(1) creates PhaseRecord with articulationAttempted=false', () => {
+      const state = makeState({ currentPhase: 0, phaseStatus: 'idle' })
+      const next = applyTransition('phase_enter', { phase: 1, _now: NOW }, state)
+      const rec = next.phases[1]
+      expect(rec).toHaveProperty('articulationAttempted', false)
+    })
+
+    it('phase_enter(1) creates PhaseRecord with articulationVerified=false', () => {
+      const state = makeState({ currentPhase: 0, phaseStatus: 'idle' })
+      const next = applyTransition('phase_enter', { phase: 1, _now: NOW }, state)
+      const rec = next.phases[1]
+      expect(rec).toHaveProperty('articulationVerified', false)
+    })
+
+    it('phase_enter(1) creates PhaseRecord with articulationDegraded=false', () => {
+      const state = makeState({ currentPhase: 0, phaseStatus: 'idle' })
+      const next = applyTransition('phase_enter', { phase: 1, _now: NOW }, state)
+      const rec = next.phases[1]
+      expect(rec).toHaveProperty('articulationDegraded', false)
+    })
+  })
 
   describe('currentPhase guard (M5)', () => {
     it('user_approval rejects when phase does not match currentPhase', () => {

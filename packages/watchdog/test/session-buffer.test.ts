@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { SessionBuffer } from '../src/session-buffer.js'
+import { SESSION_BUFFER_MAX_SIZE } from '../src/constants.js'
 
 const MAX_SIZE = 1000
 
@@ -75,5 +76,10 @@ describe('SessionBuffer', () => {
     expect(buffer.getSession('sess-A')).toHaveLength(1)
     expect(buffer.getSession('sess-B')).toHaveLength(1)
     expect(buffer.sessionCount()).toBe(2)
+  })
+
+  // ── SA-3: SESSION_BUFFER_MAX_SIZE constant exists and equals 1000 ────
+  it('SA-3: SESSION_BUFFER_MAX_SIZE is exported as 1000', () => {
+    expect(SESSION_BUFFER_MAX_SIZE).toBe(1000)
   })
 })
