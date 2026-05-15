@@ -117,7 +117,7 @@ describe('assemblePlugin', () => {
     const beforeOrder = onToolBefore.mock.invocationCallOrder![0];
     const executeOrder = execute.mock.invocationCallOrder![0];
     expect(beforeOrder).toBeLessThan(executeOrder);
-    expect(onToolBefore).toHaveBeenCalledWith('testTool', { foo: 'bar' }, 'sess-1');
+    expect(onToolBefore).toHaveBeenCalledWith('testTool', { foo: 'bar' }, 'sess-1', '');
   });
 
   // PR-08: should_invoke_onToolAfter_after_tool_execution
@@ -139,7 +139,7 @@ describe('assemblePlugin', () => {
     const executeOrder = execute.mock.invocationCallOrder![0];
     const afterOrder = onToolAfter.mock.invocationCallOrder![0];
     expect(executeOrder).toBeLessThan(afterOrder);
-    expect(onToolAfter).toHaveBeenCalledWith('testTool', { foo: 'bar' }, 'result', 'sess-1');
+    expect(onToolAfter).toHaveBeenCalledWith('testTool', { foo: 'bar' }, 'result', 'sess-1', '');
   });
 
   // PR-09: should_allow_onToolBefore_to_modify_args
@@ -168,8 +168,8 @@ describe('assemblePlugin', () => {
     );
   });
 
-  // PR-10: should_catch_onToolBefore_error_and_treat_as_pass
-  it('should_catch_onToolBefore_error_and_treat_as_pass', async () => {
+  // PR-10: should_propagate_onToolBefore_error_and_block_execution
+  it('should_propagate_onToolBefore_error_and_block_execution', async () => {
     const onToolBefore = vi.fn().mockRejectedValue(new Error('before error'));
     const execute = vi.fn().mockResolvedValue('result');
     const toolDef: ToolDefinition = {
@@ -182,10 +182,11 @@ describe('assemblePlugin', () => {
 
     const plugin = assemblePlugin(ctx, [role]);
 
-    const result = await plugin.tool!.testTool.execute({ foo: 'bar' }, { session: { id: 'sess-1' } });
+    await expect(
+      plugin.tool!.testTool.execute({ foo: 'bar' }, { session: { id: 'sess-1' } }),
+    ).rejects.toThrow('before error');
 
-    expect(result).toBe('result');
-    expect(execute).toHaveBeenCalled();
+    expect(execute).not.toHaveBeenCalled();
   });
 
   // PR-11: should_not_dispatch_idle_when_no_idle_handlers

@@ -119,12 +119,9 @@ export async function createWatchdogRole(ctx: any): Promise<RoleRegistration | n
   // 11. Return RoleRegistration with hooks
   return {
     tools,
-    onToolBefore: async (tool, args, sessionId) => {
-      await interceptor.handle(tool, args, sessionId, '')
-      return null // interceptor throws to block; null = allow
-    },
-    onToolAfter: async (tool, args, output, sessionId) => {
-      await observer.handle(tool, args, typeof output === 'string' ? output : JSON.stringify(output), sessionId, '')
+    onToolBefore: interceptor.handle.bind(interceptor),
+    onToolAfter: async (tool, args, output, sessionId, callID) => {
+      await observer.handle(tool, args, typeof output === 'string' ? output : JSON.stringify(output), sessionId, callID)
     },
   }
 }

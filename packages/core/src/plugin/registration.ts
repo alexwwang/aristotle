@@ -5,8 +5,8 @@ export interface ToolDefinition {
 }
 
 export interface RoleRegistration {
-  onToolBefore?: (tool: string, args: unknown, sessionId: string) => Promise<string | null>
-  onToolAfter?: (tool: string, args: unknown, output: unknown, sessionId: string) => Promise<void>
+  onToolBefore?: (tool: string, args: unknown, sessionId: string, callID: string) => Promise<void>
+  onToolAfter?: (tool: string, args: unknown, output: unknown, sessionId: string, callID: string) => Promise<void>
   onIdle?: (sessionId: string, client: any) => Promise<void>
   tools?: Record<string, ToolDefinition>
 }
@@ -14,6 +14,19 @@ export interface RoleRegistration {
 export interface PluginOutput {
   tool?: Record<string, ToolDefinition>
   event?: (event: any) => Promise<void>
+  "tool.execute.before"?: (params: {
+    tool: string
+    sessionID: string
+    callID: string
+    args: unknown
+  }) => Promise<void>
+  "tool.execute.after"?: (params: {
+    tool: string
+    sessionID: string
+    callID: string
+    args: unknown
+    output: unknown
+  }) => Promise<void>
 }
 
 function getSessionId(context: any): string {
@@ -51,46 +64,23 @@ export function assemblePlugin(ctx: any, roles: Array<RoleRegistration | null>):
         execute: async (args: any, context: any) => {
           const sessionId = getSessionId(context)
 
-          // Call onToolBefore for all active roles
-          let interceptedResult: string | null = null
+          // Call onToolBefore for all active roles (fail-closed: errors propagate)
           for (const role of activeRoles) {
             if (role.onToolBefore) {
-              try {
-                const result = await role.onToolBefore(name, args, sessionId)
-                if (result !== null) {
-                  interceptedResult = result
-                  break
-                }
-              } catch {
-                // PR-10: catch error and treat as PASS (continue to next role or execute)
-              }
+              await role.onToolBefore(name, args, sessionId, context.callID ?? '')
             }
-          }
-
-          if (interceptedResult !== null) {
-            // Call onToolAfter with intercepted result
-            for (const role of activeRoles) {
-              if (role.onToolAfter) {
-                try {
-                  await role.onToolAfter(name, args, interceptedResult, sessionId)
-                } catch {
-                  // Don't block on onToolAfter errors
-                }
-              }
-            }
-            return interceptedResult
           }
 
           // Execute original tool
           const output = await originalExecute(args, context)
 
-          // Call onToolAfter for all active roles
+          // Call onToolAfter for all active roles (fail-open with degradation flag)
           for (const role of activeRoles) {
             if (role.onToolAfter) {
               try {
-                await role.onToolAfter(name, args, output, sessionId)
+                await role.onToolAfter(name, args, output, sessionId, context.callID ?? '')
               } catch {
-                // Don't block on onToolAfter errors
+                // Observer errors caught here; degradation flag set internally
               }
             }
           }
@@ -105,6 +95,30 @@ export function assemblePlugin(ctx: any, roles: Array<RoleRegistration | null>):
 
   if (Object.keys(mergedTools).length > 0) {
     output.tool = mergedTools
+  }
+
+  // Phase 2 NEW: Global tool.execute.before/after — fires for ALL tools
+  const rolesWithBefore = activeRoles.filter(r => r.onToolBefore)
+  const rolesWithAfter = activeRoles.filter(r => r.onToolAfter)
+
+  if (rolesWithBefore.length > 0) {
+    output["tool.execute.before"] = async (params) => {
+      for (const role of rolesWithBefore) {
+        await role.onToolBefore!(params.tool, params.args, params.sessionID, params.callID)
+      }
+    }
+  }
+
+  if (rolesWithAfter.length > 0) {
+    output["tool.execute.after"] = async (params) => {
+      for (const role of rolesWithAfter) {
+        try {
+          await role.onToolAfter!(params.tool, params.args, params.output, params.sessionID, params.callID)
+        } catch {
+          // Observer is fail-open: errors caught, degradation flag set internally
+        }
+      }
+    }
   }
 
   const hasIdleHandlers = activeRoles.some(r => r.onIdle)
