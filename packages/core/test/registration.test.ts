@@ -146,7 +146,6 @@ describe('assemblePlugin', () => {
   it('should_allow_onToolBefore_to_modify_args', async () => {
     const onToolBefore = vi.fn().mockImplementation(async (_tool, args) => {
       (args as any).foo = 'modified';
-      return null;
     });
     const execute = vi.fn().mockResolvedValue('result');
     const toolDef: ToolDefinition = {
@@ -187,6 +186,27 @@ describe('assemblePlugin', () => {
     ).rejects.toThrow('before error');
 
     expect(execute).not.toHaveBeenCalled();
+  });
+
+  // PR-30: should_forward_callID_in_phase1_tool_wrapping
+  it('should_forward_callID_in_phase1_tool_wrapping', async () => {
+    const onToolBefore = vi.fn().mockResolvedValue(undefined);
+    const onToolAfter = vi.fn().mockResolvedValue(undefined);
+    const execute = vi.fn().mockResolvedValue('result');
+    const toolDef: ToolDefinition = {
+      description: 'Test tool',
+      args: {},
+      execute,
+    };
+    const role: RoleRegistration = { tools: { testTool: toolDef }, onToolBefore, onToolAfter };
+    const ctx = { client: {} };
+
+    const plugin = assemblePlugin(ctx, [role]);
+
+    await plugin.tool!.testTool.execute({ foo: 'bar' }, { session: { id: 'sess-1' }, callID: 'call-real-xyz' });
+
+    expect(onToolBefore).toHaveBeenCalledWith('testTool', { foo: 'bar' }, 'sess-1', 'call-real-xyz');
+    expect(onToolAfter).toHaveBeenCalledWith('testTool', { foo: 'bar' }, 'result', 'sess-1', 'call-real-xyz');
   });
 
   // PR-11: should_not_dispatch_idle_when_no_idle_handlers
