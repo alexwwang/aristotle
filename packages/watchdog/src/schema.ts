@@ -27,6 +27,7 @@ export interface PipelineState {
 
   testEvidenceConfirmed: boolean
   lastCheckpointAt: string         // ISO 8601, for stale detection
+  ownerSessionId?: string
 }
 
 export type PhaseStatus = 'idle' | 'active' | 'ralph_loop' | 'awaiting_approval' | 'complete'
@@ -38,6 +39,10 @@ export interface PhaseRecord {
   ralphTermination: RalphTermination | null
   userApproved: boolean
   approvedAt: string | null
+  articulationAttempted?: boolean
+  articulationVerified?: boolean
+  articulationDegraded?: boolean
+  articulationDimensions?: ArticulationDimension[]
 }
 
 export type RalphTermination = 'early_stop' | 'gate_pass' | 'max_rounds'
@@ -122,3 +127,26 @@ export interface AuditLogEntry {
   decision: 'PASS' | 'BLOCK'
   violation?: string
 }
+
+// ── Phase 2: Observation types ─────────────────────────────────────────
+
+export interface ObservationEntry {
+  timestamp: string
+  runId: string
+  projectId: string
+  sessionId: string
+  type: string
+  round?: number
+  toolName?: string
+  callID?: string
+  metadata?: Record<string, unknown>
+}
+
+// ── Phase 2: Articulation dimensions ───────────────────────────────────
+
+export type ArticulationDimension = 'what_it_protects' | 'key_risks' | 'why_approach_works'
+
+// ── Phase 2: Observation type constants ────────────────────────────────
+
+export const OBS_TYPE_REVIEWER_SPAWNED = '_reviewer_spawned'
+export const OBS_TYPE_OBSERVER_DEGRADED = '_observer_degraded'

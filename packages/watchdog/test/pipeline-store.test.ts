@@ -25,6 +25,9 @@ function createMockStateStore(): StateStore {
       if (!logs.has(key)) logs.set(key, [])
       logs.get(key)!.push(entry)
     },
+    readLog<T>(key: string): T[] {
+      return (logs.get(key) ?? []) as T[]
+    },
     list(_prefix: string): string[] {
       return []
     },
@@ -182,6 +185,7 @@ describe('PipelineStore', () => {
         },
         write<T>(_key: string, _value: T): void {},
         appendLog(_key: string, _entry: unknown): void {},
+        readLog<T>(_key: string): T[] { return [] },
         list(_prefix: string): string[] { return [] },
       }
 
@@ -275,17 +279,19 @@ describe('PipelineStore', () => {
       expect(archivedState).toBeUndefined()
     })
 
-    it('logs warning about audit not being archived', () => {
+    it('archives audit log entries alongside state', () => {
       const state = makeState()
       pipelineStore.writeState('testproj', 'run-001', state)
+      pipelineStore.appendAudit('testproj', 'run-001', {
+        timestamp: NOW, runId: 'run-001', projectId: 'testproj',
+        sessionId: 'sess-001', event: 'pipeline_start', phase: 0, decision: 'PASS',
+      })
 
       pipelineStore.archiveRun('testproj', 'run-001')
 
-      expect(mockLogger.warn).toHaveBeenCalledWith(
-        'Audit log not archived for project %s run %s (StateStore limitation)',
-        'testproj',
-        'run-001',
-      )
+      const archivedAudit = (mockStore as any)._logs.get('watchdog/testproj/archive/run-001/audit')
+      expect(archivedAudit).toHaveLength(1)
+      expect(archivedAudit[0].event).toBe('pipeline_start')
     })
 
     it('§9.2: archive preserves state but does not delete original (StateStore has no delete)', () => {

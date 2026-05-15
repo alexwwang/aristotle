@@ -270,4 +270,23 @@ describe('StateStore', () => {
     appendSpy.mockRestore();
     expect(errors.length).toBeGreaterThan(0);
   });
+
+  // SS-24: readLog returns parsed JSONL entries
+  it('SS-24 should read log entries written by appendLog', () => {
+    store.appendLog('role/log', { n: 1 });
+    store.appendLog('role/log', { n: 2 });
+    const entries = store.readLog<{ n: number }>('role/log');
+    expect(entries).toEqual([{ n: 1 }, { n: 2 }]);
+  });
+
+  // SS-25: readLog returns empty array for non-existent key
+  it('SS-25 should return empty array for non-existent log key', () => {
+    const entries = store.readLog('non/existent/log');
+    expect(entries).toEqual([]);
+  });
+
+  // SS-26: readLog rejects path traversal
+  it('SS-26 should reject path traversal in readLog', () => {
+    expect(() => store.readLog('role/../evil')).toThrow('Path traversal');
+  });
 });

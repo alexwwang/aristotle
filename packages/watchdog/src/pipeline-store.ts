@@ -3,6 +3,7 @@ import type { Logger } from '@opencode-ai/core/logger';
 import type {
   ActiveRun,
   AuditLogEntry,
+  ObservationEntry,
   PipelineState,
   ProjectIndex,
 } from './schema.js';
@@ -47,12 +48,20 @@ export class PipelineStore {
     return `watchdog/${projectId}/${runId}/audit`;
   }
 
+  private observationKey(projectId: string, runId: string): string {
+    return `watchdog/${projectId}/${runId}/observations`;
+  }
+
   private archiveStateKey(projectId: string, runId: string): string {
     return `watchdog/${projectId}/archive/${runId}/state`;
   }
 
   private archiveAuditKey(projectId: string, runId: string): string {
     return `watchdog/${projectId}/archive/${runId}/audit`;
+  }
+
+  private archiveObservationKey(projectId: string, runId: string): string {
+    return `watchdog/${projectId}/archive/${runId}/observations`;
   }
 
   // ------------------------------------------------------------------
@@ -165,11 +174,71 @@ export class PipelineStore {
       );
     }
 
-    // Audit log archival not yet supported — StateStore has no readLog/copy.
-    this.logger.warn(
-      'Audit log not archived for project %s run %s (StateStore limitation)',
-      projectId,
-      runId,
-    );
+    // Archive audit log
+    const auditEntries = this.stateStore.readLog<AuditLogEntry>(this.auditKey(projectId, runId));
+    if (auditEntries.length > 0) {
+      const archiveAuditKey = this.archiveAuditKey(projectId, runId);
+      for (const entry of auditEntries) {
+        this.stateStore.appendLog(archiveAuditKey, entry);
+      }
+      this.logger.info(
+        'Archived %d audit entries for project %s run %s',
+        auditEntries.length,
+        projectId,
+        runId,
+      );
+    }
+
+    // Archive observations
+    const observations = this.stateStore.readLog<ObservationEntry>(this.observationKey(projectId, runId));
+    if (observations.length > 0) {
+      const archiveObsKey = this.archiveObservationKey(projectId, runId);
+      for (const entry of observations) {
+        this.stateStore.appendLog(archiveObsKey, entry);
+      }
+      this.logger.info(
+        'Archived %d observations for project %s run %s',
+        observations.length,
+        projectId,
+        runId,
+      );
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // Observations (Phase 2)
+  // ------------------------------------------------------------------
+
+  async appendObservation(
+    projectId: string,
+    runId: string,
+    entry: ObservationEntry,
+  ): Promise<void> {
+    this.validatePathComponents(projectId, runId)
+    const key = this.observationKey(projectId, runId)
+    // M-1: use appendLog for crash-safe, concurrent-safe writes (same pattern as appendAudit)
+    this.stateStore.appendLog(key, entry)
+  }
+
+  async readObservations(
+    projectId: string,
+    runId: string,
+  ): Promise<ObservationEntry[]> {
+    this.validatePathComponents(projectId, runId)
+    const key = this.observationKey(projectId, runId)
+    return this.stateStore.readLog<ObservationEntry>(key)
+  }
+
+  async findObservations(
+    projectId: string,
+    runId: string,
+    filter: { type?: string; round?: number },
+  ): Promise<ObservationEntry[]> {
+    const entries = await this.readObservations(projectId, runId)
+    return entries.filter((e) => {
+      if (filter.type !== undefined && e.type !== filter.type) return false
+      if (filter.round !== undefined && e.round !== filter.round) return false
+      return true
+    })
   }
 }

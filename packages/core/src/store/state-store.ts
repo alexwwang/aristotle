@@ -7,6 +7,7 @@ export interface StateStore {
   read<T>(key: string): T | null;
   write<T>(key: string, value: T): void;
   appendLog(key: string, entry: unknown): void;
+  readLog<T>(key: string): T[];
   list(prefix: string): string[];
 }
 
@@ -97,6 +98,18 @@ export function createStateStore(
         fs.appendFileSync(logPath, JSON.stringify(entry) + '\n');
       } catch (err) {
         log.error('Failed to append log key %s: %s', key, String(err));
+      }
+    },
+
+    readLog<T>(key: string): T[] {
+      validateKey(key);
+      const logPath = getLogPath(baseDir, key);
+      try {
+        const content = fs.readFileSync(logPath, 'utf-8').trim();
+        if (!content) return [];
+        return content.split('\n').map((line) => JSON.parse(line) as T);
+      } catch {
+        return [];
       }
     },
 

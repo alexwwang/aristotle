@@ -1,6 +1,7 @@
 import type {
   CheckpointEvent,
   ContestedIssue,
+  PhaseRecord,
   PipelineState,
   RalphTermination,
   RoundTally,
@@ -247,6 +248,22 @@ export function validateTransition(
       }
       break
     }
+
+    case 'why_articulation': {
+      if (!isInt(payload.phase)) {
+        return fail(
+          'Invalid phase',
+          'why_articulation requires phase to be an integer.',
+        )
+      }
+      if (!isNonEmptyString(payload.articulation)) {
+        return fail(
+          'Missing or invalid articulation',
+          'why_articulation requires a non-empty string articulation field.',
+        )
+      }
+      break
+    }
   }
 
   // ── State precondition checks ───────────────────────────────────
@@ -472,6 +489,31 @@ export function validateTransition(
       }
       return ok()
     }
+
+    case 'why_articulation': {
+      if (state === null) return fail(NO_ACTIVE_RUN, START_FIRST)
+      const phase = payload.phase as number
+      if (phase !== state.currentPhase) {
+        return fail(
+          'Phase mismatch',
+          `why_articulation must target the current phase (${state.currentPhase}).`,
+        )
+      }
+      if (state.phaseStatus !== 'active') {
+        return fail(
+          'Phase not active',
+          'why_articulation can only be called when phase status is active.',
+        )
+      }
+      const rec = state.phases[phase]
+      if (!rec) {
+        return fail(
+          `Phase ${phase} not found`,
+          `why_articulation requires phase ${phase} to have been entered.`,
+        )
+      }
+      return ok()
+    }
   }
 }
 
@@ -511,6 +553,10 @@ export function applyTransition(
         ralph: null,
         testEvidenceConfirmed: false,
         lastCheckpointAt: now,
+        ownerSessionId:
+          payload._ownerSessionId !== undefined
+            ? (payload._ownerSessionId as string)
+            : undefined,
       }
     }
 
@@ -718,6 +764,37 @@ export function applyTransition(
         ...state,
         phaseStatus: 'complete',
         ralph: null,
+        lastCheckpointAt: now,
+      }
+    }
+
+    case 'why_articulation': {
+      if (state === null) {
+        throw new Error('BUG: state must not be null for why_articulation')
+      }
+      const phase = payload.phase as number
+      const existingRec = state.phases[phase]
+      const articulationVerified = payload._articulationVerified === true
+      const articulationDimensions = articulationVerified
+        ? (payload._articulationDimensions as PhaseRecord['articulationDimensions'])
+        : undefined
+
+      return {
+        ...state,
+        phases: {
+          ...state.phases,
+          [phase]: {
+            ...existingRec,
+            articulationAttempted: true,
+            ...(articulationVerified && {
+              articulationVerified: true,
+              articulationDimensions,
+            }),
+            articulationDegraded:
+              existingRec.articulationDegraded === true ||
+              payload._articulationDegraded === true,
+          },
+        },
         lastCheckpointAt: now,
       }
     }
