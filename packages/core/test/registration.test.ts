@@ -418,6 +418,7 @@ describe('assemblePlugin', () => {
           callID: 'call-1',
         }),
       ).rejects.toThrow('before fail');
+      expect(onToolBefore2).not.toHaveBeenCalled(); // first throw wins
     });
 
     // PR-26: should_continue_calling_remaining_onToolAfter_on_error
