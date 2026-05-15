@@ -132,6 +132,7 @@ export class CheckpointHandler {
       }
       // C-2: single-pipeline constraint
       //      Non-stale: reject unconditionally. Stale: only owner may restart.
+      //      Corrupted/missing state: fail-closed — reject (cannot verify ownership).
       if (activeRun && currentState) {
         if (!isStale(currentState.lastCheckpointAt, this.staleThresholdMs)) {
           // Non-stale active pipeline — reject any new pipeline_start
@@ -149,6 +150,15 @@ export class CheckpointHandler {
             guidance: 'Only the orchestrator can restart a stale pipeline. Sub-agents cannot create new pipelines.',
           })
         }
+      }
+      if (activeRun && !currentState) {
+        // Corrupted state: active run exists but state file missing/unreadable.
+        // Fail-closed: cannot verify ownership, so reject pipeline_start.
+        return JSON.stringify({
+          ok: false,
+          violation: 'An active pipeline run exists but its state is missing or corrupted. Cannot verify ownership.',
+          guidance: 'Remove the stale run metadata manually, or investigate the state storage.',
+        })
       }
       payload._runId = randomUUID()
       payload._projectId = projectId
