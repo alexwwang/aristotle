@@ -843,6 +843,45 @@ describe('CheckpointHandler Phase 2', () => {
       expect(result.ok).toBe(false)
       expect(result.violation).toBeDefined()
     })
+
+    // ── TC-C-40: Ownership check runs before stale check (C-1 defense) ────
+    it('TC-C-40: Non-owner rejected on stale pipeline without seeing recovery prompt', async () => {
+      const localStore = createMockStore()
+      const localCache = createMockCache()
+      const localObserver = createMockObserver()
+      localObserver.isDegraded.mockReturnValue(true)
+
+      const activeRuns = new Map<string, any>()
+      const states = new Map<string, any>()
+      localStore.getActiveRun.mockImplementation((pid: string) => activeRuns.get(pid) ?? null)
+      localStore.setActiveRun.mockImplementation((pid: string, run: any) => activeRuns.set(pid, run))
+      localStore.readState.mockImplementation((pid: string, rid: string) => states.get(`${pid}/${rid}`) ?? null)
+      localStore.writeState.mockImplementation((pid: string, rid: string, state: any) => states.set(`${pid}/${rid}`, state))
+
+      const localHandler = new CheckpointHandler(localStore, STALE_THRESHOLD_MS, localCache, localObserver)
+
+      // Owner creates pipeline
+      const ownerCtx = { worktree: WORKTREE, sessionID: 'sess-orchestrator' }
+      await localHandler.handle('pipeline_start', JSON.stringify({ description: 'test' }), ownerCtx)
+
+      // Make the pipeline stale by writing a very old lastCheckpointAt
+      const activeRun = activeRuns.get(PROJECT_ID)
+      const state = states.get(`${PROJECT_ID}/${activeRun.runId}`)
+      state.lastCheckpointAt = '2020-01-01T00:00:00.000Z' // 6 years ago
+
+      // Sub-agent tries phase_enter on the stale pipeline
+      const subAgentCtx = { worktree: WORKTREE, sessionID: 'sess-sub-agent' }
+      const result = parseResult(await localHandler.handle(
+        'phase_enter',
+        JSON.stringify({ phase: 1 }),
+        subAgentCtx,
+      ))
+
+      // Must be ownership rejection, NOT stale recovery prompt
+      expect(result.ok).toBe(false)
+      expect(result.violation).toContain('belongs to another session')
+      expect(result).not.toHaveProperty('recovery')
+    })
   })
 
   // ── Semantic Assertion Tests (SA) ────────────────────────────────────

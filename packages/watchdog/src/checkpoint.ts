@@ -73,7 +73,30 @@ export class CheckpointHandler {
     const currentState: PipelineState | null =
       activeRun ? (this.store.readState(projectId, activeRun.runId) ?? null) : null
 
-    // ── 4. Stale check (§4.3, §7.2) ───────────────────────────────────
+    // ── 4. Ownership check (§5.5a Layer 2+3 defense — MUST run before stale check) ──
+    //    Non-owner sessions must never see recovery prompts or advance state.
+    if (event !== 'pipeline_start' && activeRun && currentState?.ownerSessionId) {
+      if (currentState.ownerSessionId !== sessionId) {
+        const entry: AuditLogEntry = {
+          timestamp: now,
+          runId: activeRun.runId,
+          projectId,
+          sessionId,
+          event,
+          phase: currentState.currentPhase,
+          decision: 'BLOCK',
+          violation: `owner_mismatch: session ${sessionId} vs owner ${currentState.ownerSessionId}`,
+        }
+        this.store.appendAudit(projectId, activeRun.runId, entry)
+        return JSON.stringify({
+          ok: false,
+          violation: 'Checkpoint rejected: this pipeline belongs to another session.',
+          guidance: 'Sub-agents cannot advance pipeline state. Complete your assigned task and report results to the orchestrator. Do NOT attempt to create a new pipeline or retry this call.',
+        } satisfies CheckpointViolation)
+      }
+    }
+
+    // ── 5. Stale check (§4.3, §7.2) ───────────────────────────────────
     //    H-5: pipeline_start bypasses stale check (escape hatch)
     if (activeRun && event !== 'pipeline_start') {
       if (currentState && isStale(currentState.lastCheckpointAt, this.staleThresholdMs)) {
@@ -120,28 +143,6 @@ export class CheckpointHandler {
       payload._ownerSessionId = sessionId
     }
     payload._now = now
-
-    // ── 7. Ownership check (Phase 2) ──────────────────────────────────
-    if (event !== 'pipeline_start' && activeRun && currentState?.ownerSessionId) {
-      if (currentState.ownerSessionId !== sessionId) {
-        const entry: AuditLogEntry = {
-          timestamp: now,
-          runId: activeRun.runId,
-          projectId,
-          sessionId,
-          event,
-          phase: currentState.currentPhase,
-          decision: 'BLOCK',
-          violation: `owner_mismatch: session ${sessionId} vs owner ${currentState.ownerSessionId}`,
-        }
-        this.store.appendAudit(projectId, activeRun.runId, entry)
-        return JSON.stringify({
-          ok: false,
-          violation: 'Checkpoint rejected: this pipeline belongs to another session.',
-          guidance: 'Sub-agents cannot advance pipeline state. Complete your assigned task and report results to the orchestrator. Do NOT attempt to create a new pipeline or retry this call.',
-        } satisfies CheckpointViolation)
-      }
-    }
 
     // ── 8. Validate transition ────────────────────────────────────────
     const validation = validateTransition(event, payload, currentState)
