@@ -1,14 +1,20 @@
 /**
  * Watchdog role entry point.
  *
- * Design: Phase1-Watchdog-StateMachine.md §2.2 index.ts
+ * Design: Phase2-ActiveMonitoring.md §5.4
  *
  * Creates and wires the watchdog role:
  * 1. Resolve config (same sessionsDir as aristotle)
- * 2. Create dependencies (DI — no direct config import)
- * 3. Run crash recovery (informational logging only)
- * 4. Create tools
- * 5. Return RoleRegistration
+ * 2. Resolve worktree root
+ * 3. Create logger
+ * 4. Load watchdog config (phase deliverable patterns)
+ * 5. Create remaining dependencies (store, stateStore)
+ * 6. Create shared infrastructure (cache, session buffer)
+ * 7. Create Module B interceptor + Module A observer
+ * 8. Create checkpoint handler
+ * 9. Run crash recovery (informational logging only)
+ * 10. Create tools (tdd_checkpoint, wired to cache)
+ * 11. Return RoleRegistration with onToolBefore / onToolAfter
  */
 import { join } from 'node:path'
 import { homedir } from 'node:os'
@@ -19,7 +25,15 @@ import { createLogger } from '@opencode-ai/core/logger'
 import { PipelineStore } from './pipeline-store.js'
 import { CheckpointHandler } from './checkpoint.js'
 import { createWatchdogTools } from './tools.js'
-import { STALE_THRESHOLD_MS } from './constants.js'
+import { PipelineStateCache } from './state-cache.js'
+import { SessionBuffer } from './session-buffer.js'
+import { Interceptor } from './interceptor.js'
+import { Observer } from './observer.js'
+import { loadWatchdogConfig } from './watchdog-config.js'
+import { extractFilePath } from './path-extractor.js'
+import { classifyFile } from './file-classifier.js'
+import { createRules } from './intercept-rules.js'
+import { STALE_THRESHOLD_MS, SESSION_BUFFER_MAX_SIZE } from './constants.js'
 
 const DEFAULT_SESSIONS_DIR = join(homedir(), '.config', 'opencode', 'aristotle-sessions')
 const CONFIG_PATH = join(homedir(), '.config', 'opencode', 'aristotle-config.json')
@@ -36,25 +50,46 @@ function readConfigSessionsDir(): string | null {
 }
 
 export async function createWatchdogRole(ctx: any): Promise<RoleRegistration | null> {
-  // 1. Resolve config — reuse the same sessionsDir as aristotle
-  //    Priority: plugin config > config file > env var > default path (mirrors reflection/config.ts)
+  // 1. Resolve config
   const sessionsDir = ctx.config?.aristotleBridge?.sessionsDir
     ?? readConfigSessionsDir()
     ?? process.env.ARISTOTLE_SESSIONS_DIR
     ?? DEFAULT_SESSIONS_DIR
-
-  // Ensure sessions directory exists (mirrors reflection/src/index.ts)
   mkdirSync(sessionsDir, { recursive: true })
 
-  // 2. Create dependencies (DI)
+  // 2. Resolve worktree root for path normalization
+  const worktreeRoot: string = ctx.worktree ?? process.cwd()
+
+  // 3. Create logger
   const logger = createLogger('watchdog', 'AGENT_PLATFORM_LOG')
+
+  // 4. Load watchdog config (§7.4.1)
+  const watchdogConfig = loadWatchdogConfig(worktreeRoot, logger)
+
+  // 5. Create remaining core dependencies
   const stateStore = createStateStore(sessionsDir, logger)
   const store = new PipelineStore(stateStore, logger)
-  const checkpointHandler = new CheckpointHandler(store, STALE_THRESHOLD_MS)
 
-  // 3. Crash recovery — informational scan (§7.1)
-  //    Scan all projects with active runs, log warnings for stale ones.
-  //    No state mutation, no in-memory flags — stale check happens on each checkpoint call.
+  // 6. Create shared infrastructure
+  const multiAgent = false // TODO: detectMultiAgent(ctx) — Phase 2 §5.5a
+  const cache = new PipelineStateCache(store, logger, worktreeRoot, multiAgent)
+  const sessionBuffer = new SessionBuffer(SESSION_BUFFER_MAX_SIZE)
+
+  // 7. Create Module B interceptor + Module A observer
+  const rules = createRules(watchdogConfig)
+  const interceptor = new Interceptor(
+    cache,
+    watchdogConfig,
+    extractFilePath,
+    classifyFile,
+    rules,
+  )
+  const observer = new Observer(cache, sessionBuffer, store)
+
+  // 8. Create checkpoint handler (wires cache + observer)
+  const checkpointHandler = new CheckpointHandler(store, STALE_THRESHOLD_MS, cache, observer)
+
+  // 9. Crash recovery — informational scan
   try {
     const projectIds = store.getProjectIds()
     for (const projectId of projectIds) {
@@ -78,9 +113,18 @@ export async function createWatchdogRole(ctx: any): Promise<RoleRegistration | n
     logger.warn('Crash recovery scan failed: %s', String(err))
   }
 
-  // 4. Create tools
+  // 10. Create tools
   const tools = createWatchdogTools({ checkpointHandler })
 
-  // 5. Return RoleRegistration
-  return { tools }
+  // 11. Return RoleRegistration with hooks
+  return {
+    tools,
+    onToolBefore: async (tool, args, sessionId) => {
+      await interceptor.handle(tool, args, sessionId, '')
+      return null // interceptor throws to block; null = allow
+    },
+    onToolAfter: async (tool, args, output, sessionId) => {
+      await observer.handle(tool, args, typeof output === 'string' ? output : JSON.stringify(output), sessionId, '')
+    },
+  }
 }
