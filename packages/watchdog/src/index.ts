@@ -32,6 +32,7 @@ import { Observer } from './observer.js'
 import { loadWatchdogConfig } from './watchdog-config.js'
 import { extractFilePath } from './path-extractor.js'
 import { classifyFile } from './file-classifier.js'
+import { detectMultiAgent } from './multi-agent.js'
 import { createRules } from './intercept-rules.js'
 import { STALE_THRESHOLD_MS, SESSION_BUFFER_MAX_SIZE } from './constants.js'
 
@@ -71,7 +72,7 @@ export async function createWatchdogRole(ctx: any): Promise<RoleRegistration | n
   const store = new PipelineStore(stateStore, logger)
 
   // 6. Create shared infrastructure
-  const multiAgent = false // TODO: detectMultiAgent(ctx) — Phase 2 §5.5a
+  const multiAgent = detectMultiAgent(ctx)
   const cache = new PipelineStateCache(store, logger, worktreeRoot, multiAgent)
   const sessionBuffer = new SessionBuffer(SESSION_BUFFER_MAX_SIZE)
 

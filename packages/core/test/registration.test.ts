@@ -323,4 +323,171 @@ describe('assemblePlugin', () => {
     expect(plugin.tool).toBeDefined();
     expect(plugin.tool).toHaveProperty('testTool');
   });
+
+  describe('Phase 2: global hook dispatch', () => {
+    // PR-21: should_populate_tool_execute_before_when_roles_have_onToolBefore
+    it('should_populate_tool_execute_before_when_roles_have_onToolBefore', () => {
+      const role: RoleRegistration = { onToolBefore: vi.fn().mockResolvedValue(null) };
+      const ctx = { client: {} };
+
+      const plugin = assemblePlugin(ctx, [role]);
+
+      expect(plugin['tool.execute.before']).toBeDefined();
+    });
+
+    // PR-22: should_populate_tool_execute_after_when_roles_have_onToolAfter
+    it('should_populate_tool_execute_after_when_roles_have_onToolAfter', () => {
+      const role: RoleRegistration = { onToolAfter: vi.fn().mockResolvedValue(undefined) };
+      const ctx = { client: {} };
+
+      const plugin = assemblePlugin(ctx, [role]);
+
+      expect(plugin['tool.execute.after']).toBeDefined();
+    });
+
+    // PR-23: should_call_each_onToolBefore_with_correct_params
+    it('should_call_each_onToolBefore_with_correct_params', async () => {
+      const onToolBefore1 = vi.fn().mockResolvedValue(null);
+      const onToolBefore2 = vi.fn().mockResolvedValue(null);
+      const role1: RoleRegistration = { onToolBefore: onToolBefore1 };
+      const role2: RoleRegistration = { onToolBefore: onToolBefore2 };
+      const ctx = { client: {} };
+
+      const plugin = assemblePlugin(ctx, [role1, role2]);
+
+      await plugin['tool.execute.before']!({
+        tool: 'edit',
+        args: { path: '/tmp/file' },
+        sessionID: 'sess-123',
+        callID: 'call-456',
+      });
+
+      expect(onToolBefore1).toHaveBeenCalledWith('edit', { path: '/tmp/file' }, 'sess-123', 'call-456');
+      expect(onToolBefore2).toHaveBeenCalledWith('edit', { path: '/tmp/file' }, 'sess-123', 'call-456');
+    });
+
+    // PR-24: should_call_each_onToolAfter_with_correct_params
+    it('should_call_each_onToolAfter_with_correct_params', async () => {
+      const onToolAfter1 = vi.fn().mockResolvedValue(undefined);
+      const onToolAfter2 = vi.fn().mockResolvedValue(undefined);
+      const role1: RoleRegistration = { onToolAfter: onToolAfter1 };
+      const role2: RoleRegistration = { onToolAfter: onToolAfter2 };
+      const ctx = { client: {} };
+
+      const plugin = assemblePlugin(ctx, [role1, role2]);
+
+      await plugin['tool.execute.after']!({
+        tool: 'write',
+        args: { path: '/tmp/file', content: 'hello' },
+        sessionID: 'sess-789',
+        callID: 'call-abc',
+        output: 'done',
+      });
+
+      expect(onToolAfter1).toHaveBeenCalledWith(
+        'write',
+        { path: '/tmp/file', content: 'hello' },
+        'done',
+        'sess-789',
+        'call-abc',
+      );
+      expect(onToolAfter2).toHaveBeenCalledWith(
+        'write',
+        { path: '/tmp/file', content: 'hello' },
+        'done',
+        'sess-789',
+        'call-abc',
+      );
+    });
+
+    // PR-25: should_propagate_error_from_tool_execute_before
+    it('should_propagate_error_from_tool_execute_before', async () => {
+      const onToolBefore1 = vi.fn().mockRejectedValue(new Error('before fail'));
+      const onToolBefore2 = vi.fn().mockResolvedValue(null);
+      const role1: RoleRegistration = { onToolBefore: onToolBefore1 };
+      const role2: RoleRegistration = { onToolBefore: onToolBefore2 };
+      const ctx = { client: {} };
+
+      const plugin = assemblePlugin(ctx, [role1, role2]);
+
+      await expect(
+        plugin['tool.execute.before']!({
+          tool: 'edit',
+          args: {},
+          sessionID: 'sess-1',
+          callID: 'call-1',
+        }),
+      ).rejects.toThrow('before fail');
+    });
+
+    // PR-26: should_continue_calling_remaining_onToolAfter_on_error
+    it('should_continue_calling_remaining_onToolAfter_on_error', async () => {
+      const onToolAfter1 = vi.fn().mockRejectedValue(new Error('after fail'));
+      const onToolAfter2 = vi.fn().mockResolvedValue(undefined);
+      const role1: RoleRegistration = { onToolAfter: onToolAfter1 };
+      const role2: RoleRegistration = { onToolAfter: onToolAfter2 };
+      const ctx = { client: {} };
+
+      const plugin = assemblePlugin(ctx, [role1, role2]);
+
+      await plugin['tool.execute.after']!({
+        tool: 'Task',
+        args: {},
+        sessionID: 'sess-1',
+        callID: 'call-1',
+        output: 'result',
+      });
+
+      expect(onToolAfter1).toHaveBeenCalled();
+      expect(onToolAfter2).toHaveBeenCalled();
+    });
+
+    // PR-27: should_omit_tool_execute_before_when_no_onToolBefore
+    it('should_omit_tool_execute_before_when_no_onToolBefore', () => {
+      const role: RoleRegistration = { tools: { testTool: { description: 'x', args: {}, execute: vi.fn() } } };
+      const ctx = { client: {} };
+
+      const plugin = assemblePlugin(ctx, [role]);
+
+      expect(plugin['tool.execute.before']).toBeUndefined();
+    });
+
+    // PR-28: should_omit_tool_execute_after_when_no_onToolAfter
+    it('should_omit_tool_execute_after_when_no_onToolAfter', () => {
+      const role: RoleRegistration = { tools: { testTool: { description: 'x', args: {}, execute: vi.fn() } } };
+      const ctx = { client: {} };
+
+      const plugin = assemblePlugin(ctx, [role]);
+
+      expect(plugin['tool.execute.after']).toBeUndefined();
+    });
+
+    // PR-29: should_pass_callID_through_to_both_hooks
+    it('should_pass_callID_through_to_both_hooks', async () => {
+      const onToolBefore = vi.fn().mockResolvedValue(null);
+      const onToolAfter = vi.fn().mockResolvedValue(undefined);
+      const role: RoleRegistration = { onToolBefore, onToolAfter };
+      const ctx = { client: {} };
+
+      const plugin = assemblePlugin(ctx, [role]);
+
+      await plugin['tool.execute.before']!({
+        tool: 'edit',
+        args: {},
+        sessionID: 'sess-1',
+        callID: 'my-call-id',
+      });
+
+      await plugin['tool.execute.after']!({
+        tool: 'edit',
+        args: {},
+        sessionID: 'sess-1',
+        callID: 'my-call-id',
+        output: 'ok',
+      });
+
+      expect(onToolBefore).toHaveBeenCalledWith('edit', {}, 'sess-1', 'my-call-id');
+      expect(onToolAfter).toHaveBeenCalledWith('edit', {}, 'ok', 'sess-1', 'my-call-id');
+    });
+  });
 });
