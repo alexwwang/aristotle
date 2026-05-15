@@ -137,13 +137,10 @@ export interface AuditLogEntry {
 
 export interface ObservationEntry {
   timestamp: string
-  runId: string
-  projectId: string
-  sessionId: string
   type: string
+  tool: string
+  callID: string
   round?: number
-  tool?: string
-  callID?: string
   metadata?: Record<string, unknown>
 }
 
