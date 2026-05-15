@@ -28,7 +28,19 @@ export interface PipelineState {
 
   testEvidenceConfirmed: boolean
   lastCheckpointAt: string         // ISO 8601, for stale detection
+  /** Owning session ID. Mandatory for Phase 2+ pipelines (enforced by CheckpointHandler).
+   *  Absent for Phase 1 legacy states — use `hasOwner()` guard before accessing. */
   ownerSessionId?: string
+}
+
+/** Phase 2+ pipeline state with guaranteed ownerSessionId. */
+export interface OwnedPipelineState extends PipelineState {
+  ownerSessionId: string
+}
+
+/** Type guard: narrows PipelineState to OwnedPipelineState when ownerSessionId is present. */
+export function hasOwner(state: PipelineState | null): state is OwnedPipelineState {
+  return state !== null && typeof state.ownerSessionId === 'string'
 }
 
 export type PhaseStatus = 'idle' | 'active' | 'ralph_loop' | 'awaiting_approval' | 'complete'

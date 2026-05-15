@@ -25,6 +25,7 @@ import type {
   PipelineStateSummary,
   AuditLogEntry,
 } from './schema.js'
+import { hasOwner } from './schema.js'
 import { validateTransition, applyTransition, NO_ACTIVE_RUN } from './transitions.js'
 import { computeProjectId } from './project-id.js'
 import { validateArticulation } from './articulation.js'
@@ -75,7 +76,7 @@ export class CheckpointHandler {
 
     // ── 4. Ownership check (§5.5a Layer 2+3 defense — MUST run before stale check) ──
     //    Non-owner sessions must never see recovery prompts or advance state.
-    if (event !== 'pipeline_start' && activeRun && currentState?.ownerSessionId) {
+    if (event !== 'pipeline_start' && activeRun && hasOwner(currentState)) {
       if (currentState.ownerSessionId !== sessionId) {
         const entry: AuditLogEntry = {
           timestamp: now,
