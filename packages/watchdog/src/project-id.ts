@@ -9,6 +9,7 @@ import { resolve } from 'node:path'
  * Core doesn't know what a "project" is.
  */
 export function computeProjectId(worktree: string): string {
-  const absolute = resolve(worktree)
+  // TechSpec §3.1.1: normalize to lowercase for case-insensitive FS (macOS)
+  const absolute = resolve(worktree).toLowerCase()
   return createHash('sha256').update(absolute).digest('hex').slice(0, 8)
 }

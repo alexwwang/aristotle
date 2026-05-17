@@ -28,6 +28,9 @@ function createMockStateStore(): StateStore {
     readLog<T>(key: string): T[] {
       return (logs.get(key) ?? []) as T[]
     },
+    readLogSafe<T>(key: string): T[] {
+      return (logs.get(key) ?? []) as T[]
+    },
     list(_prefix: string): string[] {
       return []
     },
@@ -186,6 +189,7 @@ describe('PipelineStore', () => {
         write<T>(_key: string, _value: T): void {},
         appendLog(_key: string, _entry: unknown): void {},
         readLog<T>(_key: string): T[] { return [] },
+        readLogSafe<T>(_key: string): T[] { return [] },
         list(_prefix: string): string[] { return [] },
       }
 
@@ -367,6 +371,88 @@ describe('PipelineStore', () => {
       expect(projectIds).toContain('proj-a')
       expect(projectIds).toContain('proj-b')
       expect(projectIds).toHaveLength(2)
+    })
+  })
+
+  // ------------------------------------------------------------------
+  // Observations (Phase 2)
+  // ------------------------------------------------------------------
+
+  describe('observations', () => {
+    it('appendObservation appends entry readable by readObservations', async () => {
+      const entry = {
+        timestamp: NOW,
+        type: '_reviewer_spawned',
+        tool: 'Task',
+        callID: 'call-001',
+        round: 1,
+        metadata: { sessionId: 'sess-001' },
+      }
+      await pipelineStore.appendObservation('testproj', 'run-001', entry)
+
+      const observations = await pipelineStore.readObservations('testproj', 'run-001')
+      expect(observations).toHaveLength(1)
+      expect(observations[0]).toEqual(entry)
+    })
+
+    it('readObservations returns multiple appended entries', async () => {
+      const entry1 = { timestamp: NOW, type: '_reviewer_spawned', tool: 'Task', callID: 'call-001', round: 1 }
+      const entry2 = { timestamp: NOW, type: '_reviewer_spawned', tool: 'Task', callID: 'call-002', round: 2 }
+      await pipelineStore.appendObservation('testproj', 'run-001', entry1)
+      await pipelineStore.appendObservation('testproj', 'run-001', entry2)
+
+      const observations = await pipelineStore.readObservations('testproj', 'run-001')
+      expect(observations).toHaveLength(2)
+      expect(observations[0].callID).toBe('call-001')
+      expect(observations[1].callID).toBe('call-002')
+    })
+
+    it('findObservations filters by type', async () => {
+      const entry1 = { timestamp: NOW, type: '_reviewer_spawned', tool: 'Task', callID: 'call-001', round: 1 }
+      const entry2 = { timestamp: NOW, type: '_observer_degraded', tool: 'Task', callID: 'call-002', round: 1 }
+      await pipelineStore.appendObservation('testproj', 'run-001', entry1)
+      await pipelineStore.appendObservation('testproj', 'run-001', entry2)
+
+      const result = await pipelineStore.findObservations('testproj', 'run-001', { type: '_reviewer_spawned' })
+      expect(result).toHaveLength(1)
+      expect(result[0].type).toBe('_reviewer_spawned')
+    })
+
+    it('findObservations filters by round', async () => {
+      const entry1 = { timestamp: NOW, type: '_reviewer_spawned', tool: 'Task', callID: 'call-001', round: 1 }
+      const entry2 = { timestamp: NOW, type: '_reviewer_spawned', tool: 'Task', callID: 'call-002', round: 2 }
+      await pipelineStore.appendObservation('testproj', 'run-001', entry1)
+      await pipelineStore.appendObservation('testproj', 'run-001', entry2)
+
+      const result = await pipelineStore.findObservations('testproj', 'run-001', { round: 2 })
+      expect(result).toHaveLength(1)
+      expect(result[0].round).toBe(2)
+    })
+
+    it('findObservations filters by type and round together', async () => {
+      const entry1 = { timestamp: NOW, type: '_reviewer_spawned', tool: 'Task', callID: 'call-001', round: 1 }
+      const entry2 = { timestamp: NOW, type: '_reviewer_spawned', tool: 'Task', callID: 'call-002', round: 2 }
+      const entry3 = { timestamp: NOW, type: '_observer_degraded', tool: 'Task', callID: 'call-003', round: 2 }
+      await pipelineStore.appendObservation('testproj', 'run-001', entry1)
+      await pipelineStore.appendObservation('testproj', 'run-001', entry2)
+      await pipelineStore.appendObservation('testproj', 'run-001', entry3)
+
+      const result = await pipelineStore.findObservations('testproj', 'run-001', { type: '_reviewer_spawned', round: 2 })
+      expect(result).toHaveLength(1)
+      expect(result[0].callID).toBe('call-002')
+    })
+
+    it('archiveRun moves observations to archive', () => {
+      const state = makeState()
+      pipelineStore.writeState('testproj', 'run-001', state)
+      const entry = { timestamp: NOW, type: '_reviewer_spawned', tool: 'Task', callID: 'call-001', round: 1 }
+      pipelineStore.appendObservation('testproj', 'run-001', entry)
+
+      pipelineStore.archiveRun('testproj', 'run-001')
+
+      const archivedObs = (mockStore as any)._logs.get('watchdog/testproj/archive/run-001/observations')
+      expect(archivedObs).toHaveLength(1)
+      expect(archivedObs[0].type).toBe('_reviewer_spawned')
     })
   })
 

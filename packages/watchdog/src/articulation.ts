@@ -16,12 +16,26 @@ export interface ArticulationResult {
     why_approach_works: boolean
   }
   missingDimension?: string
+  guidance?: string
 }
 
+// TechSpec §3.6: keywords are strings (matched via includes) or RegExp (matched via test)
 const DIMENSION_KEYWORDS = {
-  what_it_protects: ['protect', 'guard', 'defend', 'secure', 'safe', 'invariant'],
-  key_risks: ['risk', 'edge case', 'failure', 'error', 'bug', 'regression', 'break', 'corrupt', 'race condition', 'deadlock'],
-  why_approach_works: ['because', 'effective', 'ensures', 'guarantees', 'prevents', 'reliable', 'robust', 'maintain'],
+  what_it_protects: ['protect', 'guard', 'prevent', 'skip', 'consequence', 'cost', 'lose', 'break', 'fail', 'wrong', 'impact'] as (string | RegExp)[],
+  // 'edge.case' per spec uses regex dot — matches edge-case, edge_case, edge case, edge.case
+  key_risks: ['risk', 'failure', /\bedge[\s._-]?cases?\b/i, 'boundary', 'break', 'incorrect', 'wrong', 'bug', 'issue', 'problem', 'limitation'] as (string | RegExp)[],
+  why_approach_works: ['because', 'reason', 'works', 'effective', 'chose', 'choose', 'alternative', 'better', 'instead', 'why'] as (string | RegExp)[],
+}
+
+function matchesKeyword(lowerText: string, kw: string | RegExp): boolean {
+  if (typeof kw === 'string') return lowerText.includes(kw)
+  return kw.test(lowerText)
+}
+
+const DIMENSION_GUIDANCE: Record<string, string> = {
+  what_it_protects: 'Describe what this phase protects — e.g., "protects against X", "guards Y", "prevents Z".',
+  key_risks: 'Identify key risks — e.g., "risk of X", "edge-case in Y", "failure mode Z".',
+  why_approach_works: 'Explain why the approach works — e.g., "because X", "effective because Y", "chose this over Z because...".',
 }
 
 /**
@@ -45,13 +59,13 @@ export function validateArticulation(text: string): ArticulationResult {
 
   const dimensions = {
     what_it_protects: DIMENSION_KEYWORDS.what_it_protects.some((kw) =>
-      lowerText.includes(kw.toLowerCase())
+      matchesKeyword(lowerText, kw)
     ),
     key_risks: DIMENSION_KEYWORDS.key_risks.some((kw) =>
-      lowerText.includes(kw.toLowerCase())
+      matchesKeyword(lowerText, kw)
     ),
     why_approach_works: DIMENSION_KEYWORDS.why_approach_works.some((kw) =>
-      lowerText.includes(kw.toLowerCase())
+      matchesKeyword(lowerText, kw)
     ),
   }
 
@@ -67,5 +81,6 @@ export function validateArticulation(text: string): ArticulationResult {
     verified,
     dimensions,
     missingDimension,
+    guidance: missingDimension ? DIMENSION_GUIDANCE[missingDimension] : undefined,
   }
 }

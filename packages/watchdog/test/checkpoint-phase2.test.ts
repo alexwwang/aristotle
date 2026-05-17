@@ -433,7 +433,7 @@ describe('CheckpointHandler Phase 2', () => {
         runId: 'run-001',
         currentPhase: 1,
         phaseStatus: 'active',
-        phases: { 1: { ...makePhaseRecord(1), articulationAttempted: true, articulationVerified: false } },
+        phases: { 1: { ...makePhaseRecord(1), articulationAttempted: true, articulationVerified: false, articulationFailures: 1 } },
       }))
 
       const badPayload = JSON.stringify({ phase: 1, articulation: 'Too short.' })
@@ -446,7 +446,7 @@ describe('CheckpointHandler Phase 2', () => {
         runId: 'run-001',
         currentPhase: 1,
         phaseStatus: 'active',
-        phases: { 1: { ...makePhaseRecord(1), articulationAttempted: true, articulationVerified: false } },
+        phases: { 1: { ...makePhaseRecord(1), articulationAttempted: true, articulationVerified: false, articulationFailures: 2 } },
       }))
 
       // Third failure overall — degraded
@@ -1076,6 +1076,146 @@ describe('CheckpointHandler Phase 2', () => {
 
       expect(result.ok).toBe(true)
     })
+
+    // ── TC-I-14: ownerSessionId pre-write assertion fires on loss ───────────
+    it('TC-I-14: ownerSessionId pre-write assertion fires on loss', async () => {
+      // TDD Red: This test should fail until pre-write assertion is implemented in checkpoint.ts
+
+      vi.resetModules()
+      vi.doMock('../src/transitions.js', async () => {
+        const actual = await vi.importActual('../src/transitions.js')
+        return {
+          ...actual,
+          applyTransition: vi.fn((event, payload, state) => {
+            const result = actual.applyTransition(event, payload, state)
+            // Simulate a bug: drop ownerSessionId from the transition result
+            if (event !== 'pipeline_start' && state && (state as any).ownerSessionId) {
+              delete (result as any).ownerSessionId
+            }
+            return result
+          }),
+        }
+      })
+
+      const { CheckpointHandler: MockedHandler } = await import('../src/checkpoint.js')
+
+      const localStore = createMockStore()
+      const localCache = createMockCache()
+      const localObserver = createMockObserver()
+      localObserver.isDegraded.mockReturnValue(true)
+
+      const activeRuns = new Map<string, any>()
+      const states = new Map<string, any>()
+      localStore.getActiveRun.mockImplementation((pid: string) => activeRuns.get(pid) ?? null)
+      localStore.setActiveRun.mockImplementation((pid: string, run: any) => activeRuns.set(pid, run))
+      localStore.readState.mockImplementation((pid: string, rid: string) => states.get(`${pid}/${rid}`) ?? null)
+      localStore.writeState.mockImplementation((pid: string, rid: string, state: any) => states.set(`${pid}/${rid}`, state))
+
+      const localHandler = new MockedHandler(localStore, STALE_THRESHOLD_MS, localCache, localObserver)
+
+      // Owner creates pipeline
+      const ownerCtx = { worktree: WORKTREE, sessionID: 'sess-owner' }
+      const startResult = parseResult(await localHandler.handle('pipeline_start', JSON.stringify({ description: 'test' }), ownerCtx))
+      expect(startResult.ok).toBe(true)
+
+      const runId = getLastWrittenState(localStore).runId
+
+      // Set up state with ownerSessionId and phase 1 complete
+      localStore.setActiveRun(PROJECT_ID, { runId, projectId: PROJECT_ID, startedAt: NOW })
+      states.set(`${PROJECT_ID}/${runId}`, makeState({
+        runId,
+        currentPhase: 1,
+        phaseStatus: 'complete',
+        phases: {
+          1: { ...makePhaseRecord(1), ralphCompleted: true, ralphTermination: 'gate_pass', userApproved: true, approvedAt: NOW },
+        },
+        ownerSessionId: 'sess-owner',
+      }))
+
+      // Clear writeState calls from setup
+      localStore.writeState.mockClear()
+
+      // Call phase_enter — the mocked applyTransition will drop ownerSessionId
+      await expect(localHandler.handle(
+        'phase_enter',
+        JSON.stringify({ phase: 2 }),
+        ownerCtx,
+      )).rejects.toThrow('BUG: ownerSessionId lost')
+
+      // Verify writeState was NOT called (disk contamination prevention)
+      expect(localStore.writeState).not.toHaveBeenCalled()
+    })
+  })
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  ownerSessionId MUST-PRESERVE — TC-I-12
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  describe('ownerSessionId MUST-PRESERVE', () => {
+    it('TC-I-12: ownerSessionId preserved through all transitions', () => {
+      const ownerSessionId = 'sess-owner'
+
+      // 1. pipeline_start — establishes ownerSessionId
+      let state = applyTransition('pipeline_start', {
+        description: 'TC-I-12 test',
+        _runId: 'run-tci12',
+        _projectId: 'proj-tci12',
+        _ownerSessionId: ownerSessionId,
+        _now: NOW,
+      }, null)
+      expect(state.ownerSessionId).toBe(ownerSessionId)
+
+      // Walk through phases 1–5, exercising every transition type
+      for (let phase = 1; phase <= 5; phase++) {
+        // phase_enter
+        state = applyTransition('phase_enter', { phase, _now: NOW }, state)
+        expect(state.ownerSessionId).toBe(ownerSessionId)
+
+        // ralph_loop_start
+        state = applyTransition('ralph_loop_start', { phase, _now: NOW }, state)
+        expect(state.ownerSessionId).toBe(ownerSessionId)
+
+        // ralph_round_complete ×2 (enough for early_stop)
+        state = applyTransition('ralph_round_complete', {
+          phase, round: 1, tally: { C: 0, H: 0, M: 0, L: 0, I: 0 }, _now: NOW,
+        }, state)
+        expect(state.ownerSessionId).toBe(ownerSessionId)
+
+        state = applyTransition('ralph_round_complete', {
+          phase, round: 2, tally: { C: 0, H: 0, M: 0, L: 0, I: 0 }, _now: NOW,
+        }, state)
+        expect(state.ownerSessionId).toBe(ownerSessionId)
+
+        // ralph_terminate
+        state = applyTransition('ralph_terminate', {
+          phase, termination: 'early_stop', _now: NOW,
+        }, state)
+        expect(state.ownerSessionId).toBe(ownerSessionId)
+
+        // test_evidence (only in phase 4)
+        if (phase === 4) {
+          state = applyTransition('test_evidence', {
+            phase: 4, evidence_file: 'tc-i-12.log', _now: NOW,
+          }, state)
+          expect(state.ownerSessionId).toBe(ownerSessionId)
+        }
+
+        // user_approval
+        state = applyTransition('user_approval', { phase, _now: NOW }, state)
+        expect(state.ownerSessionId).toBe(ownerSessionId)
+
+        // phase_complete (not for phase 5, since that ends the pipeline)
+        if (phase < 5) {
+          state = applyTransition('phase_complete', { phase, _now: NOW }, state)
+          expect(state.ownerSessionId).toBe(ownerSessionId)
+        }
+      }
+
+      // Final state still has ownerSessionId
+      expect(state.ownerSessionId).toBe(ownerSessionId)
+      expect(state.currentPhase).toBe(5)
+      expect(state.phaseStatus).toBe('awaiting_approval')
+    })
   })
 
   // ── Semantic Assertion Tests (SA) ────────────────────────────────────
@@ -1178,5 +1318,80 @@ describe('CheckpointHandler Phase 2', () => {
         expect.objectContaining({ decision: 'PASS' }),
       )
     })
+  })
+
+  // ── TC-C-22 ─────────────────────────────────────────────────────────────
+  it('TC-C-22: why_articulation precondition BLOCK preserves articulationAttempted=false', async () => {
+    mockStore._setActiveRun(PROJECT_ID, { runId: 'run-001', projectId: PROJECT_ID, startedAt: NOW })
+    mockStore._setState(PROJECT_ID, 'run-001', makeState({
+      runId: 'run-001',
+      currentPhase: 1,
+      phaseStatus: 'active',
+      phases: { 1: makePhaseRecord(1) },
+    }))
+
+    // Call why_articulation with WRONG phase (phase 2 ≠ currentPhase 1)
+    const result = parseResult(await handler.handle('why_articulation' as any,
+      JSON.stringify({ phase: 2, articulation: 'This protects against data loss because it handles edge cases and risks properly' }),
+      CONTEXT))
+
+    // Precondition violation → ok: false (not content failure)
+    expect(result.ok).toBe(false)
+
+    // articulationAttempted MUST remain false — precondition blocked before content validation
+    const writtenState = getLastWrittenState(mockStore)
+    // If precondition fails, state may or may not be written.
+    // If written, articulationAttempted must still be false
+    if (writtenState) {
+      expect(writtenState.phases[1].articulationAttempted).toBe(false)
+      expect(writtenState.phases[1].articulationVerified).toBe(false)
+    }
+
+    // No articulationAttempted for phase 2 either (it doesn't exist in state)
+    if (writtenState) {
+      expect(writtenState.phases[2]).toBeUndefined()
+    }
+  })
+
+  // ── TC-C-23 ─────────────────────────────────────────────────────────────
+  it('TC-C-23: pipeline_start clears articulation failure counter', async () => {
+    // Phase 1: Start a pipeline and accumulate 2 articulation failures
+    mockStore._setActiveRun(PROJECT_ID, { runId: 'run-001', projectId: PROJECT_ID, startedAt: NOW })
+    mockStore._setState(PROJECT_ID, 'run-001', makeState({
+      runId: 'run-001',
+      currentPhase: 1,
+      phaseStatus: 'active',
+      phases: { 1: makePhaseRecord(1) },
+      ownerSessionId: SESSION_ID,
+    }))
+
+    const badPayload = JSON.stringify({ phase: 1, articulation: 'Too short.' })
+    await handler.handle('why_articulation' as any, badPayload, CONTEXT) // failure 1
+    await handler.handle('why_articulation' as any, badPayload, CONTEXT) // failure 2
+
+    let state = getLastWrittenState(mockStore)
+    expect(state.phases[1].articulationDegraded).toBe(false) // need 3
+    expect(state.phases[1].articulationAttempted).toBe(true)
+
+    // Phase 2: Clear the active run so pipeline_start can succeed (no existing pipeline)
+    mockStore._setActiveRun(PROJECT_ID, null)
+    mockStore._setState(PROJECT_ID, 'run-001', null)
+    mockCache.get.mockReturnValue(null)
+
+    // Start a new pipeline — handler's internal articulationFailures counter should clear
+    const startResult = parseResult(await handler.handle('pipeline_start' as any,
+      JSON.stringify({ description: 'new pipeline' }), CONTEXT))
+    expect(startResult.ok).toBe(true)
+
+    // Phase 3: Enter phase 1 in new pipeline
+    await handler.handle('phase_enter', JSON.stringify({ phase: 1 }), CONTEXT)
+
+    // 3rd short articulation — but counter was reset, so this is failure #1 for new pipeline
+    const result = parseResult(await handler.handle('why_articulation' as any, badPayload, CONTEXT))
+    expect(result.ok).toBe(false) // content validation still fails
+
+    state = getLastWrittenState(mockStore)
+    // Counter was reset by pipeline_start — only 1 failure, not 3
+    expect(state.phases[1].articulationDegraded).toBe(false)
   })
 })

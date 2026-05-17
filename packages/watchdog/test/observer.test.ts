@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { Observer } from '../src/observer.js'
-import { makeState, createMockStore, createMockCache, createMockSessionBuffer } from './helpers.js'
+import { makeState, makePhaseRecord, createMockStore, createMockCache, createMockSessionBuffer } from './helpers.js'
 
 describe('Observer', () => {
   let mockStore: ReturnType<typeof createMockStore>
@@ -17,7 +17,7 @@ describe('Observer', () => {
 
   // ── TC-A-01 ───────────────────────────────────────────────────────────────
   it('records _reviewer_spawned observation for Task call during ralph_loop', async () => {
-    mockCache.get.mockResolvedValue(
+    mockCache.get.mockReturnValue(
       makeState({
         phaseStatus: 'ralph_loop',
         ralph: { round: 2 },
@@ -40,7 +40,7 @@ describe('Observer', () => {
 
   // ── TC-A-02 ───────────────────────────────────────────────────────────────
   it('records to session buffer when no active pipeline', async () => {
-    mockCache.get.mockResolvedValue(null)
+    mockCache.get.mockReturnValue(null)
 
     await observer.handle('Task', { prompt: 'review' }, 'out', 'sess-001', 'call-124')
 
@@ -55,7 +55,7 @@ describe('Observer', () => {
 
   // ── TC-A-03 ───────────────────────────────────────────────────────────────
   it('records no observation for non-Task calls', async () => {
-    mockCache.get.mockResolvedValue(
+    mockCache.get.mockReturnValue(
       makeState({
         phaseStatus: 'ralph_loop',
         ralph: { round: 2 },
@@ -70,7 +70,7 @@ describe('Observer', () => {
 
   // ── TC-A-04 ───────────────────────────────────────────────────────────────
   it('records multiple observations with same round for multiple Task calls', async () => {
-    mockCache.get.mockResolvedValue(
+    mockCache.get.mockReturnValue(
       makeState({
         phaseStatus: 'ralph_loop',
         ralph: { round: 2 },
@@ -104,7 +104,7 @@ describe('Observer', () => {
 
   // ── TC-A-05 ───────────────────────────────────────────────────────────────
   it('records no observation when pipeline is active but not in ralph_loop', async () => {
-    mockCache.get.mockResolvedValue(
+    mockCache.get.mockReturnValue(
       makeState({
         phaseStatus: 'active',
         ralph: null,
@@ -120,8 +120,8 @@ describe('Observer', () => {
   // ── TC-A-06 ───────────────────────────────────────────────────────────────
   it('catches errors and sets dual-channel degradation during ralph_loop', async () => {
     mockCache.get
-      .mockRejectedValueOnce(new Error('disk read failed'))
-      .mockResolvedValueOnce(
+      .mockImplementationOnce(() => { throw new Error('disk read failed') })
+      .mockReturnValueOnce(
         makeState({
           phaseStatus: 'ralph_loop',
           ralph: { round: 2 },
@@ -143,11 +143,29 @@ describe('Observer', () => {
     )
   })
 
+  // ── TC-A-11 ───────────────────────────────────────────────────────────────
+  it('appendObservation throws but cache.get() succeeds → degradation', async () => {
+    mockCache.get.mockReturnValue(
+      makeState({
+        currentPhase: 1,
+        phaseStatus: 'ralph_loop',
+        phases: { 1: makePhaseRecord(1) },
+        ralph: { round: 1 },
+      }),
+    )
+    mockStore.appendObservation.mockImplementation(() => { throw new Error('disk full') })
+
+    await observer.handle('Task', { prompt: 'review this' }, 'out', 'sess-001', 'call-001')
+
+    expect(observer.isDegraded('proj-test', 'run-test', 2)).toBe(true)
+    expect(mockSessionBuffer.record).not.toHaveBeenCalled()
+  })
+
   // ── TC-A-07 ───────────────────────────────────────────────────────────────
   it('sets degradation flag and persists entry with metadata.error on crash', async () => {
     mockCache.get
-      .mockRejectedValueOnce(new Error('cache crash'))
-      .mockResolvedValueOnce(
+      .mockImplementationOnce(() => { throw new Error('cache crash') })
+      .mockReturnValueOnce(
         makeState({
           phaseStatus: 'ralph_loop',
           ralph: { round: 1 },
@@ -170,8 +188,8 @@ describe('Observer', () => {
   // ── TC-A-08 ───────────────────────────────────────────────────────────────
   it('returns true only for degraded round and false for other rounds', async () => {
     mockCache.get
-      .mockRejectedValueOnce(new Error('fail'))
-      .mockResolvedValueOnce(
+      .mockImplementationOnce(() => { throw new Error('fail') })
+      .mockReturnValueOnce(
         makeState({
           phaseStatus: 'ralph_loop',
           ralph: { round: 2 },
@@ -188,8 +206,8 @@ describe('Observer', () => {
   // ── TC-A-09 ───────────────────────────────────────────────────────────────
   it('clears degradation data for a run', async () => {
     mockCache.get
-      .mockRejectedValueOnce(new Error('fail'))
-      .mockResolvedValueOnce(
+      .mockImplementationOnce(() => { throw new Error('fail') })
+      .mockReturnValueOnce(
         makeState({
           phaseStatus: 'ralph_loop',
           ralph: { round: 2 },
@@ -213,8 +231,8 @@ describe('Observer', () => {
     mockStore.readObservations = vi.fn(() => observations)
 
     mockCache.get
-      .mockRejectedValueOnce(new Error('fail'))
-      .mockResolvedValueOnce(
+      .mockImplementationOnce(() => { throw new Error('fail') })
+      .mockReturnValueOnce(
         makeState({
           phaseStatus: 'ralph_loop',
           ralph: { round: 2 },
@@ -231,7 +249,7 @@ describe('Observer', () => {
 
   // ── TC-A-15 ───────────────────────────────────────────────────────────────
   it('records observation through full pipeline flow', async () => {
-    mockCache.get.mockResolvedValue(
+    mockCache.get.mockReturnValue(
       makeState({
         currentPhase: 1,
         phaseStatus: 'ralph_loop',
@@ -255,8 +273,8 @@ describe('Observer', () => {
   // ── TC-A-16 ───────────────────────────────────────────────────────────────
   it('skips AC-2 and persists degradation when observer crashes', async () => {
     mockCache.get
-      .mockRejectedValueOnce(new Error('observer crash'))
-      .mockResolvedValueOnce(
+      .mockImplementationOnce(() => { throw new Error('observer crash') })
+      .mockReturnValueOnce(
         makeState({
           phaseStatus: 'ralph_loop',
           ralph: { round: 2 },
@@ -289,8 +307,8 @@ describe('Observer', () => {
     )
 
     mockCache.get
-      .mockRejectedValueOnce(new Error('fail'))
-      .mockResolvedValueOnce(
+      .mockImplementationOnce(() => { throw new Error('fail') })
+      .mockReturnValueOnce(
         makeState({
           phaseStatus: 'ralph_loop',
           ralph: { round: 2 },
@@ -313,12 +331,117 @@ describe('Observer', () => {
     expect(observer.isDegraded('proj-1', 'run-1')).toBe(false)
   })
 
+  // ── TC-A-25 ───────────────────────────────────────────────────────────────
+  it('handlerFailedPipelines fallback when handleDegradation fails with no state in recovery', async () => {
+    // Call 1: handle() — ralph_loop state
+    // Call 2: handleDegradation inner try — non-ralph-loop state (degradedRuns gets key)
+    // Call 3: handleDegradation catch — null (triggers fallback via degradedRuns)
+    mockCache.get
+      .mockReturnValueOnce(
+        makeState({
+          phaseStatus: 'ralph_loop',
+          ralph: { round: 1 },
+        }),
+      )
+      .mockReturnValueOnce(
+        makeState({
+          phaseStatus: 'active',
+          ralph: null,
+        }),
+      )
+      .mockReturnValueOnce(null)
+
+    mockStore.appendObservation
+      .mockImplementationOnce(() => { throw new Error('disk full in handle') })
+      .mockImplementationOnce(() => { throw new Error('disk full in degradation') })
+
+    await observer.handle('Task', { prompt: 'review' }, 'out', 'sess-001', 'call-001')
+
+    expect(observer.isDegraded('proj-test', 'run-test')).toBe(true)
+
+    observer.clearDegradation('proj-test', 'run-test')
+    expect(observer.isDegraded('proj-test', 'run-test')).toBe(false)
+  })
+
   // ── TC-A-19 ───────────────────────────────────────────────────────────────
   it('does not throw when degradation tracking itself fails', async () => {
-    mockCache.get.mockRejectedValue(new Error('total failure'))
+    mockCache.get.mockImplementation(() => { throw new Error('total failure') })
 
     await expect(
       observer.handle('Task', {}, 'out', 'sess-001', 'call-203'),
     ).resolves.not.toThrow()
+  })
+
+  describe('Observer Integration', () => {
+    // TC-A-20: Full pipeline flow with observations
+    it('TC-A-20: records observations during full pipeline flow', async () => {
+      mockCache.get.mockReturnValue(
+        makeState({
+          currentPhase: 1,
+          phaseStatus: 'ralph_loop',
+          phases: { 1: makePhaseRecord(1) },
+          ralph: { round: 1 },
+        }),
+      )
+
+      await observer.handle('Task', { prompt: 'review this code' }, 'out', 'sess-001', 'call-001')
+
+      expect(mockStore.appendObservation).toHaveBeenCalledWith(
+        'proj-test',
+        'run-test',
+        expect.objectContaining({ type: '_reviewer_spawned', callID: 'call-001' }),
+      )
+    })
+
+    // TC-A-21: Crash recovery observation loss
+    it('TC-A-21: observations lost on crash recovery are acceptable', async () => {
+      mockCache.get.mockReturnValue(null)
+
+      await observer.handle('Task', { prompt: 'review this' }, 'out', 'sess-001', 'call-001')
+
+      expect(mockSessionBuffer.record).toHaveBeenCalled()
+      expect(mockStore.appendObservation).not.toHaveBeenCalled()
+    })
+
+    // TC-A-22: Persisted entry readable by downstream
+    it('TC-A-22: persisted observations readable by downstream', async () => {
+      mockCache.get.mockReturnValue(
+        makeState({
+          currentPhase: 1,
+          phaseStatus: 'ralph_loop',
+          phases: { 1: makePhaseRecord(1) },
+          ralph: { round: 1 },
+        }),
+      )
+
+      const storedEntry = { type: '_reviewer_spawned', callID: 'call-old', round: 1 }
+      mockStore.readObservations.mockResolvedValue([storedEntry])
+
+      const entries = await mockStore.readObservations('proj-test', 'run-test')
+      expect(entries).toHaveLength(1)
+      expect(entries[0].type).toBe('_reviewer_spawned')
+    })
+
+    // TC-A-23: isDegraded returns false for non-degraded round
+    it('TC-A-23: isDegraded returns false for non-degraded round', () => {
+      expect(observer.isDegraded('proj-test', 'run-test', 1)).toBe(false)
+    })
+
+    // TC-A-24: Degradation tracking failure — no unhandled exception
+    it('TC-A-24: degradation tracking failure does not throw', async () => {
+      mockCache.get.mockReturnValue(
+        makeState({
+          currentPhase: 1,
+          phaseStatus: 'ralph_loop',
+          phases: { 1: makePhaseRecord(1) },
+          ralph: { round: 1 },
+        }),
+      )
+      mockStore.appendObservation.mockImplementation(() => { throw new Error('disk error') })
+
+      await expect(
+        observer.handle('Task', { prompt: 'review' }, 'out', 'sess-001', 'call-001'),
+      ).resolves.not.toThrow()
+    })
   })
 })

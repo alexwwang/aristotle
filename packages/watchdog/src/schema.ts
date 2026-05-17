@@ -5,7 +5,7 @@ export type CheckpointEvent =
   | 'ralph_loop_start'
   | 'ralph_round_complete'
   | 'ralph_terminate'
-  | 'test_evidence'
+  | 'test_evidence'          // @deprecated (v1.8) still accepted, no longer gates
   | 'user_approval'
   | 'phase_complete'
   | 'why_articulation'
@@ -26,6 +26,7 @@ export interface PipelineState {
   phases: Record<number, PhaseRecord>
   ralph: RalphLoopState | null
 
+  /** @deprecated (v1.8) No longer gates behavior. Kept for backward compat. */
   testEvidenceConfirmed: boolean
   lastCheckpointAt: string         // ISO 8601, for stale detection
   /** Owning session ID. Mandatory for Phase 2+ pipelines (enforced by CheckpointHandler).
@@ -52,9 +53,10 @@ export interface PhaseRecord {
   ralphTermination: RalphTermination | null
   userApproved: boolean
   approvedAt: string | null
-  articulationAttempted?: boolean
-  articulationVerified?: boolean
-  articulationDegraded?: boolean
+  articulationAttempted: boolean
+  articulationVerified: boolean
+  articulationDegraded: boolean
+  articulationFailures: number
   articulationDimensions?: {
     what_it_protects: boolean
     key_risks: boolean
@@ -62,7 +64,7 @@ export interface PhaseRecord {
   }
 }
 
-export type RalphTermination = 'early_stop' | 'gate_pass' | 'max_rounds'
+export type RalphTermination = 'early_stop' | 'gate_pass' | 'max_rounds' | 'escalated'
 
 export interface RalphLoopState {
   phase: number
@@ -138,7 +140,7 @@ export interface AuditLogEntry {
   runId: string
   projectId: string
   sessionId: string
-  event: CheckpointEvent
+  event: CheckpointEvent | 'INTERCEPT'
   phase: number
   round?: number
   decision: 'PASS' | 'BLOCK'
@@ -162,5 +164,5 @@ export type ArticulationDimension = 'what_it_protects' | 'key_risks' | 'why_appr
 
 // ── Phase 2: Observation type constants ────────────────────────────────
 
-export const OBS_TYPE_REVIEWER_SPAWNED = '_reviewer_spawned'
-export const OBS_TYPE_OBSERVER_DEGRADED = '_observer_degraded'
+export const OBS_TYPE_REVIEWER_SPAWNED = '_reviewer_spawned' as const
+export const OBS_TYPE_OBSERVER_DEGRADED = '_observer_degraded' as const

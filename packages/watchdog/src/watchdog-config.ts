@@ -11,13 +11,13 @@ export interface WatchdogConfig {
   monitoredTools: string[]
 }
 
-/** Built-in fallback patterns — used when config file is missing or broken. */
+/** Built-in fallback patterns — used when config file is missing or broken.
+ *  Phase 4/5 deliverables are determined by hardcoded classifier rules
+ *  (test_file / business_code), not config-driven patterns. */
 export const FALLBACK_PATTERNS: Record<number, string[]> = {
   1: ['requirements*.md', 'product-design*.md', 'user-stories*.md', 'prd*.md'],
   2: ['technical*.md', 'architecture*.md', 'design-doc*.md', 'api-design*.md'],
   3: ['test-plan*.md', 'test-strategy*.md', 'test-cases*.md'],
-  4: ['implementation-notes*.md'],
-  5: ['deployment-checklist*.md', 'release-notes*.md'],
 }
 
 /** Default tools to monitor for file writes. */
@@ -51,7 +51,7 @@ export function loadWatchdogConfig(worktreeRoot: string, logger: { info: (...arg
       const phaseDeliverables: Record<number, string[]> = {}
       for (const [key, value] of Object.entries(parsed.phaseDeliverables)) {
         const phase = Number(key.replace('phase', ''))
-        if (Number.isNaN(phase)) continue
+        if (Number.isNaN(phase) || phase < 1) continue
         phaseDeliverables[phase] = Array.isArray(value)
           ? value.filter((v: unknown) => typeof v === 'string')
           : []
@@ -65,7 +65,7 @@ export function loadWatchdogConfig(worktreeRoot: string, logger: { info: (...arg
         ? parsed.monitoredTools.filter((v: unknown) => typeof v === 'string')
         : [...DEFAULT_MONITORED_TOOLS]
 
-      // Guard: empty monitoredTools would disable all interception — fall back to defaults
+      // Empty monitoredTools is likely a misconfiguration — fallback to defaults for safety
       if (monitoredTools.length === 0) {
         logger.warn('watchdog.jsonc has empty monitoredTools — falling back to defaults', configPath)
         monitoredTools.push(...DEFAULT_MONITORED_TOOLS)
@@ -77,7 +77,7 @@ export function loadWatchdogConfig(worktreeRoot: string, logger: { info: (...arg
       return { phaseDeliverables, ignorePatterns, monitoredTools }
     }
 
-    logger.warn('watchdog.jsonc missing phaseDeliverables — using built-in defaults', configPath)
+    logger.warn('watchdog.jsonc missing phaseDeliverables — using built-in defaults: %s', configPath)
     return { phaseDeliverables: FALLBACK_PATTERNS, ignorePatterns: [], monitoredTools: [...DEFAULT_MONITORED_TOOLS] }
   } catch (err) {
     logger.warn('Failed to load watchdog.jsonc: %s — using built-in defaults', String(err))

@@ -9,3 +9,6 @@ export const ARTICULATION_MAX_FAILURES = 3
 
 /** Max entries in SessionBuffer before FIFO eviction. */
 export const SESSION_BUFFER_MAX_SIZE = 1000
+
+/** Max number of tracked sessions in SessionBuffer before oldest is evicted. */
+export const MAX_TRACKED_SESSIONS = 50

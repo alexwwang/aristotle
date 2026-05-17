@@ -111,7 +111,7 @@ describe('WatchdogConfig', () => {
   })
 
   // TC-B-41: Empty monitoredTools -> warning + fallback
-  it('falls back to default monitoredTools when config has empty array', () => {
+  it('falls back to defaults when monitoredTools is empty', () => {
     const configPath = path.join(tmpDir, '.opencode')
     fs.mkdirSync(configPath, { recursive: true })
     fs.writeFileSync(
@@ -123,6 +123,6 @@ describe('WatchdogConfig', () => {
     )
     const config = loadWatchdogConfig(tmpDir, logger)
     expect(config.monitoredTools).toEqual(DEFAULT_MONITORED_TOOLS)
-    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('empty monitoredTools'), expect.anything())
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('falling back to defaults'), expect.anything())
   })
 })

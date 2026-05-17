@@ -34,7 +34,7 @@ import { extractFilePath } from './path-extractor.js'
 import { classifyFile } from './file-classifier.js'
 import { detectMultiAgent } from './multi-agent.js'
 import { createRules } from './intercept-rules.js'
-import { STALE_THRESHOLD_MS, SESSION_BUFFER_MAX_SIZE } from './constants.js'
+import { STALE_THRESHOLD_MS } from './constants.js'
 
 const DEFAULT_SESSIONS_DIR = join(homedir(), '.config', 'opencode', 'aristotle-sessions')
 const CONFIG_PATH = join(homedir(), '.config', 'opencode', 'aristotle-config.json')
@@ -73,22 +73,25 @@ export async function createWatchdogRole(ctx: any): Promise<RoleRegistration | n
 
   // 6. Create shared infrastructure
   const multiAgent = detectMultiAgent({ directory: worktreeRoot })
-  const cache = new PipelineStateCache(store, logger, worktreeRoot, multiAgent)
-  const sessionBuffer = new SessionBuffer(SESSION_BUFFER_MAX_SIZE)
+  const cache = new PipelineStateCache(store, worktreeRoot, logger, multiAgent)
+  const sessionBuffer = new SessionBuffer(logger)
 
   // 7. Create Module B interceptor + Module A observer
-  const rules = createRules(watchdogConfig)
+  const rules = createRules()
+  const interceptorConfig = { ...watchdogConfig, worktreeRoot }
   const interceptor = new Interceptor(
     cache,
-    watchdogConfig,
+    interceptorConfig,
     extractFilePath,
     classifyFile,
     rules,
+    store,
+    logger,
   )
-  const observer = new Observer(cache, sessionBuffer, store)
+  const observer = new Observer(cache, sessionBuffer, store, logger)
 
   // 8. Create checkpoint handler (wires cache + observer)
-  const checkpointHandler = new CheckpointHandler(store, STALE_THRESHOLD_MS, cache, observer)
+  const checkpointHandler = new CheckpointHandler(store, STALE_THRESHOLD_MS, cache, observer, logger)
 
   // 9. Crash recovery — informational scan
   try {
@@ -122,7 +125,7 @@ export async function createWatchdogRole(ctx: any): Promise<RoleRegistration | n
     tools,
     onToolBefore: interceptor.handle.bind(interceptor),
     onToolAfter: async (tool, args, output, sessionId, callID) => {
-      await observer.handle(tool, args, typeof output === 'string' ? output : JSON.stringify(output), sessionId, callID)
+      await observer.handle(tool, args, output, sessionId, callID)
     },
   }
 }

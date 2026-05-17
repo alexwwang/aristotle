@@ -289,4 +289,23 @@ describe('StateStore', () => {
   it('SS-26 should reject path traversal in readLog', () => {
     expect(() => store.readLog('role/../evil')).toThrow('Path traversal');
   });
+
+  // SS-27: readLogSafe skips corrupt lines and returns valid entries
+  it('SS-27 should skip corrupt lines in readLogSafe and return valid entries', () => {
+    store.appendLog('role/log', { n: 1 });
+    store.appendLog('role/log', { n: 2 });
+    store.appendLog('role/log', { n: 3 });
+
+    // Directly append a corrupt line to the JSONL file
+    const logPath = path.join(tmpDir, 'role', 'log.jsonl');
+    fs.appendFileSync(logPath, 'this is not json\n');
+
+    // readLogSafe should skip the corrupt line and return 3 valid entries
+    const safeEntries = store.readLogSafe<{ n: number }>('role/log');
+    expect(safeEntries).toEqual([{ n: 1 }, { n: 2 }, { n: 3 }]);
+
+    // readLog should return [] because of the corrupt line
+    const entries = store.readLog<{ n: number }>('role/log');
+    expect(entries).toEqual([]);
+  });
 });

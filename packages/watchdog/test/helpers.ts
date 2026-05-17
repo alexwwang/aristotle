@@ -39,23 +39,35 @@ export function makePhaseRecord(phase: number, overrides: Record<string, any> = 
     ralphTermination: null,
     userApproved: false,
     approvedAt: null,
+    // Phase 2 articulation fields (must match transitions.ts phase_enter defaults)
+    articulationVerified: false,
+    articulationAttempted: false,
+    articulationDegraded: false,
+    articulationFailures: 0,
     ...overrides,
   }
 }
 
 // ── Mock factories ─────────────────────────────────────────────────────────
+// NOTE (C-2): PipelineStateCache.get() and PipelineStore read/write/audit methods
+// are SYNCHRONOUS in production. Mocks below use mockReturnValue for sync methods
+// and mockResolvedValue for truly async methods (observations).
+// Observer tests use mockImplementationOnce(() => { throw ... }) for error injection
+// since cache.get() is sync and does not return a Promise.
 
 export function createMockStore() {
   return {
-    readState: vi.fn().mockResolvedValue(null),
-    writeState: vi.fn().mockResolvedValue(undefined),
-    appendAudit: vi.fn().mockResolvedValue(undefined),
+    // Synchronous methods (match production PipelineStore signatures)
+    readState: vi.fn().mockReturnValue(null),
+    writeState: vi.fn().mockReturnValue(undefined),
+    appendAudit: vi.fn().mockReturnValue(undefined),
     getActiveRun: vi.fn().mockReturnValue(null),
     setActiveRun: vi.fn(),
     clearActiveRun: vi.fn(),
     archiveRun: vi.fn(),
     getProjectIds: vi.fn().mockReturnValue([]),
-    // Phase 2 observation methods
+    // async — matches production PipelineStore observation methods
+    // (async for future StateStore async migration; internal ops currently sync)
     appendObservation: vi.fn().mockResolvedValue(undefined),
     readObservations: vi.fn().mockResolvedValue([]),
     findObservations: vi.fn().mockResolvedValue([]),
@@ -64,7 +76,8 @@ export function createMockStore() {
 
 export function createMockCache(overrides: { getReturn?: any } = {}) {
   return {
-    get: vi.fn().mockResolvedValue(overrides.getReturn ?? null),
+    // Synchronous — matches production PipelineStateCache.get()
+    get: vi.fn().mockReturnValue(overrides.getReturn ?? null),
     update: vi.fn(),
     clear: vi.fn(),
   }

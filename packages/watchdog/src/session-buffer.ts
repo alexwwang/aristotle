@@ -1,53 +1,79 @@
 /**
- * SessionBuffer — per-session call recording with global FIFO eviction.
+ * SessionBuffer — per-session call recording with per-session FIFO eviction.
  * Design: Phase2-ActiveMonitoring.md §6.3
+ *
+ * Each session has an independent buffer. When record() pushes the buffer
+ * past SESSION_BUFFER_MAX_SIZE (1000), oldest entries are evicted (FIFO).
+ * NOT persisted — cleared on session end or plugin restart.
  */
-export class SessionBuffer {
-  private maxSize: number
-  private sessions: Map<string, any[]>
-  private chronological: Array<{ sessionID: string; entry: any }>
+import type { Logger } from '@opencode-ai/core/logger'
+import { SESSION_BUFFER_MAX_SIZE, MAX_TRACKED_SESSIONS } from './constants.js'
 
-  constructor(maxSize: number) {
-    this.maxSize = maxSize
-    this.sessions = new Map()
-    this.chronological = []
+export interface SessionBufferEntry {
+  tool: string
+  callID: string
+  timestamp: string
+}
+
+export class SessionBuffer {
+  private buffers = new Map<string, SessionBufferEntry[]>()
+  private logger: Logger
+
+  constructor(logger: Logger) {
+    this.logger = logger
   }
 
-  record(
-    sessionID: string,
-    entry: { tool: string; callID: string; timestamp: string }
-  ): void {
-    if (!this.sessions.has(sessionID)) {
-      this.sessions.set(sessionID, [])
+  /**
+   * Record a tool call observation for a session.
+   * If the session's buffer exceeds SESSION_BUFFER_MAX_SIZE, oldest entries
+   * are evicted (FIFO).
+   */
+  record(sessionId: string, entry: SessionBufferEntry): void {
+    let buffer = this.buffers.get(sessionId)
+    if (!buffer) {
+      buffer = []
+      this.buffers.set(sessionId, buffer)
     }
-    this.sessions.get(sessionID)!.push(entry)
-    this.chronological.push({ sessionID, entry })
 
-    // FIFO eviction across all sessions when total exceeds maxSize
-    while (this.chronological.length > this.maxSize) {
-      const oldest = this.chronological.shift()!
-      const sessionEntries = this.sessions.get(oldest.sessionID)!
-      sessionEntries.shift()
-      if (sessionEntries.length === 0) {
-        this.sessions.delete(oldest.sessionID)
+    buffer.push(entry)
+
+    // Per-session FIFO eviction
+    while (buffer.length > SESSION_BUFFER_MAX_SIZE) {
+      buffer.shift()
+      this.logger.debug('SessionBuffer: FIFO eviction for session %s', sessionId)
+    }
+
+    // LRU eviction: re-insert to move accessed session to end of Map iteration order
+    if (this.buffers.has(sessionId)) {
+      const existing = this.buffers.get(sessionId)!
+      this.buffers.delete(sessionId)
+      this.buffers.set(sessionId, existing)
+    }
+
+    // Evict least-recently-used session if total session count exceeds limit
+    while (this.buffers.size > MAX_TRACKED_SESSIONS) {
+      const lruKey = this.buffers.keys().next().value
+        if (lruKey !== undefined) {
+          this.buffers.delete(lruKey)
+        this.logger.debug('SessionBuffer: evicted LRU session %s (limit %d)', lruKey, MAX_TRACKED_SESSIONS)
+      } else {
+        break
       }
     }
   }
 
-  getSession(sessionID: string): any[] {
-    return this.sessions.get(sessionID) ?? []
+  /** Get all buffered entries for a session. Returns empty array if none. */
+  getSession(sessionId: string): SessionBufferEntry[] {
+    return this.buffers.get(sessionId)?.slice() ?? []
   }
 
-  clearSession(sessionID: string): void {
-    if (!this.sessions.has(sessionID)) return
-
-    this.chronological = this.chronological.filter(
-      (item) => item.sessionID !== sessionID
-    )
-    this.sessions.delete(sessionID)
+  /** Clear all entries for a session. Called on session end. */
+  clearSession(sessionId: string): void {
+    this.buffers.delete(sessionId)
   }
 
+  /** Get count of tracked sessions (for diagnostics). */
   sessionCount(): number {
-    return this.sessions.size
+    return this.buffers.size
   }
 }

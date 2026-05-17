@@ -247,7 +247,7 @@ describe('CheckpointHandler', () => {
       }
 
       // 3. ralph_loop_start(1)
-      const afterEnter = makeState({ runId, currentPhase: 1, phaseStatus: 'active', phases: { 1: { phase: 1, enteredAt: NOW, ralphCompleted: false, ralphTermination: null, userApproved: false, approvedAt: null } } })
+      const afterEnter = makeState({ runId, currentPhase: 1, phaseStatus: 'active', phases: { 1: { phase: 1, enteredAt: NOW, ralphCompleted: false, ralphTermination: null, userApproved: false, approvedAt: null, articulationAttempted: false, articulationVerified: false, articulationDegraded: false, articulationFailures: 0 } } })
       mockStore._setState(PROJECT_ID, runId, afterEnter)
       result = await handler.handle('ralph_loop_start', JSON.stringify({ phase: 1 }), CONTEXT)
       parsed = parseResult(result)
@@ -256,7 +256,7 @@ describe('CheckpointHandler', () => {
       // 4. 5 rounds of ralph_round_complete
       const afterRalphStart = makeState({
         runId, currentPhase: 1, phaseStatus: 'ralph_loop',
-        phases: { 1: { phase: 1, enteredAt: NOW, ralphCompleted: false, ralphTermination: null, userApproved: false, approvedAt: null } },
+        phases: { 1: { phase: 1, enteredAt: NOW, ralphCompleted: false, ralphTermination: null, userApproved: false, approvedAt: null, articulationAttempted: false, articulationVerified: false, articulationDegraded: false, articulationFailures: 0 } },
         ralph: { phase: 1, round: 0, consecutiveZero: 0, tallyHistory: [], openContested: [], escalated: false, escalatedAt: null, termination: null },
       })
       mockStore._setState(PROJECT_ID, runId, afterRalphStart)
@@ -265,7 +265,7 @@ describe('CheckpointHandler', () => {
         // Update mock state to reflect current round before next call
         const currentRalphState = makeState({
           runId, currentPhase: 1, phaseStatus: 'ralph_loop',
-          phases: { 1: { phase: 1, enteredAt: NOW, ralphCompleted: false, ralphTermination: null, userApproved: false, approvedAt: null } },
+          phases: { 1: { phase: 1, enteredAt: NOW, ralphCompleted: false, ralphTermination: null, userApproved: false, approvedAt: null, articulationAttempted: false, articulationVerified: false, articulationDegraded: false, articulationFailures: 0 } },
           ralph: {
             phase: 1, round: r - 1, consecutiveZero: r - 1,
             tallyHistory: Array.from({ length: r - 1 }, (_, i) => ({ round: i + 1, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW })),
@@ -286,7 +286,7 @@ describe('CheckpointHandler', () => {
       // 5. ralph_terminate('gate_pass')
       const after5Rounds = makeState({
         runId, currentPhase: 1, phaseStatus: 'ralph_loop',
-        phases: { 1: { phase: 1, enteredAt: NOW, ralphCompleted: false, ralphTermination: null, userApproved: false, approvedAt: null } },
+        phases: { 1: { phase: 1, enteredAt: NOW, ralphCompleted: false, ralphTermination: null, userApproved: false, approvedAt: null, articulationAttempted: false, articulationVerified: false, articulationDegraded: false, articulationFailures: 0 } },
         ralph: {
           phase: 1, round: 5, consecutiveZero: 5,
           tallyHistory: Array.from({ length: 5 }, (_, i) => ({ round: i + 1, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW })),
@@ -305,7 +305,7 @@ describe('CheckpointHandler', () => {
       // 6. user_approval(1)
       const afterTerminate = makeState({
         runId, currentPhase: 1, phaseStatus: 'awaiting_approval',
-        phases: { 1: { phase: 1, enteredAt: NOW, ralphCompleted: true, ralphTermination: 'gate_pass', userApproved: false, approvedAt: null } },
+        phases: { 1: { phase: 1, enteredAt: NOW, ralphCompleted: true, ralphTermination: 'gate_pass', userApproved: false, approvedAt: null, articulationAttempted: false, articulationVerified: false, articulationDegraded: false, articulationFailures: 0 } },
         ralph: { phase: 1, round: 5, consecutiveZero: 5, tallyHistory: [], openContested: [], escalated: false, escalatedAt: null, termination: 'gate_pass' },
       })
       mockStore._setState(PROJECT_ID, runId, afterTerminate)
@@ -316,7 +316,7 @@ describe('CheckpointHandler', () => {
       // 7. phase_complete(1)
       const afterApproval = makeState({
         runId, currentPhase: 1, phaseStatus: 'awaiting_approval',
-        phases: { 1: { phase: 1, enteredAt: NOW, ralphCompleted: true, ralphTermination: 'gate_pass', userApproved: true, approvedAt: NOW } },
+        phases: { 1: { phase: 1, enteredAt: NOW, ralphCompleted: true, ralphTermination: 'gate_pass', userApproved: true, approvedAt: NOW, articulationAttempted: false, articulationVerified: false, articulationDegraded: false, articulationFailures: 0 } },
         ralph: { phase: 1, round: 5, consecutiveZero: 5, tallyHistory: [], openContested: [], escalated: false, escalatedAt: null, termination: 'gate_pass' },
       })
       mockStore._setState(PROJECT_ID, runId, afterApproval)
@@ -342,7 +342,7 @@ describe('CheckpointHandler', () => {
         phaseStatus: 'awaiting_approval',
         testEvidenceConfirmed: true,
         phases: {
-          5: { phase: 5, enteredAt: NOW, ralphCompleted: true, ralphTermination: 'gate_pass', userApproved: true, approvedAt: NOW },
+          5: { phase: 5, enteredAt: NOW, ralphCompleted: true, ralphTermination: 'gate_pass', userApproved: true, approvedAt: NOW, articulationAttempted: false, articulationVerified: false, articulationDegraded: false, articulationFailures: 0 },
         },
         ralph: { phase: 5, round: 5, consecutiveZero: 5, tallyHistory: [], openContested: [], escalated: false, escalatedAt: null, termination: 'gate_pass' },
       }))
@@ -489,7 +489,7 @@ describe('CheckpointHandler', () => {
         runId: 'run-001',
         currentPhase: 1,
         phaseStatus: 'ralph_loop',
-        phases: { 1: { phase: 1, enteredAt: FRESH_NOW, ralphCompleted: false, ralphTermination: null, userApproved: false, approvedAt: null } },
+        phases: { 1: { phase: 1, enteredAt: FRESH_NOW, ralphCompleted: false, ralphTermination: null, userApproved: false, approvedAt: null, articulationAttempted: false, articulationVerified: false, articulationDegraded: false, articulationFailures: 0 } },
         ralph: { phase: 1, round: 0, consecutiveZero: 0, tallyHistory: [], openContested: [], escalated: false, escalatedAt: null, termination: null },
       }))
 
@@ -638,7 +638,7 @@ describe('CheckpointHandler', () => {
         currentPhase: 1,
         phaseStatus: 'ralph_loop',
         phases: {
-          1: { phase: 1, enteredAt: FRESH_NOW, ralphCompleted: false, ralphTermination: null, userApproved: false, approvedAt: null },
+          1: { phase: 1, enteredAt: FRESH_NOW, ralphCompleted: false, ralphTermination: null, userApproved: false, approvedAt: null, articulationAttempted: false, articulationVerified: false, articulationDegraded: false, articulationFailures: 0 },
         },
         ralph: null as any, // Intentionally null
       }))

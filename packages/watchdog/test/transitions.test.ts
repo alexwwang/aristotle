@@ -51,6 +51,10 @@ function makeRalphState(
         ralphTermination: null,
         userApproved: false,
         approvedAt: null,
+        articulationAttempted: false,
+        articulationVerified: false,
+        articulationDegraded: false,
+        articulationFailures: 0,
       },
     },
     ...overrides,
@@ -238,14 +242,18 @@ describe('state preconditions', () => {
       makeState({
         phaseStatus: 'complete',
         phases: {
-          1: {
-            phase: 1,
-            enteredAt: NOW,
-            ralphCompleted: true,
-            ralphTermination: 'gate_pass',
-            userApproved: false,
-            approvedAt: null,
-          },
+        1: {
+          phase: 1,
+          enteredAt: NOW,
+          ralphCompleted: true,
+          ralphTermination: 'gate_pass',
+          userApproved: false,
+          approvedAt: null,
+          articulationAttempted: false,
+          articulationVerified: false,
+          articulationDegraded: false,
+          articulationFailures: 0,
+        },
         },
       }),
     )
@@ -269,6 +277,10 @@ describe('state preconditions', () => {
             ralphTermination: 'gate_pass',
             userApproved: true,
             approvedAt: NOW,
+            articulationAttempted: false,
+            articulationVerified: false,
+            articulationDegraded: false,
+            articulationFailures: 0,
           },
         },
       }),
@@ -279,7 +291,7 @@ describe('state preconditions', () => {
     }
   })
 
-  it('rejects phase_enter(5) when testEvidenceConfirmed is false', () => {
+  it('allows phase_enter(5) without testEvidenceConfirmed (v1.8: gate is Ralph loop only)', () => {
     const result = validateTransition(
       'phase_enter',
       basePayload({ phase: 5 }),
@@ -294,14 +306,15 @@ describe('state preconditions', () => {
             ralphTermination: 'gate_pass',
             userApproved: true,
             approvedAt: NOW,
+            articulationAttempted: false,
+            articulationVerified: false,
+            articulationDegraded: false,
+            articulationFailures: 0,
           },
         },
       }),
     )
-    expect(result.valid).toBe(false)
-    if (!result.valid) {
-      expect(result.violation).toBe('Test evidence not confirmed')
-    }
+    expect(result.valid).toBe(true)
   })
 
   it('rejects ralph_loop_start when currentPhase != phase', () => {
@@ -457,6 +470,27 @@ describe('state preconditions', () => {
     }
   })
 
+  // ── M5: ralphTermination === 'escalated' also blocks user_approval ─────
+  it('rejects user_approval when ralphTermination is escalated (even if ralph.escalated is false)', () => {
+    const state = makeRalphState({}, {
+      termination: 'gate_pass',
+    })
+    // ralphCompleted but ralphTermination === 'escalated' on the phase record
+    const phases = {
+      ...state.phases,
+      1: { ...state.phases[1], ralphCompleted: true, ralphTermination: 'escalated' as const },
+    }
+    const result = validateTransition(
+      'user_approval',
+      basePayload({ phase: 1 }),
+      { ...state, phases, phaseStatus: 'awaiting_approval', ralph: { ...state.ralph!, escalated: false } },
+    )
+    expect(result.valid).toBe(false)
+    if (!result.valid) {
+      expect(result.violation).toBe('Ralph loop escalated')
+    }
+  })
+
   it('rejects phase_complete when not user-approved', () => {
     const state = makeRalphState({}, {
       termination: 'gate_pass',
@@ -532,6 +566,10 @@ describe('happy path', () => {
             ralphTermination: 'gate_pass',
             userApproved: true,
             approvedAt: NOW,
+            articulationAttempted: false,
+            articulationVerified: false,
+            articulationDegraded: false,
+            articulationFailures: 0,
           },
         },
       }),
@@ -680,9 +718,10 @@ describe('applyTransition', () => {
       ralphTermination: null,
       userApproved: false,
       approvedAt: null,
-      articulationAttempted: false,
-      articulationVerified: false,
-      articulationDegraded: false,
+        articulationAttempted: false,
+        articulationVerified: false,
+        articulationDegraded: false,
+        articulationFailures: 0,
     })
     expect(newState.lastCheckpointAt).toBe(NOW)
   })
@@ -844,8 +883,12 @@ describe('applyTransition', () => {
           enteredAt: NOW,
           ralphCompleted: true,
           ralphTermination: 'gate_pass',
-          userApproved: false,
-          approvedAt: null,
+          userApproved: true,
+          approvedAt: NOW,
+          articulationAttempted: false,
+          articulationVerified: false,
+          articulationDegraded: false,
+          articulationFailures: 0,
         },
       },
     })
@@ -861,14 +904,18 @@ describe('applyTransition', () => {
       phaseStatus: 'awaiting_approval',
       ralph: { phase: 1, round: 5, consecutiveZero: 0, tallyHistory: [], openContested: [], escalated: false, escalatedAt: null, termination: 'gate_pass' },
       phases: {
-        1: {
-          phase: 1,
-          enteredAt: NOW,
-          ralphCompleted: true,
-          ralphTermination: 'gate_pass',
-          userApproved: true,
-          approvedAt: NOW,
-        },
+          1: {
+            phase: 1,
+            enteredAt: NOW,
+            ralphCompleted: true,
+            ralphTermination: 'gate_pass',
+            userApproved: true,
+            approvedAt: NOW,
+            articulationAttempted: false,
+            articulationVerified: false,
+            articulationDegraded: false,
+            articulationFailures: 0,
+          },
       },
     })
     const newState = applyTransition('phase_complete', basePayload({ phase: 1 }), state)
@@ -1020,8 +1067,8 @@ describe('full pipeline flow', () => {
         currentPhase: 3,
         phaseStatus: 'awaiting_approval',
         phases: {
-          3: { phase: 3, enteredAt: NOW, ralphCompleted: true, ralphTermination: 'gate_pass', userApproved: false, approvedAt: null },
-          1: { phase: 1, enteredAt: NOW, ralphCompleted: true, ralphTermination: 'gate_pass', userApproved: true, approvedAt: NOW },
+          3: { phase: 3, enteredAt: NOW, ralphCompleted: true, ralphTermination: 'gate_pass', userApproved: false, approvedAt: null, articulationAttempted: false, articulationVerified: false, articulationDegraded: false, articulationFailures: 0 },
+          1: { phase: 1, enteredAt: NOW, ralphCompleted: true, ralphTermination: 'gate_pass', userApproved: true, approvedAt: NOW, articulationAttempted: false, articulationVerified: false, articulationDegraded: false, articulationFailures: 0 },
         },
       })
       const result = validateTransition('user_approval', { phase: 1 }, state)
@@ -1036,8 +1083,8 @@ describe('full pipeline flow', () => {
         currentPhase: 3,
         phaseStatus: 'awaiting_approval',
         phases: {
-          3: { phase: 3, enteredAt: NOW, ralphCompleted: true, ralphTermination: 'gate_pass', userApproved: true, approvedAt: NOW },
-          1: { phase: 1, enteredAt: NOW, ralphCompleted: true, ralphTermination: 'gate_pass', userApproved: true, approvedAt: NOW },
+          3: { phase: 3, enteredAt: NOW, ralphCompleted: true, ralphTermination: 'gate_pass', userApproved: true, approvedAt: NOW, articulationAttempted: false, articulationVerified: false, articulationDegraded: false, articulationFailures: 0 },
+          1: { phase: 1, enteredAt: NOW, ralphCompleted: true, ralphTermination: 'gate_pass', userApproved: true, approvedAt: NOW, articulationAttempted: false, articulationVerified: false, articulationDegraded: false, articulationFailures: 0 },
         },
       })
       const result = validateTransition('phase_complete', { phase: 1 }, state)

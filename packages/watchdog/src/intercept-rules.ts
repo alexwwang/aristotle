@@ -1,27 +1,44 @@
 import type { FileClassification } from './file-classifier.js'
 import type { PipelineState } from './schema.js'
 
+// Deviation from TechSpec §3.2.1: spec defines applies()/check() two-phase design.
+// Implementation uses single evaluate() method returning { blocked, reason }.
+// Rationale: with only 2 rules, the separation overhead outweighs the benefit.
+// The Interceptor pre-filters by tool and state before invoking rules,
+// so the fast-path rejection that applies() provides is already handled upstream.
+
 export interface InterceptRule {
   id: string
-  evaluate(...args: unknown[]): { blocked: boolean; reason?: string }
+  evaluate(tool: string, filePath: string, classification: FileClassification, state: PipelineState): { blocked: boolean; reason?: string }
 }
 
-export function createRules(_config?: unknown): InterceptRule[] {
+export function createRules(): InterceptRule[] {
   return [
-    // Rule 1 (AC-3): Test Evidence Gate
-    // Phase 4, no test evidence, business code → blocked
+    // Rule 1 (AC-3): Business Code Gate (v1.8)
+    // Phase 4 + business_code → unconditional block (Phase 4 writes test files only)
+    // Phase 5 + business_code + Phase 4 gate not passed → blocked
     {
-      id: 'NO_BUSINESS_CODE_BEFORE_FAILING_TESTS',
+      id: 'NO_BUSINESS_CODE_BEFORE_PHASE5',
       evaluate(_tool: string, _path: string, classification: FileClassification, state: PipelineState) {
         if (
           (state.currentPhase === 4 || state.currentPhase === 5) &&
           classification.category === 'business_code'
         ) {
-          if (state.testEvidenceConfirmed === false) {
-            return {
-              blocked: true,
-              reason:
-                'business code write blocked — submit test evidence first',
+          if (
+            state.currentPhase === 4 ||
+            !state.phases?.[4]?.ralphCompleted ||
+            !state.phases?.[4]?.userApproved
+          ) {
+          const phase4Rec = state.phases?.[4]
+          const phase4Status = !phase4Rec
+            ? 'Phase 4 not yet entered — complete earlier phases first'
+            : !phase4Rec.ralphCompleted
+              ? 'Phase 4 Ralph loop incomplete'
+              : 'Phase 4 awaiting user approval'
+          return {
+            blocked: true,
+            reason:
+              `⛔ [TDD Watchdog] Phase ${state.currentPhase} violation: business code write blocked. ${phase4Status}. Business code (src/) must not be written during Phase 4 (Test Code). Phase 4 writes test files only — stubs and mocks belong in test directories.`,
             }
           }
         }
@@ -36,15 +53,20 @@ export function createRules(_config?: unknown): InterceptRule[] {
         const currentPhase = state.currentPhase
         const rec = state.phases?.[currentPhase]
 
+        // Phase deliverable for next phase
         if (
-          currentPhase >= 1 &&
           classification.category === 'phase_deliverable' &&
           classification.phase === currentPhase + 1
         ) {
           if (!rec || !rec.ralphCompleted || !rec.userApproved) {
+            const status = !rec
+              ? 'phase not entered'
+              : rec.ralphCompleted
+                ? 'awaiting user approval'
+                : 'Ralph loop incomplete'
             return {
               blocked: true,
-              reason: `Phase transition blocked — phase ${currentPhase} must complete first`,
+              reason: `⛔ [TDD Watchdog] Phase transition blocked: Phase ${currentPhase} Ralph loop gate has not been passed (status: ${status}). Complete the Ralph loop and obtain user approval before starting Phase ${currentPhase + 1}.`,
             }
           }
         }

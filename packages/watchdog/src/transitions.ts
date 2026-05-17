@@ -101,20 +101,20 @@ export function validateTransition(
     }
 
     case 'ralph_loop_start': {
-      if (!isInt(payload.phase)) {
+      if (!isInt(payload.phase) || payload.phase < 1 || payload.phase > 5) {
         return fail(
           'Invalid phase',
-          'ralph_loop_start requires phase to be an integer.',
+          'ralph_loop_start requires phase to be an integer between 1 and 5.',
         )
       }
       break
     }
 
     case 'ralph_round_complete': {
-      if (!isInt(payload.phase)) {
+      if (!isInt(payload.phase) || payload.phase < 1 || payload.phase > 5) {
         return fail(
           'Invalid phase',
-          'ralph_round_complete requires phase to be an integer.',
+          'ralph_round_complete requires phase to be an integer between 1 and 5.',
         )
       }
       if (!isInt(payload.round) || payload.round < 1) {
@@ -193,15 +193,24 @@ export function validateTransition(
             )
           }
         }
+        // Check for duplicate IDs
+        const ncIds = (payload.new_contested as Array<Record<string, unknown>>).map(i => i.id)
+        if (new Set(ncIds).size !== ncIds.length) {
+          const dupes = ncIds.filter((id, i) => ncIds.indexOf(id) !== i)
+          return fail(
+            'Duplicate contested ID',
+            `new_contested contains duplicate id(s): ${[...new Set(dupes)].join(', ')}.`,
+          )
+        }
       }
       break
     }
 
     case 'ralph_terminate': {
-      if (!isInt(payload.phase)) {
+      if (!isInt(payload.phase) || payload.phase < 1 || payload.phase > 5) {
         return fail(
           'Invalid phase',
-          'ralph_terminate requires phase to be an integer.',
+          'ralph_terminate requires phase to be an integer between 1 and 5.',
         )
       }
       if (!['gate_pass', 'early_stop', 'max_rounds'].includes(payload.termination as string)) {
@@ -230,30 +239,30 @@ export function validateTransition(
     }
 
     case 'user_approval': {
-      if (!isInt(payload.phase)) {
+      if (!isInt(payload.phase) || payload.phase < 1 || payload.phase > 5) {
         return fail(
           'Invalid phase',
-          'user_approval requires phase to be an integer.',
+          'user_approval requires phase to be an integer between 1 and 5.',
         )
       }
       break
     }
 
     case 'phase_complete': {
-      if (!isInt(payload.phase)) {
+      if (!isInt(payload.phase) || payload.phase < 1 || payload.phase > 5) {
         return fail(
           'Invalid phase',
-          'phase_complete requires phase to be an integer.',
+          'phase_complete requires phase to be an integer between 1 and 5.',
         )
       }
       break
     }
 
     case 'why_articulation': {
-      if (!isInt(payload.phase)) {
+      if (!isInt(payload.phase) || payload.phase < 1 || payload.phase > 5) {
         return fail(
           'Invalid phase',
-          'why_articulation requires phase to be an integer.',
+          'why_articulation requires phase to be an integer between 1 and 5.',
         )
       }
       if (!isNonEmptyString(payload.articulation)) {
@@ -263,6 +272,10 @@ export function validateTransition(
         )
       }
       break
+    }
+
+    default: {
+      return fail('Unknown event', `Unrecognized event type: ${event}`)
     }
   }
 
@@ -301,12 +314,9 @@ export function validateTransition(
           )
         }
       }
-      if (phase === 5 && !state.testEvidenceConfirmed) {
-        return fail(
-          'Test evidence not confirmed',
-          'Phase 5 cannot be entered until test evidence is confirmed.',
-        )
-      }
+      // v1.8: Removed testEvidenceConfirmed check for phase 5.
+      // Phase gate is now solely Ralph loop completion + user approval,
+      // which is enforced by the userApproved check above.
       return ok()
     }
 
@@ -353,7 +363,7 @@ export function validateTransition(
           `Expected round ${state.ralph.round + 1}, got ${payload.round}.`,
         )
       }
-      if (state.ralph.openContested.length > 0 && payload.contested_resolutions === undefined) {
+      if (state.ralph.openContested.length > 0 && payload.contested_resolutions == null) {
         return fail(
           'Missing contested_resolutions',
           'There are open contested issues that must be resolved in this round.',
@@ -456,6 +466,12 @@ export function validateTransition(
           `user_approval requires phase ${phase} ralph loop to be completed first.`,
         )
       }
+      if (state.ralph?.escalated || rec.ralphTermination === 'escalated') {
+        return fail(
+          'Ralph loop escalated',
+          `user_approval requires phase ${phase} ralph loop to have resolved without escalation. Current round was escalated.`,
+        )
+      }
       return ok()
     }
 
@@ -513,6 +529,10 @@ export function validateTransition(
         )
       }
       return ok()
+    }
+
+    default: {
+      return fail('Unknown event', `Unrecognized event type: ${event}`)
     }
   }
 }
@@ -581,6 +601,7 @@ export function applyTransition(
             articulationAttempted: false,
             articulationVerified: false,
             articulationDegraded: false,
+            articulationFailures: 0,
           },
         },
         lastCheckpointAt: now,
@@ -662,7 +683,9 @@ export function applyTransition(
             // Remove from openContested
             continue
           }
-          // re_raised or escalated: treat as re_raised in Phase 1
+          // re_raised or escalated: treat as re_raised in Phase 2
+          // Phase 3 TODO: when action === 'escalated', set state.ralph.escalated = true
+          //   and state.ralph.escalatedAt = now to activate the user_approval safety gate.
           newOpenContested.push({
             ...issue,
             disputeRounds: issue.disputeRounds + 1,
@@ -789,17 +812,23 @@ export function applyTransition(
           [phase]: {
             ...existingRec,
             articulationAttempted: true,
-            ...(articulationVerified && {
-              articulationVerified: true,
-              articulationDimensions,
-            }),
+            articulationVerified,
+            articulationDimensions,
             articulationDegraded:
               existingRec.articulationDegraded === true ||
               payload._articulationDegraded === true,
+            articulationFailures:
+              (payload._articulationFailureCount as number | undefined)
+                ?? (existingRec.articulationFailures ?? 0),
           },
         },
         lastCheckpointAt: now,
       }
+    }
+
+    default: {
+      // Should never reach here if validateTransition runs first
+      throw new Error(`BUG: applyTransition received unrecognized event: ${event}`)
     }
   }
 }

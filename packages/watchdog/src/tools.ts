@@ -17,9 +17,15 @@ export function createWatchdogTools(deps: CreateWatchdogToolsDeps): Record<strin
 
   return {
     tdd_checkpoint: {
-      description: 'Report a checkpoint event to the TDD pipeline watchdog. Call this at mandatory points during tdd-pipeline execution: pipeline_start, phase_enter, ralph_loop_start, ralph_round_complete, ralph_terminate, test_evidence, user_approval, phase_complete.',
+      description: 'Report a checkpoint event to the TDD pipeline watchdog. Call this at mandatory points during tdd-pipeline execution: pipeline_start, phase_enter, ralph_loop_start, ralph_round_complete, ralph_terminate, user_approval, phase_complete. NOTE: test_evidence and why_articulation are also accepted but test_evidence is DEPRECATED (no longer gates behavior).',
       args: {
-        event: z.string().describe('Checkpoint event type: pipeline_start | phase_enter | ralph_loop_start | ralph_round_complete | ralph_terminate | test_evidence | user_approval | phase_complete'),
+        // NOTE: When adding new event types (e.g. Phase 3 escalation),
+        // update this enum array and the CheckpointEvent type in schema.ts.
+        event: z.enum([
+          'pipeline_start', 'phase_enter', 'ralph_loop_start',
+          'ralph_round_complete', 'ralph_terminate', 'test_evidence',
+          'user_approval', 'why_articulation', 'phase_complete',
+        ]).describe('Checkpoint event type'),
         payload: z.string().describe('JSON string with event-specific data. See tdd-pipeline SKILL.md for payload schemas.'),
       },
       execute: async (args: any, context: any) => {

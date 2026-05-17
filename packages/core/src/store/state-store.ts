@@ -8,6 +8,9 @@ export interface StateStore {
   write<T>(key: string, value: T): void;
   appendLog(key: string, entry: unknown): void;
   readLog<T>(key: string): T[];
+  /** Per-line tolerant read — corrupt lines are skipped with a warning instead of
+   *  discarding the entire log. Returns all successfully parsed entries. */
+  readLogSafe<T>(key: string): T[];
   list(prefix: string): string[];
 }
 
@@ -108,6 +111,26 @@ export function createStateStore(
         const content = fs.readFileSync(logPath, 'utf-8').trim();
         if (!content) return [];
         return content.split('\n').map((line) => JSON.parse(line) as T);
+      } catch {
+        return [];
+      }
+    },
+
+    readLogSafe<T>(key: string): T[] {
+      validateKey(key);
+      const logPath = getLogPath(baseDir, key);
+      try {
+        const content = fs.readFileSync(logPath, 'utf-8').trim();
+        if (!content) return [];
+        const results: T[] = [];
+        for (const line of content.split('\n')) {
+          try {
+            results.push(JSON.parse(line) as T);
+          } catch {
+            log.error('Corrupt line in %s skipped: %s', key, line.slice(0, 100));
+          }
+        }
+        return results;
       } catch {
         return [];
       }

@@ -5,7 +5,7 @@ import { classifyFile } from '../src/file-classifier.js'
 import { type InterceptRule } from '../src/intercept-rules.js'
 import { FALLBACK_PATTERNS } from '../src/watchdog-config.js'
 import { PipelineStateCache } from '../src/state-cache.js'
-import { makeState, createMockStore } from './helpers.js'
+import { makeState, makePhaseRecord, createMockStore } from './helpers.js'
 
 describe('Interceptor', () => {
   let mockCache: { get: ReturnType<typeof vi.fn>; update: ReturnType<typeof vi.fn>; clear: ReturnType<typeof vi.fn> }
@@ -31,21 +31,21 @@ describe('Interceptor', () => {
     config = {
       worktreeRoot: '/project',
       monitoredTools: ['edit', 'write'],
-      deliverablePatterns: FALLBACK_PATTERNS,
+      phaseDeliverables: FALLBACK_PATTERNS,
       ignorePatterns: [],
       store: mockStore,
       logger: mockLogger,
     }
 
-    // AC-3: Test Evidence Gate
+    // AC-3: Business Code Gate (v1.8: gates on Phase 4 Ralph completion, not testEvidence)
     ac3Rule = {
-      id: 'NO_BUSINESS_CODE_BEFORE_FAILING_TESTS',
+      id: 'NO_BUSINESS_CODE_BEFORE_PHASE5',
       evaluate(_tool: string, _path: string, classification: any, state: any) {
         if ((state.currentPhase === 4 || state.currentPhase === 5) && classification.category === 'business_code') {
-          if (state.testEvidenceConfirmed === false) {
+          if (state.currentPhase === 4 || !state.phases?.[4]?.ralphCompleted || !state.phases?.[4]?.userApproved) {
             return {
               blocked: true,
-              reason: `⛔ [TDD Watchdog] Phase ${state.currentPhase} violation: business code write blocked. Failing tests must be confirmed before writing implementation. Call tdd_checkpoint('test_evidence', ...) with your test output.`,
+              reason: `⛔ [TDD Watchdog] Phase ${state.currentPhase} violation: business code write blocked. Business code (src/) must not be written during Phase 4 (Test Code). Phase 4 writes test files only — stubs and mocks belong in test directories. Phase 5 business code requires Phase 4 Ralph loop gate passed.`,
             }
           }
         }
@@ -53,20 +53,10 @@ describe('Interceptor', () => {
       },
     }
 
-    // AC-4: Phase Gate
+    // AC-4: Phase Gate (v1.8: phase_deliverable only, no business_code workaround)
     ac4Rule = {
       id: 'NO_PHASE_ADVANCE_WITHOUT_GATE',
       evaluate(_tool: string, _path: string, classification: any, state: any) {
-        if (state.currentPhase === 4 && classification.category === 'business_code') {
-          const rec = state.phases?.[state.currentPhase]
-          if (!rec || !rec.ralphCompleted || !rec.userApproved) {
-            const status = !rec ? 'phase not entered' : rec.ralphCompleted ? 'awaiting user approval' : 'Ralph loop incomplete'
-            return {
-              blocked: true,
-              reason: `⛔ [TDD Watchdog] Phase transition blocked: Phase ${state.currentPhase} Ralph loop gate has not been passed (status: ${status}). Complete the Ralph loop and obtain user approval before starting Phase ${state.currentPhase + 1}.`,
-            }
-          }
-        }
         if (state.currentPhase >= 1 && classification.category === 'phase_deliverable' && classification.phase === state.currentPhase + 1) {
           const rec = state.phases?.[state.currentPhase]
           if (!rec || !rec.ralphCompleted || !rec.userApproved) {
@@ -89,6 +79,24 @@ describe('Interceptor', () => {
     expect(mockCache.get).not.toHaveBeenCalled()
   })
 
+  // ── TC-B-01a: active pipeline + unknown classification → pass through ──
+  it('TC-B-01a: passes through with unknown file classification', async () => {
+    const state = makeState({
+      currentPhase: 4,
+      phaseStatus: 'active',
+      testEvidenceConfirmed: false,
+      phases: { 4: makePhaseRecord(4) },
+    })
+    mockCache.get.mockReturnValue(state)
+
+    const interceptor = new Interceptor(mockCache, config, extractFilePath, classifyFile, [ac3Rule, ac4Rule])
+
+    // A file that doesn't match any rule → unknown classification
+    // Should NOT throw — unknown files are not blocked
+    await expect(interceptor.handle('edit', { file_path: '/project/README.md' }, 'sess-001', 'call-001'))
+      .resolves.toBeUndefined()
+  })
+
   // ── TC-B-02 ───────────────────────────────────────────────────────────────
   it('returns silently when cache returns null (no active pipeline)', async () => {
     mockCache.get.mockReturnValue(null)
@@ -97,8 +105,8 @@ describe('Interceptor', () => {
   })
 
   // ── TC-B-14 ───────────────────────────────────────────────────────────────
-  it('Rule 1: throws for Phase 4 business code without test evidence', async () => {
-    mockCache.get.mockReturnValue(makeState({ currentPhase: 4, testEvidenceConfirmed: false }))
+  it('Rule 1: throws for Phase 4 business code (unconditional block)', async () => {
+    mockCache.get.mockReturnValue(makeState({ currentPhase: 4 }))
     const interceptor = new Interceptor(mockCache, config, extractFilePath, classifyFile, [ac3Rule, ac4Rule])
     await expect(
       interceptor.handle('edit', { filePath: '/project/src/foo.ts' }, 'sess-001', 'call-302'),
@@ -109,10 +117,9 @@ describe('Interceptor', () => {
   })
 
   // ── TC-B-15 ───────────────────────────────────────────────────────────────
-  it('Rule 1: allows business code when test evidence is confirmed', async () => {
+  it('Rule 1: allows business code in Phase 5 when Phase 4 gate passed', async () => {
     mockCache.get.mockReturnValue(makeState({
-      currentPhase: 4,
-      testEvidenceConfirmed: true,
+      currentPhase: 5,
       phases: { 4: { ralphCompleted: true, userApproved: true } },
     }))
     const interceptor = new Interceptor(mockCache, config, extractFilePath, classifyFile, [ac3Rule, ac4Rule])
@@ -121,9 +128,28 @@ describe('Interceptor', () => {
     ).resolves.toBeUndefined()
   })
 
+  // ── TC-B-15a: Rule 1 — Phase 5, Phase 4 gate NOT passed, business code blocked ──
+  it('TC-B-15a: blocks business code in Phase 5 when Phase 4 gate not passed', () => {
+    const state = makeState({
+      currentPhase: 5,
+      phaseStatus: 'active',
+      phases: {
+        4: makePhaseRecord(4, { ralphCompleted: false, userApproved: false }),
+      },
+    })
+    mockCache.get.mockReturnValue(state)
+
+    // Business code classification
+    const classification = { category: 'business_code', ruleIndex: 3, pattern: null }
+
+    expect(ac3Rule.evaluate('edit', '/project/src/app.ts', classification, state)).toEqual(
+      expect.objectContaining({ blocked: true }),
+    )
+  })
+
   // ── TC-B-16 ───────────────────────────────────────────────────────────────
-  it('Rule 1: allows test files even without test evidence', async () => {
-    mockCache.get.mockReturnValue(makeState({ currentPhase: 4, testEvidenceConfirmed: false }))
+  it('Rule 1: allows test files in Phase 4 regardless of state', async () => {
+    mockCache.get.mockReturnValue(makeState({ currentPhase: 4 }))
     const interceptor = new Interceptor(mockCache, config, extractFilePath, classifyFile, [ac3Rule, ac4Rule])
     await expect(
       interceptor.handle('edit', { filePath: '/project/tests/foo.test.ts' }, 'sess-001', 'call-304'),
@@ -162,12 +188,11 @@ describe('Interceptor', () => {
   })
 
   // ── TC-B-19 ───────────────────────────────────────────────────────────────
-  it('Rule order: AC-3 fires before AC-4 when both would apply', async () => {
-    // Phase 4 + no evidence + business_code: both AC-3 and AC-4 could apply
+  it('Rule order: AC-3 fires before AC-4 when both could apply', async () => {
+    // Phase 4 + business_code: AC-3 applies (Phase 4 unconditional block)
     mockCache.get.mockReturnValue(
       makeState({
         currentPhase: 4,
-        testEvidenceConfirmed: false,
         phases: { 4: { ralphCompleted: false, userApproved: false } },
       }),
     )
@@ -183,7 +208,7 @@ describe('Interceptor', () => {
     store.getActiveRun.mockReturnValue({ runId: 'run-1', projectId: 'proj-test', startedAt: new Date().toISOString() })
     store.readState.mockReturnValue(makeState())
 
-    const cache = new PipelineStateCache(store as any, mockLogger as any, '/project', true)
+    const cache = new PipelineStateCache(store as any, '/project', mockLogger as any, true)
     const state = cache.get()
     expect(state).not.toBeNull()
     expect(state?.runId).toBe('run-test')
@@ -197,7 +222,7 @@ describe('Interceptor', () => {
     })
     const logger = { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() }
 
-    const cache = new PipelineStateCache(store as any, logger as any, '/project', true)
+    const cache = new PipelineStateCache(store as any, '/project', logger as any, true)
     const state = cache.get()
     expect(state).toBeNull()
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('disk read failed'), expect.anything())
@@ -314,12 +339,38 @@ describe('Interceptor', () => {
     const state1 = makeState({ currentPhase: 2 })
     store.readState.mockReturnValue(state1)
 
-    const cache = new PipelineStateCache(store as any, mockLogger as any, '/project', true)
+    const cache = new PipelineStateCache(store as any, '/project', mockLogger as any, true)
     expect(cache.get()?.currentPhase).toBe(2)
 
     // Simulate orchestrator writing new state
     const state2 = makeState({ currentPhase: 3 })
     store.readState.mockReturnValue(state2)
     expect(cache.get()?.currentPhase).toBe(3)
+  })
+
+  // ── TC-B-46: missing extractable path logs warning and allows write ──
+  it('logs warning and allows write when path extraction returns null', async () => {
+    mockCache.get.mockReturnValue(makeState({ currentPhase: 4 }))
+    const nullExtractor = vi.fn().mockReturnValue(null)
+    const interceptor = new Interceptor(mockCache, config, nullExtractor, classifyFile, [ac3Rule], mockStore, mockLogger as any)
+    await expect(interceptor.handle('edit', { filePath: 'foo.ts' }, 'sess-001', 'call-318')).resolves.toBeUndefined()
+    expect(mockLogger.warn).toHaveBeenCalledWith(expect.stringContaining('missing target path'), expect.anything())
+  })
+
+  // ── TC-B-45: relative path resolved via worktreeRoot (C-6) ──
+  it('TC-B-45: resolves relative file paths via worktreeRoot', async () => {
+    const state = makeState({
+      currentPhase: 5,
+      phaseStatus: 'active',
+      phases: { 4: { ralphCompleted: true, userApproved: true } },
+    })
+    mockCache.get.mockReturnValue(state)
+
+    const interceptor = new Interceptor(mockCache, config, extractFilePath, classifyFile, [ac3Rule, ac4Rule])
+
+    // Relative path should be resolved against worktreeRoot and classified as business_code
+    // Phase 5 + Phase 4 gate passed → should succeed
+    await expect(interceptor.handle('edit', { file_path: 'src/app.ts' }, 'sess-001', 'call-001'))
+      .resolves.toBeUndefined()
   })
 })

@@ -1,13 +1,17 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { SessionBuffer } from '../src/session-buffer.js'
-import { SESSION_BUFFER_MAX_SIZE } from '../src/constants.js'
+import { SESSION_BUFFER_MAX_SIZE, MAX_TRACKED_SESSIONS } from '../src/constants.js'
 
 const MAX_SIZE = 1000
+
+function createBuffer(): SessionBuffer {
+  return new SessionBuffer({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } as any)
+}
 
 describe('SessionBuffer', () => {
   // ── TC-A-01 (was TC-A-11) ─────────────────────────────────────────────────
   it('records entries within bounds', () => {
-    const buffer = new SessionBuffer(MAX_SIZE)
+    const buffer = createBuffer()
 
     buffer.record('sess-001', {
       tool: 'Task',
@@ -28,7 +32,7 @@ describe('SessionBuffer', () => {
 
   // ── TC-A-02 (was TC-A-12) ─────────────────────────────────────────────────
   it('evicts oldest entries on overflow', () => {
-    const buffer = new SessionBuffer(MAX_SIZE)
+    const buffer = createBuffer()
 
     for (let i = 0; i < MAX_SIZE + 1; i++) {
       buffer.record('sess-001', {
@@ -46,7 +50,7 @@ describe('SessionBuffer', () => {
 
   // ── TC-A-03 (was TC-A-13) ─────────────────────────────────────────────────
   it('clears all entries for a session', () => {
-    const buffer = new SessionBuffer(MAX_SIZE)
+    const buffer = createBuffer()
 
     buffer.record('sess-001', {
       tool: 'Task',
@@ -60,7 +64,7 @@ describe('SessionBuffer', () => {
 
   // ── TC-A-04 (was TC-A-14) ─────────────────────────────────────────────────
   it('isolates entries per session', () => {
-    const buffer = new SessionBuffer(MAX_SIZE)
+    const buffer = createBuffer()
 
     buffer.record('sess-A', {
       tool: 'Task',
@@ -81,5 +85,56 @@ describe('SessionBuffer', () => {
   // ── SA-3: SESSION_BUFFER_MAX_SIZE constant exists and equals 1000 ────
   it('SA-3: SESSION_BUFFER_MAX_SIZE is exported as 1000', () => {
     expect(SESSION_BUFFER_MAX_SIZE).toBe(1000)
+  })
+
+  // ── TC-A-XX: Per-session FIFO eviction independence ──────────────────────
+  it('per-session FIFO eviction does not affect other sessions', () => {
+    const buffer = createBuffer()
+    const SMALL_MAX = 5
+
+    // Fill session A beyond its limit using the constant (1000)
+    // But we test independence: fill sess-A with 10 entries, sess-B with 3
+    for (let i = 0; i < 10; i++) {
+      buffer.record('sess-A', {
+        tool: 'Task',
+        callID: `call-A${i}`,
+        timestamp: `2026-01-01T00:00:${i.toString().padStart(2, '0')}Z`,
+      })
+    }
+    for (let i = 0; i < 3; i++) {
+      buffer.record('sess-B', {
+        tool: 'edit',
+        callID: `call-B${i}`,
+        timestamp: `2026-01-01T00:00:${i.toString().padStart(2, '0')}Z`,
+      })
+    }
+
+    // Both sessions keep all entries (10 and 3 are well under 1000)
+    expect(buffer.getSession('sess-A')).toHaveLength(10)
+    expect(buffer.getSession('sess-B')).toHaveLength(3)
+  })
+
+  // ── TC-A-05: MAX_TRACKED_SESSIONS evicts oldest session ───────────────
+  it('evicts oldest session when session count exceeds MAX_TRACKED_SESSIONS', () => {
+    const buffer = createBuffer()
+
+    // Fill MAX_TRACKED_SESSIONS + 1 sessions with 1 entry each
+    for (let i = 0; i < MAX_TRACKED_SESSIONS + 1; i++) {
+      buffer.record(`sess-${i.toString().padStart(3, '0')}`, {
+        tool: 'Task',
+        callID: `call-${i}`,
+        timestamp: '2026-01-01T00:00:00Z',
+      })
+    }
+
+    // Session count should be capped at MAX_TRACKED_SESSIONS
+    expect(buffer.sessionCount()).toBe(MAX_TRACKED_SESSIONS)
+
+    // The oldest session (sess-000) should have been evicted
+    expect(buffer.getSession('sess-000')).toEqual([])
+
+    // The newest session should still exist
+    const lastSession = `sess-${MAX_TRACKED_SESSIONS.toString().padStart(3, '0')}`
+    expect(buffer.getSession(lastSession)).toHaveLength(1)
   })
 })

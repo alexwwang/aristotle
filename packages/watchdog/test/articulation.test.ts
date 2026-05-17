@@ -20,7 +20,7 @@ describe('validateArticulation', () => {
   it('TC-C-02: returns verified=false when what_it_protects is missing', () => {
     const text =
       'Key risks include data loss and race conditions. ' +
-      'The approach works because transactions prevent corruption.'
+      'The approach works because transactions ensure consistency.'
     const result = validateArticulation(text)
     expect(result.verified).toBe(false)
     expect(result.missingDimension).toBe('what_it_protects')

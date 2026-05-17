@@ -106,14 +106,18 @@ export class PipelineStore {
       this.archiveRun(projectId, existing.runId);
     }
 
-    this.stateStore.write<ActiveRun>(this.activeKey(projectId), run);
+    // L5 fix: write index FIRST, then activeRun pointer.
+    // If crash occurs between the two writes, the worst case is:
+    //   - index has the project but no activeRun → harmless (getActiveRun returns null)
+    // The previous order (activeRun first) could leave a dangling pointer on crash.
     this.addProjectToIndex(projectId);
+    this.stateStore.write<ActiveRun>(this.activeKey(projectId), run);
     this.logger.info('Set active run %s for project %s', run.runId, projectId);
   }
 
   clearActiveRun(projectId: string): void {
     this.validatePathComponents(projectId)
-    this.stateStore.write(this.activeKey(projectId), null as unknown as ActiveRun);
+    this.stateStore.write<ActiveRun | null>(this.activeKey(projectId), null);
     this.logger.info('Cleared active run for project %s', projectId);
   }
 
@@ -175,7 +179,7 @@ export class PipelineStore {
     }
 
     // Archive audit log
-    const auditEntries = this.stateStore.readLog<AuditLogEntry>(this.auditKey(projectId, runId));
+    const auditEntries = this.stateStore.readLogSafe<AuditLogEntry>(this.auditKey(projectId, runId));
     if (auditEntries.length > 0) {
       const archiveAuditKey = this.archiveAuditKey(projectId, runId);
       for (const entry of auditEntries) {
@@ -190,7 +194,7 @@ export class PipelineStore {
     }
 
     // Archive observations
-    const observations = this.stateStore.readLog<ObservationEntry>(this.observationKey(projectId, runId));
+    const observations = this.stateStore.readLogSafe<ObservationEntry>(this.observationKey(projectId, runId));
     if (observations.length > 0) {
       const archiveObsKey = this.archiveObservationKey(projectId, runId);
       for (const entry of observations) {
@@ -209,6 +213,10 @@ export class PipelineStore {
   // Observations (Phase 2)
   // ------------------------------------------------------------------
 
+  /**
+   * Append an observation entry. async for future StateStore async migration
+   * (e.g. fs.promises.appendFile). Internal operations are currently sync.
+   */
   async appendObservation(
     projectId: string,
     runId: string,
@@ -217,18 +225,28 @@ export class PipelineStore {
     this.validatePathComponents(projectId, runId)
     const key = this.observationKey(projectId, runId)
     // M-1: use appendLog for crash-safe, concurrent-safe writes (same pattern as appendAudit)
+    // async for future StateStore async migration (e.g. fs.promises.appendFile)
     this.stateStore.appendLog(key, entry)
   }
 
+  /**
+   * Read all observation entries. async for future StateStore async migration
+   * (e.g. fs.promises.readFile). Internal operations are currently sync.
+   */
   async readObservations(
     projectId: string,
     runId: string,
   ): Promise<ObservationEntry[]> {
     this.validatePathComponents(projectId, runId)
     const key = this.observationKey(projectId, runId)
-    return this.stateStore.readLog<ObservationEntry>(key)
+    // F1 fix: readLogSafe skips corrupt lines instead of losing all observations
+    return this.stateStore.readLogSafe<ObservationEntry>(key)
   }
 
+  /**
+   * Find observations matching a filter. async for future StateStore async migration.
+   * Internal operations are currently sync.
+   */
   async findObservations(
     projectId: string,
     runId: string,

@@ -24,14 +24,17 @@ import type {
   PipelineState,
   PipelineStateSummary,
   AuditLogEntry,
+  PhaseRecord,
 } from './schema.js'
 import { hasOwner } from './schema.js'
 import { validateTransition, applyTransition, NO_ACTIVE_RUN } from './transitions.js'
+import { OBS_TYPE_REVIEWER_SPAWNED } from './schema.js'
 import { computeProjectId } from './project-id.js'
 import { validateArticulation } from './articulation.js'
 import { ARTICULATION_MAX_FAILURES } from './constants.js'
 import type { PipelineStateCache } from './state-cache.js'
 import type { Observer } from './observer.js'
+import type { Logger } from '@opencode-ai/core/logger'
 
 export class CheckpointHandler {
   private articulationFailures = new Map<number, number>()
@@ -41,8 +44,14 @@ export class CheckpointHandler {
     private staleThresholdMs: number,
     private cache?: PipelineStateCache,
     private observer?: Observer,
+    private logger?: Logger,
   ) {}
 
+  /**
+   * Process a checkpoint event. async for framework contract
+   * (ToolDefinition.execute returns Promise<string>) and future
+   * StateStore async migration. Internal operations are currently sync.
+   */
   async handle(
     event: CheckpointEvent,
     payloadJson: string,
@@ -76,6 +85,28 @@ export class CheckpointHandler {
 
     // ── 4. Ownership check (§5.5a Layer 2+3 defense — MUST run before stale check) ──
     //    Non-owner sessions must never see recovery prompts or advance state.
+    //    Corrupted state (activeRun exists but currentState is null): fail-closed,
+    //    reject non-pipeline_start events since ownership cannot be verified.
+    if (event !== 'pipeline_start' && activeRun && !currentState) {
+      // Audit BLOCK for corrupted state
+      const entry: AuditLogEntry = {
+        timestamp: now,
+        runId: activeRun.runId,
+        projectId,
+        sessionId,
+        event,
+        phase: 0,
+        decision: 'BLOCK',
+        violation: `Pipeline state file is missing or corrupted for run ${activeRun.runId}.`,
+      }
+      this.store.appendAudit(projectId, activeRun.runId, entry)
+
+      return JSON.stringify({
+        ok: false,
+        violation: 'Pipeline state file is missing or corrupted. Cannot verify ownership.',
+        guidance: 'Only pipeline_start can proceed when state is corrupted. Call pipeline_start to recover.',
+      })
+    }
     if (event !== 'pipeline_start' && activeRun && hasOwner(currentState)) {
       if (currentState.ownerSessionId !== sessionId) {
         const entry: AuditLogEntry = {
@@ -110,14 +141,6 @@ export class CheckpointHandler {
           message: `Found stale pipeline run from ${elapsed} ago. Last activity: Phase ${summary.phase} ${formatPhaseStatus(summary.phaseStatus)}${summary.ralphRound ? ` round ${summary.ralphRound}` : ''}. Options: (1) continue from where you left off — call phase_enter or ralph_round_complete as appropriate, (2) start fresh — call pipeline_start to archive this run and begin a new one.`,
         } satisfies CheckpointRecovery)
       }
-    }
-
-    // ── 5. Reset articulation counters ────────────────────────────────
-    if (event === 'phase_enter' && typeof payload.phase === 'number') {
-      this.articulationFailures.delete(payload.phase)
-    }
-    if (event === 'pipeline_start') {
-      this.articulationFailures.clear()
     }
 
     // ── 6. Inject metadata into payload ───────────────────────────────
@@ -228,9 +251,11 @@ export class CheckpointHandler {
         this.articulationFailures.delete(phase)
         payload._articulationVerified = true
         payload._articulationDimensions = articulationResult.dimensions
+        payload._articulationFailureCount = 0
       } else {
         const failures = this.getFailureCount(phase, currentState) + 1
         this.articulationFailures.set(phase, failures)
+        payload._articulationFailureCount = failures
         if (failures >= ARTICULATION_MAX_FAILURES) {
           payload._articulationDegraded = true
         }
@@ -242,8 +267,11 @@ export class CheckpointHandler {
     if (event === 'ralph_round_complete' && activeRun && this.observer) {
       const round = payload.round as number
       const skipAC2 = this.observer.isDegraded(projectId, activeRun.runId, round)
-      if (!skipAC2) {
-        const observations = await this.store.findObservations(projectId, activeRun.runId, { type: '_reviewer_spawned', round })
+      if (skipAC2) {
+        // Spec §6.4: log warning when AC-2 is skipped due to observer degradation
+        this.logger?.warn('[TDD Watchdog] AC-2 skipped: observer was degraded during round %d for pipeline %s/%s', round, projectId, activeRun.runId)
+      } else {
+        const observations = await this.store.findObservations(projectId, activeRun.runId, { type: OBS_TYPE_REVIEWER_SPAWNED, round })
         if (!observations || observations.length === 0) {
           const entry: AuditLogEntry = {
             timestamp: now,
@@ -271,6 +299,7 @@ export class CheckpointHandler {
     try {
       newState = applyTransition(event, payload, currentState)
     } catch (err) {
+      this.logger?.error('applyTransition threw for event %s: %s', event, String(err))
       return JSON.stringify({
         ok: false,
         violation: `Internal state error: ${String(err)}`,
@@ -278,6 +307,25 @@ export class CheckpointHandler {
       } satisfies CheckpointViolation)
     }
     const runId = newState.runId
+
+    // ── 11a. Reset articulation counters (after successful transition) ──
+    if (event === 'phase_enter' && typeof payload.phase === 'number') {
+      this.articulationFailures.delete(payload.phase)
+    }
+    if (event === 'pipeline_start') {
+      this.articulationFailures.clear()
+    }
+
+    // ── 11b. Pre-write invariant: ownerSessionId MUST-PRESERVE (R6 M-2) ──
+    // If the current state has an owner, the new state MUST also have one.
+    // This assertion fires BEFORE writeState to prevent disk contamination.
+    if (hasOwner(currentState) && !hasOwner(newState)) {
+      throw new Error(
+        `BUG: ownerSessionId lost during ${event} transition. ` +
+        `This is a programming error — please report. ` +
+        `Owner was: ${currentState.ownerSessionId}`,
+      )
+    }
 
     // Write state FIRST (M10: before setActiveRun to avoid partial-write window)
     this.store.writeState(projectId, runId, newState)
@@ -312,8 +360,8 @@ export class CheckpointHandler {
 
     // ── 12. phase_complete(5) → clearActiveRun + archiveRun ───────────
     if (event === 'phase_complete' && payload.phase === 5) {
-      this.store.clearActiveRun(projectId)
       this.store.archiveRun(projectId, runId)
+      this.store.clearActiveRun(projectId)
       this.cache?.clear()
       this.observer?.clearDegradation(projectId, runId)
     }
@@ -345,8 +393,12 @@ export class CheckpointHandler {
   private getFailureCount(phase: number, currentState: PipelineState | null): number {
     let count = this.articulationFailures.get(phase)
     if (count === undefined) {
-      const phaseRec = currentState?.phases?.[phase] as { articulationAttempted?: boolean; articulationVerified?: boolean } | undefined
-      if (phaseRec?.articulationAttempted && !phaseRec?.articulationVerified) {
+      const phaseRec = currentState?.phases?.[phase] as PhaseRecord | undefined
+      // M2 fix: prefer persisted failure count from PhaseRecord for accurate recovery after restart
+      if (phaseRec?.articulationFailures !== undefined && phaseRec.articulationFailures > 0) {
+        count = phaseRec.articulationFailures
+      } else if (phaseRec?.articulationAttempted && !phaseRec?.articulationVerified) {
+        // Legacy fallback: no persisted count, infer from boolean flags
         count = 1
       } else {
         count = 0
@@ -374,10 +426,13 @@ function summarizeState(state: PipelineState): PipelineStateSummary {
 }
 
 function formatElapsed(ms: number): string {
+  if (ms < 1000) return '<1s'
   const hours = Math.floor(ms / (60 * 60 * 1000))
   const minutes = Math.floor((ms % (60 * 60 * 1000)) / (60 * 1000))
+  const seconds = Math.floor((ms % (60 * 1000)) / 1000)
   if (hours > 0) return `${hours}h${minutes > 0 ? ` ${minutes}m` : ''}`
-  return `${minutes}m`
+  if (minutes > 0) return `${minutes}m${seconds > 0 ? ` ${seconds}s` : ''}`
+  return `${seconds}s`
 }
 
 function formatPhaseStatus(status: string): string {
