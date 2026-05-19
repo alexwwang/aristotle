@@ -83,11 +83,11 @@ export class Observer {
     sessionID: string,
   ): Promise<void> {
     try {
-      // Extract prompt from Task args
+      // Extract prompt from Task args — prefer prompt, fall through to description if empty
       let prompt = ''
       if (args && typeof args === 'object') {
         const a = args as Record<string, unknown>
-        if (typeof a.prompt === 'string') prompt = a.prompt
+        if (typeof a.prompt === 'string' && a.prompt.length > 0) prompt = a.prompt
         else if (typeof a.description === 'string') prompt = a.description
       }
 

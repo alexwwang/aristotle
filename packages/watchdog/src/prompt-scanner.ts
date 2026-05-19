@@ -39,7 +39,7 @@ export const DEFAULT_PROHIBITED_PATTERNS: RegExp[] = [
 
 /**
  * Scan a prompt string for prohibited patterns.
- * Returns all matches (not just the first) so the audit log captures the full picture.
+ * Returns one match per matching pattern so the audit log captures which rules fired.
  */
 export function scanPrompt(
   prompt: string,

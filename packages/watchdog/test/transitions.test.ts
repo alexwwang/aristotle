@@ -1804,6 +1804,25 @@ describe('Phase 2.1 GPAV — migration', () => {
       expect(result.violation).toContain('consecutive zero rounds')
     }
   })
+
+  it('TC-G-37: GPAV fallback accepts gate_pass via legacy tallyHistory when completedRecords empty', () => {
+    const state = makeRalphState({}, {
+      round: 5,
+      autoValidated: true,
+      tallyHistory: [
+        { round: 1, C: 1, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 2, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 3, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 4, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 5, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
+      ],
+      roundRecords: [{ round: 6, counts: { C: 0, H: 0, M: 0, L: 0, I: 1 }, submittedAt: NOW }],
+    })
+    const result = validateTransition('ralph_terminate', basePayload({
+      phase: 1, termination: 'gate_pass',
+    }), state)
+    expect(result.valid).toBe(true)
+  })
 })
 
 describe('Phase 2.1 GPAV — edge cases', () => {
