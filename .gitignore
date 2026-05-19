@@ -23,6 +23,9 @@ scripts/dp-save.sh
 # Protocol drafts (moved to design_plan/, kept for reference)
 protocol_draft/
 
+# Binary docs
+*.pdf
+
 # Test artifacts
 test-output.log
 tmp/
