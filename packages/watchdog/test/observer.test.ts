@@ -444,4 +444,21 @@ describe('Observer', () => {
       ).resolves.not.toThrow()
     })
   })
+
+  // ── KI-7 regression: non-round degradation does not affect per-round queries ──
+  it('KI-7: non-round degradation does not affect per-round AC-2 queries', async () => {
+    // Simulate observer error during non-ralph activity (phaseStatus='active', no ralph)
+    const state = makeState({ phaseStatus: 'active', ralph: null })
+    mockCache.get
+      .mockImplementationOnce(() => { throw new Error('transient fail') })
+      .mockReturnValue(state)
+
+    await observer.handle('edit', {}, 'out', 'sess-001', 'call-001')
+
+    // Without round → true (degradedRuns has the key)
+    expect(observer.isDegraded('proj-test', 'run-test')).toBe(true)
+    // With specific round → false (degradedRounds is empty for this round)
+    expect(observer.isDegraded('proj-test', 'run-test', 1)).toBe(false)
+    expect(observer.isDegraded('proj-test', 'run-test', 5)).toBe(false)
+  })
 })

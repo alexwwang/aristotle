@@ -47,6 +47,9 @@ function isNonNegativeInt(val: unknown): boolean {
 }
 
 function checkTally(tally: unknown): { ok: boolean; errorType?: 'missing' | 'type' } {
+  if (tally === undefined) {
+    return { ok: false, errorType: 'missing' }
+  }
   if (typeof tally !== 'object' || tally === null) {
     return { ok: false, errorType: 'type' }
   }

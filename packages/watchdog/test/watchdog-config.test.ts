@@ -125,4 +125,18 @@ describe('WatchdogConfig', () => {
     expect(config.monitoredTools).toEqual(DEFAULT_MONITORED_TOOLS)
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('falling back to defaults'), expect.anything())
   })
+
+  // KI-5 regression: stripJsonComments preserves // and /* inside string values
+  it('preserves // inside string values while stripping comments', () => {
+    const configPath = path.join(tmpDir, '.opencode')
+    fs.mkdirSync(configPath, { recursive: true })
+    fs.writeFileSync(
+      path.join(configPath, 'watchdog.jsonc'),
+      '// top comment\n' +
+      '{ /* inline comment */ "phaseDeliverables": { "phase1": ["http://example.com"] }, "ignorePatterns": ["path/*glob"] }',
+    )
+    const config = loadWatchdogConfig(tmpDir, logger)
+    expect(config.phaseDeliverables[1]).toEqual(['http://example.com'])
+    expect(config.ignorePatterns).toEqual(['path/*glob'])
+  })
 })

@@ -155,7 +155,7 @@ describe('payload validation', () => {
     )
     expect(result.valid).toBe(false)
     if (!result.valid) {
-      expect(result.violation).toMatch(/^Invalid tally/)
+      expect(result.violation).toMatch(/^(Invalid tally|Missing required field)/)
     }
   })
 
