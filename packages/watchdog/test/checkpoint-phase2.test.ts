@@ -1320,8 +1320,8 @@ describe('CheckpointHandler Phase 2', () => {
     })
   })
 
-  // ── TC-C-22 ─────────────────────────────────────────────────────────────
-  it('TC-C-22: why_articulation precondition BLOCK preserves articulationAttempted=false', async () => {
+  // ── TC-C-47 ─────────────────────────────────────────────────────────────
+  it('TC-C-47: why_articulation precondition BLOCK preserves articulationAttempted=false', async () => {
     mockStore._setActiveRun(PROJECT_ID, { runId: 'run-001', projectId: PROJECT_ID, startedAt: NOW })
     mockStore._setState(PROJECT_ID, 'run-001', makeState({
       runId: 'run-001',
@@ -1353,8 +1353,8 @@ describe('CheckpointHandler Phase 2', () => {
     }
   })
 
-  // ── TC-C-23 ─────────────────────────────────────────────────────────────
-  it('TC-C-23: pipeline_start clears articulation failure counter', async () => {
+  // ── TC-C-48 ─────────────────────────────────────────────────────────────
+  it('TC-C-48: pipeline_start clears articulation failure counter', async () => {
     // Phase 1: Start a pipeline and accumulate 2 articulation failures
     mockStore._setActiveRun(PROJECT_ID, { runId: 'run-001', projectId: PROJECT_ID, startedAt: NOW })
     mockStore._setState(PROJECT_ID, 'run-001', makeState({

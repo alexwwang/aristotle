@@ -166,7 +166,13 @@ export function validateTransition(
               'Each contested_resolution must have a non-empty string id.',
             )
           }
-          if (!['accepted', 're_raised', 'escalated'].includes(cr.action as string)) {
+          if (cr.action === 'escalated') {
+            return fail(
+              'Escalation not yet implemented',
+              'The escalated action is reserved for a future phase. Use accepted or re_raised.',
+            )
+          }
+          if (!['accepted', 're_raised'].includes(cr.action as string)) {
             return fail(
               'Invalid contested_resolutions action',
               'contested_resolution action must be one of: accepted, re_raised, escalated.',
@@ -459,7 +465,7 @@ export function validateTransition(
       if (state.currentPhase < TEST_CODE_PHASE) {
         return fail(
           'Invalid phase for test evidence',
-          `test_evidence can only be submitted in phase ${TEST_CODE_PHASE} or later.`,
+          `test_evidence requires the pipeline to be at phase ${TEST_CODE_PHASE} or later (currently at phase ${state.currentPhase}).`,
         )
       }
       return ok()

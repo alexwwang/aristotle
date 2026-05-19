@@ -44,11 +44,9 @@ export class SessionBuffer {
     }
 
     // LRU eviction: re-insert to move accessed session to end of Map iteration order
-    if (this.buffers.has(sessionId)) {
-      const existing = this.buffers.get(sessionId)!
-      this.buffers.delete(sessionId)
-      this.buffers.set(sessionId, existing)
-    }
+    const existing = this.buffers.get(sessionId)!
+    this.buffers.delete(sessionId)
+    this.buffers.set(sessionId, existing)
 
     // Evict least-recently-used session if total session count exceeds limit
     while (this.buffers.size > MAX_TRACKED_SESSIONS) {
