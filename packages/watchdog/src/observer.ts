@@ -93,39 +93,42 @@ export class Observer {
 
       if (promptsToScan.length === 0) return // No prompts to scan
 
+      // Scan all candidate fields, accumulate matches
+      const allMatches: Array<{ pattern: string; match: string }> = []
       for (const p of promptsToScan) {
         const result = scanPrompt(p)
-        if (!result.flagged) continue
-
-        // Log matched patterns
-        const patterns = result.matchedPatterns.map(m => `"${m.match}" (${m.pattern})`).join(', ')
-        this.logger?.warn('RPS: prompt injection detected in Task call round %d: %s', round, patterns)
-
-        // Persist audit entry
-        const auditEntry: AuditLogEntry = {
-          timestamp: new Date().toISOString(),
-          runId: state.runId,
-          projectId: state.projectId,
-          sessionId: sessionID,
-          event: 'PROMPT_INJECTION_DETECTED',
-          phase: state.currentPhase,
-          round,
-          decision: 'WARN',
-          violation: `Prohibited patterns in reviewer prompt: ${patterns}`,
-        }
-        await this.store.appendAudit(state.projectId, state.runId, auditEntry)
-
-        // Also record as observation for easy querying
-        await this.store.appendObservation(state.projectId, state.runId, {
-          timestamp: new Date().toISOString(),
-          type: OBS_TYPE_PROMPT_INJECTION,
-          tool,
-          callID,
-          round,
-          metadata: { matchedPatterns: result.matchedPatterns, sessionId: sessionID },
-        })
-        break // One detection per Task call is sufficient
+        if (result.flagged) allMatches.push(...result.matchedPatterns)
       }
+
+      if (allMatches.length === 0) return
+
+      // Log matched patterns
+      const patterns = allMatches.map(m => `"${m.match}" (${m.pattern})`).join(', ')
+      this.logger?.warn('RPS: prompt injection detected in Task call round %d: %s', round, patterns)
+
+      // Persist audit entry
+      const auditEntry: AuditLogEntry = {
+        timestamp: new Date().toISOString(),
+        runId: state.runId,
+        projectId: state.projectId,
+        sessionId: sessionID,
+        event: 'PROMPT_INJECTION_DETECTED',
+        phase: state.currentPhase,
+        round,
+        decision: 'WARN',
+        violation: `Prohibited patterns in reviewer prompt: ${patterns}`,
+      }
+      await this.store.appendAudit(state.projectId, state.runId, auditEntry)
+
+      // Also record as observation for easy querying
+      await this.store.appendObservation(state.projectId, state.runId, {
+        timestamp: new Date().toISOString(),
+        type: OBS_TYPE_PROMPT_INJECTION,
+        tool,
+        callID,
+        round,
+        metadata: { matchedPatterns: allMatches, sessionId: sessionID },
+      })
     } catch (err) {
       // RPS failure should not break the observer
       this.logger?.warn('RPS scan failed (suppressed): %s', String(err))
