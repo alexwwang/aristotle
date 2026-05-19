@@ -208,7 +208,7 @@ export function validateTransition(
             )
           }
         }
-        // Check for duplicate IDs
+        // Check for duplicate IDs within new_contested
         const ncIds = (payload.new_contested as Array<Record<string, unknown>>).map(i => i.id)
         if (new Set(ncIds).size !== ncIds.length) {
           const dupes = ncIds.filter((id, i) => ncIds.indexOf(id) !== i)
@@ -216,6 +216,18 @@ export function validateTransition(
             'Duplicate contested ID',
             `new_contested contains duplicate id(s): ${[...new Set(dupes)].join(', ')}.`,
           )
+        }
+        // Check for conflicts with existing openContested IDs
+        if (state.ralph?.openContested) {
+          const existingIds = new Set(state.ralph.openContested.map(i => i.id))
+          for (const ncId of ncIds) {
+            if (existingIds.has(ncId as string)) {
+              return fail(
+                'Duplicate contested ID',
+                `new_contested id '${ncId}' conflicts with an existing open contested issue.`,
+              )
+            }
+          }
         }
       }
       break
@@ -846,7 +858,7 @@ export function applyTransition(
           [phase]: {
             ...existingRec,
             articulationAttempted: true,
-            articulationVerified,
+            articulationVerified: articulationVerified || existingRec.articulationVerified,
             articulationDimensions,
             articulationDegraded:
               existingRec.articulationDegraded === true ||
