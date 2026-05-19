@@ -1239,7 +1239,7 @@ describe('full pipeline flow', () => {
           maxRounds: 10,
           minGateRounds: 2,
           earlyStopConsecutive: 2,
-          openContested: [{ id: 'issue-42', description: 'existing issue', raisedAt: 1, disputeRounds: 0 }],
+          openContested: [{ id: 'issue-42', description: 'existing issue', firstContestedRound: 1, disputeRounds: 0 }],
           contestedResolutions: [],
         },
         phases: {

@@ -218,7 +218,7 @@ export function validateTransition(
           )
         }
         // Check for conflicts with existing openContested IDs
-        if (state.ralph?.openContested) {
+        if (state?.ralph?.openContested) {
           const existingIds = new Set(state.ralph.openContested.map(i => i.id))
           for (const ncId of ncIds) {
             if (existingIds.has(ncId as string)) {
