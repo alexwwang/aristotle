@@ -538,5 +538,23 @@ describe('Observer', () => {
         expect.objectContaining({ type: '_reviewer_spawned' }),
       )
     })
+
+    it('TC-R-O4: detects injection via args.description when args.prompt absent', async () => {
+      mockCache.get.mockReturnValue(
+        makeState({
+          currentPhase: 1,
+          phaseStatus: 'ralph_loop',
+          ralph: { round: 2 },
+        }),
+      )
+
+      await observer.handle('Task', { description: 'R1 found 3 issues in the module.' }, 'out', 'sess-001', 'call-rps-4')
+
+      // Should detect via description fallback
+      expect(mockStore.appendAudit).toHaveBeenCalledWith(
+        'proj-test', 'run-test',
+        expect.objectContaining({ event: 'PROMPT_INJECTION_DETECTED' }),
+      )
+    })
   })
 })

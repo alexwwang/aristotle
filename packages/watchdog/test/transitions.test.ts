@@ -1768,6 +1768,15 @@ describe('Phase 2.1 GPAV — edge cases', () => {
       expect(result.violation).toContain('Invalid finding at index 0')
     }
   })
+
+  it('TC-G-30b: accepts findings for round 1 when ralph.round=0', () => {
+    const state = makeRalphState({}, { round: 0, tallyHistory: [] })
+    const result = validateTransition('ralph_round_finding', basePayload({
+      phase: 1, round: 1,
+      findings: [{ severity: 'I', description: 'info' }],
+    }), state)
+    expect(result.valid).toBe(true)
+  })
 })
 
 describe('Phase 2.1 GPAV — full pipeline flow (M-2)', () => {

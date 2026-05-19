@@ -468,15 +468,13 @@ export function validateTransition(
           )
         }
         // Validate agent's tally matches Watchdog's authoritative counts
-        const tally = payload.tally as Record<string, unknown> | undefined
-        if (tally) {
-          for (const sev of ['C', 'H', 'M', 'L', 'I'] as const) {
-            if (tally[sev] !== undefined && tally[sev] !== record.counts[sev]) {
-              return fail(
-                `Tally mismatch for ${sev}`,
-                `Agent reported ${sev}=${tally[sev]} but Watchdog recorded ${sev}=${record.counts[sev]}.`,
-              )
-            }
+        const tally = payload.tally as Record<string, unknown>
+        for (const sev of ['C', 'H', 'M', 'L', 'I'] as const) {
+          if (tally[sev] !== record.counts[sev]) {
+            return fail(
+              `Tally mismatch for ${sev}`,
+              `Agent reported ${sev}=${tally[sev]} but Watchdog recorded ${sev}=${record.counts[sev]}.`,
+            )
           }
         }
       }
