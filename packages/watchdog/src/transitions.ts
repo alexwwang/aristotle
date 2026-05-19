@@ -590,7 +590,44 @@ export function validateTransition(
             }
           }
         } else {
-          // autoValidated=true but no completed rounds with records — fall through to legacy
+          // autoValidated=true but no completed rounds with records — fall back to legacy checks
+          // This prevents a bypass where agent submits only uncommitted findings.
+          if (termination === 'gate_pass') {
+            if (ralph.round < MIN_GATE_ROUNDS) {
+              return fail(
+                'Insufficient rounds for gate pass',
+                `Gate pass requires at least ${MIN_GATE_ROUNDS} rounds. Current: ${ralph.round}.`,
+              )
+            }
+            const last = ralph.tallyHistory[ralph.tallyHistory.length - 1]
+            if (!last || last.C + last.H + last.M > 0) {
+              return fail(
+                'Unresolved issues remain',
+                'Gate pass requires the last tally to have C+H+M equal to 0.',
+              )
+            }
+          } else if (termination === 'early_stop') {
+            if (ralph.consecutiveZero < EARLY_STOP_CONSECUTIVE) {
+              return fail(
+                'Insufficient consecutive zero rounds',
+                `Early stop requires at least ${EARLY_STOP_CONSECUTIVE} consecutive zero rounds. Current: ${ralph.consecutiveZero}.`,
+              )
+            }
+          } else if (termination === 'max_rounds') {
+            if (ralph.round < MAX_RALPH_ROUNDS) {
+              return fail(
+                'Insufficient rounds for max_rounds termination',
+                `max_rounds termination requires at least ${MAX_RALPH_ROUNDS} rounds. Current: ${ralph.round}.`,
+              )
+            }
+            const last = ralph.tallyHistory[ralph.tallyHistory.length - 1]
+            if (!last || last.C + last.H + last.M === 0) {
+              return fail(
+                'No unresolved issues',
+                'max_rounds termination requires the last tally to have C+H+M greater than 0.',
+              )
+            }
+          }
         }
       } else {
         // Legacy mode — use tallyHistory (current behavior)

@@ -1770,6 +1770,40 @@ describe('Phase 2.1 GPAV — migration', () => {
     // Completed rounds 3-5: 3 consecutive zeros → passes (>= 2)
     expect(result.valid).toBe(true)
   })
+
+  it('TC-G-35: rejects gate_pass when autoValidated but no completed records (C-1 regression)', () => {
+    // Exploit: agent submits finding for round 1 (uncommitted) then calls terminate.
+    // completedRecords would be empty (round 1 > ralph.round=0), so must fall back to legacy.
+    const state = makeRalphState({}, {
+      round: 0,
+      autoValidated: true,
+      tallyHistory: [],
+      roundRecords: [{ round: 1, counts: { C: 0, H: 0, M: 0, L: 0, I: 1 }, submittedAt: NOW }],
+    })
+    const result = validateTransition('ralph_terminate', basePayload({
+      phase: 1, termination: 'gate_pass',
+    }), state)
+    expect(result.valid).toBe(false)
+    if (!result.valid) {
+      expect(result.violation).toContain('Insufficient rounds')
+    }
+  })
+
+  it('TC-G-36: rejects early_stop when autoValidated but no completed records (C-1)', () => {
+    const state = makeRalphState({}, {
+      round: 0,
+      autoValidated: true,
+      tallyHistory: [],
+      roundRecords: [{ round: 1, counts: { C: 0, H: 0, M: 0, L: 0, I: 1 }, submittedAt: NOW }],
+    })
+    const result = validateTransition('ralph_terminate', basePayload({
+      phase: 1, termination: 'early_stop',
+    }), state)
+    expect(result.valid).toBe(false)
+    if (!result.valid) {
+      expect(result.violation).toContain('consecutive zero rounds')
+    }
+  })
 })
 
 describe('Phase 2.1 GPAV — edge cases', () => {
