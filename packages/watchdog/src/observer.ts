@@ -88,7 +88,7 @@ export class Observer {
       if (args && typeof args === 'object') {
         const a = args as Record<string, unknown>
         if (typeof a.prompt === 'string' && a.prompt.length > 0) prompt = a.prompt
-        else if (typeof a.description === 'string') prompt = a.description
+        else if (typeof a.description === 'string' && a.description.length > 0) prompt = a.description
       }
 
       if (!prompt) return // No prompt to scan

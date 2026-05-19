@@ -910,6 +910,9 @@ export function applyTransition(
         timestamp: now,
       }
 
+      // NOTE: consecutiveZero uses the legacy definition (C+H+M=0, L excluded).
+      // When autoValidated=true, ralph_terminate recomputes from roundRecords using
+      // the strict definition (C+H+M+L=0). This counter is NOT authoritative in GPAV mode.
       const chmZero = tally.C + tally.H + tally.M === 0
       const newConsecutiveZero = chmZero
         ? state.ralph.consecutiveZero + 1
