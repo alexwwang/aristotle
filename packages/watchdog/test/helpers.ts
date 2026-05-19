@@ -22,6 +22,7 @@ export function makeState(overrides: Record<string, any> = {}): Record<string, a
     description: 'test',
     currentPhase: 0,
     phaseStatus: 'idle' as const,
+    totalPhases: 5,
     phases: {},
     ralph: null,
     testEvidenceConfirmed: false,

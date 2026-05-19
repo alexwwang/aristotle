@@ -114,7 +114,7 @@ tdd-pipeline v0.8.0 定义了 **7 phase**：
 
 Phase 1-5 是 creation phase（Ralph loop review），Phase 6 是 validation closure（独立测试流程），Phase 7 是增量式系统审计（Phase 6 完成后运行，用 16-pattern catalog 发现 Phase 6 漏掉的问题）。
 
-Watchdog 当前硬编码 5 phase，需扩展到 7 phase（前置任务，应在 Phase 2.1 之前完成）。
+Watchdog 已支持动态 phase 数量（通过 `pipeline_start` 的 `totalPhases` 参数），默认 5 phase 向后兼容。tdd-pipeline v0.8.0 传 `totalPhases: 7` 即可。
 
 ### 引入方案
 
@@ -138,9 +138,9 @@ Watchdog 当前硬编码 5 phase，需扩展到 7 phase（前置任务，应在 
 | Phase | 内容 | 状态 |
 |-------|------|------|
 | Phase 0 | Core 提取（包拆分、build 系统） | ✅ v1.2.0 |
-| Phase 1 | Watchdog 状态机 + Checkpoint Tool（5 phase） | ✅ v0.1.0 |
+| Phase 1 | Watchdog 状态机 + Checkpoint Tool（动态 phase 数量） | ✅ v0.1.0 |
 | Phase 2 | Active Monitoring（Observer + Interceptor + Articulation） | ✅ v0.2.0 |
-| **前置** | **扩展到 7 phase（对齐 tdd-pipeline v0.8.0）** | 📋 **待实现** |
+| **前置** | **动态 phase 数量（对齐 tdd-pipeline v0.8.0）** | ✅ **已完成** |
 | Phase 2.1 | Ralph Loop 完整性（GPAV + RPS） | 📋 设计完成 |
 | Phase 3 | Escalation + Idle Monitoring | ⏳ 未开始 |
 | Phase 4 | Aristotle 集成（PROCESS_VIOLATION + 双向规则闭环） | ⏳ 未开始 |

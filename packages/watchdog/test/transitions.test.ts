@@ -13,6 +13,7 @@ function makeState(overrides: Partial<PipelineState> = {}): PipelineState {
     description: 'test feature',
     currentPhase: 0,
     phaseStatus: 'idle',
+    totalPhases: 5,
     phases: {},
     ralph: null,
     testEvidenceConfirmed: false,
@@ -98,7 +99,7 @@ describe('payload validation', () => {
 
   it('accepts phase_enter with phase=6 (dynamic phase count)', () => {
     const state = {
-      ...makeState(),
+      ...makeState({ totalPhases: 7 }),
       currentPhase: 5,
       phaseStatus: 'complete' as const,
       phases: {
@@ -119,6 +120,14 @@ describe('payload validation', () => {
     }
     const result = validateTransition('phase_enter', basePayload({ phase: 6 }), state)
     expect(result.valid).toBe(true)
+  })
+
+  it('rejects phase_enter with phase=-1', () => {
+    const result = validateTransition('phase_enter', basePayload({ phase: -1 }), makeState())
+    expect(result.valid).toBe(false)
+    if (!result.valid) {
+      expect(result.violation).toBe('Invalid phase number')
+    }
   })
 
   it('rejects phase_enter with phase=1.5', () => {
@@ -945,7 +954,7 @@ describe('applyTransition', () => {
 // ── Part E: Full pipeline happy path ────────────────────────────────────────
 
 describe('full pipeline flow', () => {
-  it('runs the complete 5-phase pipeline with correct state at each step', () => {
+  it('runs the complete 5-phase pipeline (default totalPhases) with correct state at each step', () => {
     let state: PipelineState | null = null
 
     // 1. pipeline_start

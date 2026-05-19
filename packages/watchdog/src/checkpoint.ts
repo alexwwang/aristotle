@@ -11,7 +11,7 @@
  * 5. Validate transition
  * 6. If invalid → audit BLOCK + return violation
  * 7. Apply transition → write state → audit PASS + return ok
- * 8. If event is phase_complete(5) → clearActiveRun + archiveRun
+ * 8. If event is phase_complete(finalPhase) → clearActiveRun + archiveRun
  */
 import { randomUUID } from 'node:crypto'
 import type { PipelineStore } from './pipeline-store.js'
@@ -358,8 +358,8 @@ export class CheckpointHandler {
     }
     this.store.appendAudit(projectId, runId, auditEntry)
 
-    // ── 12. phase_complete(5) → clearActiveRun + archiveRun ───────────
-    if (event === 'phase_complete' && payload.phase === 5) {
+    // ── 12. phase_complete(final) → clearActiveRun + archiveRun ──────
+    if (event === 'phase_complete' && payload.phase === newState.totalPhases) {
       this.store.archiveRun(projectId, runId)
       this.store.clearActiveRun(projectId)
       this.cache?.clear()

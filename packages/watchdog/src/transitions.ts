@@ -91,7 +91,7 @@ export function validateTransition(
     }
 
     case 'phase_enter': {
-      if (!isInt(payload.phase) || payload.phase < 1 ) {
+      if (!isInt(payload.phase) || payload.phase < 1) {
         return fail(
           'Invalid phase number',
           'phase_enter requires phase to be a positive integer.',
@@ -291,6 +291,12 @@ export function validateTransition(
         return fail(NO_ACTIVE_RUN, START_FIRST)
       }
       const phase = payload.phase as number
+      if (phase > state.totalPhases) {
+        return fail(
+          'Phase exceeds pipeline total',
+          `Phase ${phase} exceeds pipeline total of ${state.totalPhases} phases.`,
+        )
+      }
       if (phase === 1) {
         if (state.phaseStatus !== 'idle') {
           return fail(
@@ -561,6 +567,9 @@ export function applyTransition(
 
   switch (event) {
     case 'pipeline_start': {
+      const totalPhases = typeof payload.totalPhases === 'number' && payload.totalPhases >= 1
+        ? Math.floor(payload.totalPhases)
+        : 5  // backward compat default
       return {
         version: SCHEMA_VERSION,
         projectId: payload._projectId as string,
@@ -569,6 +578,7 @@ export function applyTransition(
         description: payload.description as string,
         currentPhase: 0,
         phaseStatus: 'idle',
+        totalPhases,
         phases: {},
         ralph: null,
         testEvidenceConfirmed: false,

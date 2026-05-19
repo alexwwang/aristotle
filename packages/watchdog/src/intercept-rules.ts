@@ -16,12 +16,12 @@ export function createRules(): InterceptRule[] {
   return [
     // Rule 1 (AC-3): Business Code Gate (v1.8)
     // Phase 4 + business_code → unconditional block (Phase 4 writes test files only)
-    // Phase 5 + business_code + Phase 4 gate not passed → blocked
+    // Phase 5+ + business_code + Phase 4 gate not passed → blocked
     {
       id: 'NO_BUSINESS_CODE_BEFORE_PHASE5',
       evaluate(_tool: string, _path: string, classification: FileClassification, state: PipelineState) {
         if (
-          (state.currentPhase === 4 || state.currentPhase === 5) &&
+          state.currentPhase >= 4 &&
           classification.category === 'business_code'
         ) {
           if (

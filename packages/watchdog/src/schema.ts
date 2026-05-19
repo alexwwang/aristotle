@@ -22,6 +22,7 @@ export interface PipelineState {
 
   currentPhase: number                   // 0 = initialized, awaiting first phase_enter
   phaseStatus: PhaseStatus
+  totalPhases: number                    // from pipeline_start payload (default 5 for backward compat)
 
   phases: Record<number, PhaseRecord>
   ralph: RalphLoopState | null

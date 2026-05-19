@@ -78,6 +78,7 @@ function makeState(overrides: Partial<PipelineState> = {}): PipelineState {
     description: 'test',
     currentPhase: 0,
     phaseStatus: 'idle',
+    totalPhases: 5,
     phases: {},
     ralph: null,
     testEvidenceConfirmed: false,
