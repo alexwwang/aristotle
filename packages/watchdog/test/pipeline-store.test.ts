@@ -192,6 +192,24 @@ describe('PipelineStore', () => {
       expect(readBack!.totalPhases).toBe(5) // migration default
     })
 
+    it('migration does not mutate store internal reference', () => {
+      // Simulate a pre-v2 state file
+      const oldState = { ...makeState(), version: 1 }
+      delete (oldState as Record<string, unknown>).totalPhases
+      pipelineStore.writeState('testproj', 'run-mut', oldState as PipelineState)
+
+      // First read — triggers migration
+      const read1 = pipelineStore.readState('testproj', 'run-mut')
+      expect(read1!.totalPhases).toBe(5)
+
+      // Second read — must also get totalPhases=5 (not undefined from corrupted store)
+      const read2 = pipelineStore.readState('testproj', 'run-mut')
+      expect(read2!.totalPhases).toBe(5)
+
+      // Migration must be idempotent — same result each time
+      expect(read1).toEqual(read2)
+    })
+
     it('throws on read-back verification failure', () => {
       // Create a mock store that returns corrupted data on read-back
       let readCount = 0

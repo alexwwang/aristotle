@@ -127,10 +127,10 @@ export class PipelineStore {
 
   readState(projectId: string, runId: string): PipelineState | null {
     this.validatePathComponents(projectId, runId)
-    const state = this.stateStore.read<PipelineState>(this.stateKey(projectId, runId));
+    let state = this.stateStore.read<PipelineState>(this.stateKey(projectId, runId));
     // Migration: pre-v2 state files lack totalPhases field
     if (state && !('totalPhases' in state)) {
-      state.totalPhases = 5;
+      state = { ...state, totalPhases: 5 };
     }
     return state;
   }
