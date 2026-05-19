@@ -851,6 +851,8 @@ export function applyTransition(
             articulationDegraded:
               existingRec.articulationDegraded === true ||
               payload._articulationDegraded === true,
+            // Note: _articulationFailureCount is always provided by CheckpointHandler.
+            // The fallback to existingRec.articulationFailures exists only for type safety.
             articulationFailures:
               (payload._articulationFailureCount as number | undefined)
                 ?? (existingRec.articulationFailures ?? 0),
