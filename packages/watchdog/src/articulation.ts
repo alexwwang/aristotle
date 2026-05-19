@@ -21,9 +21,9 @@ export interface ArticulationResult {
 
 // TechSpec §3.6: keywords are strings (matched via includes) or RegExp (matched via test)
 const DIMENSION_KEYWORDS = {
-  what_it_protects: ['protect', 'guard', 'prevent', 'skip', 'consequence', 'cost', 'lose', 'break', 'fail', 'wrong', 'impact'] as (string | RegExp)[],
+  what_it_protects: ['protect', 'guard', 'prevent', 'consequence', 'cost', 'lose', 'impact', 'safeguard', 'invariant', 'safety'] as (string | RegExp)[],
   // 'edge.case' per spec uses regex dot — matches edge-case, edge_case, edge case, edge.case
-  key_risks: ['risk', 'failure', /\bedge[\s._-]?cases?\b/i, 'boundary', 'break', 'incorrect', 'wrong', 'bug', 'issue', 'problem', 'limitation'] as (string | RegExp)[],
+  key_risks: ['risk', 'failure', /\bedge[\s._-]?cases?\b/i, 'boundary', 'incorrect', 'bug', 'regression', 'limitation', 'vulnerability'] as (string | RegExp)[],
   why_approach_works: ['because', 'reason', 'works', 'effective', 'chose', 'choose', 'alternative', 'better', 'instead', 'why'] as (string | RegExp)[],
 }
 

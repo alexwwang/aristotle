@@ -174,13 +174,13 @@ describe('Interceptor', () => {
   // ── TC-B-20 ───────────────────────────────────────────────────────────────
   it('disk read returns state for active run in multi-agent mode', () => {
     const store = createMockStore()
-    store.getActiveRun.mockReturnValue({ runId: 'run-1', projectId: 'proj-test', startedAt: new Date().toISOString() })
-    store.readState.mockReturnValue(makeState())
+    store.getActiveRun.mockReturnValue({ runId: 'run-active', projectId: 'proj-test', startedAt: new Date().toISOString() })
+    store.readState.mockReturnValue(makeState({ runId: 'run-from-disk' }))
 
     const cache = new PipelineStateCache(store as any, '/project', mockLogger as any, true)
     const state = cache.get()
     expect(state).not.toBeNull()
-    expect(state?.runId).toBe('run-test')
+    expect(state?.runId).toBe('run-from-disk')
   })
 
   // ── TC-B-21 ───────────────────────────────────────────────────────────────

@@ -107,6 +107,9 @@ export class CheckpointHandler {
         guidance: 'Only pipeline_start can proceed when state is corrupted. Call pipeline_start to recover.',
       })
     }
+    // Security boundary: ownership check only applies to states with ownerSessionId.
+    // Phase 1 legacy states (pre-v2 migration, no ownerSessionId) are implicitly owned
+    // by the first session to interact. To establish explicit ownership, call pipeline_start.
     if (event !== 'pipeline_start' && activeRun && hasOwner(currentState)) {
       if (currentState.ownerSessionId !== sessionId) {
         const entry: AuditLogEntry = {

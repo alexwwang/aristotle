@@ -55,14 +55,7 @@ export function classifyFile(
   }
 
   // Rule 3: source directories (spec §3.2.2 Rule 3 — hardcoded)
-  if (
-    lower.includes('/src/') ||
-    lower.includes('/lib/') ||
-    lower.includes('/app/') ||
-    lower.includes('\\src\\') ||
-    lower.includes('\\lib\\') ||
-    lower.includes('\\app\\')
-  ) {
+  if (/[\\/](src|lib|app)[\\/]/i.test(lower)) {
     return { category: 'business_code' }
   }
 
