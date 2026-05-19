@@ -122,6 +122,15 @@ describe('payload validation', () => {
     expect(result.valid).toBe(true)
   })
 
+  it('rejects phase_enter with phase exceeding totalPhases', () => {
+    const result = validateTransition('phase_enter', basePayload({ phase: 6 }), makeState())
+    expect(result.valid).toBe(false)
+    if (!result.valid) {
+      expect(result.violation).toBe('Phase exceeds pipeline total')
+      expect(result.guidance).toContain('exceeds pipeline total of 5')
+    }
+  })
+
   it('rejects phase_enter with phase=-1', () => {
     const result = validateTransition('phase_enter', basePayload({ phase: -1 }), makeState())
     expect(result.valid).toBe(false)
@@ -730,6 +739,69 @@ describe('applyTransition', () => {
     expect(newState.ralph).toBeNull()
     expect(newState.testEvidenceConfirmed).toBe(false)
     expect(newState.phases).toEqual({})
+  })
+
+  it('pipeline_start with totalPhases stores it in state', () => {
+    const newState = applyTransition(
+      'pipeline_start',
+      basePayload({ description: '7-phase project', _runId: 'run-7p', _projectId: 'proj-7p', totalPhases: 7 }),
+      null,
+    )
+    expect(newState.totalPhases).toBe(7)
+  })
+
+  it('pipeline_start without totalPhases defaults to 5', () => {
+    const newState = applyTransition(
+      'pipeline_start',
+      basePayload({ description: 'legacy project', _runId: 'run-5p', _projectId: 'proj-5p' }),
+      null,
+    )
+    expect(newState.totalPhases).toBe(5)
+  })
+
+  it('pipeline_start with non-integer totalPhases is rejected in validation', () => {
+    const result = validateTransition(
+      'pipeline_start',
+      { description: 'bad totalPhases', totalPhases: 'abc' },
+      null,
+    )
+    expect(result.valid).toBe(false)
+    if (!result.valid) {
+      expect(result.violation).toBe('Invalid totalPhases')
+    }
+  })
+
+  it('pipeline_start with totalPhases=0 is rejected in validation', () => {
+    const result = validateTransition(
+      'pipeline_start',
+      { description: 'zero phases', totalPhases: 0 },
+      null,
+    )
+    expect(result.valid).toBe(false)
+    if (!result.valid) {
+      expect(result.violation).toBe('Invalid totalPhases')
+    }
+  })
+
+  it('pipeline_start with totalPhases=-1 is rejected in validation', () => {
+    const result = validateTransition(
+      'pipeline_start',
+      { description: 'negative phases', totalPhases: -1 },
+      null,
+    )
+    expect(result.valid).toBe(false)
+    if (!result.valid) {
+      expect(result.violation).toBe('Invalid totalPhases')
+    }
+  })
+
+  it('pipeline_start with totalPhases=1.5 floors to 1 in applyTransition', () => {
+    const newState = applyTransition(
+      'pipeline_start',
+      basePayload({ description: 'fractional', _runId: 'run-f', _projectId: 'proj-f', totalPhases: 1 }),
+      null,
+    )
+    expect(newState.totalPhases).toBe(1)
   })
 
   it('phase_enter(1) sets currentPhase=1, phaseStatus=active, creates PhaseRecord', () => {

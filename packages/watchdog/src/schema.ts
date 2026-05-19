@@ -11,7 +11,7 @@ export type CheckpointEvent =
   | 'why_articulation'
 
 /** State machine version for forward-compatible reads */
-export const SCHEMA_VERSION = 1
+export const SCHEMA_VERSION = 2
 
 export interface PipelineState {
   version: typeof SCHEMA_VERSION

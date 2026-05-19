@@ -87,6 +87,14 @@ export function validateTransition(
           'pipeline_start requires a non-empty string description field.',
         )
       }
+      if (payload.totalPhases !== undefined) {
+        if (!isInt(payload.totalPhases) || payload.totalPhases < 1) {
+          return fail(
+            'Invalid totalPhases',
+            'totalPhases must be a positive integer.',
+          )
+        }
+      }
       break
     }
 
@@ -101,7 +109,7 @@ export function validateTransition(
     }
 
     case 'ralph_loop_start': {
-      if (!isInt(payload.phase) || payload.phase < 1 ) {
+      if (!isInt(payload.phase) || payload.phase < 1) {
         return fail(
           'Invalid phase',
           'ralph_loop_start requires phase to be a positive integer.',
@@ -111,7 +119,7 @@ export function validateTransition(
     }
 
     case 'ralph_round_complete': {
-      if (!isInt(payload.phase) || payload.phase < 1 ) {
+      if (!isInt(payload.phase) || payload.phase < 1) {
         return fail(
           'Invalid phase',
           'ralph_round_complete requires phase to be a positive integer.',
@@ -207,7 +215,7 @@ export function validateTransition(
     }
 
     case 'ralph_terminate': {
-      if (!isInt(payload.phase) || payload.phase < 1 ) {
+      if (!isInt(payload.phase) || payload.phase < 1) {
         return fail(
           'Invalid phase',
           'ralph_terminate requires phase to be a positive integer.',
@@ -239,7 +247,7 @@ export function validateTransition(
     }
 
     case 'user_approval': {
-      if (!isInt(payload.phase) || payload.phase < 1 ) {
+      if (!isInt(payload.phase) || payload.phase < 1) {
         return fail(
           'Invalid phase',
           'user_approval requires phase to be a positive integer.',
@@ -249,7 +257,7 @@ export function validateTransition(
     }
 
     case 'phase_complete': {
-      if (!isInt(payload.phase) || payload.phase < 1 ) {
+      if (!isInt(payload.phase) || payload.phase < 1) {
         return fail(
           'Invalid phase',
           'phase_complete requires phase to be a positive integer.',
@@ -259,7 +267,7 @@ export function validateTransition(
     }
 
     case 'why_articulation': {
-      if (!isInt(payload.phase) || payload.phase < 1 ) {
+      if (!isInt(payload.phase) || payload.phase < 1) {
         return fail(
           'Invalid phase',
           'why_articulation requires phase to be a positive integer.',

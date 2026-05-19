@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { Interceptor, WatchdogInterceptError } from '../src/interceptor.js'
 import { extractFilePath } from '../src/path-extractor.js'
 import { classifyFile } from '../src/file-classifier.js'
-import { type InterceptRule } from '../src/intercept-rules.js'
+import { createRules, type InterceptRule } from '../src/intercept-rules.js'
 import { FALLBACK_PATTERNS } from '../src/watchdog-config.js'
 import { PipelineStateCache } from '../src/state-cache.js'
 import { makeState, makePhaseRecord, createMockStore } from './helpers.js'
@@ -12,8 +12,7 @@ describe('Interceptor', () => {
   let mockStore: ReturnType<typeof createMockStore>
   let mockLogger: { info: ReturnType<typeof vi.fn>; warn: ReturnType<typeof vi.fn>; debug: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> }
   let config: Record<string, unknown>
-  let ac3Rule: InterceptRule
-  let ac4Rule: InterceptRule
+  let rules: InterceptRule[]
 
   beforeEach(() => {
     mockCache = {
@@ -37,44 +36,13 @@ describe('Interceptor', () => {
       logger: mockLogger,
     }
 
-    // AC-3: Business Code Gate (v1.8: gates on Phase 4 Ralph completion, not testEvidence)
-    ac3Rule = {
-      id: 'NO_BUSINESS_CODE_BEFORE_PHASE5',
-      evaluate(_tool: string, _path: string, classification: any, state: any) {
-        if ((state.currentPhase === 4 || state.currentPhase === 5) && classification.category === 'business_code') {
-          if (state.currentPhase === 4 || !state.phases?.[4]?.ralphCompleted || !state.phases?.[4]?.userApproved) {
-            return {
-              blocked: true,
-              reason: `⛔ [TDD Watchdog] Phase ${state.currentPhase} violation: business code write blocked. Business code (src/) must not be written during Phase 4 (Test Code). Phase 4 writes test files only — stubs and mocks belong in test directories. Phase 5 business code requires Phase 4 Ralph loop gate passed.`,
-            }
-          }
-        }
-        return { blocked: false }
-      },
-    }
-
-    // AC-4: Phase Gate (v1.8: phase_deliverable only, no business_code workaround)
-    ac4Rule = {
-      id: 'NO_PHASE_ADVANCE_WITHOUT_GATE',
-      evaluate(_tool: string, _path: string, classification: any, state: any) {
-        if (state.currentPhase >= 1 && classification.category === 'phase_deliverable' && classification.phase === state.currentPhase + 1) {
-          const rec = state.phases?.[state.currentPhase]
-          if (!rec || !rec.ralphCompleted || !rec.userApproved) {
-            const status = !rec ? 'phase not entered' : rec.ralphCompleted ? 'awaiting user approval' : 'Ralph loop incomplete'
-            return {
-              blocked: true,
-              reason: `⛔ [TDD Watchdog] Phase transition blocked: Phase ${state.currentPhase} Ralph loop gate has not been passed (status: ${status}). Complete the Ralph loop and obtain user approval before starting Phase ${state.currentPhase + 1}.`,
-            }
-          }
-        }
-        return { blocked: false }
-      },
-    }
+    // Use production rules from source (not inline copies)
+    rules = createRules()
   })
 
   // ── TC-B-01 ───────────────────────────────────────────────────────────────
   it('returns without reading cache for non-monitored tools', async () => {
-    const interceptor = new Interceptor(mockCache, config, extractFilePath, classifyFile, [ac3Rule])
+    const interceptor = new Interceptor(mockCache, config, extractFilePath, classifyFile, rules)
     await interceptor.handle('read', { filePath: 'foo.ts' }, 'sess-001', 'call-300')
     expect(mockCache.get).not.toHaveBeenCalled()
   })
@@ -89,7 +57,7 @@ describe('Interceptor', () => {
     })
     mockCache.get.mockReturnValue(state)
 
-    const interceptor = new Interceptor(mockCache, config, extractFilePath, classifyFile, [ac3Rule, ac4Rule])
+    const interceptor = new Interceptor(mockCache, config, extractFilePath, classifyFile, rules)
 
     // A file that doesn't match any rule → unknown classification
     // Should NOT throw — unknown files are not blocked
@@ -100,14 +68,14 @@ describe('Interceptor', () => {
   // ── TC-B-02 ───────────────────────────────────────────────────────────────
   it('returns silently when cache returns null (no active pipeline)', async () => {
     mockCache.get.mockReturnValue(null)
-    const interceptor = new Interceptor(mockCache, config, extractFilePath, classifyFile, [ac3Rule])
+    const interceptor = new Interceptor(mockCache, config, extractFilePath, classifyFile, rules)
     await expect(interceptor.handle('edit', { filePath: 'foo.ts' }, 'sess-001', 'call-301')).resolves.toBeUndefined()
   })
 
   // ── TC-B-14 ───────────────────────────────────────────────────────────────
   it('Rule 1: throws for Phase 4 business code (unconditional block)', async () => {
     mockCache.get.mockReturnValue(makeState({ currentPhase: 4 }))
-    const interceptor = new Interceptor(mockCache, config, extractFilePath, classifyFile, [ac3Rule, ac4Rule])
+    const interceptor = new Interceptor(mockCache, config, extractFilePath, classifyFile, rules)
     await expect(
       interceptor.handle('edit', { filePath: '/project/src/foo.ts' }, 'sess-001', 'call-302'),
     ).rejects.toThrow(WatchdogInterceptError)
@@ -122,7 +90,7 @@ describe('Interceptor', () => {
       currentPhase: 5,
       phases: { 4: { ralphCompleted: true, userApproved: true } },
     }))
-    const interceptor = new Interceptor(mockCache, config, extractFilePath, classifyFile, [ac3Rule, ac4Rule])
+    const interceptor = new Interceptor(mockCache, config, extractFilePath, classifyFile, rules)
     await expect(
       interceptor.handle('edit', { filePath: '/project/src/foo.ts' }, 'sess-001', 'call-303'),
     ).resolves.toBeUndefined()
@@ -142,6 +110,7 @@ describe('Interceptor', () => {
     // Business code classification
     const classification = { category: 'business_code', ruleIndex: 3, pattern: null }
 
+    const ac3Rule = rules.find(r => r.id === 'NO_BUSINESS_CODE_BEFORE_PHASE5')!
     expect(ac3Rule.evaluate('edit', '/project/src/app.ts', classification, state)).toEqual(
       expect.objectContaining({ blocked: true }),
     )
@@ -150,7 +119,7 @@ describe('Interceptor', () => {
   // ── TC-B-16 ───────────────────────────────────────────────────────────────
   it('Rule 1: allows test files in Phase 4 regardless of state', async () => {
     mockCache.get.mockReturnValue(makeState({ currentPhase: 4 }))
-    const interceptor = new Interceptor(mockCache, config, extractFilePath, classifyFile, [ac3Rule, ac4Rule])
+    const interceptor = new Interceptor(mockCache, config, extractFilePath, classifyFile, rules)
     await expect(
       interceptor.handle('edit', { filePath: '/project/tests/foo.test.ts' }, 'sess-001', 'call-304'),
     ).resolves.toBeUndefined()
@@ -164,7 +133,7 @@ describe('Interceptor', () => {
         phases: { 2: { ralphCompleted: false, userApproved: false } },
       }),
     )
-    const interceptor = new Interceptor(mockCache, config, extractFilePath, classifyFile, [ac3Rule, ac4Rule])
+    const interceptor = new Interceptor(mockCache, config, extractFilePath, classifyFile, rules)
     await expect(
       interceptor.handle('write', { file: 'test-plan.md' }, 'sess-001', 'call-305'),
     ).rejects.toThrow(WatchdogInterceptError)
@@ -181,7 +150,7 @@ describe('Interceptor', () => {
         phases: { 2: { ralphCompleted: true, userApproved: true } },
       }),
     )
-    const interceptor = new Interceptor(mockCache, config, extractFilePath, classifyFile, [ac3Rule, ac4Rule])
+    const interceptor = new Interceptor(mockCache, config, extractFilePath, classifyFile, rules)
     await expect(
       interceptor.handle('write', { file: 'test-plan.md' }, 'sess-001', 'call-306'),
     ).resolves.toBeUndefined()
@@ -196,7 +165,7 @@ describe('Interceptor', () => {
         phases: { 4: { ralphCompleted: false, userApproved: false } },
       }),
     )
-    const interceptor = new Interceptor(mockCache, config, extractFilePath, classifyFile, [ac3Rule, ac4Rule])
+    const interceptor = new Interceptor(mockCache, config, extractFilePath, classifyFile, rules)
     await expect(
       interceptor.handle('edit', { filePath: '/project/src/foo.ts' }, 'sess-001', 'call-307'),
     ).rejects.toThrow(/business code write blocked/)
@@ -234,7 +203,7 @@ describe('Interceptor', () => {
       throw new Error('classification boom')
     })
     mockCache.get.mockReturnValue(makeState({ currentPhase: 4 }))
-    const interceptor = new Interceptor(mockCache, config, badExtractor, classifyFile, [ac3Rule])
+    const interceptor = new Interceptor(mockCache, config, badExtractor, classifyFile, rules)
     await expect(
       interceptor.handle('edit', { filePath: 'foo.ts' }, 'sess-001', 'call-308'),
     ).rejects.toThrow(/\[TDD Watchdog\]/)
@@ -246,7 +215,7 @@ describe('Interceptor', () => {
       throw new Error('classification boom')
     })
     mockCache.get.mockReturnValue(makeState({ currentPhase: 4 }))
-    const interceptor = new Interceptor(mockCache, config, badExtractor, classifyFile, [ac3Rule])
+    const interceptor = new Interceptor(mockCache, config, badExtractor, classifyFile, rules)
     await expect(
       interceptor.handle('edit', { filePath: 'foo.ts' }, 'sess-001', 'call-309'),
     ).rejects.toThrow(/restart the pipeline/)
@@ -255,7 +224,7 @@ describe('Interceptor', () => {
   // ── TC-B-24 ───────────────────────────────────────────────────────────────
   it('thrown violation is instanceof WatchdogInterceptError', async () => {
     mockCache.get.mockReturnValue(makeState({ currentPhase: 4, testEvidenceConfirmed: false }))
-    const interceptor = new Interceptor(mockCache, config, extractFilePath, classifyFile, [ac3Rule])
+    const interceptor = new Interceptor(mockCache, config, extractFilePath, classifyFile, rules)
     await expect(
       interceptor.handle('edit', { filePath: '/project/src/foo.ts' }, 'sess-001', 'call-310'),
     ).rejects.toBeInstanceOf(WatchdogInterceptError)
@@ -266,7 +235,7 @@ describe('Interceptor', () => {
     mockCache.get.mockImplementation(() => {
       throw new Error('cache explosion')
     })
-    const interceptor = new Interceptor(mockCache, config, extractFilePath, classifyFile, [ac3Rule])
+    const interceptor = new Interceptor(mockCache, config, extractFilePath, classifyFile, rules)
     try {
       await interceptor.handle('edit', { filePath: 'foo.ts' }, 'sess-001', 'call-311')
       expect.fail('should have thrown')
@@ -279,7 +248,7 @@ describe('Interceptor', () => {
   it('intercepts hashline_edit when in custom monitoredTools', async () => {
     const customConfig = { ...config, monitoredTools: ['edit', 'write', 'hashline_edit'] }
     mockCache.get.mockReturnValue(makeState({ currentPhase: 4, testEvidenceConfirmed: false }))
-    const interceptor = new Interceptor(mockCache, customConfig, extractFilePath, classifyFile, [ac3Rule])
+    const interceptor = new Interceptor(mockCache, customConfig, extractFilePath, classifyFile, rules)
     await expect(
       interceptor.handle('hashline_edit', { filePath: '/project/src/foo.ts' }, 'sess-001', 'call-312'),
     ).rejects.toThrow(WatchdogInterceptError)
@@ -288,7 +257,7 @@ describe('Interceptor', () => {
   // ── TC-B-33 ───────────────────────────────────────────────────────────────
   it('does not intercept hashline_edit with default monitoredTools', async () => {
     mockCache.get.mockReturnValue(makeState({ currentPhase: 4, testEvidenceConfirmed: false }))
-    const interceptor = new Interceptor(mockCache, config, extractFilePath, classifyFile, [ac3Rule])
+    const interceptor = new Interceptor(mockCache, config, extractFilePath, classifyFile, rules)
     await interceptor.handle('hashline_edit', { filePath: '/project/src/foo.ts' }, 'sess-001', 'call-313')
     expect(mockCache.get).not.toHaveBeenCalled()
   })
@@ -296,7 +265,7 @@ describe('Interceptor', () => {
   // ── TC-B-36 ───────────────────────────────────────────────────────────────
   it('allows tool calls from pipeline owner session', async () => {
     mockCache.get.mockReturnValue(makeState({ ownerSessionId: 'sess-orchestrator' }))
-    const interceptor = new Interceptor(mockCache, config, extractFilePath, classifyFile, [ac3Rule])
+    const interceptor = new Interceptor(mockCache, config, extractFilePath, classifyFile, rules)
     await expect(
       interceptor.handle('edit', { filePath: 'foo.ts' }, 'sess-orchestrator', 'call-314'),
     ).resolves.toBeUndefined()
@@ -305,7 +274,7 @@ describe('Interceptor', () => {
   // ── TC-B-37 (updated: ownership NOT in interceptor per H-1 fix) ────────
   it('does NOT block non-owner session — ownership is checkpoint-only', async () => {
     mockCache.get.mockReturnValue(makeState({ ownerSessionId: 'sess-orchestrator' }))
-    const interceptor = new Interceptor(mockCache, config, extractFilePath, classifyFile, [ac3Rule])
+    const interceptor = new Interceptor(mockCache, config, extractFilePath, classifyFile, rules)
     // Interceptor does NOT check ownership — it only checks TDD invariants
     // Ownership enforcement belongs to CheckpointHandler (§15a L2)
     await expect(
@@ -316,7 +285,7 @@ describe('Interceptor', () => {
   // ── TC-B-38 (updated: single-pipeline constraint is checkpoint-only) ──
   it('does NOT enforce single-pipeline constraint — that is checkpoint-only', async () => {
     mockCache.get.mockReturnValue(makeState({ ownerSessionId: 'sess-orchestrator' }))
-    const interceptor = new Interceptor(mockCache, config, extractFilePath, classifyFile, [ac3Rule])
+    const interceptor = new Interceptor(mockCache, config, extractFilePath, classifyFile, rules)
     await expect(
       interceptor.handle('edit', { filePath: '/project/tests/foo.test.ts' }, 'sess-sub-agent', 'call-316'),
     ).resolves.toBeUndefined()
@@ -325,7 +294,7 @@ describe('Interceptor', () => {
   // ── TC-B-39 (updated: ownership audit is checkpoint-only) ──────────────
   it('does NOT log ownership audit in interceptor — that is checkpoint-only', async () => {
     mockCache.get.mockReturnValue(makeState({ ownerSessionId: 'sess-orchestrator' }))
-    const interceptor = new Interceptor(mockCache, config, extractFilePath, classifyFile, [ac3Rule])
+    const interceptor = new Interceptor(mockCache, config, extractFilePath, classifyFile, rules)
     await interceptor.handle('edit', { filePath: '/project/tests/foo.test.ts' }, 'sess-sub-agent', 'call-317')
     // Interceptor does NOT call appendAudit for ownership — that's checkpoint's job
     expect(mockStore.appendAudit).not.toHaveBeenCalled()
@@ -352,7 +321,7 @@ describe('Interceptor', () => {
   it('logs warning and allows write when path extraction returns null', async () => {
     mockCache.get.mockReturnValue(makeState({ currentPhase: 4 }))
     const nullExtractor = vi.fn().mockReturnValue(null)
-    const interceptor = new Interceptor(mockCache, config, nullExtractor, classifyFile, [ac3Rule], mockStore, mockLogger as any)
+    const interceptor = new Interceptor(mockCache, config, nullExtractor, classifyFile, rules, mockStore, mockLogger as any)
     await expect(interceptor.handle('edit', { filePath: 'foo.ts' }, 'sess-001', 'call-318')).resolves.toBeUndefined()
     expect(mockLogger.warn).toHaveBeenCalledWith(expect.stringContaining('missing target path'), expect.anything())
   })
@@ -366,7 +335,7 @@ describe('Interceptor', () => {
     })
     mockCache.get.mockReturnValue(state)
 
-    const interceptor = new Interceptor(mockCache, config, extractFilePath, classifyFile, [ac3Rule, ac4Rule])
+    const interceptor = new Interceptor(mockCache, config, extractFilePath, classifyFile, rules)
 
     // Relative path should be resolved against worktreeRoot and classified as business_code
     // Phase 5 + Phase 4 gate passed → should succeed

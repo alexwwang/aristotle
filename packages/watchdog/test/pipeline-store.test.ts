@@ -177,6 +177,21 @@ describe('PipelineStore', () => {
       expect(readBack).toEqual(state)
     })
 
+    it('migrates pre-v2 state without totalPhases field', () => {
+      // Simulate a pre-v2 state file that lacks totalPhases
+      const oldState = {
+        ...makeState(),
+        version: 1,
+      }
+      // Remove totalPhases to simulate old state
+      delete (oldState as Record<string, unknown>).totalPhases
+      pipelineStore.writeState('testproj', 'run-old', oldState as PipelineState)
+
+      const readBack = pipelineStore.readState('testproj', 'run-old')
+      expect(readBack).not.toBeNull()
+      expect(readBack!.totalPhases).toBe(5) // migration default
+    })
+
     it('throws on read-back verification failure', () => {
       // Create a mock store that returns corrupted data on read-back
       let readCount = 0

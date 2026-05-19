@@ -2,14 +2,14 @@
  * CheckpointHandler tests — based on Phase1-Watchdog-StateMachine.md §9.3
  *
  * Spec mandates 4 test categories:
- * 1. Full happy path: pipeline_start → ... → phase_complete(5)
+ * 1. Full happy path: pipeline_start → ... → phase_complete(totalPhases)
  * 2. Stale recovery: mock state with old lastCheckpointAt → verify recovery prompt
  * 3. No active run: call phase_enter without pipeline_start → verify "no active run" violation
  * 4. Payload validation: malformed JSON → verify graceful error
  *
  * Additional coverage from §2.2/§4.3 spec:
  * 5. pipeline_start bypasses stale check (H-5 fix from §7.2)
- * 6. phase_complete(5) triggers clearActiveRun + archiveRun (§2.2 step 8)
+ * 6. phase_complete(finalPhase) triggers clearActiveRun + archiveRun (§2.2 step 8)
  * 7. Audit log entries: PASS on valid, BLOCK on invalid
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -330,10 +330,10 @@ describe('CheckpointHandler', () => {
     })
   })
 
-  // ── §2.2 step 8: phase_complete(5) triggers clearActiveRun + archiveRun ─
+  // ── §2.2 step 8: phase_complete(finalPhase) triggers clearActiveRun + archiveRun ─
 
-  describe('phase 5 completion', () => {
-    it('clears active run and archives on phase_complete(5)', async () => {
+  describe('final phase completion', () => {
+    it('clears active run and archives on phase_complete(totalPhases)', async () => {
       mockStore._setActiveRun(PROJECT_ID, {
         runId: 'run-001', projectId: PROJECT_ID, startedAt: NOW,
       })
