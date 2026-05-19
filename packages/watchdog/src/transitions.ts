@@ -536,53 +536,61 @@ export function validateTransition(
       const ralph = state.ralph
 
       // Phase 2.1 GPAV: use roundRecords as authoritative source when autoValidated
+      // Only consider completed rounds (round <= ralph.round). Uncommitted findings
+      // (submitted via ralph_round_finding but not yet closed by ralph_round_complete)
+      // are excluded to prevent gate_pass bypass.
       if (ralph.autoValidated && ralph.roundRecords.length > 0) {
-        // Compute consecutiveZero from roundRecords with strict definition: C=H=M=L=0
-        let strictConsecutive = 0
-        for (let i = ralph.roundRecords.length - 1; i >= 0; i--) {
-          const c = ralph.roundRecords[i].counts
-          if (c.C === 0 && c.H === 0 && c.M === 0 && c.L === 0) {
-            strictConsecutive++
-          } else {
-            break
+        const completedRecords = ralph.roundRecords.filter(r => r.round <= ralph.round)
+        if (completedRecords.length > 0) {
+          // Compute consecutiveZero from completed records with strict definition: C=H=M=L=0
+          let strictConsecutive = 0
+          for (let i = completedRecords.length - 1; i >= 0; i--) {
+            const c = completedRecords[i].counts
+            if (c.C === 0 && c.H === 0 && c.M === 0 && c.L === 0) {
+              strictConsecutive++
+            } else {
+              break
+            }
           }
-        }
 
-        if (termination === 'gate_pass') {
-          if (ralph.round < MIN_GATE_ROUNDS) {
-            return fail(
-              'Insufficient rounds for gate pass',
-              `Gate pass requires at least ${MIN_GATE_ROUNDS} rounds. Current: ${ralph.round}.`,
-            )
+          if (termination === 'gate_pass') {
+            if (ralph.round < MIN_GATE_ROUNDS) {
+              return fail(
+                'Insufficient rounds for gate pass',
+                `Gate pass requires at least ${MIN_GATE_ROUNDS} rounds. Current: ${ralph.round}.`,
+              )
+            }
+            const lastRec = completedRecords[completedRecords.length - 1]
+            if (!lastRec || lastRec.counts.C + lastRec.counts.H + lastRec.counts.M + lastRec.counts.L > 0) {
+              return fail(
+                'Unresolved issues remain (GPAV)',
+                'Gate pass requires the last completed round to have C=H=M=L=0 per Watchdog records.',
+              )
+            }
+          } else if (termination === 'early_stop') {
+            if (strictConsecutive < EARLY_STOP_CONSECUTIVE) {
+              return fail(
+                'Insufficient consecutive zero rounds (GPAV)',
+                `Early stop requires at least ${EARLY_STOP_CONSECUTIVE} consecutive completed rounds with C=H=M=L=0. Current: ${strictConsecutive}.`,
+              )
+            }
+          } else if (termination === 'max_rounds') {
+            if (ralph.round < MAX_RALPH_ROUNDS) {
+              return fail(
+                'Insufficient rounds for max_rounds termination',
+                `max_rounds termination requires at least ${MAX_RALPH_ROUNDS} rounds. Current: ${ralph.round}.`,
+              )
+            }
+            const lastRec = completedRecords[completedRecords.length - 1]
+            if (!lastRec || lastRec.counts.C + lastRec.counts.H + lastRec.counts.M + lastRec.counts.L === 0) {
+              return fail(
+                'No unresolved issues (GPAV)',
+                'max_rounds termination requires the last completed round to have C+H+M+L > 0 per Watchdog records.',
+              )
+            }
           }
-          const lastRec = ralph.roundRecords[ralph.roundRecords.length - 1]
-          if (!lastRec || lastRec.counts.C + lastRec.counts.H + lastRec.counts.M + lastRec.counts.L > 0) {
-            return fail(
-              'Unresolved issues remain (GPAV)',
-              'Gate pass requires the last round to have C=H=M=L=0 per Watchdog records.',
-            )
-          }
-        } else if (termination === 'early_stop') {
-          if (strictConsecutive < EARLY_STOP_CONSECUTIVE) {
-            return fail(
-              'Insufficient consecutive zero rounds (GPAV)',
-              `Early stop requires at least ${EARLY_STOP_CONSECUTIVE} consecutive rounds with C=H=M=L=0. Current: ${strictConsecutive}.`,
-            )
-          }
-        } else if (termination === 'max_rounds') {
-          if (ralph.round < MAX_RALPH_ROUNDS) {
-            return fail(
-              'Insufficient rounds for max_rounds termination',
-              `max_rounds termination requires at least ${MAX_RALPH_ROUNDS} rounds. Current: ${ralph.round}.`,
-            )
-          }
-          const lastRec = ralph.roundRecords[ralph.roundRecords.length - 1]
-          if (!lastRec || lastRec.counts.C + lastRec.counts.H + lastRec.counts.M + lastRec.counts.L === 0) {
-            return fail(
-              'No unresolved issues (GPAV)',
-              'max_rounds termination requires the last round to have C+H+M+L > 0 per Watchdog records.',
-            )
-          }
+        } else {
+          // autoValidated=true but no completed rounds with records — fall through to legacy
         }
       } else {
         // Legacy mode — use tallyHistory (current behavior)

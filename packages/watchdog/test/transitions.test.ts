@@ -1707,6 +1707,69 @@ describe('Phase 2.1 GPAV — migration', () => {
     expect(state.ralph!.roundRecords).toEqual([])
     expect(state.ralph!.autoValidated).toBe(false)
   })
+
+  it('TC-G-33: gate_pass rejects when uncommitted clean round masks dirty completed round (H-1 regression)', () => {
+    // Exploit: round 5 has C=1, but agent submitted round 6 findings (clean) without
+    // completing round 6. Without the fix, terminate would see round 6's clean record
+    // and accept gate_pass despite round 5 having unresolved issues.
+    const state = makeRalphState({}, {
+      round: 5,
+      autoValidated: true,
+      tallyHistory: [
+        { round: 1, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 2, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 3, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 4, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 5, C: 1, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
+      ],
+      roundRecords: [
+        { round: 1, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 2, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 3, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 4, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 5, counts: { C: 1, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
+        // Uncommitted round 6 — submitted via ralph_round_finding but not yet completed
+        { round: 6, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
+      ],
+    })
+    const result = validateTransition('ralph_terminate', basePayload({
+      phase: 1, termination: 'gate_pass',
+    }), state)
+    expect(result.valid).toBe(false)
+    if (!result.valid) {
+      expect(result.violation).toContain('Unresolved issues remain (GPAV)')
+    }
+  })
+
+  it('TC-G-34: early_stop ignores uncommitted round in consecutive count (H-1 regression)', () => {
+    // Rounds 4-5 are completed and clean. Round 6 submitted but not completed.
+    // strictConsecutive should be 2 (rounds 4-5), not 3 (rounds 4-6).
+    const state = makeRalphState({}, {
+      round: 5,
+      autoValidated: true,
+      tallyHistory: [
+        { round: 1, C: 1, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 2, C: 0, H: 0, M: 1, L: 0, I: 0, timestamp: NOW },
+        { round: 3, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 4, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 5, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
+      ],
+      roundRecords: [
+        { round: 1, counts: { C: 1, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 2, counts: { C: 0, H: 0, M: 1, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 3, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 4, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 5, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
+        // Uncommitted round 6 — should not inflate count
+        { round: 6, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
+      ],
+    })
+    const result = validateTransition('ralph_terminate', basePayload({
+      phase: 1, termination: 'early_stop',
+    }), state)
+    // Completed rounds 3-5: 3 consecutive zeros → passes (>= 2)
+    expect(result.valid).toBe(true)
+  })
 })
 
 describe('Phase 2.1 GPAV — edge cases', () => {
