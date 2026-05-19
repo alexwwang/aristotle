@@ -1192,4 +1192,82 @@ describe('full pipeline flow', () => {
       }
     })
   })
+
+  // ── Regression: why_articulation failure preserves existing articulationVerified ──
+  describe('why_articulation preserves verified state on failure', () => {
+    it('failed articulation retry does NOT regress articulationVerified from true to false', () => {
+      const state = makeState({
+        currentPhase: 1,
+        phaseStatus: 'active',
+        phases: {
+          1: {
+            phase: 1,
+            enteredAt: NOW,
+            ralphCompleted: false,
+            ralphTermination: null,
+            userApproved: false,
+            approvedAt: null,
+            articulationAttempted: true,
+            articulationVerified: true,
+            articulationDegraded: false,
+            articulationFailures: 0,
+          },
+        },
+      })
+      // Simulate a failed retry — _articulationVerified is absent (undefined)
+      const result = applyTransition('why_articulation', {
+        phase: 1,
+        articulation_text: 'Bad text',
+        _articulationVerified: undefined,
+        _articulationDimensions: { what_it_protects: false, key_risks: false, why_approach_works: false },
+        _articulationDegraded: false,
+        _articulationFailureCount: 1,
+        _now: NOW,
+      }, state)
+      // articulationVerified MUST be preserved from the existing PhaseRecord
+      expect(result.phases[1].articulationVerified).toBe(true)
+    })
+
+    it('new_contested rejects IDs that conflict with existing openContested', () => {
+      const state = makeState({
+        currentPhase: 1,
+        phaseStatus: 'ralph_loop',
+        ralph: {
+          round: 2,
+          tallies: [{ round: 1, C: 0, H: 0, M: 0, L: 0, I: 0 }],
+          consecutiveZero: 0,
+          maxRounds: 10,
+          minGateRounds: 2,
+          earlyStopConsecutive: 2,
+          openContested: [{ id: 'issue-42', description: 'existing issue', raisedAt: 1, disputeRounds: 0 }],
+          contestedResolutions: [],
+        },
+        phases: {
+          1: {
+            phase: 1,
+            enteredAt: NOW,
+            ralphCompleted: false,
+            ralphTermination: null,
+            userApproved: false,
+            approvedAt: null,
+            articulationAttempted: false,
+            articulationVerified: false,
+            articulationDegraded: false,
+            articulationFailures: 0,
+          },
+        },
+      })
+      const result = validateTransition('ralph_round_complete', {
+        phase: 1,
+        round: 3,
+        tally: { C: 0, H: 0, M: 0, L: 0, I: 0 },
+        contested_resolutions: [],
+        new_contested: [{ id: 'issue-42', description: 'duplicate ID' }],
+      }, state)
+      expect(result.valid).toBe(false)
+      if (!result.valid) {
+        expect(result.guidance).toMatch(/conflicts with an existing open contested issue/)
+      }
+    })
+  })
 })
