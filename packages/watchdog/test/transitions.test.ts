@@ -1897,12 +1897,6 @@ describe('Phase 2.1 GPAV — edge cases', () => {
 
 describe('Phase 2.1 GPAV — full pipeline flow (M-2)', () => {
   it('TC-G-31: complete GPAV pipeline — findings → rounds → gate_pass', () => {
-    const phaseRec = {
-      phase: 1, enteredAt: NOW, ralphCompleted: false, ralphTermination: null,
-      userApproved: false, approvedAt: null, articulationAttempted: false,
-      articulationVerified: false, articulationDegraded: false, articulationFailures: 0,
-    }
-
     // pipeline_start
     let state = applyTransition('pipeline_start', basePayload({
       description: 'GPAV test', _projectId: 'test', _runId: 'run-gpav',
@@ -1982,12 +1976,6 @@ describe('Phase 2.1 GPAV — full pipeline flow (M-2)', () => {
   })
 
   it('TC-G-32: GPAV early_stop with 2 consecutive strict zero rounds', () => {
-    const phaseRec = {
-      phase: 1, enteredAt: NOW, ralphCompleted: false, ralphTermination: null,
-      userApproved: false, approvedAt: null, articulationAttempted: false,
-      articulationVerified: false, articulationDegraded: false, articulationFailures: 0,
-    }
-
     let state = applyTransition('pipeline_start', basePayload({
       description: 'GPAV early_stop test', _projectId: 'test', _runId: 'run-gpav-es',
     }), null)
