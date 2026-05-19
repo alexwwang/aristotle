@@ -1,9 +1,11 @@
 import type {
   CheckpointEvent,
   ContestedIssue,
+  FindingSubmission,
   PhaseRecord,
   PipelineState,
   RalphTermination,
+  RoundRecord,
   RoundTally,
 } from './schema.js'
 import { SCHEMA_VERSION } from './schema.js'
@@ -63,6 +65,12 @@ function checkTally(tally: unknown): { ok: boolean; errorType?: 'missing' | 'typ
     }
   }
   return { ok: true }
+}
+
+/** Severity ordering: C=5 > H=4 > M=3 > L=2 > I=1. Returns true when a is less severe than b. */
+const SEV_ORDER: Record<string, number> = { C: 5, H: 4, M: 3, L: 2, I: 1 }
+function severityLt(a: string, b: string): boolean {
+  return (SEV_ORDER[a] ?? 0) < (SEV_ORDER[b] ?? 0)
 }
 
 export const NO_ACTIVE_RUN = 'No active pipeline run for this project.' as const
@@ -304,6 +312,16 @@ export function validateTransition(
       break
     }
 
+    case 'ralph_round_finding': {
+      if (!isInt(payload.phase) || payload.phase < 1) {
+        return fail('Invalid phase', 'ralph_round_finding requires phase to be a positive integer.')
+      }
+      if (!isInt(payload.round) || payload.round < 1) {
+        return fail('Invalid round', 'ralph_round_finding requires round to be a positive integer.')
+      }
+      break
+    }
+
     default: {
       return fail('Unknown event', `Unrecognized event type: ${event}`)
     }
@@ -412,6 +430,103 @@ export function validateTransition(
           'There are open contested issues that must be resolved in this round.',
         )
       }
+      // Phase 2.1 GPAV: when autoValidated, validate agent tally against Watchdog's records
+      if (state.ralph.autoValidated) {
+        const round = payload.round as number
+        const record = state.ralph.roundRecords.find(r => r.round === round)
+        if (!record) {
+          return fail(
+            'No findings submitted for round',
+            `GPAV mode requires ralph_round_finding before ralph_round_complete for round ${round}.`,
+          )
+        }
+        // Validate agent's tally matches Watchdog's authoritative counts
+        const tally = payload.tally as Record<string, unknown> | undefined
+        if (tally) {
+          for (const sev of ['C', 'H', 'M', 'L', 'I'] as const) {
+            if (tally[sev] !== undefined && tally[sev] !== record.counts[sev]) {
+              return fail(
+                `Tally mismatch for ${sev}`,
+                `Agent reported ${sev}=${tally[sev]} but Watchdog recorded ${sev}=${record.counts[sev]}.`,
+              )
+            }
+          }
+        }
+      }
+      return ok()
+    }
+
+    case 'ralph_round_finding': {
+      if (state === null) return fail(NO_ACTIVE_RUN, START_FIRST)
+      if (state.currentPhase !== payload.phase) {
+        return fail(
+          'Phase mismatch',
+          `ralph_round_finding must target the current phase (${state.currentPhase}).`,
+        )
+      }
+      if (state.phaseStatus !== 'ralph_loop') {
+        return fail(
+          'Not in ralph loop',
+          'ralph_round_finding can only be called when phase status is ralph_loop.',
+        )
+      }
+      if (state.ralph === null) {
+        return fail(
+          'Ralph loop not initialized',
+          'ralph_round_finding requires ralph loop to be started first.',
+        )
+      }
+      const round = payload.round as number
+      if (round !== state.ralph.round + 1) {
+        return fail(
+          'Round mismatch',
+          `Expected round ${state.ralph.round + 1}, got ${round}.`,
+        )
+      }
+      if (!Array.isArray(payload.findings) || (payload.findings as unknown[]).length === 0) {
+        return fail(
+          'Missing findings',
+          'ralph_round_finding requires a non-empty findings array.',
+        )
+      }
+      // Validate each finding
+      const validSeverities = new Set(['C', 'H', 'M', 'L', 'I'])
+      for (let i = 0; i < (payload.findings as unknown[]).length; i++) {
+        const f = (payload.findings as Record<string, unknown>[])[i]
+        if (!f || typeof f !== 'object') {
+          return fail(`Invalid finding at index ${i}`, 'Each finding must be an object.')
+        }
+        if (!validSeverities.has(f.severity as string)) {
+          return fail(
+            `Invalid severity at index ${i}`,
+            `Finding severity must be one of C/H/M/L/I, got "${f.severity}".`,
+          )
+        }
+        if (typeof f.description !== 'string' || (f.description as string).length === 0) {
+          return fail(
+            `Missing description at index ${i}`,
+            'Each finding must have a non-empty description.',
+          )
+        }
+        // AC-G5: downgrade from higher severity requires reason
+        if (f.original !== undefined) {
+          if (!validSeverities.has(f.original as string)) {
+            return fail(
+              `Invalid original severity at index ${i}`,
+              `Original severity must be one of C/H/M/L/I, got "${f.original}".`,
+            )
+          }
+          if (severityLt(f.severity as string, f.original as string)) {
+            // severity is less than original → downgrade
+            if (typeof f.downgrade_reason !== 'string' || (f.downgrade_reason as string).length === 0) {
+              return fail(
+                `Missing downgrade_reason at index ${i}`,
+                `Severity downgrade from ${f.original} to ${f.severity} requires a downgrade_reason.`,
+              )
+            }
+          }
+        }
+      }
       return ok()
     }
 
@@ -437,40 +552,93 @@ export function validateTransition(
       }
       const termination = payload.termination as RalphTermination
       const ralph = state.ralph
-      if (termination === 'gate_pass') {
-        if (ralph.round < MIN_GATE_ROUNDS) {
-          return fail(
-            'Insufficient rounds for gate pass',
-            `Gate pass requires at least ${MIN_GATE_ROUNDS} rounds. Current: ${ralph.round}.`,
-          )
+
+      // Phase 2.1 GPAV: use roundRecords as authoritative source when autoValidated
+      if (ralph.autoValidated && ralph.roundRecords.length > 0) {
+        // Compute consecutiveZero from roundRecords with strict definition: C=H=M=L=0
+        let strictConsecutive = 0
+        for (let i = ralph.roundRecords.length - 1; i >= 0; i--) {
+          const c = ralph.roundRecords[i].counts
+          if (c.C === 0 && c.H === 0 && c.M === 0 && c.L === 0) {
+            strictConsecutive++
+          } else {
+            break
+          }
         }
-        const last = ralph.tallyHistory[ralph.tallyHistory.length - 1]
-        if (!last || last.C + last.H + last.M > 0) {
-          return fail(
-            'Unresolved issues remain',
-            'Gate pass requires the last tally to have C+H+M equal to 0.',
-          )
+
+        if (termination === 'gate_pass') {
+          if (ralph.round < MIN_GATE_ROUNDS) {
+            return fail(
+              'Insufficient rounds for gate pass',
+              `Gate pass requires at least ${MIN_GATE_ROUNDS} rounds. Current: ${ralph.round}.`,
+            )
+          }
+          const lastRec = ralph.roundRecords[ralph.roundRecords.length - 1]
+          if (!lastRec || lastRec.counts.C + lastRec.counts.H + lastRec.counts.M + lastRec.counts.L > 0) {
+            return fail(
+              'Unresolved issues remain (GPAV)',
+              'Gate pass requires the last round to have C=H=M=L=0 per Watchdog records.',
+            )
+          }
+        } else if (termination === 'early_stop') {
+          if (strictConsecutive < EARLY_STOP_CONSECUTIVE) {
+            return fail(
+              'Insufficient consecutive zero rounds (GPAV)',
+              `Early stop requires at least ${EARLY_STOP_CONSECUTIVE} consecutive rounds with C=H=M=L=0. Current: ${strictConsecutive}.`,
+            )
+          }
+        } else if (termination === 'max_rounds') {
+          if (ralph.round < MAX_RALPH_ROUNDS) {
+            return fail(
+              'Insufficient rounds for max_rounds termination',
+              `max_rounds termination requires at least ${MAX_RALPH_ROUNDS} rounds. Current: ${ralph.round}.`,
+            )
+          }
+          const lastRec = ralph.roundRecords[ralph.roundRecords.length - 1]
+          if (!lastRec || lastRec.counts.C + lastRec.counts.H + lastRec.counts.M + lastRec.counts.L === 0) {
+            return fail(
+              'No unresolved issues (GPAV)',
+              'max_rounds termination requires the last round to have C+H+M+L > 0 per Watchdog records.',
+            )
+          }
         }
-      } else if (termination === 'early_stop') {
-        if (ralph.consecutiveZero < EARLY_STOP_CONSECUTIVE) {
-          return fail(
-            'Insufficient consecutive zero rounds',
-            `Early stop requires at least ${EARLY_STOP_CONSECUTIVE} consecutive zero rounds. Current: ${ralph.consecutiveZero}.`,
-          )
-        }
-      } else if (termination === 'max_rounds') {
-        if (ralph.round < MAX_RALPH_ROUNDS) {
-          return fail(
-            'Insufficient rounds for max_rounds termination',
-            `max_rounds termination requires at least ${MAX_RALPH_ROUNDS} rounds. Current: ${ralph.round}.`,
-          )
-        }
-        const last = ralph.tallyHistory[ralph.tallyHistory.length - 1]
-        if (!last || last.C + last.H + last.M === 0) {
-          return fail(
-            'No unresolved issues',
-            'max_rounds termination requires the last tally to have C+H+M greater than 0.',
-          )
+      } else {
+        // Legacy mode — use tallyHistory (current behavior)
+        if (termination === 'gate_pass') {
+          if (ralph.round < MIN_GATE_ROUNDS) {
+            return fail(
+              'Insufficient rounds for gate pass',
+              `Gate pass requires at least ${MIN_GATE_ROUNDS} rounds. Current: ${ralph.round}.`,
+            )
+          }
+          const last = ralph.tallyHistory[ralph.tallyHistory.length - 1]
+          if (!last || last.C + last.H + last.M > 0) {
+            return fail(
+              'Unresolved issues remain',
+              'Gate pass requires the last tally to have C+H+M equal to 0.',
+            )
+          }
+        } else if (termination === 'early_stop') {
+          if (ralph.consecutiveZero < EARLY_STOP_CONSECUTIVE) {
+            return fail(
+              'Insufficient consecutive zero rounds',
+              `Early stop requires at least ${EARLY_STOP_CONSECUTIVE} consecutive zero rounds. Current: ${ralph.consecutiveZero}.`,
+            )
+          }
+        } else if (termination === 'max_rounds') {
+          if (ralph.round < MAX_RALPH_ROUNDS) {
+            return fail(
+              'Insufficient rounds for max_rounds termination',
+              `max_rounds termination requires at least ${MAX_RALPH_ROUNDS} rounds. Current: ${ralph.round}.`,
+            )
+          }
+          const last = ralph.tallyHistory[ralph.tallyHistory.length - 1]
+          if (!last || last.C + last.H + last.M === 0) {
+            return fail(
+              'No unresolved issues',
+              'max_rounds termination requires the last tally to have C+H+M greater than 0.',
+            )
+          }
         }
       }
       return ok()
@@ -675,6 +843,8 @@ export function applyTransition(
           escalated: false,
           escalatedAt: null,
           termination: null,
+          roundRecords: [],
+          autoValidated: false,
         },
         lastCheckpointAt: now,
       }
@@ -769,6 +939,58 @@ export function applyTransition(
           consecutiveZero: newConsecutiveZero,
           tallyHistory: [...state.ralph.tallyHistory, roundTally],
           openContested: newOpenContested,
+        },
+        lastCheckpointAt: now,
+      }
+    }
+
+    case 'ralph_round_finding': {
+      if (state === null) {
+        throw new Error('BUG: state must not be null for ralph_round_finding')
+      }
+      if (state.ralph === null) {
+        throw new Error('BUG: ralph must not be null for ralph_round_finding')
+      }
+      const round = payload.round as number
+      const findings = payload.findings as FindingSubmission[]
+
+      // Compute counts from findings
+      const counts = { C: 0, H: 0, M: 0, L: 0, I: 0 }
+      for (const f of findings) {
+        counts[f.severity]++
+      }
+
+      // Find or create round record
+      const existingIdx = state.ralph.roundRecords.findIndex(r => r.round === round)
+      let newRoundRecords: RoundRecord[]
+      if (existingIdx >= 0) {
+        // Append to existing record (multiple finding submissions per round)
+        const existing = state.ralph.roundRecords[existingIdx]
+        const merged = {
+          ...existing,
+          counts: {
+            C: existing.counts.C + counts.C,
+            H: existing.counts.H + counts.H,
+            M: existing.counts.M + counts.M,
+            L: existing.counts.L + counts.L,
+            I: existing.counts.I + counts.I,
+          },
+        }
+        newRoundRecords = [...state.ralph.roundRecords]
+        newRoundRecords[existingIdx] = merged
+      } else {
+        newRoundRecords = [
+          ...state.ralph.roundRecords,
+          { round, counts, submittedAt: now },
+        ]
+      }
+
+      return {
+        ...state,
+        ralph: {
+          ...state.ralph,
+          roundRecords: newRoundRecords,
+          autoValidated: true,
         },
         lastCheckpointAt: now,
       }

@@ -461,4 +461,82 @@ describe('Observer', () => {
     expect(observer.isDegraded('proj-test', 'run-test', 1)).toBe(false)
     expect(observer.isDegraded('proj-test', 'run-test', 5)).toBe(false)
   })
+
+  // ── Phase 2.1 RPS: Prompt injection detection in Task calls ──────────────
+
+  describe('Phase 2.1 RPS — prompt injection detection', () => {
+    it('TC-R-O1: detects injection in Task prompt and creates audit entry', async () => {
+      mockCache.get.mockReturnValue(
+        makeState({
+          currentPhase: 1,
+          phaseStatus: 'ralph_loop',
+          ralph: { round: 2 },
+        }),
+      )
+
+      await observer.handle('Task', { prompt: 'R1 found 3 issues in the module.' }, 'out', 'sess-001', 'call-rps-1')
+
+      // Should still record _reviewer_spawned observation
+      expect(mockStore.appendObservation).toHaveBeenCalledWith(
+        'proj-test', 'run-test',
+        expect.objectContaining({ type: '_reviewer_spawned' }),
+      )
+      // Should also record audit entry
+      expect(mockStore.appendAudit).toHaveBeenCalledWith(
+        'proj-test', 'run-test',
+        expect.objectContaining({
+          event: 'PROMPT_INJECTION_DETECTED',
+          decision: 'WARN',
+        }),
+      )
+      // Should also record prompt injection observation
+      expect(mockStore.appendObservation).toHaveBeenCalledWith(
+        'proj-test', 'run-test',
+        expect.objectContaining({ type: '_prompt_injection' }),
+      )
+    })
+
+    it('TC-R-O2: clean prompt does not trigger audit entry', async () => {
+      mockCache.get.mockReturnValue(
+        makeState({
+          currentPhase: 1,
+          phaseStatus: 'ralph_loop',
+          ralph: { round: 2 },
+        }),
+      )
+
+      await observer.handle('Task', { prompt: 'Review the design document for correctness.' }, 'out', 'sess-001', 'call-rps-2')
+
+      // Should record _reviewer_spawned observation
+      expect(mockStore.appendObservation).toHaveBeenCalledWith(
+        'proj-test', 'run-test',
+        expect.objectContaining({ type: '_reviewer_spawned' }),
+      )
+      // Should NOT record audit entry
+      expect(mockStore.appendAudit).not.toHaveBeenCalled()
+    })
+
+    it('TC-R-O3: RPS scan failure does not break observer', async () => {
+      mockCache.get.mockReturnValue(
+        makeState({
+          currentPhase: 1,
+          phaseStatus: 'ralph_loop',
+          ralph: { round: 2 },
+        }),
+      )
+      // Make appendAudit throw to simulate RPS scan failure path
+      mockStore.appendAudit.mockImplementation(() => { throw new Error('audit write failed') })
+
+      // Should NOT throw — RPS failure is suppressed
+      await expect(
+        observer.handle('Task', { prompt: 'R1 found issues' }, 'out', 'sess-001', 'call-rps-3'),
+      ).resolves.not.toThrow()
+
+      // _reviewer_spawned should still be recorded (it's before RPS scan)
+      expect(mockStore.appendObservation).toHaveBeenCalledWith(
+        'proj-test', 'run-test',
+        expect.objectContaining({ type: '_reviewer_spawned' }),
+      )
+    })
+  })
 })

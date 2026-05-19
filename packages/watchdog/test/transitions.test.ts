@@ -37,6 +37,8 @@ function makeRalphState(
     escalated: false,
     escalatedAt: null,
     termination: null,
+    roundRecords: [],
+    autoValidated: false,
     ...ralphOverrides,
   }
 
@@ -1290,5 +1292,419 @@ describe('full pipeline flow', () => {
         expect(result.guidance).toMatch(/conflicts with an existing open contested issue/)
       }
     })
+  })
+})
+
+// ── Part F: Phase 2.1 GPAV (Gate Pass Auto-Validation) ────────────────────────
+
+describe('Phase 2.1 GPAV — ralph_round_finding', () => {
+  it('TC-G-01: accepts valid findings for current round', () => {
+    const state = makeRalphState({}, { round: 1 })
+    const result = validateTransition('ralph_round_finding', basePayload({
+      phase: 1, round: 2,
+      findings: [
+        { severity: 'M', description: 'code quality issue' },
+      ],
+    }), state)
+    expect(result.valid).toBe(true)
+  })
+
+  it('TC-G-02: rejects findings without ralph loop', () => {
+    const state = makeState({ currentPhase: 1, phaseStatus: 'active' })
+    const result = validateTransition('ralph_round_finding', basePayload({
+      phase: 1, round: 1,
+      findings: [{ severity: 'M', description: 'issue' }],
+    }), state)
+    expect(result.valid).toBe(false)
+    if (!result.valid) {
+      expect(result.violation).toBe('Not in ralph loop')
+    }
+  })
+
+  it('TC-G-03: rejects findings with wrong phase', () => {
+    const state = makeRalphState({ currentPhase: 1 }, { phase: 1, round: 2 })
+    const result = validateTransition('ralph_round_finding', basePayload({
+      phase: 2, round: 3,
+      findings: [{ severity: 'M', description: 'issue' }],
+    }), state)
+    expect(result.valid).toBe(false)
+    if (!result.valid) {
+      expect(result.violation).toBe('Phase mismatch')
+    }
+  })
+
+  it('TC-G-04: rejects findings with wrong round', () => {
+    const state = makeRalphState({}, { round: 1 })
+    const result = validateTransition('ralph_round_finding', basePayload({
+      phase: 1, round: 5,  // should be 2
+      findings: [{ severity: 'M', description: 'issue' }],
+    }), state)
+    expect(result.valid).toBe(false)
+    if (!result.valid) {
+      expect(result.violation).toBe('Round mismatch')
+    }
+  })
+
+  it('TC-G-05: rejects findings with invalid severity', () => {
+    const state = makeRalphState({}, { round: 1 })
+    const result = validateTransition('ralph_round_finding', basePayload({
+      phase: 1, round: 2,
+      findings: [{ severity: 'X', description: 'issue' }],
+    }), state)
+    expect(result.valid).toBe(false)
+    if (!result.valid) {
+      expect(result.violation).toContain('Invalid severity')
+    }
+  })
+
+  it('TC-G-06: rejects downgrade without reason (AC-G5)', () => {
+    const state = makeRalphState({}, { round: 1 })
+    const result = validateTransition('ralph_round_finding', basePayload({
+      phase: 1, round: 2,
+      findings: [
+        { severity: 'M', description: 'downgraded from H', original: 'H' },
+      ],
+    }), state)
+    expect(result.valid).toBe(false)
+    if (!result.valid) {
+      expect(result.violation).toContain('downgrade_reason')
+    }
+  })
+
+  it('TC-G-07: accepts downgrade with reason (AC-G5)', () => {
+    const state = makeRalphState({}, { round: 1 })
+    const result = validateTransition('ralph_round_finding', basePayload({
+      phase: 1, round: 2,
+      findings: [
+        {
+          severity: 'M', description: 'downgraded from H',
+          original: 'H', downgrade_reason: 'false positive — test covers this',
+        },
+      ],
+    }), state)
+    expect(result.valid).toBe(true)
+  })
+
+  it('TC-G-07b: accepts upgrade without reason (C→C is no change)', () => {
+    const state = makeRalphState({}, { round: 1 })
+    const result = validateTransition('ralph_round_finding', basePayload({
+      phase: 1, round: 2,
+      findings: [
+        { severity: 'H', description: 'kept at H', original: 'H' },
+      ],
+    }), state)
+    expect(result.valid).toBe(true)
+  })
+
+  it('TC-G-07c: accepts upgrade (M→H) without reason', () => {
+    const state = makeRalphState({}, { round: 1 })
+    const result = validateTransition('ralph_round_finding', basePayload({
+      phase: 1, round: 2,
+      findings: [
+        { severity: 'H', description: 'upgraded from M', original: 'M' },
+      ],
+    }), state)
+    expect(result.valid).toBe(true)
+  })
+
+  it('TC-G-08: rejects empty findings array', () => {
+    const state = makeRalphState({}, { round: 1 })
+    const result = validateTransition('ralph_round_finding', basePayload({
+      phase: 1, round: 2,
+      findings: [],
+    }), state)
+    expect(result.valid).toBe(false)
+    if (!result.valid) {
+      expect(result.violation).toBe('Missing findings')
+    }
+  })
+
+  it('TC-G-09: rejects finding with missing description', () => {
+    const state = makeRalphState({}, { round: 1 })
+    const result = validateTransition('ralph_round_finding', basePayload({
+      phase: 1, round: 2,
+      findings: [{ severity: 'M' }],
+    }), state)
+    expect(result.valid).toBe(false)
+    if (!result.valid) {
+      expect(result.violation).toContain('Missing description')
+    }
+  })
+
+  it('TC-G-10: rejects finding with empty description', () => {
+    const state = makeRalphState({}, { round: 1 })
+    const result = validateTransition('ralph_round_finding', basePayload({
+      phase: 1, round: 2,
+      findings: [{ severity: 'M', description: '' }],
+    }), state)
+    expect(result.valid).toBe(false)
+    if (!result.valid) {
+      expect(result.violation).toContain('Missing description')
+    }
+  })
+})
+
+describe('Phase 2.1 GPAV — ralph_round_finding apply', () => {
+  it('TC-G-11: accumulates counts and sets autoValidated=true', () => {
+    const state = makeRalphState({}, { round: 1 })
+    const newState = applyTransition('ralph_round_finding', basePayload({
+      phase: 1, round: 2,
+      findings: [
+        { severity: 'M', description: 'issue 1' },
+        { severity: 'L', description: 'issue 2' },
+        { severity: 'I', description: 'info 1' },
+      ],
+    }), state)
+    expect(newState.ralph!.autoValidated).toBe(true)
+    expect(newState.ralph!.roundRecords).toHaveLength(1)
+    expect(newState.ralph!.roundRecords[0].round).toBe(2)
+    expect(newState.ralph!.roundRecords[0].counts).toEqual({ C: 0, H: 0, M: 1, L: 1, I: 1 })
+  })
+
+  it('TC-G-12: merges multiple submissions for same round', () => {
+    const state = makeRalphState({}, {
+      round: 1,
+      roundRecords: [{ round: 2, counts: { C: 0, H: 0, M: 1, L: 0, I: 0 }, submittedAt: NOW }],
+      autoValidated: true,
+    })
+    const newState = applyTransition('ralph_round_finding', basePayload({
+      phase: 1, round: 2,
+      findings: [{ severity: 'L', description: 'another issue' }],
+    }), state)
+    expect(newState.ralph!.roundRecords).toHaveLength(1)
+    expect(newState.ralph!.roundRecords[0].counts).toEqual({ C: 0, H: 0, M: 1, L: 1, I: 0 })
+  })
+
+  it('TC-G-13: adds new round record when round changes', () => {
+    const state = makeRalphState({}, {
+      round: 2,
+      roundRecords: [
+        { round: 1, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 2, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
+      ],
+      autoValidated: true,
+    })
+    const newState = applyTransition('ralph_round_finding', basePayload({
+      phase: 1, round: 3,
+      findings: [{ severity: 'M', description: 'found issue' }],
+    }), state)
+    expect(newState.ralph!.roundRecords).toHaveLength(3)
+    expect(newState.ralph!.roundRecords[2].round).toBe(3)
+    expect(newState.ralph!.roundRecords[2].counts.M).toBe(1)
+  })
+})
+
+describe('Phase 2.1 GPAV — ralph_round_complete with autoValidated', () => {
+  it('TC-G-14: rejects when no roundRecord for round', () => {
+    const state = makeRalphState({}, {
+      round: 1,
+      autoValidated: true,
+      roundRecords: [],
+    })
+    const result = validateTransition('ralph_round_complete', basePayload({
+      phase: 1, round: 2,
+      tally: { C: 0, H: 0, M: 0, L: 0, I: 0 },
+    }), state)
+    expect(result.valid).toBe(false)
+    if (!result.valid) {
+      expect(result.violation).toBe('No findings submitted for round')
+    }
+  })
+
+  it('TC-G-15: accepts when roundRecord matches tally', () => {
+    const state = makeRalphState({}, {
+      round: 1,
+      autoValidated: true,
+      roundRecords: [{ round: 2, counts: { C: 0, H: 0, M: 1, L: 0, I: 0 }, submittedAt: NOW }],
+    })
+    const result = validateTransition('ralph_round_complete', basePayload({
+      phase: 1, round: 2,
+      tally: { C: 0, H: 0, M: 1, L: 0, I: 0 },
+    }), state)
+    expect(result.valid).toBe(true)
+  })
+
+  it('TC-G-16: rejects when agent tally mismatches Watchdog records', () => {
+    const state = makeRalphState({}, {
+      round: 1,
+      autoValidated: true,
+      roundRecords: [{ round: 2, counts: { C: 0, H: 0, M: 1, L: 0, I: 0 }, submittedAt: NOW }],
+    })
+    const result = validateTransition('ralph_round_complete', basePayload({
+      phase: 1, round: 2,
+      tally: { C: 0, H: 0, M: 0, L: 0, I: 0 },  // agent claims 0M but WD recorded 1M
+    }), state)
+    expect(result.valid).toBe(false)
+    if (!result.valid) {
+      expect(result.violation).toContain('Tally mismatch')
+    }
+  })
+
+  it('TC-G-17: legacy mode (autoValidated=false) ignores roundRecords', () => {
+    const state = makeRalphState({}, {
+      round: 1,
+      autoValidated: false,
+      roundRecords: [],
+    })
+    const result = validateTransition('ralph_round_complete', basePayload({
+      phase: 1, round: 2,
+      tally: { C: 0, H: 0, M: 0, L: 0, I: 0 },
+    }), state)
+    expect(result.valid).toBe(true)
+  })
+})
+
+describe('Phase 2.1 GPAV — ralph_terminate with autoValidated', () => {
+  it('TC-G-18: early_stop with 2 strict consecutive zeros (AC-G2)', () => {
+    const state = makeRalphState({}, {
+      round: 6,
+      autoValidated: true,
+      roundRecords: [
+        { round: 1, counts: { C: 1, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 2, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 3, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
+      ],
+    })
+    const result = validateTransition('ralph_terminate', basePayload({
+      phase: 1, termination: 'early_stop',
+    }), state)
+    expect(result.valid).toBe(true)
+  })
+
+  it('TC-G-19: early_stop rejected when L=1 in last round (AC-G2 strict)', () => {
+    const state = makeRalphState({}, {
+      round: 6,
+      autoValidated: true,
+      roundRecords: [
+        { round: 1, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 2, counts: { C: 0, H: 0, M: 0, L: 1, I: 0 }, submittedAt: NOW },
+      ],
+    })
+    const result = validateTransition('ralph_terminate', basePayload({
+      phase: 1, termination: 'early_stop',
+    }), state)
+    expect(result.valid).toBe(false)
+    if (!result.valid) {
+      expect(result.violation).toContain('consecutive zero rounds')
+    }
+  })
+
+  it('TC-G-20: gate_pass with zero C/H/M/L in last record', () => {
+    const state = makeRalphState({}, {
+      round: 5,
+      autoValidated: true,
+      tallyHistory: [
+        { round: 1, C: 1, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 2, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 3, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 4, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 5, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
+      ],
+      roundRecords: [
+        { round: 1, counts: { C: 1, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 2, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 3, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 4, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 5, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
+      ],
+    })
+    const result = validateTransition('ralph_terminate', basePayload({
+      phase: 1, termination: 'gate_pass',
+    }), state)
+    expect(result.valid).toBe(true)
+  })
+
+  it('TC-G-21: gate_pass rejected when L>0 in last record (GPAV strict)', () => {
+    const state = makeRalphState({}, {
+      round: 5,
+      autoValidated: true,
+      tallyHistory: [
+        { round: 1, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 2, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 3, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 4, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 5, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
+      ],
+      roundRecords: [
+        { round: 1, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 2, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 3, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 4, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 5, counts: { C: 0, H: 0, M: 0, L: 1, I: 0 }, submittedAt: NOW },
+      ],
+    })
+    const result = validateTransition('ralph_terminate', basePayload({
+      phase: 1, termination: 'gate_pass',
+    }), state)
+    expect(result.valid).toBe(false)
+    if (!result.valid) {
+      expect(result.violation).toContain('Unresolved issues remain (GPAV)')
+    }
+  })
+
+  it('TC-G-22: legacy mode uses tallyHistory (unchanged behavior)', () => {
+    const state = makeRalphState({}, {
+      round: 5,
+      autoValidated: false,
+      tallyHistory: [
+        { round: 1, C: 1, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 2, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 3, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 4, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 5, C: 0, H: 0, M: 0, L: 1, I: 0, timestamp: NOW },
+      ],
+    })
+    // Legacy mode: L=1 is fine for gate_pass (only checks C+H+M)
+    const result = validateTransition('ralph_terminate', basePayload({
+      phase: 1, termination: 'gate_pass',
+    }), state)
+    expect(result.valid).toBe(true)
+  })
+
+  it('TC-G-23: max_rounds with GPAV checks C+H+M+L>0', () => {
+    const state = makeRalphState({}, {
+      round: 10,
+      autoValidated: true,
+      tallyHistory: Array.from({ length: 10 }, (_, i) => ({
+        round: i + 1, C: 0, H: 0, M: 0, L: 1, I: 0, timestamp: NOW,
+      })),
+      roundRecords: Array.from({ length: 10 }, (_, i) => ({
+        round: i + 1, counts: { C: 0, H: 0, M: 0, L: 1, I: 0 }, submittedAt: NOW,
+      })),
+    })
+    const result = validateTransition('ralph_terminate', basePayload({
+      phase: 1, termination: 'max_rounds',
+    }), state)
+    expect(result.valid).toBe(true)
+  })
+
+  it('TC-G-24: max_rounds rejected when all zero in GPAV mode', () => {
+    const state = makeRalphState({}, {
+      round: 10,
+      autoValidated: true,
+      tallyHistory: Array.from({ length: 10 }, (_, i) => ({
+        round: i + 1, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW,
+      })),
+      roundRecords: Array.from({ length: 10 }, (_, i) => ({
+        round: i + 1, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW,
+      })),
+    })
+    const result = validateTransition('ralph_terminate', basePayload({
+      phase: 1, termination: 'max_rounds',
+    }), state)
+    expect(result.valid).toBe(false)
+    if (!result.valid) {
+      expect(result.violation).toContain('No unresolved issues (GPAV)')
+    }
+  })
+})
+
+describe('Phase 2.1 GPAV — migration', () => {
+  it('TC-G-25: ralph_loop_start creates empty roundRecords and autoValidated=false', () => {
+    const state = applyTransition('ralph_loop_start', basePayload({ phase: 1 }),
+      makeState({ currentPhase: 1, phaseStatus: 'active', phases: { 1: { phase: 1, enteredAt: NOW, ralphCompleted: false, ralphTermination: null, userApproved: false, approvedAt: null, articulationAttempted: false, articulationVerified: false, articulationDegraded: false, articulationFailures: 0 } } }))
+    expect(state.ralph).not.toBeNull()
+    expect(state.ralph!.roundRecords).toEqual([])
+    expect(state.ralph!.autoValidated).toBe(false)
   })
 })

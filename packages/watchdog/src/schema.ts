@@ -4,6 +4,7 @@ export type CheckpointEvent =
   | 'phase_enter'
   | 'ralph_loop_start'
   | 'ralph_round_complete'
+  | 'ralph_round_finding'    // Phase 2.1: GPAV — submit structured findings per round
   | 'ralph_terminate'
   | 'test_evidence'          // @deprecated (v1.8) still accepted, no longer gates
   | 'user_approval'
@@ -11,7 +12,7 @@ export type CheckpointEvent =
   | 'why_articulation'
 
 /** State machine version for forward-compatible reads */
-export const SCHEMA_VERSION = 2
+export const SCHEMA_VERSION = 3
 
 export interface PipelineState {
   version: typeof SCHEMA_VERSION
@@ -76,6 +77,9 @@ export interface RalphLoopState {
   escalated: boolean
   escalatedAt: string | null
   termination: RalphTermination | null
+  // Phase 2.1: GPAV — authoritative per-round counts from ralph_round_finding
+  roundRecords: RoundRecord[]
+  autoValidated: boolean           // true after first ralph_round_finding submission
 }
 
 export interface RoundTally {
@@ -93,6 +97,23 @@ export interface ContestedIssue {
   firstContestedRound: number
   disputeRounds: number
   description: string
+}
+
+/** Phase 2.1: GPAV — authoritative per-round finding counts */
+export interface RoundRecord {
+  round: number
+  counts: { C: number; H: number; M: number; L: number; I: number }
+  submittedAt: string
+}
+
+/** Phase 2.1: GPAV — structured finding submitted by agent */
+export interface FindingSubmission {
+  severity: 'C' | 'H' | 'M' | 'L' | 'I'
+  description: string
+  /** Original severity from reviewer — set when agent relabels */
+  original?: 'C' | 'H' | 'M' | 'L' | 'I'
+  /** Required when severity is lower than original (downgrade) */
+  downgrade_reason?: string
 }
 
 /** Active run index — one per project */
@@ -141,7 +162,7 @@ export interface AuditLogEntry {
   runId: string
   projectId: string
   sessionId: string
-  event: CheckpointEvent | 'INTERCEPT'
+  event: CheckpointEvent | 'INTERCEPT' | 'PROMPT_INJECTION_DETECTED'
   phase: number
   round?: number
   decision: 'PASS' | 'BLOCK'
@@ -167,3 +188,4 @@ export type ArticulationDimension = 'what_it_protects' | 'key_risks' | 'why_appr
 
 export const OBS_TYPE_REVIEWER_SPAWNED = '_reviewer_spawned' as const
 export const OBS_TYPE_OBSERVER_DEGRADED = '_observer_degraded' as const
+export const OBS_TYPE_PROMPT_INJECTION = '_prompt_injection' as const

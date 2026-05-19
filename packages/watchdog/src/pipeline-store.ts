@@ -132,6 +132,13 @@ export class PipelineStore {
     if (state && !('totalPhases' in state)) {
       state = { ...state, totalPhases: 5 };
     }
+    // Migration: pre-v3 ralph state lacks roundRecords and autoValidated
+    if (state?.ralph && !('roundRecords' in state.ralph)) {
+      state = {
+        ...state,
+        ralph: { ...state.ralph, roundRecords: [], autoValidated: false },
+      };
+    }
     return state;
   }
 

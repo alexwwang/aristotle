@@ -6,7 +6,9 @@ import type { PipelineStateCache } from './state-cache.js'
 import type { SessionBuffer } from './session-buffer.js'
 import type { PipelineStore } from './pipeline-store.js'
 import type { Logger } from '@opencode-ai/core/logger'
-import { OBS_TYPE_REVIEWER_SPAWNED, OBS_TYPE_OBSERVER_DEGRADED } from './schema.js'
+import { OBS_TYPE_REVIEWER_SPAWNED, OBS_TYPE_OBSERVER_DEGRADED, OBS_TYPE_PROMPT_INJECTION } from './schema.js'
+import { scanPrompt } from './prompt-scanner.js'
+import type { AuditLogEntry } from './schema.js'
 
 export class Observer {
   private cache: PipelineStateCache
@@ -69,6 +71,65 @@ export class Observer {
   }
 
   /**
+   * Phase 2.1 RPS: scan Task prompt for prohibited injection patterns.
+   * Runs after the observation is recorded (warn mode). Logs + persists audit entry if flagged.
+   */
+  private async scanTaskPrompt(
+    tool: string,
+    args: unknown,
+    state: { projectId: string; runId: string; currentPhase: number },
+    round: number,
+    callID: string,
+    sessionID: string,
+  ): Promise<void> {
+    try {
+      // Extract prompt from Task args
+      let prompt = ''
+      if (args && typeof args === 'object') {
+        const a = args as Record<string, unknown>
+        if (typeof a.prompt === 'string') prompt = a.prompt
+        else if (typeof a.description === 'string') prompt = a.description
+      }
+
+      if (!prompt) return // No prompt to scan
+
+      const result = scanPrompt(prompt)
+      if (!result.flagged) return
+
+      // Log matched patterns
+      const patterns = result.matchedPatterns.map(m => `"${m.match}" (${m.pattern})`).join(', ')
+      this.logger?.warn('RPS: prompt injection detected in Task call round %d: %s', round, patterns)
+
+      // Persist audit entry
+      const auditEntry: AuditLogEntry = {
+        timestamp: new Date().toISOString(),
+        runId: state.runId,
+        projectId: state.projectId,
+        sessionId: sessionID,
+        event: 'PROMPT_INJECTION_DETECTED',
+        phase: state.currentPhase,
+        round,
+        decision: 'WARN',
+        violation: `Prohibited patterns in reviewer prompt: ${patterns}`,
+      }
+      await this.store.appendAudit(state.projectId, state.runId, auditEntry)
+
+      // Also record as observation for easy querying
+      await this.store.appendObservation(state.projectId, state.runId, {
+        timestamp: new Date().toISOString(),
+        type: OBS_TYPE_PROMPT_INJECTION,
+        tool,
+        callID,
+        round,
+        metadata: { matchedPatterns: result.matchedPatterns, sessionId: sessionID },
+      })
+    } catch (err) {
+      // RPS failure should not break the observer
+      this.logger?.warn('RPS scan failed (suppressed): %s', String(err))
+    }
+  }
+
+  /**
    * onToolAfter handler — called for EVERY tool execution.
    */
   async handle(
@@ -96,6 +157,9 @@ export class Observer {
         }
         await this.store.appendObservation(state.projectId, state.runId, entry)
         this.logger?.debug('recorded %s for round %d (pipeline %s/%s)', OBS_TYPE_REVIEWER_SPAWNED, round, state.projectId, state.runId)
+
+        // Phase 2.1 RPS: scan Task prompt for injection patterns
+        await this.scanTaskPrompt(tool, args, state, round, callID, sessionID)
         return
       }
 
