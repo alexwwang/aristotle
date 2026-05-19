@@ -1233,14 +1233,14 @@ describe('full pipeline flow', () => {
         currentPhase: 1,
         phaseStatus: 'ralph_loop',
         ralph: {
+          phase: 1,
           round: 2,
-          tallies: [{ round: 1, C: 0, H: 0, M: 0, L: 0, I: 0 }],
           consecutiveZero: 0,
-          maxRounds: 10,
-          minGateRounds: 2,
-          earlyStopConsecutive: 2,
+          tallyHistory: [{ round: 1, C: 0, H: 0, M: 0, L: 0, I: 0 }],
           openContested: [{ id: 'issue-42', description: 'existing issue', firstContestedRound: 1, disputeRounds: 0 }],
-          contestedResolutions: [],
+          escalated: false,
+          escalatedAt: null,
+          termination: null,
         },
         phases: {
           1: {

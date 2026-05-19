@@ -401,8 +401,9 @@ export class CheckpointHandler {
       if (phaseRec?.articulationFailures !== undefined && phaseRec.articulationFailures > 0) {
         count = phaseRec.articulationFailures
       } else if (phaseRec?.articulationAttempted && !phaseRec?.articulationVerified) {
-        // Legacy fallback: no persisted count, infer from boolean flags
-        count = 1
+        // Legacy fallback: no persisted count, unknown actual count.
+        // Return 0 to start fresh — safer to require an extra articulation than to skip degradation gate.
+        count = 0
       } else {
         count = 0
       }
