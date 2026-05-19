@@ -795,10 +795,10 @@ describe('applyTransition', () => {
     }
   })
 
-  it('pipeline_start with totalPhases=1.5 floors to 1 in applyTransition', () => {
+  it('pipeline_start with totalPhases=1 creates single-phase pipeline', () => {
     const newState = applyTransition(
       'pipeline_start',
-      basePayload({ description: 'fractional', _runId: 'run-f', _projectId: 'proj-f', totalPhases: 1 }),
+      basePayload({ description: 'single phase', _runId: 'run-f', _projectId: 'proj-f', totalPhases: 1 }),
       null,
     )
     expect(newState.totalPhases).toBe(1)
