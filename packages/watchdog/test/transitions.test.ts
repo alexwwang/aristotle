@@ -96,12 +96,29 @@ describe('payload validation', () => {
     }
   })
 
-  it('rejects phase_enter with phase=6', () => {
-    const result = validateTransition('phase_enter', basePayload({ phase: 6 }), makeState())
-    expect(result.valid).toBe(false)
-    if (!result.valid) {
-      expect(result.violation).toBe('Invalid phase number')
+  it('accepts phase_enter with phase=6 (dynamic phase count)', () => {
+    const state = {
+      ...makeState(),
+      currentPhase: 5,
+      phaseStatus: 'complete' as const,
+      phases: {
+        ...makeState().phases,
+        5: {
+          phase: 5,
+          enteredAt: '2025-01-01T00:00:00Z',
+          ralphCompleted: true,
+          ralphTermination: 'gate_pass' as const,
+          userApproved: true,
+          approvedAt: '2025-01-01T01:00:00Z',
+          articulationAttempted: false,
+          articulationVerified: false,
+          articulationDegraded: false,
+          articulationFailures: 0,
+        },
+      },
     }
+    const result = validateTransition('phase_enter', basePayload({ phase: 6 }), state)
+    expect(result.valid).toBe(true)
   })
 
   it('rejects phase_enter with phase=1.5', () => {

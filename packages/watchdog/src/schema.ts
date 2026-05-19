@@ -20,7 +20,7 @@ export interface PipelineState {
   startedAt: string                // ISO 8601
   description: string              // from pipeline_start payload
 
-  currentPhase: 0 | 1 | 2 | 3 | 4 | 5  // 0 = initialized, awaiting first phase_enter
+  currentPhase: number                   // 0 = initialized, awaiting first phase_enter
   phaseStatus: PhaseStatus
 
   phases: Record<number, PhaseRecord>

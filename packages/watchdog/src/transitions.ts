@@ -91,30 +91,30 @@ export function validateTransition(
     }
 
     case 'phase_enter': {
-      if (!isInt(payload.phase) || payload.phase < 1 || payload.phase > 5) {
+      if (!isInt(payload.phase) || payload.phase < 1 ) {
         return fail(
           'Invalid phase number',
-          'phase_enter requires phase to be an integer between 1 and 5.',
+          'phase_enter requires phase to be a positive integer.',
         )
       }
       break
     }
 
     case 'ralph_loop_start': {
-      if (!isInt(payload.phase) || payload.phase < 1 || payload.phase > 5) {
+      if (!isInt(payload.phase) || payload.phase < 1 ) {
         return fail(
           'Invalid phase',
-          'ralph_loop_start requires phase to be an integer between 1 and 5.',
+          'ralph_loop_start requires phase to be a positive integer.',
         )
       }
       break
     }
 
     case 'ralph_round_complete': {
-      if (!isInt(payload.phase) || payload.phase < 1 || payload.phase > 5) {
+      if (!isInt(payload.phase) || payload.phase < 1 ) {
         return fail(
           'Invalid phase',
-          'ralph_round_complete requires phase to be an integer between 1 and 5.',
+          'ralph_round_complete requires phase to be a positive integer.',
         )
       }
       if (!isInt(payload.round) || payload.round < 1) {
@@ -207,10 +207,10 @@ export function validateTransition(
     }
 
     case 'ralph_terminate': {
-      if (!isInt(payload.phase) || payload.phase < 1 || payload.phase > 5) {
+      if (!isInt(payload.phase) || payload.phase < 1 ) {
         return fail(
           'Invalid phase',
-          'ralph_terminate requires phase to be an integer between 1 and 5.',
+          'ralph_terminate requires phase to be a positive integer.',
         )
       }
       if (!['gate_pass', 'early_stop', 'max_rounds'].includes(payload.termination as string)) {
@@ -239,30 +239,30 @@ export function validateTransition(
     }
 
     case 'user_approval': {
-      if (!isInt(payload.phase) || payload.phase < 1 || payload.phase > 5) {
+      if (!isInt(payload.phase) || payload.phase < 1 ) {
         return fail(
           'Invalid phase',
-          'user_approval requires phase to be an integer between 1 and 5.',
+          'user_approval requires phase to be a positive integer.',
         )
       }
       break
     }
 
     case 'phase_complete': {
-      if (!isInt(payload.phase) || payload.phase < 1 || payload.phase > 5) {
+      if (!isInt(payload.phase) || payload.phase < 1 ) {
         return fail(
           'Invalid phase',
-          'phase_complete requires phase to be an integer between 1 and 5.',
+          'phase_complete requires phase to be a positive integer.',
         )
       }
       break
     }
 
     case 'why_articulation': {
-      if (!isInt(payload.phase) || payload.phase < 1 || payload.phase > 5) {
+      if (!isInt(payload.phase) || payload.phase < 1 ) {
         return fail(
           'Invalid phase',
-          'why_articulation requires phase to be an integer between 1 and 5.',
+          'why_articulation requires phase to be a positive integer.',
         )
       }
       if (!isNonEmptyString(payload.articulation)) {

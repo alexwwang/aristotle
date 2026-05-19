@@ -90,7 +90,7 @@ describe('WatchdogConfig', () => {
     )
     const config = loadWatchdogConfig(tmpDir, logger)
     expect(config.phaseDeliverables[6]).toEqual(['future.md'])
-    // Rules only check phases 1-5, so phase6 exists but is never matched
+    // Phase count is now dynamic — phase6+ is valid and will be matched
   })
 
   // TC-B-31: globToRegex -- *.md matches .md only
