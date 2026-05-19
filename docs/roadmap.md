@@ -10,9 +10,9 @@
 
 ### 前置：扩展到 7 Phase
 
-**现状：** Watchdog 硬编码 5 phase。tdd-pipeline skill 已演进到 7 phase（+Phase 6 Pre-release Testing + Phase 7 System Quality Audit）。
+**现状：** Watchdog 硬编码 5 phase。tdd-pipeline v0.8.0（master 分支）定义 7 phase：Phase 1-5 creation（Ralph loop）+ Phase 6 Pre-Release Testing（validation closure）+ Phase 7 System Quality Audit（16-pattern grep catalog + pair discovery）。
 
-**目标：** Watchdog 对齐 7 phase。扩展 schema（CheckpointEvent）、transitions（Phase 6/7 转换）、FALLBACK_PATTERNS（Phase 6/7 deliverable patterns）、intercept-rules（Phase 6/7 覆盖）。
+**目标：** Watchdog 对齐 7 phase。扩展 schema（CheckpointEvent）、transitions（Phase 6/7 转换）、FALLBACK_PATTERNS（Phase 6/7 deliverable patterns）、intercept-rules（Phase 6/7 覆盖）。Phase 6 的 quality mechanism 非 Ralph loop（testing flow + 追问），Phase 7 是增量式审计（非 Ralph loop），Watchdog 需适配。
 
 **优先级：** 在 Phase 2.1 之前完成（GPAV 需要知道正确的 phase 数量）。
 

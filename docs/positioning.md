@@ -100,17 +100,19 @@ Monitored tools         →    watchdog.jsonc
 
 ### Phase 数量
 
-tdd-pipeline 当前为 **7 phase**：
+tdd-pipeline v0.8.0 定义了 **7 phase**：
 
-| Phase | 名称 | Deliverable | Ralph Review |
-|-------|------|-------------|-------------|
-| 1 | Product Design | Requirements Document | ✅ |
-| 2 | Technical Solution | Technical Design Document | ✅ |
-| 3 | Test Plan | Test Plan Document | ✅ |
-| 4 | Test Code | Test Files (all failing) | ✅ |
-| 5 | Business Code | Working Business Code | ✅ |
-| 6 | Pre-Release Testing | Bug root cause analysis, regression | ✅ |
-| 7 | System Quality Audit | Architecture/quality review | ✅ |
+| Phase | 名称 | Deliverable | Quality Mechanism |
+|-------|------|-------------|-------------------|
+| 1 | Product Design | Requirements Document | Ralph design review |
+| 2 | Technical Solution | Technical Design Document | Ralph design review |
+| 3 | Test Plan | Test Plan Document | Ralph design review |
+| 4 | Test Code | Test Files (all failing) | Ralph code review |
+| 5 | Business Code | Working Business Code | Ralph code review |
+| 6 | Pre-Release Testing | Release Gate Checklist (with evidence) | Testing flow + 追问 + user go/no-go |
+| 7 | System Quality Audit | Audit findings (16-pattern catalog) | Grep-powered pattern scan + pair discovery + execution-order analysis |
+
+Phase 1-5 是 creation phase（Ralph loop review），Phase 6 是 validation closure（独立测试流程），Phase 7 是增量式系统审计（Phase 6 完成后运行，用 16-pattern catalog 发现 Phase 6 漏掉的问题）。
 
 Watchdog 当前硬编码 5 phase，需扩展到 7 phase（前置任务，应在 Phase 2.1 之前完成）。
 
@@ -138,7 +140,7 @@ Watchdog 当前硬编码 5 phase，需扩展到 7 phase（前置任务，应在 
 | Phase 0 | Core 提取（包拆分、build 系统） | ✅ v1.2.0 |
 | Phase 1 | Watchdog 状态机 + Checkpoint Tool（5 phase） | ✅ v0.1.0 |
 | Phase 2 | Active Monitoring（Observer + Interceptor + Articulation） | ✅ v0.2.0 |
-| **前置** | **扩展到 7 phase（对齐 tdd-pipeline）** | 📋 **待实现** |
+| **前置** | **扩展到 7 phase（对齐 tdd-pipeline v0.8.0）** | 📋 **待实现** |
 | Phase 2.1 | Ralph Loop 完整性（GPAV + RPS） | 📋 设计完成 |
 | Phase 3 | Escalation + Idle Monitoring | ⏳ 未开始 |
 | Phase 4 | Aristotle 集成（PROCESS_VIOLATION + 双向规则闭环） | ⏳ 未开始 |
