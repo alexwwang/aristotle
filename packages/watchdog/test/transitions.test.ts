@@ -405,6 +405,27 @@ describe('state preconditions', () => {
     }
   })
 
+  it('rejects ralph_round_complete with empty contested_resolutions when openContested is non-empty', () => {
+    const state = makeRalphState({}, {
+      openContested: [
+        { id: 'M-1', firstContestedRound: 1, disputeRounds: 0, description: 'issue' },
+      ],
+    })
+    const result = validateTransition(
+      'ralph_round_complete',
+      basePayload({
+        phase: 1, round: 2,
+        tally: { C: 0, H: 0, M: 0, L: 0, I: 0 },
+        contested_resolutions: [],
+      }),
+      state,
+    )
+    expect(result.valid).toBe(false)
+    if (!result.valid) {
+      expect(result.violation).toBe('Missing contested_resolutions')
+    }
+  })
+
   it('rejects ralph_terminate(gate_pass) when round < MIN_GATE_ROUNDS', () => {
     const state = makeRalphState({}, {
       round: MIN_GATE_ROUNDS - 1,

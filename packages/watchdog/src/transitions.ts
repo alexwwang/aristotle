@@ -405,7 +405,8 @@ export function validateTransition(
           `Expected round ${state.ralph.round + 1}, got ${payload.round}.`,
         )
       }
-      if (state.ralph.openContested.length > 0 && payload.contested_resolutions == null) {
+      if (state.ralph.openContested.length > 0 &&
+        (payload.contested_resolutions == null || !Array.isArray(payload.contested_resolutions) || payload.contested_resolutions.length === 0)) {
         return fail(
           'Missing contested_resolutions',
           'There are open contested issues that must be resolved in this round.',
