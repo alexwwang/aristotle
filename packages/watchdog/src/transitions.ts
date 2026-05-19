@@ -319,6 +319,33 @@ export function validateTransition(
       if (!isInt(payload.round) || payload.round < 1) {
         return fail('Invalid round', 'ralph_round_finding requires round to be a positive integer.')
       }
+      if (!Array.isArray(payload.findings) || (payload.findings as unknown[]).length === 0) {
+        return fail('Missing findings', 'ralph_round_finding requires a non-empty findings array.')
+      }
+      // Validate each finding structure
+      const validSeverities = new Set(['C', 'H', 'M', 'L', 'I'])
+      for (let i = 0; i < (payload.findings as unknown[]).length; i++) {
+        const f = (payload.findings as Record<string, unknown>[])[i]
+        if (!f || typeof f !== 'object') {
+          return fail(`Invalid finding at index ${i}`, 'Each finding must be an object.')
+        }
+        if (!validSeverities.has(f.severity as string)) {
+          return fail(`Invalid severity at index ${i}`, `Finding severity must be one of C/H/M/L/I, got "${f.severity}".`)
+        }
+        if (typeof f.description !== 'string' || (f.description as string).length === 0) {
+          return fail(`Missing description at index ${i}`, 'Each finding must have a non-empty description.')
+        }
+        if (f.original !== undefined) {
+          if (!validSeverities.has(f.original as string)) {
+            return fail(`Invalid original severity at index ${i}`, `Original severity must be one of C/H/M/L/I, got "${f.original}".`)
+          }
+          if (severityLt(f.severity as string, f.original as string)) {
+            if (typeof f.downgrade_reason !== 'string' || (f.downgrade_reason as string).length === 0) {
+              return fail(`Missing downgrade_reason at index ${i}`, `Severity downgrade from ${f.original} to ${f.severity} requires a downgrade_reason.`)
+            }
+          }
+        }
+      }
       break
     }
 
@@ -483,50 +510,7 @@ export function validateTransition(
           `Expected round ${state.ralph.round + 1}, got ${round}.`,
         )
       }
-      if (!Array.isArray(payload.findings) || (payload.findings as unknown[]).length === 0) {
-        return fail(
-          'Missing findings',
-          'ralph_round_finding requires a non-empty findings array.',
-        )
-      }
-      // Validate each finding
-      const validSeverities = new Set(['C', 'H', 'M', 'L', 'I'])
-      for (let i = 0; i < (payload.findings as unknown[]).length; i++) {
-        const f = (payload.findings as Record<string, unknown>[])[i]
-        if (!f || typeof f !== 'object') {
-          return fail(`Invalid finding at index ${i}`, 'Each finding must be an object.')
-        }
-        if (!validSeverities.has(f.severity as string)) {
-          return fail(
-            `Invalid severity at index ${i}`,
-            `Finding severity must be one of C/H/M/L/I, got "${f.severity}".`,
-          )
-        }
-        if (typeof f.description !== 'string' || (f.description as string).length === 0) {
-          return fail(
-            `Missing description at index ${i}`,
-            'Each finding must have a non-empty description.',
-          )
-        }
-        // AC-G5: downgrade from higher severity requires reason
-        if (f.original !== undefined) {
-          if (!validSeverities.has(f.original as string)) {
-            return fail(
-              `Invalid original severity at index ${i}`,
-              `Original severity must be one of C/H/M/L/I, got "${f.original}".`,
-            )
-          }
-          if (severityLt(f.severity as string, f.original as string)) {
-            // severity is less than original → downgrade
-            if (typeof f.downgrade_reason !== 'string' || (f.downgrade_reason as string).length === 0) {
-              return fail(
-                `Missing downgrade_reason at index ${i}`,
-                `Severity downgrade from ${f.original} to ${f.severity} requires a downgrade_reason.`,
-              )
-            }
-          }
-        }
-      }
+      // Note: findings structural validation is in the payload section (M-7 compliance)
       return ok()
     }
 

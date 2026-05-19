@@ -165,7 +165,7 @@ export interface AuditLogEntry {
   event: CheckpointEvent | 'INTERCEPT' | 'PROMPT_INJECTION_DETECTED'
   phase: number
   round?: number
-  decision: 'PASS' | 'BLOCK'
+  decision: 'PASS' | 'BLOCK' | 'WARN'
   violation?: string
 }
 

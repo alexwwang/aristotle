@@ -6,6 +6,7 @@ import type {
   ObservationEntry,
   PipelineState,
   ProjectIndex,
+  RalphLoopState,
 } from './schema.js';
 
 export class PipelineStore {
@@ -134,9 +135,10 @@ export class PipelineStore {
     }
     // Migration: pre-v3 ralph state lacks roundRecords and autoValidated
     if (state?.ralph && !('roundRecords' in state.ralph)) {
+      const ralph: RalphLoopState = state.ralph
       state = {
         ...state,
-        ralph: { ...state.ralph, roundRecords: [], autoValidated: false },
+        ralph: { ...ralph, roundRecords: [], autoValidated: false },
       };
     }
     return state;
