@@ -64,7 +64,8 @@ describe('validateArticulation', () => {
     expect(result.dimensions.what_it_protects).toBe(false)
     expect(result.dimensions.key_risks).toBe(false)
     expect(result.dimensions.why_approach_works).toBe(false)
-    expect(result.missingDimension).toBe('what_it_protects')
+    expect(result.missingDimension).toBe('all')
+    expect(result.guidance).toContain('too short')
   })
 
   // ── TC-C-06: Empty string ─────────────────────────────────────────────────
@@ -74,7 +75,7 @@ describe('validateArticulation', () => {
     expect(result.dimensions.what_it_protects).toBe(false)
     expect(result.dimensions.key_risks).toBe(false)
     expect(result.dimensions.why_approach_works).toBe(false)
-    expect(result.missingDimension).toBe('what_it_protects')
+    expect(result.missingDimension).toBe('all')
   })
 
   // ── TC-C-07: All dimensions missing ───────────────────────────────────────

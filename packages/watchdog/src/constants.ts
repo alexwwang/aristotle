@@ -2,6 +2,14 @@ export const MAX_RALPH_ROUNDS = 10
 export const MIN_GATE_ROUNDS = 5
 export const EARLY_STOP_CONSECUTIVE = 2
 export const STALE_THRESHOLD_MS = 4 * 60 * 60 * 1000  // 4 hours
+
+/**
+ * The phase where only test files may be written (no business code).
+ * This is a tdd-pipeline domain constraint: Phase 4 = Test Code in all pipeline sizes.
+ * Business code writes in Phase 5+ require this phase's gate to be passed first.
+ */
+export const TEST_CODE_PHASE = 4
+
 /** Max consecutive articulation failures before degradation. */
 export const ARTICULATION_MAX_FAILURES = 3
 

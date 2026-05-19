@@ -1,5 +1,6 @@
 import type { FileClassification } from './file-classifier.js'
 import type { PipelineState } from './schema.js'
+import { TEST_CODE_PHASE } from './constants.js'
 
 // Deviation from TechSpec §3.2.1: spec defines applies()/check() two-phase design.
 // Implementation uses single evaluate() method returning { blocked, reason }.
@@ -15,30 +16,30 @@ export interface InterceptRule {
 export function createRules(): InterceptRule[] {
   return [
     // Rule 1 (AC-3): Business Code Gate (v1.8)
-    // Phase 4 + business_code → unconditional block (Phase 4 writes test files only)
-    // Phase 5+ + business_code + Phase 4 gate not passed → blocked
+    // TEST_CODE_PHASE + business_code → unconditional block (test phase writes test files only)
+    // Phase 5+ + business_code + TEST_CODE_PHASE gate not passed → blocked
     {
       id: 'NO_BUSINESS_CODE_BEFORE_PHASE5',
       evaluate(_tool: string, _path: string, classification: FileClassification, state: PipelineState) {
         if (
-          state.currentPhase >= 4 &&
+          state.currentPhase >= TEST_CODE_PHASE &&
           classification.category === 'business_code'
         ) {
           if (
-            state.currentPhase === 4 ||
-            !state.phases?.[4]?.ralphCompleted ||
-            !state.phases?.[4]?.userApproved
+            state.currentPhase === TEST_CODE_PHASE ||
+            !state.phases?.[TEST_CODE_PHASE]?.ralphCompleted ||
+            !state.phases?.[TEST_CODE_PHASE]?.userApproved
           ) {
-          const phase4Rec = state.phases?.[4]
-          const phase4Status = !phase4Rec
-            ? 'Phase 4 not yet entered — complete earlier phases first'
-            : !phase4Rec.ralphCompleted
-              ? 'Phase 4 Ralph loop incomplete'
-              : 'Phase 4 awaiting user approval'
+          const testPhaseRec = state.phases?.[TEST_CODE_PHASE]
+          const testPhaseStatus = !testPhaseRec
+            ? `Phase ${TEST_CODE_PHASE} not yet entered — complete earlier phases first`
+            : !testPhaseRec.ralphCompleted
+              ? `Phase ${TEST_CODE_PHASE} Ralph loop incomplete`
+              : `Phase ${TEST_CODE_PHASE} awaiting user approval`
           return {
             blocked: true,
             reason:
-              `⛔ [TDD Watchdog] Phase ${state.currentPhase} violation: business code write blocked. ${phase4Status}. Business code (src/) must not be written during Phase 4 (Test Code). Phase 4 writes test files only — stubs and mocks belong in test directories.`,
+              `⛔ [TDD Watchdog] Phase ${state.currentPhase} violation: business code write blocked. ${testPhaseStatus}. Business code (src/) must not be written during Phase ${TEST_CODE_PHASE} (Test Code). Phase ${TEST_CODE_PHASE} writes test files only — stubs and mocks belong in test directories.`,
             }
           }
         }

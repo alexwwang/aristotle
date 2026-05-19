@@ -51,7 +51,8 @@ export function validateArticulation(text: string): ArticulationResult {
         key_risks: false,
         why_approach_works: false,
       },
-      missingDimension: 'what_it_protects',
+      missingDimension: 'all',
+      guidance: 'Articulation is too short — provide at least 50 characters covering all three dimensions: what_it_protects, key_risks, why_approach_works.',
     }
   }
 
