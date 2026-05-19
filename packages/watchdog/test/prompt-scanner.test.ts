@@ -92,4 +92,15 @@ describe('Phase 2.1 RPS — PromptScanner', () => {
     const result = scanPrompt('The running total of issues is 5.')
     expect(result.flagged).toBe(true)
   })
+
+  it('TC-R-18: empty string prompt returns clean (not bypass) — R6 regression', () => {
+    const result = scanPrompt('')
+    expect(result.flagged).toBe(false)
+    expect(result.matchedPatterns).toEqual([])
+  })
+
+  it('TC-R-19: whitespace-only prompt returns clean', () => {
+    const result = scanPrompt('   \n\t  ')
+    expect(result.flagged).toBe(false)
+  })
 })

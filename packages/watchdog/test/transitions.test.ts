@@ -1023,7 +1023,7 @@ describe('applyTransition', () => {
     const state = makeState({
       currentPhase: 1,
       phaseStatus: 'awaiting_approval',
-      ralph: { phase: 1, round: 5, consecutiveZero: 0, tallyHistory: [], openContested: [], escalated: false, escalatedAt: null, termination: 'gate_pass' },
+      ralph: { phase: 1, round: 5, consecutiveZero: 0, tallyHistory: [], openContested: [], escalated: false, escalatedAt: null, termination: 'gate_pass', roundRecords: [], autoValidated: false },
       phases: {
           1: {
             phase: 1,
@@ -1259,11 +1259,13 @@ describe('full pipeline flow', () => {
           phase: 1,
           round: 2,
           consecutiveZero: 0,
-          tallyHistory: [{ round: 1, C: 0, H: 0, M: 0, L: 0, I: 0 }],
+          tallyHistory: [{ round: 1, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW }],
           openContested: [{ id: 'issue-42', description: 'existing issue', firstContestedRound: 1, disputeRounds: 0 }],
           escalated: false,
           escalatedAt: null,
           termination: null,
+          roundRecords: [],
+          autoValidated: false,
         },
         phases: {
           1: {
@@ -1823,6 +1825,23 @@ describe('Phase 2.1 GPAV — migration', () => {
     }), state)
     expect(result.valid).toBe(true)
   })
+
+  it('TC-G-39: max_rounds fallback to legacy when completedRecords empty (KI-29)', () => {
+    const state = makeRalphState({}, {
+      round: MAX_RALPH_ROUNDS,
+      autoValidated: true,
+      tallyHistory: Array.from({ length: MAX_RALPH_ROUNDS }, (_, i) => ({
+        round: i + 1,
+        C: i === 9 ? 1 : 0, H: 0, M: 0, L: 0, I: 0,
+        timestamp: NOW,
+      })),
+      roundRecords: [{ round: 11, counts: { C: 0, H: 0, M: 0, L: 0, I: 1 }, submittedAt: NOW }],
+    })
+    const result = validateTransition('ralph_terminate', basePayload({
+      phase: 1, termination: 'max_rounds',
+    }), state)
+    expect(result.valid).toBe(true)
+  })
 })
 
 describe('Phase 2.1 GPAV — edge cases', () => {
@@ -1892,6 +1911,20 @@ describe('Phase 2.1 GPAV — edge cases', () => {
       findings: [{ severity: 'I', description: 'info' }],
     }), state)
     expect(result.valid).toBe(true)
+  })
+
+  it('TC-G-38: rejects downgrade with empty-string reason (KI-26)', () => {
+    const state = makeRalphState({}, { round: 1 })
+    const result = validateTransition('ralph_round_finding', basePayload({
+      phase: 1, round: 2,
+      findings: [
+        { severity: 'M', description: 'downgraded', original: 'H', downgrade_reason: '' },
+      ],
+    }), state)
+    expect(result.valid).toBe(false)
+    if (!result.valid) {
+      expect(result.violation).toContain('downgrade_reason')
+    }
   })
 })
 

@@ -539,6 +539,30 @@ describe('Observer', () => {
       )
     })
 
+    it('TC-R-O5: detects injection in BOTH prompt and description simultaneously (KI-27)', async () => {
+      mockCache.get.mockReturnValue(
+        makeState({
+          currentPhase: 1,
+          phaseStatus: 'ralph_loop',
+          ralph: { round: 2 },
+        }),
+      )
+
+      await observer.handle('Task', {
+        prompt: 'R1 found a critical bug',
+        description: 'Previous round 3 found more issues here.',
+      }, 'out', 'sess-001', 'call-rps-5')
+
+      // Should accumulate matches from BOTH fields in the violation string
+      expect(mockStore.appendAudit).toHaveBeenCalledWith(
+        'proj-test', 'run-test',
+        expect.objectContaining({
+          event: 'PROMPT_INJECTION_DETECTED',
+          violation: expect.stringMatching(/R1 found.*round 3 found|round 3 found.*R1 found/),
+        }),
+      )
+    })
+
     it('TC-R-O4: detects injection via args.description when args.prompt absent', async () => {
       mockCache.get.mockReturnValue(
         makeState({
