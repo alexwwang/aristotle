@@ -48,11 +48,15 @@ export class Observer {
     const key = `${projectId}/${runId}`
     // L3 fix: if handleDegradation failed for this pipeline, treat as degraded
     if (this.handlerFailedPipelines.has(key)) return true
-    if (this.degradedRuns.has(key)) return true
-    const rounds = this.degradedRounds.get(key)
+    // KI-7 fix: degradedRuns (non-round degradation) only applies when no specific round is queried.
+    // A per-round query should only check degradedRounds, so that a transient observer error
+    // during non-ralph activity does not disable AC-2 for all subsequent rounds.
     if (round === undefined) {
+      if (this.degradedRuns.has(key)) return true
+      const rounds = this.degradedRounds.get(key)
       return rounds !== undefined && rounds.size > 0
     }
+    const rounds = this.degradedRounds.get(key)
     return rounds?.has(round) ?? false
   }
 

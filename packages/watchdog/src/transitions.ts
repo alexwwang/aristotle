@@ -46,17 +46,17 @@ function isNonNegativeInt(val: unknown): boolean {
   return isInt(val) && val >= 0
 }
 
-function checkTally(tally: unknown): { ok: boolean; msg?: string } {
+function checkTally(tally: unknown): { ok: boolean; errorType?: 'missing' | 'type' } {
   if (typeof tally !== 'object' || tally === null) {
-    return { ok: false, msg: 'tally must be an object' }
+    return { ok: false, errorType: 'type' }
   }
   const t = tally as Record<string, unknown>
   for (const key of ['C', 'H', 'M', 'L', 'I']) {
     if (!(key in t)) {
-      return { ok: false, msg: `tally missing required field '${key}'` }
+      return { ok: false, errorType: 'missing' }
     }
     if (!isNonNegativeInt(t[key])) {
-      return { ok: false, msg: `tally.${key} must be a non-negative integer` }
+      return { ok: false, errorType: 'type' }
     }
   }
   return { ok: true }
@@ -134,7 +134,7 @@ export function validateTransition(
       }
       const tc = checkTally(payload.tally)
       if (!tc.ok) {
-        if (tc.msg?.includes('must be')) {
+        if (tc.errorType === 'type') {
           return fail(
             'Invalid tally field type',
             'ralph_round_complete requires tally with C, H, M, L, I as non-negative integers.',

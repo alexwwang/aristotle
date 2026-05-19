@@ -23,9 +23,52 @@ export const FALLBACK_PATTERNS: Record<number, string[]> = {
 /** Default tools to monitor for file writes. */
 export const DEFAULT_MONITORED_TOOLS = ['edit', 'write']
 
-/** Strip single-line (//) and multi-line block comments from JSON string. */
+/**
+ * Strip single-line (//) and multi-line block comments from JSON string.
+ * KI-5 fix: respects quoted strings — does not strip // or /* inside "..." values.
+ */
 function stripJsonComments(jsonc: string): string {
-  return jsonc.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '')
+  // Process character-by-character to track string context.
+  // Regex-only approaches can't correctly handle escaped quotes or nested strings.
+  let inString = false
+  let result = ''
+  let i = 0
+  while (i < jsonc.length) {
+    const ch = jsonc[i]
+    if (inString) {
+      result += ch
+      if (ch === '\\') {
+        // Escaped character — consume next char too
+        i++
+        if (i < jsonc.length) result += jsonc[i]
+      } else if (ch === '"') {
+        inString = false
+      }
+      i++
+      continue
+    }
+    if (ch === '"') {
+      inString = true
+      result += ch
+      i++
+      continue
+    }
+    // Block comment /*
+    if (ch === '/' && i + 1 < jsonc.length && jsonc[i + 1] === '*') {
+      const end = jsonc.indexOf('*/', i + 2)
+      i = end === -1 ? jsonc.length : end + 2
+      continue
+    }
+    // Line comment //
+    if (ch === '/' && i + 1 < jsonc.length && jsonc[i + 1] === '/') {
+      const end = jsonc.indexOf('\n', i + 2)
+      i = end === -1 ? jsonc.length : end + 1
+      continue
+    }
+    result += ch
+    i++
+  }
+  return result
 }
 
 /**
