@@ -11,6 +11,7 @@ import {
   EARLY_STOP_CONSECUTIVE,
   MAX_RALPH_ROUNDS,
   MIN_GATE_ROUNDS,
+  TEST_CODE_PHASE,
 } from './constants.js'
 
 export interface TransitionResult {
@@ -231,10 +232,10 @@ export function validateTransition(
     }
 
     case 'test_evidence': {
-      if (payload.phase !== 4) {
+      if (payload.phase !== TEST_CODE_PHASE) {
         return fail(
           'Invalid phase for test evidence',
-          'test_evidence requires phase to be 4.',
+          `test_evidence requires phase to be ${TEST_CODE_PHASE}.`,
         )
       }
       if (!isNonEmptyString(payload.evidence_file)) {
@@ -299,6 +300,12 @@ export function validateTransition(
         return fail(NO_ACTIVE_RUN, START_FIRST)
       }
       const phase = payload.phase as number
+      if (phase <= state.currentPhase) {
+        return fail(
+          'Phase regression not allowed',
+          `Cannot enter phase ${phase}: pipeline is already at phase ${state.currentPhase}. Phase transitions must be monotonically forward.`,
+        )
+      }
       if (phase > state.totalPhases) {
         return fail(
           'Phase exceeds pipeline total',
@@ -449,10 +456,10 @@ export function validateTransition(
 
     case 'test_evidence': {
       if (state === null) return fail(NO_ACTIVE_RUN, START_FIRST)
-      if (state.currentPhase < 4) {
+      if (state.currentPhase < TEST_CODE_PHASE) {
         return fail(
           'Invalid phase for test evidence',
-          'test_evidence can only be submitted in phase 4 or later.',
+          `test_evidence can only be submitted in phase ${TEST_CODE_PHASE} or later.`,
         )
       }
       return ok()
@@ -603,6 +610,9 @@ export function applyTransition(
         throw new Error('BUG: state must not be null for phase_enter')
       }
       const phase = payload.phase as number
+      if (phase <= state.currentPhase) {
+        throw new Error(`BUG: phase regression from ${state.currentPhase} to ${phase} — validateTransition should have caught this`)
+      }
       return {
         ...state,
         currentPhase: phase as PipelineState['currentPhase'],

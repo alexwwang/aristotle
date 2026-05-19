@@ -441,21 +441,36 @@ describe('CheckpointHandler', () => {
     })
 
     it('generates different runIds for successive calls', async () => {
+      // First pipeline
       const result1 = await handler.handle(
         'pipeline_start',
         JSON.stringify({ description: 'first' }),
         CONTEXT,
       )
+      const parsed1 = parseResult(result1)
+      expect(parsed1.ok).toBe(true)
+
+      // Complete the first pipeline so second can start
+      const runId1 = parsed1.state!.runId
+      mockStore._setState(PROJECT_ID, runId1, makeState({
+        runId: runId1,
+        currentPhase: 5,
+        phaseStatus: 'awaiting_approval',
+        phases: {
+          5: { phase: 5, enteredAt: NOW, ralphCompleted: true, ralphTermination: 'gate_pass', userApproved: true, approvedAt: NOW, articulationAttempted: false, articulationVerified: false, articulationDegraded: false, articulationFailures: 0 },
+        },
+      }))
+      await handler.handle('phase_complete', JSON.stringify({ phase: 5 }), CONTEXT)
+
+      // Second pipeline
       const result2 = await handler.handle(
         'pipeline_start',
         JSON.stringify({ description: 'second' }),
         CONTEXT,
       )
-      const parsed1 = parseResult(result1)
       const parsed2 = parseResult(result2)
-      if (parsed1.ok && parsed2.ok) {
-        expect(parsed1.state.runId).not.toBe(parsed2.state.runId)
-      }
+      expect(parsed2.ok).toBe(true)
+      expect(parsed1.state!.runId).not.toBe(parsed2.state!.runId)
     })
   })
 

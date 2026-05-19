@@ -552,8 +552,8 @@ describe('Integration Tests Phase 2', () => {
   // ── TC-I-13: pipeline_start deterministic timestamp/ID injection ──────────
   it('TC-I-13: pipeline_start deterministic timestamp/ID injection', async () => {
     const newState = applyTransition('pipeline_start',
-      { description: 'test', _now: '2026-06-01T00:00:00Z', _runId: 'run-deterministic', _ownerSessionId: SESSION_ID },
-      null, PROJECT_ID)
+      { description: 'test', _now: '2026-06-01T00:00:00Z', _runId: 'run-deterministic', _ownerSessionId: SESSION_ID, _projectId: PROJECT_ID },
+      null)
 
     expect(newState.startedAt).toBe('2026-06-01T00:00:00Z')
     expect(newState.runId).toBe('run-deterministic')
