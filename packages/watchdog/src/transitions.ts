@@ -590,8 +590,13 @@ export function validateTransition(
             }
           }
         } else {
-          // autoValidated=true but no completed rounds with records — fall back to legacy checks
-          // This prevents a bypass where agent submits only uncommitted findings.
+          // [KI-24] Known design decision: when autoValidated=true but completedRecords is empty
+          // (agent activated GPAV mid-loop by submitting findings for an uncommitted round),
+          // we fall back to legacy tallyHistory checks. This is intentional — legacy rounds
+          // were validated through ralph_round_complete. Once SKILL.md is updated to include
+          // ralph_round_finding, agents will use GPAV from round 1 and this path becomes
+          // unreachable. See KnownIssues-Watchdog.md KI-24 for full analysis.
+          // Reviewers: this is a documented design choice, NOT a defect.
           if (termination === 'gate_pass') {
             if (ralph.round < MIN_GATE_ROUNDS) {
               return fail(
