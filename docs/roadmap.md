@@ -1,10 +1,49 @@
 # Aristotle Roadmap
 
-> **Phase 0 核心提取完成。** Core 包（10 模块 150 测试）+ Aristotle 包（6 模块 115 测试）已实现并通过 4 轮 Ralph Loop 审查。当前测试总量：405 pytest + 150 core vitest + 115 aristotle vitest + 162 bridge vitest + 103 static + 64 regression = 999 total。详见 [testing.md](./testing.md)。
+> **Phase 2 AM 完成。** Core 包（10 模块 167 测试）+ Reflection 包（6 模块 115 测试）+ Watchdog 包（15 模块 270 测试）= **552 vitest 全绿** + 405 pytest。详见 [testing.md](./testing.md)。产品定位见 [positioning.md](./positioning.md)。
 
 ---
 
-## V1.3 — 功能补全
+## TDD Watchdog (packages/watchdog)
+
+> 独立于 Aristotle 反思引擎的实时流程监控产品。可单独安装使用。详见 [positioning.md](./positioning.md)。
+
+### 前置：扩展到 7 Phase
+
+**现状：** Watchdog 硬编码 5 phase。tdd-pipeline skill 已演进到 7 phase（+Phase 6 Pre-release Testing + Phase 7 System Quality Audit）。
+
+**目标：** Watchdog 对齐 7 phase。扩展 schema（CheckpointEvent）、transitions（Phase 6/7 转换）、FALLBACK_PATTERNS（Phase 6/7 deliverable patterns）、intercept-rules（Phase 6/7 覆盖）。
+
+**优先级：** 在 Phase 2.1 之前完成（GPAV 需要知道正确的 phase 数量）。
+
+### Watchdog Phase 2.1 — Ralph Loop 完整性
+
+**需求文档**: `design_plan/Phase2.1-RalphLoopIntegrity.md`（已完成）
+
+| 功能 | 解决的违规 Case | 优先级 |
+|------|----------------|--------|
+| **GPAV**（Gate Pass Auto-Validation） | #1-#5, #9-#10 — 虚假 Gate Pass、严重度降级 | Core |
+| **RPS**（Reviewer Prompt Sanitization） | #11-#12 — 向 reviewer prompt 注入前轮上下文 | Core |
+
+实施后违规覆盖率从 22% 提升到 74%（17/23 cases）。
+
+### Watchdog Phase 3 — Escalation + Idle Monitoring
+
+Ralph Loop 卡住时自动升级给用户。双通道机制：同步（checkpoint 返回值）+ 异步（session.idle prompt）。
+
+### Watchdog Phase 4 — Aristotle 集成
+
+将 Watchdog 审计日志接入 Aristotle 反思引擎，形成"检测→学习→预防"闭环。
+
+### Watchdog Phase 5 — 安装体验
+
+安装脚本、README 更新、dogfood 验证。
+
+---
+
+## Aristotle 反思引擎 (packages/reflection)
+
+### V1.3 — 功能补全
 
 ### V1.3a 命令参数解析
 
@@ -121,6 +160,8 @@
 | **v1.2** | **Review UX** | **inspect N / show draft / 完善通知内容（Δ + audit_level + confidence + conflicts）/ staging_rule_paths / rule_summary 字段 / 57 新测试** |
 | **v1.3** | **Per-Rec Isolation** | **隔离 per-rec state / config resolver 重构 / 395 pytest** |
 | **Phase 0** | **Core Extraction** | **Core 包 10 模块 150 测试 + Aristotle 包 6 模块 115 测试 + 4 轮 Ralph Loop 审查（R1:4C+4M → R4:0）+ 999 总测试 + tsc 零错误** |
+| **Watchdog Phase 1** | **State Machine + Checkpoint** | **Pipeline 状态机 + tdd_checkpoint tool + PipelineStore + 106 测试** |
+| **Watchdog Phase 2** | **Active Monitoring** | **Observer + Interceptor + Articulation + OMO 4 层防御 + Oracle R1-R9 审查修复 + 552 总测试全绿** |
 
 ---
 
