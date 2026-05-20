@@ -1024,6 +1024,7 @@ export function applyTransition(
         ...state,
         ralph: {
           ...state.ralph,
+          round: Math.max(state.ralph.round, round),
           roundRecords: newRoundRecords,
           autoValidated: true,
         },
