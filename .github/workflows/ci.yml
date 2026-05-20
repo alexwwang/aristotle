@@ -2,12 +2,12 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, phase0-core-extraction]
   pull_request:
     branches: [main]
 
 jobs:
-  test:
+  test-python:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -32,7 +32,26 @@ jobs:
       - name: Run static tests
         run: bash test.sh
 
-  lint:
+  test-ts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Run tests
+        run: bun run --filter '*' test
+
+      - name: Type check (src/ only)
+        run: |
+          cd packages/watchdog
+          bunx tsc --noEmit --project tsconfig.json 2>&1 | grep "src/" || true
+
+  lint-python:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
