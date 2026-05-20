@@ -131,7 +131,7 @@ export class PipelineStore {
     let state = this.stateStore.read<PipelineState>(this.stateKey(projectId, runId));
     // Migration: pre-v2 state files lack totalPhases field
     if (state && !('totalPhases' in state)) {
-      state = { ...state, totalPhases: 5 };
+      (state as Record<string, unknown>).totalPhases = 5;
     }
     // Migration: pre-v3 ralph state lacks roundRecords and autoValidated
     if (state?.ralph && !('roundRecords' in state.ralph)) {
