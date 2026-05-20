@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { validateTransition, applyTransition } from '../src/transitions.js'
 import { SCHEMA_VERSION } from '../src/schema.js'
 import type { PipelineState, RalphLoopState, PhaseRecord } from '../src/schema.js'
-import { MAX_RALPH_ROUNDS, MIN_GATE_ROUNDS, EARLY_STOP_CONSECUTIVE } from '../src/constants.js'
+import { MAX_RALPH_ROUNDS, MIN_GATE_ROUNDS, EARLY_STOP_CONSECUTIVE, MAX_FINDINGS_PER_ROUND, MAX_FINDING_DESCRIPTION_LENGTH } from '../src/constants.js'
 
 function makeState(overrides: Partial<PipelineState> = {}): PipelineState {
   return {
@@ -1917,6 +1917,54 @@ describe('Phase 2.1 GPAV — edge cases', () => {
     expect(result.valid).toBe(false)
     if (!result.valid) {
       expect(result.violation).toContain('downgrade_reason')
+    }
+  })
+
+  it('TC-G-42: rejects findings array exceeding MAX_FINDINGS_PER_ROUND, accepts at limit (KI-47)', () => {
+    const state = makeRalphState({}, { round: 1 })
+    // Boundary-positive: exactly MAX_FINDINGS_PER_ROUND accepted
+    const atLimit = Array.from({ length: MAX_FINDINGS_PER_ROUND }, (_, i) => ({
+      severity: 'L' as const, description: `finding ${i}`,
+    }))
+    const atLimitResult = validateTransition('ralph_round_finding', basePayload({
+      phase: 1, round: 2,
+      findings: atLimit,
+    }), state)
+    expect(atLimitResult.valid).toBe(true)
+
+    // Boundary-negative: limit + 1 rejected
+    const overLimit = Array.from({ length: MAX_FINDINGS_PER_ROUND + 1 }, (_, i) => ({
+      severity: 'L' as const, description: `finding ${i}`,
+    }))
+    const result = validateTransition('ralph_round_finding', basePayload({
+      phase: 1, round: 2,
+      findings: overLimit,
+    }), state)
+    expect(result.valid).toBe(false)
+    if (!result.valid) {
+      expect(result.violation).toBe('Too many findings')
+      expect(result.guidance).toContain(String(MAX_FINDINGS_PER_ROUND))
+    }
+  })
+
+  it('TC-G-43: rejects description exceeding MAX_FINDING_DESCRIPTION_LENGTH, accepts at limit (KI-47)', () => {
+    const state = makeRalphState({}, { round: 1 })
+    // Boundary-positive: exactly MAX_FINDING_DESCRIPTION_LENGTH accepted
+    const atLimitResult = validateTransition('ralph_round_finding', basePayload({
+      phase: 1, round: 2,
+      findings: [{ severity: 'M', description: 'x'.repeat(MAX_FINDING_DESCRIPTION_LENGTH) }],
+    }), state)
+    expect(atLimitResult.valid).toBe(true)
+
+    // Boundary-negative: limit + 1 rejected
+    const result = validateTransition('ralph_round_finding', basePayload({
+      phase: 1, round: 2,
+      findings: [{ severity: 'M', description: 'x'.repeat(MAX_FINDING_DESCRIPTION_LENGTH + 1) }],
+    }), state)
+    expect(result.valid).toBe(false)
+    if (!result.valid) {
+      expect(result.violation).toContain('Description too long')
+      expect(result.guidance).toContain(String(MAX_FINDING_DESCRIPTION_LENGTH))
     }
   })
 })

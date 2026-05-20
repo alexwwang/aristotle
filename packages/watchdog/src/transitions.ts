@@ -11,6 +11,8 @@ import type {
 import { SCHEMA_VERSION } from './schema.js'
 import {
   EARLY_STOP_CONSECUTIVE,
+  MAX_FINDING_DESCRIPTION_LENGTH,
+  MAX_FINDINGS_PER_ROUND,
   MAX_RALPH_ROUNDS,
   MIN_GATE_ROUNDS,
   TEST_CODE_PHASE,
@@ -322,6 +324,9 @@ export function validateTransition(
       if (!Array.isArray(payload.findings) || (payload.findings as unknown[]).length === 0) {
         return fail('Missing findings', 'ralph_round_finding requires a non-empty findings array.')
       }
+      if ((payload.findings as unknown[]).length > MAX_FINDINGS_PER_ROUND) {
+        return fail('Too many findings', `ralph_round_finding accepts at most ${MAX_FINDINGS_PER_ROUND} findings per round, got ${(payload.findings as unknown[]).length}.`)
+      }
       // Validate each finding structure
       const validSeverities = new Set(['C', 'H', 'M', 'L', 'I'])
       for (let i = 0; i < (payload.findings as unknown[]).length; i++) {
@@ -334,6 +339,9 @@ export function validateTransition(
         }
         if (typeof f.description !== 'string' || (f.description as string).length === 0) {
           return fail(`Missing description at index ${i}`, 'Each finding must have a non-empty description.')
+        }
+        if ((f.description as string).length > MAX_FINDING_DESCRIPTION_LENGTH) {
+          return fail(`Description too long at index ${i}`, `Finding description must be at most ${MAX_FINDING_DESCRIPTION_LENGTH} characters, got ${(f.description as string).length}.`)
         }
         if (f.original !== undefined) {
           if (!validSeverities.has(f.original as string)) {
@@ -539,6 +547,9 @@ export function validateTransition(
       // are excluded to prevent gate_pass bypass.
       if (ralph.autoValidated && ralph.roundRecords.length > 0) {
         const completedRecords = ralph.roundRecords.filter(r => r.round <= ralph.round)
+        // KI-22 defensive check: in normal GPAV flow, completedRecords should cover
+        // all rounds. If not, fall through to KI-24 fallback (completedRecords empty
+        // or partial). This branch handles partial coverage gracefully.
         if (completedRecords.length > 0) {
           // Compute consecutiveZero from completed records with strict definition: C=H=M=L=0
           let strictConsecutive = 0

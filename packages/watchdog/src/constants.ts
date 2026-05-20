@@ -18,3 +18,9 @@ export const SESSION_BUFFER_MAX_SIZE = 1000
 
 /** Max number of tracked sessions in SessionBuffer before oldest is evicted. */
 export const MAX_TRACKED_SESSIONS = 50
+
+/** Max number of findings per ralph_round_finding submission. */
+export const MAX_FINDINGS_PER_ROUND = 50
+
+/** Max length of a single finding description in characters. */
+export const MAX_FINDING_DESCRIPTION_LENGTH = 2000
