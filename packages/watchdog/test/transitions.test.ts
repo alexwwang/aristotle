@@ -428,6 +428,27 @@ describe('state preconditions', () => {
     }
   })
 
+  it('rejects ralph_round_complete when contested_resolutions has no matching IDs (KI-34)', () => {
+    const state = makeRalphState({}, {
+      round: 1,
+      openContested: [{ id: 'M-1', firstContestedRound: 1, disputeRounds: 0, description: 'real issue' }],
+    })
+    const result = validateTransition(
+      'ralph_round_complete',
+      basePayload({
+        phase: 1, round: 2,
+        tally: { C: 0, H: 0, M: 0, L: 0, I: 0 },
+        contested_resolutions: [{ id: 'fake-id', action: 'accepted' }],
+      }),
+      state,
+    )
+    expect(result.valid).toBe(false)
+    if (!result.valid) {
+      expect(result.violation).toBe('Invalid contested_resolutions')
+      expect(result.guidance).toContain('M-1')
+    }
+  })
+
   it('rejects ralph_terminate(gate_pass) when round < MIN_GATE_ROUNDS', () => {
     const state = makeRalphState({}, {
       round: MIN_GATE_ROUNDS - 1,
@@ -1497,48 +1518,20 @@ describe('Phase 2.1 GPAV — ralph_round_finding apply', () => {
 })
 
 describe('Phase 2.1 GPAV — ralph_round_complete with autoValidated', () => {
-  it('TC-G-14: rejects when no roundRecord for round', () => {
+  it('TC-G-40: rejects ralph_round_complete when GPAV active (mixed path forbidden)', () => {
     const state = makeRalphState({}, {
       round: 1,
       autoValidated: true,
-      roundRecords: [],
-    })
-    const result = validateTransition('ralph_round_complete', basePayload({
-      phase: 1, round: 2,
-      tally: { C: 0, H: 0, M: 0, L: 0, I: 0 },
-    }), state)
-    expect(result.valid).toBe(false)
-    if (!result.valid) {
-      expect(result.violation).toBe('No findings submitted for round')
-    }
-  })
-
-  it('TC-G-15: accepts when roundRecord matches tally', () => {
-    const state = makeRalphState({}, {
-      round: 1,
-      autoValidated: true,
-      roundRecords: [{ round: 2, counts: { C: 0, H: 0, M: 1, L: 0, I: 0 }, submittedAt: NOW }],
+      roundRecords: [{ round: 1, counts: { C: 0, H: 0, M: 1, L: 0, I: 0 }, submittedAt: NOW }],
     })
     const result = validateTransition('ralph_round_complete', basePayload({
       phase: 1, round: 2,
       tally: { C: 0, H: 0, M: 1, L: 0, I: 0 },
     }), state)
-    expect(result.valid).toBe(true)
-  })
-
-  it('TC-G-16: rejects when agent tally mismatches Watchdog records', () => {
-    const state = makeRalphState({}, {
-      round: 1,
-      autoValidated: true,
-      roundRecords: [{ round: 2, counts: { C: 0, H: 0, M: 1, L: 0, I: 0 }, submittedAt: NOW }],
-    })
-    const result = validateTransition('ralph_round_complete', basePayload({
-      phase: 1, round: 2,
-      tally: { C: 0, H: 0, M: 0, L: 0, I: 0 },  // agent claims 0M but WD recorded 1M
-    }), state)
     expect(result.valid).toBe(false)
     if (!result.valid) {
-      expect(result.violation).toContain('Tally mismatch')
+      expect(result.violation).toBe('GPAV active — ralph_round_complete forbidden')
+      expect(result.guidance).toContain('ralph_terminate')
     }
   })
 
@@ -1946,7 +1939,7 @@ describe('Phase 2.1 GPAV — full pipeline flow (M-2)', () => {
     expect(state.ralph!.autoValidated).toBe(false)
     expect(state.ralph!.roundRecords).toEqual([])
 
-    // Round 1: submit findings + complete
+    // Round 1: submit findings only (GPAV-only, no ralph_round_complete)
     state = applyTransition('ralph_round_finding', basePayload({
       phase: 1, round: 1,
       findings: [{ severity: 'M', description: 'code quality issue' }],
@@ -1955,13 +1948,7 @@ describe('Phase 2.1 GPAV — full pipeline flow (M-2)', () => {
     expect(state.ralph!.roundRecords).toHaveLength(1)
     expect(state.ralph!.roundRecords[0].counts.M).toBe(1)
 
-    state = applyTransition('ralph_round_complete', basePayload({
-      phase: 1, round: 1,
-      tally: { C: 0, H: 0, M: 1, L: 0, I: 0 },
-    }), state)
-    expect(state.ralph!.round).toBe(1)
-
-    // Round 2: submit findings + complete (2x M this time)
+    // Round 2: 2x M findings
     state = applyTransition('ralph_round_finding', basePayload({
       phase: 1, round: 2,
       findings: [
@@ -1971,27 +1958,18 @@ describe('Phase 2.1 GPAV — full pipeline flow (M-2)', () => {
     }), state)
     expect(state.ralph!.roundRecords).toHaveLength(2)
 
-    state = applyTransition('ralph_round_complete', basePayload({
-      phase: 1, round: 2,
-      tally: { C: 0, H: 0, M: 2, L: 0, I: 0 },
-    }), state)
-
-    // Rounds 3-5: zero findings each
+    // Rounds 3-5: zero findings each (C=H=M=L=0)
     for (let r = 3; r <= 5; r++) {
       state = applyTransition('ralph_round_finding', basePayload({
         phase: 1, round: r,
         findings: [{ severity: 'I', description: 'clean round' }],
       }), state)
-      state = applyTransition('ralph_round_complete', basePayload({
-        phase: 1, round: r,
-        tally: { C: 0, H: 0, M: 0, L: 0, I: 1 },
-      }), state)
     }
     expect(state.ralph!.round).toBe(5)
     expect(state.ralph!.roundRecords).toHaveLength(5)
-    // Rounds 3-5: C=H=M=L=0, I=1 → strict consecutive = 3
+    expect(state.ralph!.tallyHistory).toEqual([])
 
-    // ralph_terminate(gate_pass)
+    // ralph_terminate(gate_pass) — uses roundRecords exclusively
     state = applyTransition('ralph_terminate', basePayload({
       phase: 1, termination: 'gate_pass',
     }), state)
@@ -2015,15 +1993,11 @@ describe('Phase 2.1 GPAV — full pipeline flow (M-2)', () => {
     state = applyTransition('phase_enter', basePayload({ phase: 1 }), state)
     state = applyTransition('ralph_loop_start', basePayload({ phase: 1 }), state)
 
-    // Rounds 1-2: have issues
+    // Rounds 1-2: have issues (GPAV-only, no ralph_round_complete)
     for (let r = 1; r <= 2; r++) {
       state = applyTransition('ralph_round_finding', basePayload({
         phase: 1, round: r,
         findings: [{ severity: 'M', description: 'issue' }],
-      }), state)
-      state = applyTransition('ralph_round_complete', basePayload({
-        phase: 1, round: r,
-        tally: { C: 0, H: 0, M: 1, L: 0, I: 0 },
       }), state)
     }
 
@@ -2033,16 +2007,76 @@ describe('Phase 2.1 GPAV — full pipeline flow (M-2)', () => {
         phase: 1, round: r,
         findings: [{ severity: 'I', description: 'clean' }],
       }), state)
-      state = applyTransition('ralph_round_complete', basePayload({
-        phase: 1, round: r,
-        tally: { C: 0, H: 0, M: 0, L: 0, I: 1 },
-      }), state)
     }
 
-    // Verify early_stop passes (2 consecutive strict zeros)
+    expect(state.ralph!.tallyHistory).toEqual([])
+
+    // Verify early_stop passes (2 consecutive strict zeros from roundRecords)
     const result = validateTransition('ralph_terminate', basePayload({
       phase: 1, termination: 'early_stop',
     }), state)
     expect(result.valid).toBe(true)
+  })
+
+  it('TC-G-41: pure GPAV-only pipeline — no ralph_round_complete calls', () => {
+    // pipeline_start
+    let state = applyTransition('pipeline_start', basePayload({
+      description: 'GPAV-only test', _projectId: 'test', _runId: 'run-gpav-only',
+    }), null)
+
+    // phase_enter(1)
+    state = applyTransition('phase_enter', basePayload({ phase: 1 }), state)
+
+    // ralph_loop_start
+    state = applyTransition('ralph_loop_start', basePayload({ phase: 1 }), state)
+    expect(state.ralph!.autoValidated).toBe(false)
+
+    // Round 1: submit findings only (no ralph_round_complete)
+    state = applyTransition('ralph_round_finding', basePayload({
+      phase: 1, round: 1,
+      findings: [{ severity: 'M', description: 'issue in round 1' }],
+    }), state)
+    expect(state.ralph!.autoValidated).toBe(true)
+    expect(state.ralph!.roundRecords).toHaveLength(1)
+    expect(state.ralph!.round).toBe(1)
+
+    // Round 2: submit findings only
+    state = applyTransition('ralph_round_finding', basePayload({
+      phase: 1, round: 2,
+      findings: [{ severity: 'M', description: 'issue in round 2' }],
+    }), state)
+    expect(state.ralph!.roundRecords).toHaveLength(2)
+
+    // Rounds 3-5: zero findings (C=H=M=L=0) — only I-level informational
+    for (let r = 3; r <= 5; r++) {
+      state = applyTransition('ralph_round_finding', basePayload({
+        phase: 1, round: r,
+        findings: [{ severity: 'I', description: 'clean round' }],
+      }), state)
+    }
+    expect(state.ralph!.round).toBe(5)
+    expect(state.ralph!.roundRecords).toHaveLength(5)
+
+    // Verify: tallyHistory is empty (no ralph_round_complete ever called)
+    expect(state.ralph!.tallyHistory).toEqual([])
+    expect(state.ralph!.consecutiveZero).toBe(0)
+
+    // ralph_terminate(gate_pass) — must use GPAV roundRecords, not tallyHistory
+    const termResult = validateTransition('ralph_terminate', basePayload({
+      phase: 1, termination: 'gate_pass',
+    }), state)
+    expect(termResult.valid).toBe(true)
+
+    // Apply the termination
+    state = applyTransition('ralph_terminate', basePayload({
+      phase: 1, termination: 'gate_pass',
+    }), state)
+    expect(state.phaseStatus).toBe('awaiting_approval')
+
+    // Complete the pipeline
+    state = applyTransition('user_approval', basePayload({ phase: 1 }), state)
+    state = applyTransition('phase_complete', basePayload({ phase: 1 }), state)
+    expect(state.phaseStatus).toBe('complete')
+    expect(state.ralph).toBeNull()
   })
 })

@@ -457,26 +457,24 @@ export function validateTransition(
           'There are open contested issues that must be resolved in this round.',
         )
       }
-      // Phase 2.1 GPAV: when autoValidated, validate agent tally against Watchdog's records
-      if (state.ralph.autoValidated) {
-        const round = payload.round as number
-        const record = state.ralph.roundRecords.find(r => r.round === round)
-        if (!record) {
+      if (state.ralph.openContested.length > 0 && Array.isArray(payload.contested_resolutions) && payload.contested_resolutions.length > 0) {
+        const openIds = new Set(state.ralph.openContested.map(i => i.id))
+        const provided = payload.contested_resolutions as Array<Record<string, unknown>>
+        const matchingIds = provided.filter(r => openIds.has(r.id as string))
+        if (matchingIds.length === 0) {
           return fail(
-            'No findings submitted for round',
-            `GPAV mode requires ralph_round_finding before ralph_round_complete for round ${round}.`,
+            'Invalid contested_resolutions',
+            'None of the provided contested_resolutions match any open contested issue. Open issues: ' + [...openIds].join(', '),
           )
         }
-        // Validate agent's tally matches Watchdog's authoritative counts
-        const tally = payload.tally as Record<string, unknown>
-        for (const sev of ['C', 'H', 'M', 'L', 'I'] as const) {
-          if (tally[sev] !== record.counts[sev]) {
-            return fail(
-              `Tally mismatch for ${sev}`,
-              `Agent reported ${sev}=${tally[sev]} but Watchdog recorded ${sev}=${record.counts[sev]}.`,
-            )
-          }
-        }
+      }
+      // Phase 2.1 GPAV: mixed path explicitly rejected — when autoValidated,
+      // ralph_round_complete is forbidden. Agent must use ralph_terminate instead.
+      if (state.ralph.autoValidated) {
+        return fail(
+          'GPAV active — ralph_round_complete forbidden',
+          'GPAV mode is active. Use ralph_round_finding to submit findings and ralph_terminate to complete. ralph_round_complete is only available in legacy mode (autoValidated=false).',
+        )
       }
       return ok()
     }
@@ -916,8 +914,10 @@ export function applyTransition(
       }
 
       // NOTE: consecutiveZero uses the legacy definition (C+H+M=0, L excluded).
-      // When autoValidated=true, ralph_terminate recomputes from roundRecords using
-      // the strict definition (C+H+M+L=0). This counter is NOT authoritative in GPAV mode.
+      // Legacy path only — GPAV mode blocks ralph_round_complete at validate,
+      // so this apply branch is unreachable when autoValidated=true.
+      // ralph_terminate recomputes from roundRecords using the strict definition
+      // (C+H+M+L=0) when autoValidated=true.
       const chmZero = tally.C + tally.H + tally.M === 0
       const newConsecutiveZero = chmZero
         ? state.ralph.consecutiveZero + 1
@@ -996,6 +996,10 @@ export function applyTransition(
       }
 
       // Find or create round record
+      // NOTE (KI-32): The merge branch (existingIdx >= 0) is currently unreachable through
+      // validate→apply because validate enforces round === ralph.round + 1 (monotonic advance).
+      // This is intentional — merge logic is pre-built for future multi-submit-per-round use
+      // cases. When needed, relax validate to allow round === ralph.round in GPAV mode.
       const existingIdx = state.ralph.roundRecords.findIndex(r => r.round === round)
       let newRoundRecords: RoundRecord[]
       if (existingIdx >= 0) {
