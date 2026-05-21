@@ -4,11 +4,16 @@
  */
 import { readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
+import { parseLoopPhases, isLoopConfigError } from './loop-config.js'
+import type { LoopConfigResult } from './loop-config.js'
 
 export interface WatchdogConfig {
   phaseDeliverables: Record<number, string[]>
   ignorePatterns: string[]
   monitoredTools: string[]
+  /** Parsed loop configuration. Undefined when loopPhases is missing (legacy).
+   *  When present but invalid, loopConfig is omitted and a warning is logged. */
+  loopConfig?: LoopConfigResult
 }
 
 /** Built-in fallback patterns — used when config file is missing or broken.
@@ -117,7 +122,12 @@ export function loadWatchdogConfig(worktreeRoot: string, logger: { info: (...arg
       logger.info('Loaded watchdog.jsonc: %d phases, %d ignore patterns, %d monitored tools',
         Object.keys(phaseDeliverables).length, ignorePatterns.length, monitoredTools.length)
 
-      return { phaseDeliverables, ignorePatterns, monitoredTools }
+      // KI-62: parse loopPhases config if present
+      const loopConfig = parseLoopPhasesFromConfig(parsed, logger)
+
+      return { phaseDeliverables, ignorePatterns, monitoredTools, ...loopConfig }
+      // Note: spread is safe — helper returns {} (no keys) or { loopConfig: LoopConfigResult }.
+      // Never returns { loopConfig: undefined } — missing/invalid configs omit the key entirely.
     }
 
     logger.warn('watchdog.jsonc missing phaseDeliverables — using built-in defaults: %s', configPath)
@@ -126,4 +136,24 @@ export function loadWatchdogConfig(worktreeRoot: string, logger: { info: (...arg
     logger.warn('Failed to load watchdog.jsonc: %s — using built-in defaults', String(err))
     return { phaseDeliverables: FALLBACK_PATTERNS, ignorePatterns: [], monitoredTools: [...DEFAULT_MONITORED_TOOLS] }
   }
+}
+
+/**
+ * Parse loopPhases from raw config JSON.
+ * - loopPhases present + valid → { loopConfig: LoopConfigResult }
+ * - loopPhases present + invalid → log warning, return {} (soft-fail fallback)
+ * - loopPhases missing/undefined → return {} (legacy, no loopConfig)
+ */
+function parseLoopPhasesFromConfig(
+  parsed: any,
+  logger: { warn: (...args: any[]) => void },
+): { loopConfig?: LoopConfigResult } {
+  if (parsed.loopPhases === undefined) return {}
+
+  const result = parseLoopPhases(parsed.loopPhases)
+  if (isLoopConfigError(result)) {
+    logger.warn('Invalid loopPhases config — ignoring: %s', result.message)
+    return {} // soft-fail: proceed without loopConfig
+  }
+  return { loopConfig: result }
 }

@@ -139,4 +139,66 @@ describe('WatchdogConfig', () => {
     expect(config.phaseDeliverables[1]).toEqual(['http://example.com'])
     expect(config.ignorePatterns).toEqual(['path/*glob'])
   })
+
+  // ─── KI-62 Integration: loadWatchdogConfig → parseLoopPhases → loopConfig ───
+
+  // DC-16: valid loopPhases config → loopConfig populated
+  it('parses valid loopPhases into loopConfig', () => {
+    const configPath = path.join(tmpDir, '.opencode')
+    fs.mkdirSync(configPath, { recursive: true })
+    fs.writeFileSync(
+      path.join(configPath, 'watchdog.jsonc'),
+      JSON.stringify({
+        phaseDeliverables: { phase1: ['a.md'] },
+        loopPhases: { ralph: [1, 2, 3, 4, 5], followup: [6, 7] },
+      }),
+    )
+    const config = loadWatchdogConfig(tmpDir, logger)
+    expect(config.loopConfig).toBeDefined()
+    expect(config.loopConfig!.loopPhaseMap).toEqual({
+      1: 'ralph', 2: 'ralph', 3: 'ralph', 4: 'ralph', 5: 'ralph',
+      6: 'followup', 7: 'followup',
+    })
+    expect(config.loopConfig!.maxPhase).toBe(7)
+  })
+
+  // DC-17: invalid loopPhases config → warning logged, loopConfig undefined (soft-fail)
+  it('soft-fails on invalid loopPhases — logs warning, no loopConfig', () => {
+    const configPath = path.join(tmpDir, '.opencode')
+    fs.mkdirSync(configPath, { recursive: true })
+    fs.writeFileSync(
+      path.join(configPath, 'watchdog.jsonc'),
+      JSON.stringify({
+        phaseDeliverables: { phase1: ['a.md'] },
+        loopPhases: { ralph: [1, 2], custom: [3, 4] }, // unknown type
+      }),
+    )
+    const config = loadWatchdogConfig(tmpDir, logger)
+    expect(config.loopConfig).toBeUndefined()
+    // Note: assertion checks prefix only. Specific error messages are validated
+    // in loop-config.test.ts (28 unit tests). Integration test verifies wiring.
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('Invalid loopPhases'), expect.anything())
+    // Other config fields still loaded correctly
+    expect(config.phaseDeliverables[1]).toEqual(['a.md'])
+  })
+
+  // DC-18: missing loopPhases → loopConfig undefined (legacy behavior)
+  it('returns undefined loopConfig when loopPhases is missing (legacy)', () => {
+    const configPath = path.join(tmpDir, '.opencode')
+    fs.mkdirSync(configPath, { recursive: true })
+    fs.writeFileSync(
+      path.join(configPath, 'watchdog.jsonc'),
+      JSON.stringify({
+        phaseDeliverables: { phase1: ['a.md'] },
+      }),
+    )
+    const config = loadWatchdogConfig(tmpDir, logger)
+    expect(config.loopConfig).toBeUndefined()
+  })
+
+  // DC-18 variant: missing config file → loopConfig undefined
+  it('returns undefined loopConfig when config file is missing', () => {
+    const config = loadWatchdogConfig(tmpDir, logger)
+    expect(config.loopConfig).toBeUndefined()
+  })
 })
