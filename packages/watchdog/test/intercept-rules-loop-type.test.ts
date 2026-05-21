@@ -17,7 +17,7 @@ describe('Rule 2: NO_PHASE_ADVANCE_WITHOUT_GATE — loopType-aware', () => {
     const classification = mockClassification('phase_deliverable', 7)
 
     const result = rule2.evaluate('write', 'src/feature.ts', classification, state)
-    // Will FAIL: current code checks !rec.ralphCompleted unconditionally
+    // Verifies followup phase skips ralphCompleted gate in Rule 2
     expect(result.blocked).toBe(false)
   })
 

@@ -26,7 +26,7 @@ describe('CheckpointHandler constructor — loopConfig injection', () => {
     const store = createMockStore()
     const cache = createMockCache()
     const observer = createMockObserver()
-    // RED: current constructor doesn't accept loopConfig as 3rd param.
+    // Phase 5: constructor accepts loopConfig as 3rd param.
     // After Phase 5: CheckpointHandler(store, staleThresholdMs, loopConfig, cache, observer)
     const handler = new CheckpointHandler(store, 300_000, loopConfig, cache, observer)
 
@@ -42,7 +42,7 @@ describe('CheckpointHandler constructor — loopConfig injection', () => {
     // Verify writeState was called with loopPhaseMap in the new state
     expect(store.writeState).toHaveBeenCalled()
     const writtenState = store.writeState.mock.calls[0][2] as Record<string, unknown>
-    // RED: current code doesn't inject loopPhaseMap — field will be missing or undefined
+    // Phase 5: handle() injects loopPhaseMap from loopConfig.
     expect(writtenState.loopPhaseMap).toEqual(VALID_CONFIG_MAP)
     expect(writtenState.maxPhase).toBe(7)
   })
@@ -111,7 +111,7 @@ describe('pipeline completion — archive trigger uses effectiveMax', () => {
     await handler.handle('phase_complete', JSON.stringify({ phase: 7 }),
       { worktree: '/t', sessionID: 's1' })
 
-    // RED: current code checks payload.phase === newState.totalPhases (9),
+    // Phase 5: archive triggers at effectiveMax (maxPhase ?? totalPhases), not raw totalPhases.
     // so phase 7 !== 9 → archive NOT called. New code uses effectiveMax (7) → archive called.
     expect(store.archiveRun).toHaveBeenCalled()
   })
@@ -253,12 +253,12 @@ describe('integration: followup phase full lifecycle', () => {
 
     // Step 3: user_approval for followup phase 6
     const afterApproval = applyTransition('user_approval', { phase: 6 }, afterStart)
-    // RED: current apply doesn't set phaseStatus for followup
+    // Phase 5: followup user_approval sets phaseStatus to awaiting_approval.
     expect(afterApproval.phaseStatus).toBe('awaiting_approval')
 
     // Step 4: phase_complete(6) — should be accepted after approval
     const result = validateTransition('phase_complete', { phase: 6 }, afterApproval)
-    // RED: current code won't accept because phaseStatus wasn't set
+    // Phase 5: followup phaseStatus=awaiting_approval allows phase_complete.
     expect(result.valid).toBe(true)
 
     // Step 5: Rule 2 intercept — Phase 7 deliverable must NOT be blocked
@@ -269,7 +269,7 @@ describe('integration: followup phase full lifecycle', () => {
     const rule2 = rules.find(r => r.id === 'NO_PHASE_ADVANCE_WITHOUT_GATE')!
     const classification = mockClassification('phase_deliverable', 7)
     const interceptResult = rule2.evaluate('write', 'src/feature.ts', classification, afterApproval)
-    // RED: current code blocks because ralphCompleted=false unconditionally
+    // Phase 5: Rule 2 allows Phase 7 deliverable when followup phase has userApproved=true.
     expect(interceptResult.blocked).toBe(false)
   })
 })

@@ -100,7 +100,7 @@ describe('user_approval validate — loopType-aware', () => {
     state.phaseStatus = 'active'
     state.phases = { 6: makePhaseRecord(6, { ralphCompleted: false }) }
     const result = validateTransition('user_approval', { phase: 6 }, state)
-    // Will FAIL: current code unconditionally checks ralphCompleted
+    // Verifies followup phase skips ralphCompleted check
     expect(result.valid).toBe(true)
   })
 
@@ -158,7 +158,7 @@ describe('ralph_loop_start validate — loopType guard', () => {
     state.currentPhase = 6
     state.phaseStatus = 'active'
     const result = validateTransition('ralph_loop_start', { phase: 6 }, state)
-    // Will FAIL: current code has no loopType guard
+    // Verifies ralph_loop_start is rejected for followup phases
     expect(result.valid).toBe(false)
     if (!result.valid) {
       expect(result.guidance).toContain('followup')
@@ -205,7 +205,7 @@ describe('user_approval apply — followup phaseStatus transition', () => {
     state.phaseStatus = 'active'
     state.phases = { 6: makePhaseRecord(6, { ralphCompleted: false }) }
     const result = applyTransition('user_approval', { phase: 6 }, state)
-    // Will FAIL: current apply doesn't check loopType or change phaseStatus
+    // Verifies user_approval apply is loopType-aware (followup → active→awaiting_approval)
     expect(result.phaseStatus).toBe('awaiting_approval')
   })
 
@@ -248,7 +248,7 @@ describe('user_approval apply — followup phaseStatus transition', () => {
     const afterApproval = applyTransition('user_approval', { phase: 6 }, state)
     // Then validate phase_complete on the new state
     const result = validateTransition('phase_complete', { phase: 6 }, afterApproval)
-    // Will FAIL: current apply doesn't set phaseStatus to awaiting_approval for followup
+    // Verifies followup user_approval transitions phaseStatus to awaiting_approval
     expect(result.valid).toBe(true)
   })
 })
