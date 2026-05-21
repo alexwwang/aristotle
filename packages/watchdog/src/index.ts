@@ -90,8 +90,9 @@ export async function createWatchdogRole(ctx: any): Promise<RoleRegistration | n
   )
   const observer = new Observer(cache, sessionBuffer, store, logger)
 
-  // 8. Create checkpoint handler (wires cache + observer)
-  const checkpointHandler = new CheckpointHandler(store, STALE_THRESHOLD_MS, cache, observer, logger)
+  // 8. Create checkpoint handler (wires loopConfig + cache + observer)
+  // TODO(Phase 5): wire loadWatchdogConfig → parseLoopPhases → LoopConfigResult here
+  const checkpointHandler = new CheckpointHandler(store, STALE_THRESHOLD_MS, undefined, cache, observer, logger)
 
   // 9. Crash recovery — informational scan
   try {

@@ -11,6 +11,12 @@ export type CheckpointEvent =
   | 'phase_complete'
   | 'why_articulation'
 
+import type { LoopType, PhaseLoopMap } from './loop-config.js'
+
+// Re-export loop types from canonical source (loop-config.ts is the foundation module).
+// Schema consumers use these types for PipelineState.loopPhaseMap and related fields.
+export type { LoopType, PhaseLoopMap }
+
 /** State machine version for forward-compatible reads */
 export const SCHEMA_VERSION = 3
 
@@ -24,6 +30,13 @@ export interface PipelineState {
   currentPhase: number                   // 0 = initialized, awaiting first phase_enter
   phaseStatus: PhaseStatus
   totalPhases: number                    // from pipeline_start payload (default 5 for backward compat)
+
+  /** Phase → LoopType mapping. Set by pipeline_start when loopPhases config is provided.
+   *  Undefined for legacy pipelines (no config) — getLoopType falls back to 'ralph'. */
+  loopPhaseMap?: PhaseLoopMap
+  /** Maximum phase number for this pipeline run. When set, archive triggers at maxPhase
+   *  instead of totalPhases. Undefined for legacy pipelines — falls back to totalPhases. */
+  maxPhase?: number
 
   phases: Record<number, PhaseRecord>
   ralph: RalphLoopState | null

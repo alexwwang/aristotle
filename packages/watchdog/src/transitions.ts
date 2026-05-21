@@ -9,6 +9,8 @@ import type {
   RoundTally,
 } from './schema.js'
 import { SCHEMA_VERSION } from './schema.js'
+import { getLoopType } from './loop-config.js'
+import type { PhaseLoopMap } from './loop-config.js'
 import {
   EARLY_STOP_CONSECUTIVE,
   MAX_FINDING_DESCRIPTION_LENGTH,
@@ -380,10 +382,12 @@ export function validateTransition(
           `Cannot enter phase ${phase}: pipeline is already at phase ${state.currentPhase}. Phase transitions must be monotonically forward.`,
         )
       }
-      if (phase > state.totalPhases) {
+      // Tech Solution §D.2 Change 2: effectiveMax = maxPhase ?? totalPhases
+      const effectiveMax = state.maxPhase ?? state.totalPhases
+      if (phase > effectiveMax) {
         return fail(
           'Phase exceeds pipeline total',
-          `Phase ${phase} exceeds pipeline total of ${state.totalPhases} phases.`,
+          `Phase ${phase} exceeds pipeline total of ${effectiveMax} phases.`,
         )
       }
       if (phase === 1) {
@@ -427,6 +431,14 @@ export function validateTransition(
         return fail(
           'Phase not active',
           'ralph_loop_start can only be called when phase status is active.',
+        )
+      }
+      // Tech Solution §D.2: reject ralph_loop_start for followup phases
+      const loopType = getLoopType(state, payload.phase as number)
+      if (loopType === 'followup') {
+        return fail(
+          'Followup phase — no Ralph loop',
+          `Phase ${payload.phase} is a followup phase and does not require a Ralph loop. Proceed directly to user_approval.`,
         )
       }
       return ok()
@@ -712,16 +724,35 @@ export function validateTransition(
           `user_approval requires phase ${phase} to have been entered.`,
         )
       }
-      if (!rec.ralphCompleted) {
+      // Tech Solution §D.2: loopType-aware validation
+      const loopType = getLoopType(state, phase)
+      if (loopType === 'ralph') {
+        // Ralph phases: require ralphCompleted + no escalation
+        if (!rec.ralphCompleted) {
+          return fail(
+            'Ralph loop not completed',
+            `user_approval requires phase ${phase} ralph loop to be completed first.`,
+          )
+        }
+        if (state.ralph?.escalated || rec.ralphTermination === 'escalated') {
+          return fail(
+            'Ralph loop escalated',
+            `user_approval requires phase ${phase} ralph loop to have resolved without escalation. Current round was escalated.`,
+          )
+        }
+      } else if (loopType === 'followup') {
+        // Followup phases: skip ralphCompleted check, require phaseStatus=active
+        if (state.phaseStatus !== 'active') {
+          return fail(
+            'Phase not active',
+            `user_approval for followup phase ${phase} requires phase status to be active.`,
+          )
+        }
+      } else {
+        // Defensive: unknown loopType rejected
         return fail(
-          'Ralph loop not completed',
-          `user_approval requires phase ${phase} ralph loop to be completed first.`,
-        )
-      }
-      if (state.ralph?.escalated || rec.ralphTermination === 'escalated') {
-        return fail(
-          'Ralph loop escalated',
-          `user_approval requires phase ${phase} ralph loop to have resolved without escalation. Current round was escalated.`,
+          'Unknown loop type',
+          `Phase ${phase} has unknown loop type "${loopType}". Expected 'ralph' or 'followup'.`,
         )
       }
       return ok()
@@ -816,6 +847,9 @@ export function applyTransition(
       const totalPhases = typeof payload.totalPhases === 'number' && payload.totalPhases >= 1
         ? Math.floor(payload.totalPhases)
         : 5  // backward compat default
+      // Tech Solution §D.2: inject loopPhaseMap/maxPhase from config
+      const loopPhaseMap = (payload._loopPhaseMap as PhaseLoopMap | undefined) ?? {}
+      const maxPhase = (payload._maxPhase as number | undefined) ?? totalPhases
       return {
         version: SCHEMA_VERSION,
         projectId: payload._projectId as string,
@@ -825,6 +859,8 @@ export function applyTransition(
         currentPhase: 0,
         phaseStatus: 'idle',
         totalPhases,
+        loopPhaseMap,
+        maxPhase,
         phases: {},
         ralph: null,
         testEvidenceConfirmed: false,
@@ -1091,8 +1127,13 @@ export function applyTransition(
         throw new Error('BUG: state must not be null for user_approval')
       }
       const phase = payload.phase as number
+      const loopType = getLoopType(state, phase)
+      // Followup: transition from active → awaiting_approval
+      // Ralph: phaseStatus is already 'awaiting_approval' (set by ralph_terminate)
+      const newPhaseStatus = loopType === 'followup' ? 'awaiting_approval' : state.phaseStatus
       return {
         ...state,
+        phaseStatus: newPhaseStatus,
         phases: {
           ...state.phases,
           [phase]: {

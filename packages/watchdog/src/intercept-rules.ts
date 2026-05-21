@@ -1,5 +1,6 @@
 import type { FileClassification } from './file-classifier.js'
 import type { PipelineState } from './schema.js'
+import { getLoopType } from './loop-config.js'
 import { TEST_CODE_PHASE } from './constants.js'
 
 // Deviation from TechSpec §3.2.1: spec defines applies()/check() two-phase design.
@@ -46,8 +47,10 @@ export function createRules(): InterceptRule[] {
         return { blocked: false }
       },
     },
-    // Rule 2 (AC-4): Phase Gate
-    // Phase N deliverable for phase (N+1), but phase N not ralphCompleted or not userApproved → blocked
+    // Rule 2 (AC-12): Phase Gate — loopType-aware
+    // Phase N deliverable for phase (N+1), but phase N not gate-passed.
+    // Ralph phases: require both ralphCompleted and userApproved.
+    // Followup phases: require userApproved only (ralphCompleted skipped).
     {
       id: 'NO_PHASE_ADVANCE_WITHOUT_GATE',
       evaluate(_tool: string, _path: string, classification: FileClassification, state: PipelineState) {
@@ -59,15 +62,23 @@ export function createRules(): InterceptRule[] {
           classification.category === 'phase_deliverable' &&
           classification.phase === currentPhase + 1
         ) {
-          if (!rec || !rec.ralphCompleted || !rec.userApproved) {
+          const loopType = getLoopType(state, currentPhase)
+          // Ralph phases: require ralphCompleted + userApproved
+          // Followup phases: require userApproved only
+          // Unknown loopType: fall back to ralph rules (defensive)
+          const needsRalphCompleted = loopType !== 'followup'
+          const ralphOk = !needsRalphCompleted || (rec?.ralphCompleted === true)
+          const approvedOk = rec?.userApproved === true
+
+          if (!rec || !ralphOk || !approvedOk) {
             const status = !rec
               ? 'phase not entered'
-              : rec.ralphCompleted
-                ? 'awaiting user approval'
-                : 'Ralph loop incomplete'
+              : !ralphOk
+                ? 'Ralph loop incomplete'
+                : 'awaiting user approval'
             return {
               blocked: true,
-              reason: `⛔ [TDD Watchdog] Phase transition blocked: Phase ${currentPhase} Ralph loop gate has not been passed (status: ${status}). Complete the Ralph loop and obtain user approval before starting Phase ${currentPhase + 1}.`,
+              reason: `⛔ [TDD Watchdog] Phase transition blocked: Phase ${currentPhase} gate has not been passed (status: ${status}). Complete required gates before starting Phase ${currentPhase + 1}.`,
             }
           }
         }

@@ -95,7 +95,7 @@ describe('CheckpointHandler', () => {
 
   beforeEach(() => {
     mockStore = createMockStore()
-    handler = new CheckpointHandler(mockStore as unknown as PipelineStore, STALE_THRESHOLD_MS)
+    handler = new CheckpointHandler(mockStore as unknown as PipelineStore, STALE_THRESHOLD_MS, undefined)
   })
 
   // ── §9.3 #3: No active run ────────────────────────────────────────────
@@ -690,6 +690,7 @@ describe('CheckpointHandler', () => {
       const orderingHandler = new CheckpointHandler(
         orderingStore as unknown as PipelineStore,
         STALE_THRESHOLD_MS,
+        undefined,
       )
 
       await orderingHandler.handle(

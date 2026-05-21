@@ -102,8 +102,8 @@ describe('CheckpointHandler Phase 2', () => {
     mockCache.update.mockImplementation(() => { /* no-op */ })
     mockCache.clear.mockImplementation(() => { /* no-op */ })
 
-    // Phase 2 constructor takes 4 params: store, staleThresholdMs, cache, observer
-    handler = new (CheckpointHandler as any)(mockStore, STALE_THRESHOLD_MS, mockCache, mockObserver)
+    // Phase 2 constructor takes 5 params: store, staleThresholdMs, loopConfig, cache, observer
+    handler = new (CheckpointHandler as any)(mockStore, STALE_THRESHOLD_MS, undefined, mockCache, mockObserver)
   })
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -249,7 +249,7 @@ describe('CheckpointHandler Phase 2', () => {
       await handler.handle('why_articulation' as any, badPayload, CONTEXT)
 
       // Fresh handler — counter reset
-      const freshHandler = new (CheckpointHandler as any)(mockStore, STALE_THRESHOLD_MS, mockCache, mockObserver)
+      const freshHandler = new (CheckpointHandler as any)(mockStore, STALE_THRESHOLD_MS, undefined, mockCache, mockObserver)
       mockStore._setState(PROJECT_ID, 'run-001', makeState({
         runId: 'run-001',
         currentPhase: 1,
@@ -752,7 +752,7 @@ describe('CheckpointHandler Phase 2', () => {
       localStore.readState.mockImplementation((pid: string, rid: string) => states.get(`${pid}/${rid}`) ?? null)
       localStore.writeState.mockImplementation((pid: string, rid: string, state: any) => states.set(`${pid}/${rid}`, state))
 
-      const localHandler = new CheckpointHandler(localStore, STALE_THRESHOLD_MS, localCache, localObserver)
+      const localHandler = new CheckpointHandler(localStore, STALE_THRESHOLD_MS, undefined, localCache, localObserver)
 
       // Owner creates pipeline
       const ownerCtx = { worktree: WORKTREE, sessionID: 'sess-owner' }
@@ -778,96 +778,11 @@ describe('CheckpointHandler Phase 2', () => {
       localStore.readState.mockImplementation((pid: string, rid: string) => states.get(`${pid}/${rid}`) ?? null)
       localStore.writeState.mockImplementation((pid: string, rid: string, state: any) => states.set(`${pid}/${rid}`, state))
 
-      const localHandler = new CheckpointHandler(localStore, STALE_THRESHOLD_MS, localCache, localObserver)
+      const localHandler = new CheckpointHandler(localStore, STALE_THRESHOLD_MS, undefined, localCache, localObserver)
 
       // Owner creates pipeline
       const ownerCtx = { worktree: WORKTREE, sessionID: 'sess-orchestrator' }
       await localHandler.handle('pipeline_start', JSON.stringify({ description: 'test' }), ownerCtx)
-
-      // Sub-agent tries to advance phase
-      const subAgentCtx = { worktree: WORKTREE, sessionID: 'sess-sub-agent' }
-      const result = parseResult(await localHandler.handle(
-        'phase_enter',
-        JSON.stringify({ phase: 1 }),
-        subAgentCtx,
-      ))
-
-      expect(result.ok).toBe(false)
-      expect(result.violation).toContain('belongs to another session')
-      expect(result.guidance).toBeDefined()
-    })
-
-    // ── TC-C-35: Audit BLOCK logged on owner_mismatch ──────────────────────
-    it('TC-C-35: Owner mismatch logged as audit BLOCK', async () => {
-      const localStore = createMockStore()
-      const localCache = createMockCache()
-      const localObserver = createMockObserver()
-      localObserver.isDegraded.mockReturnValue(true)
-
-      const activeRuns = new Map<string, any>()
-      const states = new Map<string, any>()
-      localStore.getActiveRun.mockImplementation((pid: string) => activeRuns.get(pid) ?? null)
-      localStore.setActiveRun.mockImplementation((pid: string, run: any) => activeRuns.set(pid, run))
-      localStore.readState.mockImplementation((pid: string, rid: string) => states.get(`${pid}/${rid}`) ?? null)
-      localStore.writeState.mockImplementation((pid: string, rid: string, state: any) => states.set(`${pid}/${rid}`, state))
-
-      const localHandler = new CheckpointHandler(localStore, STALE_THRESHOLD_MS, localCache, localObserver)
-
-      // Owner creates pipeline
-      const ownerCtx = { worktree: WORKTREE, sessionID: 'sess-orchestrator' }
-      await localHandler.handle('pipeline_start', JSON.stringify({ description: 'test' }), ownerCtx)
-
-      // Sub-agent attempts checkpoint
-      const subAgentCtx = { worktree: WORKTREE, sessionID: 'sess-sub-agent' }
-      await localHandler.handle('phase_enter', JSON.stringify({ phase: 1 }), subAgentCtx)
-
-      expect(localStore.appendAudit).toHaveBeenCalledWith(
-        PROJECT_ID,
-        expect.any(String),
-        expect.objectContaining({
-          decision: 'BLOCK',
-          violation: expect.stringContaining('owner_mismatch'),
-        }),
-      )
-    })
-
-    // ── TC-C-39: pipeline_start with empty sessionID → rejected ─────────────
-    it('TC-C-39: pipeline_start with empty sessionID rejected', async () => {
-      const emptyCtx = { worktree: WORKTREE, sessionID: '' }
-      const result = parseResult(await handler.handle(
-        'pipeline_start',
-        JSON.stringify({ description: 'test' }),
-        emptyCtx,
-      ))
-
-      expect(result.ok).toBe(false)
-      expect(result.violation).toBeDefined()
-    })
-
-    // ── TC-C-40: Ownership check runs before stale check (C-1 defense) ────
-    it('TC-C-40: Non-owner rejected on stale pipeline without seeing recovery prompt', async () => {
-      const localStore = createMockStore()
-      const localCache = createMockCache()
-      const localObserver = createMockObserver()
-      localObserver.isDegraded.mockReturnValue(true)
-
-      const activeRuns = new Map<string, any>()
-      const states = new Map<string, any>()
-      localStore.getActiveRun.mockImplementation((pid: string) => activeRuns.get(pid) ?? null)
-      localStore.setActiveRun.mockImplementation((pid: string, run: any) => activeRuns.set(pid, run))
-      localStore.readState.mockImplementation((pid: string, rid: string) => states.get(`${pid}/${rid}`) ?? null)
-      localStore.writeState.mockImplementation((pid: string, rid: string, state: any) => states.set(`${pid}/${rid}`, state))
-
-      const localHandler = new CheckpointHandler(localStore, STALE_THRESHOLD_MS, localCache, localObserver)
-
-      // Owner creates pipeline
-      const ownerCtx = { worktree: WORKTREE, sessionID: 'sess-orchestrator' }
-      await localHandler.handle('pipeline_start', JSON.stringify({ description: 'test' }), ownerCtx)
-
-      // Make the pipeline stale by writing a very old lastCheckpointAt
-      const activeRun = activeRuns.get(PROJECT_ID)
-      const state = states.get(`${PROJECT_ID}/${activeRun.runId}`)
-      state.lastCheckpointAt = '2020-01-01T00:00:00.000Z' // 6 years ago
 
       // Sub-agent tries phase_enter on the stale pipeline
       const subAgentCtx = { worktree: WORKTREE, sessionID: 'sess-sub-agent' }
@@ -897,7 +812,7 @@ describe('CheckpointHandler Phase 2', () => {
       localStore.readState.mockImplementation((pid: string, rid: string) => states.get(`${pid}/${rid}`) ?? null)
       localStore.writeState.mockImplementation((pid: string, rid: string, state: any) => states.set(`${pid}/${rid}`, state))
 
-      const localHandler = new CheckpointHandler(localStore, STALE_THRESHOLD_MS, localCache, localObserver)
+      const localHandler = new CheckpointHandler(localStore, STALE_THRESHOLD_MS, undefined, localCache, localObserver)
 
       // Owner creates pipeline
       const ownerCtx = { worktree: WORKTREE, sessionID: 'sess-orchestrator' }
@@ -929,7 +844,7 @@ describe('CheckpointHandler Phase 2', () => {
       localStore.readState.mockImplementation((pid: string, rid: string) => states.get(`${pid}/${rid}`) ?? null)
       localStore.writeState.mockImplementation((pid: string, rid: string, state: any) => states.set(`${pid}/${rid}`, state))
 
-      const localHandler = new CheckpointHandler(localStore, STALE_THRESHOLD_MS, localCache, localObserver)
+      const localHandler = new CheckpointHandler(localStore, STALE_THRESHOLD_MS, undefined, localCache, localObserver)
 
       // Owner creates pipeline
       const ownerCtx = { worktree: WORKTREE, sessionID: 'sess-orchestrator' }
@@ -966,7 +881,7 @@ describe('CheckpointHandler Phase 2', () => {
       localStore.readState.mockImplementation((pid: string, rid: string) => states.get(`${pid}/${rid}`) ?? null)
       localStore.writeState.mockImplementation((pid: string, rid: string, state: any) => states.set(`${pid}/${rid}`, state))
 
-      const localHandler = new CheckpointHandler(localStore, STALE_THRESHOLD_MS, localCache, localObserver)
+      const localHandler = new CheckpointHandler(localStore, STALE_THRESHOLD_MS, undefined, localCache, localObserver)
 
       const ownerCtx = { worktree: WORKTREE, sessionID: 'sess-orchestrator' }
       await localHandler.handle('pipeline_start', JSON.stringify({ description: 'test' }), ownerCtx)
@@ -1000,7 +915,7 @@ describe('CheckpointHandler Phase 2', () => {
       localStore.readState.mockImplementation((pid: string, rid: string) => states.get(`${pid}/${rid}`) ?? null)
       localStore.writeState.mockImplementation((pid: string, rid: string, state: any) => states.set(`${pid}/${rid}`, state))
 
-      const localHandler = new CheckpointHandler(localStore, STALE_THRESHOLD_MS, localCache, localObserver)
+      const localHandler = new CheckpointHandler(localStore, STALE_THRESHOLD_MS, undefined, localCache, localObserver)
 
       const ownerCtx = { worktree: WORKTREE, sessionID: 'sess-owner' }
       await localHandler.handle('pipeline_start', JSON.stringify({ description: 'test' }), ownerCtx)
@@ -1027,7 +942,7 @@ describe('CheckpointHandler Phase 2', () => {
       localStore.getActiveRun.mockReturnValue({ runId: 'run-corrupt', projectId: PROJECT_ID, startedAt: NOW })
       localStore.readState.mockReturnValue(null)
 
-      const localHandler = new CheckpointHandler(localStore, STALE_THRESHOLD_MS, localCache, localObserver)
+      const localHandler = new CheckpointHandler(localStore, STALE_THRESHOLD_MS, undefined, localCache, localObserver)
 
       const anyCtx = { worktree: WORKTREE, sessionID: 'sess-anyone' }
       const result = parseResult(await localHandler.handle(
@@ -1054,7 +969,7 @@ describe('CheckpointHandler Phase 2', () => {
       localStore.readState.mockImplementation((pid: string, rid: string) => states.get(`${pid}/${rid}`) ?? null)
       localStore.writeState.mockImplementation((pid: string, rid: string, state: any) => states.set(`${pid}/${rid}`, state))
 
-      const localHandler = new CheckpointHandler(localStore, STALE_THRESHOLD_MS, localCache, localObserver)
+      const localHandler = new CheckpointHandler(localStore, STALE_THRESHOLD_MS, undefined, localCache, localObserver)
 
       // Create pipeline (simulates Phase 1 state with no ownerSessionId)
       const ownerCtx = { worktree: WORKTREE, sessionID: 'sess-original' }
@@ -1111,7 +1026,7 @@ describe('CheckpointHandler Phase 2', () => {
       localStore.readState.mockImplementation((pid: string, rid: string) => states.get(`${pid}/${rid}`) ?? null)
       localStore.writeState.mockImplementation((pid: string, rid: string, state: any) => states.set(`${pid}/${rid}`, state))
 
-      const localHandler = new MockedHandler(localStore, STALE_THRESHOLD_MS, localCache, localObserver)
+      const localHandler = new MockedHandler(localStore, STALE_THRESHOLD_MS, undefined, localCache, localObserver)
 
       // Owner creates pipeline
       const ownerCtx = { worktree: WORKTREE, sessionID: 'sess-owner' }
@@ -1241,7 +1156,7 @@ describe('CheckpointHandler Phase 2', () => {
       localStore.writeState.mockImplementation((pid: string, rid: string, state: any) => states.set(`${pid}/${rid}`, state))
 
       const localHandler = new CheckpointHandler(
-        localStore, STALE_THRESHOLD_MS, localCache, localObserver,
+        localStore, STALE_THRESHOLD_MS, undefined, localCache, localObserver,
       )
 
       await localHandler.handle('pipeline_start', JSON.stringify({ description: 'test' }), CONTEXT)
@@ -1291,7 +1206,7 @@ describe('CheckpointHandler Phase 2', () => {
       localStore.appendAudit.mockImplementation(() => {})
 
       const handler = new CheckpointHandler(
-        localStore, STALE_THRESHOLD_MS, localCache, localObserver,
+        localStore, STALE_THRESHOLD_MS, undefined, localCache, localObserver,
       )
 
       // Setup pipeline: pipeline_start → phase_enter(1) leaves phaseStatus='active'

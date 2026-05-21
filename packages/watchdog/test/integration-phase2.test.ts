@@ -107,7 +107,7 @@ describe('Integration Tests Phase 2', () => {
     const sessionBuffer = new SessionBuffer({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } as any)
     const cache = new PipelineStateCache(mockStore as any, WORKTREE, undefined, false)
     const observer = new Observer(cache, sessionBuffer, mockStore as any)
-    const handler = new CheckpointHandler(mockStore as any, STALE_THRESHOLD_MS, cache, observer)
+    const handler = new CheckpointHandler(mockStore as any, STALE_THRESHOLD_MS, undefined, cache, observer)
 
     // Start pipeline
     let result = parseResult(await handler.handle('pipeline_start', JSON.stringify({ description: 'integration test' }), CONTEXT))
@@ -200,7 +200,7 @@ describe('Integration Tests Phase 2', () => {
 
   // ── TC-I-02: Articulation full cycle ──────────────────────────────────────
   it('TC-I-02: Articulation full cycle', async () => {
-    const handler = new CheckpointHandler(mockStore as any, STALE_THRESHOLD_MS, mockCache, mockObserver)
+    const handler = new CheckpointHandler(mockStore as any, STALE_THRESHOLD_MS, undefined, mockCache, mockObserver)
 
     // Setup active pipeline at phase 1
     mockStore._setActiveRun(PROJECT_ID, { runId: 'run-001', projectId: PROJECT_ID, startedAt: NOW })
@@ -264,7 +264,7 @@ describe('Integration Tests Phase 2', () => {
       ignorePatterns: [],
     }
     const interceptor = new Interceptor(cache, config, extractFilePath, classifyFile, rules)
-    const handler = new CheckpointHandler(mockStore as any, STALE_THRESHOLD_MS, cache, mockObserver)
+    const handler = new CheckpointHandler(mockStore as any, STALE_THRESHOLD_MS, undefined, cache, mockObserver)
     mockObserver.isDegraded.mockReturnValue(true)
 
     // Setup: start pipeline, advance to phase 4
@@ -329,7 +329,7 @@ describe('Integration Tests Phase 2', () => {
 
   // ── TC-I-04: Multi-agent ownership ────────────────────────────────────────
   it('TC-I-04: Multi-agent ownership', async () => {
-    const handler = new CheckpointHandler(mockStore as any, STALE_THRESHOLD_MS, mockCache, mockObserver)
+    const handler = new CheckpointHandler(mockStore as any, STALE_THRESHOLD_MS, undefined, mockCache, mockObserver)
     mockObserver.isDegraded.mockReturnValue(true)
 
     // Step 1: owner starts pipeline
@@ -402,7 +402,7 @@ describe('Integration Tests Phase 2', () => {
 
   // ── TC-I-07: Cache update on checkpoint ───────────────────────────────────
   it('TC-I-07: Cache update on checkpoint', async () => {
-    const handler = new CheckpointHandler(mockStore as any, STALE_THRESHOLD_MS, mockCache, mockObserver)
+    const handler = new CheckpointHandler(mockStore as any, STALE_THRESHOLD_MS, undefined, mockCache, mockObserver)
     mockObserver.isDegraded.mockReturnValue(true)
 
     await handler.handle('pipeline_start', JSON.stringify({ description: 'cache test' }), CONTEXT)
@@ -419,7 +419,7 @@ describe('Integration Tests Phase 2', () => {
 
   // ── TC-I-08: Cache clear on completion ────────────────────────────────────
   it('TC-I-08: Cache clear on completion', async () => {
-    const handler = new CheckpointHandler(mockStore as any, STALE_THRESHOLD_MS, mockCache, mockObserver)
+    const handler = new CheckpointHandler(mockStore as any, STALE_THRESHOLD_MS, undefined, mockCache, mockObserver)
     mockObserver.isDegraded.mockReturnValue(true)
 
     await handler.handle('pipeline_start', JSON.stringify({ description: 'completion test' }), CONTEXT)
@@ -458,7 +458,7 @@ describe('Integration Tests Phase 2', () => {
     const sessionBuffer = new SessionBuffer({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } as any)
     const cache = new PipelineStateCache(mockStore as any, WORKTREE, undefined, false)
     const observer = new Observer(cache, sessionBuffer, mockStore as any)
-    const handler = new CheckpointHandler(mockStore as any, STALE_THRESHOLD_MS, cache, observer)
+    const handler = new CheckpointHandler(mockStore as any, STALE_THRESHOLD_MS, undefined, cache, observer)
 
     // Setup pipeline in ralph_loop
     await handler.handle('pipeline_start', JSON.stringify({ description: 'ac2 test' }), CONTEXT)
@@ -521,7 +521,7 @@ describe('Integration Tests Phase 2', () => {
 
   // ── TC-I-11: Pipeline completes without articulation (AC-6 soft gate) ──────
   it('TC-I-11: pipeline completes without articulation', async () => {
-    const handler = new CheckpointHandler(mockStore as any, STALE_THRESHOLD_MS, mockCache, mockObserver)
+    const handler = new CheckpointHandler(mockStore as any, STALE_THRESHOLD_MS, undefined, mockCache, mockObserver)
 
     // Start pipeline
     const result = parseResult(await handler.handle('pipeline_start', JSON.stringify({ description: 'test' }), CONTEXT))
@@ -561,7 +561,7 @@ describe('Integration Tests Phase 2', () => {
 
   // ── TC-I-15: Stale pipeline — owner can restart ──────────────────────────
   it('TC-I-15: stale pipeline — owner can restart', async () => {
-    const handler = new CheckpointHandler(mockStore as any, STALE_THRESHOLD_MS, mockCache, mockObserver)
+    const handler = new CheckpointHandler(mockStore as any, STALE_THRESHOLD_MS, undefined, mockCache, mockObserver)
     const staleTime = new Date(Date.now() - STALE_THRESHOLD_MS - 1000).toISOString()
     mockStore._setActiveRun(PROJECT_ID, { runId: 'run-stale', projectId: PROJECT_ID, startedAt: staleTime })
     mockStore._setState(PROJECT_ID, 'run-stale', makeState({
@@ -580,7 +580,7 @@ describe('Integration Tests Phase 2', () => {
 
   // ── TC-I-16: Stale pipeline — non-owner rejected ─────────────────────────
   it('TC-I-16: stale pipeline — non-owner rejected', async () => {
-    const handler = new CheckpointHandler(mockStore as any, STALE_THRESHOLD_MS, mockCache, mockObserver)
+    const handler = new CheckpointHandler(mockStore as any, STALE_THRESHOLD_MS, undefined, mockCache, mockObserver)
     const staleTime = new Date(Date.now() - STALE_THRESHOLD_MS - 1000).toISOString()
     mockStore._setActiveRun(PROJECT_ID, { runId: 'run-stale', projectId: PROJECT_ID, startedAt: staleTime })
     mockStore._setState(PROJECT_ID, 'run-stale', makeState({
@@ -597,7 +597,7 @@ describe('Integration Tests Phase 2', () => {
 
   // ── TC-I-17: Corrupted state — active run exists but state unreadable ────
   it('TC-I-17: corrupted state — fail-closed', async () => {
-    const handler = new CheckpointHandler(mockStore as any, STALE_THRESHOLD_MS, mockCache, mockObserver)
+    const handler = new CheckpointHandler(mockStore as any, STALE_THRESHOLD_MS, undefined, mockCache, mockObserver)
     mockStore._setActiveRun(PROJECT_ID, { runId: 'run-corrupt', projectId: PROJECT_ID, startedAt: NOW })
     // State is null (corrupted) but activeRun exists
     mockStore._setState(PROJECT_ID, 'run-corrupt', null)
@@ -608,7 +608,7 @@ describe('Integration Tests Phase 2', () => {
 
   // ── TC-I-18: Non-stale active pipeline — owner also rejected ─────────────
   it('TC-I-18: non-stale active pipeline — owner also rejected', async () => {
-    const handler = new CheckpointHandler(mockStore as any, STALE_THRESHOLD_MS, mockCache, mockObserver)
+    const handler = new CheckpointHandler(mockStore as any, STALE_THRESHOLD_MS, undefined, mockCache, mockObserver)
     mockStore._setActiveRun(PROJECT_ID, { runId: 'run-active', projectId: PROJECT_ID, startedAt: NOW })
     mockStore._setState(PROJECT_ID, 'run-active', makeState({
       runId: 'run-active',

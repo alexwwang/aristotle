@@ -35,6 +35,7 @@ import { ARTICULATION_MAX_FAILURES } from './constants.js'
 import type { PipelineStateCache } from './state-cache.js'
 import type { Observer } from './observer.js'
 import type { Logger } from '@opencode-ai/core/logger'
+import type { LoopConfigResult } from './loop-config.js'
 
 export class CheckpointHandler {
   private articulationFailures = new Map<number, number>()
@@ -42,6 +43,7 @@ export class CheckpointHandler {
   constructor(
     private store: PipelineStore,
     private staleThresholdMs: number,
+    private loopConfig?: LoopConfigResult,
     private cache?: PipelineStateCache,
     private observer?: Observer,
     private logger?: Logger,
@@ -190,6 +192,11 @@ export class CheckpointHandler {
       payload._projectId = projectId
       // C-1: inject ownerSessionId
       payload._ownerSessionId = sessionId
+      // Tech Solution §D.2: inject loopConfig into pipeline_start payload
+      // Security: always overwrite these fields to prevent payload injection.
+      // When loopConfig is undefined (legacy), inject safe defaults (empty map + totalPhases fallback).
+      payload._loopPhaseMap = this.loopConfig?.loopPhaseMap ?? {}
+      payload._maxPhase = this.loopConfig?.maxPhase
     }
     payload._now = now
 
@@ -362,11 +369,15 @@ export class CheckpointHandler {
     this.store.appendAudit(projectId, runId, auditEntry)
 
     // ── 12. phase_complete(final) → clearActiveRun + archiveRun ──────
-    if (event === 'phase_complete' && payload.phase === newState.totalPhases) {
-      this.store.archiveRun(projectId, runId)
-      this.store.clearActiveRun(projectId)
-      this.cache?.clear()
-      this.observer?.clearDegradation(projectId, runId)
+    // Tech Solution §D.2 Change 2: effectiveMax = maxPhase ?? totalPhases
+    if (event === 'phase_complete') {
+      const effectiveMax = newState.maxPhase ?? newState.totalPhases
+      if (payload.phase === effectiveMax) {
+        this.store.archiveRun(projectId, runId)
+        this.store.clearActiveRun(projectId)
+        this.cache?.clear()
+        this.observer?.clearDegradation(projectId, runId)
+      }
     }
 
     // ── 13. Articulation violation return ─────────────────────────────
