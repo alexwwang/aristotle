@@ -18,7 +18,7 @@ import type { LoopType, PhaseLoopMap } from './loop-config.js'
 export type { LoopType, PhaseLoopMap }
 
 /** State machine version for forward-compatible reads */
-export const SCHEMA_VERSION = 3
+export const SCHEMA_VERSION = 4
 
 export interface PipelineState {
   version: typeof SCHEMA_VERSION
@@ -84,7 +84,7 @@ export type RalphTermination = 'early_stop' | 'gate_pass' | 'max_rounds' | 'esca
 export interface RalphLoopState {
   phase: number
   round: number                    // 1-based
-  consecutiveZero: number          // consecutive rounds with zero C/H/M (L excluded)
+  consecutiveZero: number          // consecutive rounds with zero C/H/M (P/L excluded)
   tallyHistory: RoundTally[]
   openContested: ContestedIssue[]
   escalated: boolean
@@ -100,6 +100,7 @@ export interface RoundTally {
   C: number
   H: number
   M: number
+  P: number
   L: number
   I: number
   timestamp: string
@@ -112,19 +113,26 @@ export interface ContestedIssue {
   description: string
 }
 
-/** Phase 2.1: GPAV — authoritative per-round finding counts */
+/** Phase 2.1: GPAV — authoritative per-round finding counts
+ *
+ * IMPORTANT (Phase 2.3): The `counts` object must always include `P`.
+ * `readState()` in pipeline-store.ts migrates old records (pre-v4) by adding `P: 0`.
+ * Any code accessing `.counts.P` on records loaded from disk is safe AFTER `readState()`.
+ * If you create RoundRecord objects outside the normal load path (e.g. test mocks),
+ * ensure `P` is present to avoid `undefined` → `NaN` in arithmetic.
+ */
 export interface RoundRecord {
   round: number
-  counts: { C: number; H: number; M: number; L: number; I: number }
+  counts: { C: number; H: number; M: number; P: number; L: number; I: number }
   submittedAt: string
 }
 
 /** Phase 2.1: GPAV — structured finding submitted by agent */
 export interface FindingSubmission {
-  severity: 'C' | 'H' | 'M' | 'L' | 'I'
+  severity: 'C' | 'H' | 'M' | 'P' | 'L' | 'I'
   description: string
   /** Original severity from reviewer — set when agent relabels */
-  original?: 'C' | 'H' | 'M' | 'L' | 'I'
+  original?: 'C' | 'H' | 'M' | 'P' | 'L' | 'I'
   /** Required when severity is lower than original (downgrade) */
   downgrade_reason?: string
 }

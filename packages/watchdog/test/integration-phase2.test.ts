@@ -127,7 +127,7 @@ describe('Integration Tests Phase 2', () => {
 
     // Round 1 complete
     result = parseResult(await handler.handle('ralph_round_complete', JSON.stringify({
-      phase: 1, round: 1, tally: { C: 0, H: 0, M: 0, L: 0, I: 0 },
+      phase: 1, round: 1, tally: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 },
     }), CONTEXT))
     expect(result.ok).toBe(true)
 
@@ -136,7 +136,7 @@ describe('Integration Tests Phase 2', () => {
 
     // Round 2 complete (early_stop after 2 consecutive zero rounds)
     result = parseResult(await handler.handle('ralph_round_complete', JSON.stringify({
-      phase: 1, round: 2, tally: { C: 0, H: 0, M: 0, L: 0, I: 0 },
+      phase: 1, round: 2, tally: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 },
     }), CONTEXT))
     expect(result.ok).toBe(true)
 
@@ -172,13 +172,13 @@ describe('Integration Tests Phase 2', () => {
     // Early stop in one round (simplified)
     await observer.handle('Task', { prompt: 'review' }, 'out', SESSION_ID, 'call-3')
     result = parseResult(await handler.handle('ralph_round_complete', JSON.stringify({
-      phase: 2, round: 1, tally: { C: 0, H: 0, M: 0, L: 0, I: 0 },
+      phase: 2, round: 1, tally: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 },
     }), CONTEXT))
     expect(result.ok).toBe(true)
 
     await observer.handle('Task', { prompt: 'review' }, 'out', SESSION_ID, 'call-4')
     result = parseResult(await handler.handle('ralph_round_complete', JSON.stringify({
-      phase: 2, round: 2, tally: { C: 0, H: 0, M: 0, L: 0, I: 0 },
+      phase: 2, round: 2, tally: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 },
     }), CONTEXT))
     expect(result.ok).toBe(true)
 
@@ -276,10 +276,10 @@ describe('Integration Tests Phase 2', () => {
       await handler.handle('phase_enter', JSON.stringify({ phase }), CONTEXT)
       await handler.handle('ralph_loop_start', JSON.stringify({ phase }), CONTEXT)
       await handler.handle('ralph_round_complete', JSON.stringify({
-        phase, round: 1, tally: { C: 0, H: 0, M: 0, L: 0, I: 0 },
+        phase, round: 1, tally: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 },
       }), CONTEXT)
       await handler.handle('ralph_round_complete', JSON.stringify({
-        phase, round: 2, tally: { C: 0, H: 0, M: 0, L: 0, I: 0 },
+        phase, round: 2, tally: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 },
       }), CONTEXT)
       await handler.handle('ralph_terminate', JSON.stringify({
         phase, termination: 'early_stop',
@@ -306,10 +306,10 @@ describe('Integration Tests Phase 2', () => {
     // Step 2: Complete Phase 4 Ralph loop + user approval
     await handler.handle('ralph_loop_start', JSON.stringify({ phase: 4 }), CONTEXT)
     await handler.handle('ralph_round_complete', JSON.stringify({
-      phase: 4, round: 1, tally: { C: 0, H: 0, M: 0, L: 0, I: 0 },
+      phase: 4, round: 1, tally: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 },
     }), CONTEXT)
     await handler.handle('ralph_round_complete', JSON.stringify({
-      phase: 4, round: 2, tally: { C: 0, H: 0, M: 0, L: 0, I: 0 },
+      phase: 4, round: 2, tally: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 },
     }), CONTEXT)
     await handler.handle('ralph_terminate', JSON.stringify({
       phase: 4, termination: 'early_stop',
@@ -428,10 +428,10 @@ describe('Integration Tests Phase 2', () => {
       await handler.handle('phase_enter', JSON.stringify({ phase }), CONTEXT)
       await handler.handle('ralph_loop_start', JSON.stringify({ phase }), CONTEXT)
       await handler.handle('ralph_round_complete', JSON.stringify({
-        phase, round: 1, tally: { C: 0, H: 0, M: 0, L: 0, I: 0 },
+        phase, round: 1, tally: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 },
       }), CONTEXT)
       await handler.handle('ralph_round_complete', JSON.stringify({
-        phase, round: 2, tally: { C: 0, H: 0, M: 0, L: 0, I: 0 },
+        phase, round: 2, tally: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 },
       }), CONTEXT)
       await handler.handle('ralph_terminate', JSON.stringify({
         phase, termination: 'early_stop',
@@ -476,7 +476,7 @@ describe('Integration Tests Phase 2', () => {
 
     // ralph_round_complete → AC-2 check passes because observation exists
     const result = parseResult(await handler.handle('ralph_round_complete', JSON.stringify({
-      phase: 1, round: 1, tally: { C: 0, H: 0, M: 0, L: 0, I: 0 },
+      phase: 1, round: 1, tally: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 },
     }), CONTEXT))
     expect(result.ok).toBe(true)
   })
@@ -536,7 +536,7 @@ describe('Integration Tests Phase 2', () => {
     // Add reviewer observation for AC-2
     mockStore._addObservation(PROJECT_ID, state.runId, { type: '_reviewer_spawned', tool: 'Task', callID: 'call-001', round: 1 })
 
-    await handler.handle('ralph_round_complete', JSON.stringify({ phase: 1, round: 1, tally: { C: 0, H: 0, M: 0, L: 0, I: 0 } }), CONTEXT)
+    await handler.handle('ralph_round_complete', JSON.stringify({ phase: 1, round: 1, tally: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 } }), CONTEXT)
     await handler.handle('ralph_terminate', JSON.stringify({ phase: 1, termination: 'gate_pass' }), CONTEXT)
     await handler.handle('user_approval', JSON.stringify({ phase: 1 }), CONTEXT)
     await handler.handle('phase_complete', JSON.stringify({ phase: 1 }), CONTEXT)

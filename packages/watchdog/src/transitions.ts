@@ -60,7 +60,7 @@ function checkTally(tally: unknown): { ok: boolean; errorType?: 'missing' | 'typ
     return { ok: false, errorType: 'type' }
   }
   const t = tally as Record<string, unknown>
-  for (const key of ['C', 'H', 'M', 'L', 'I']) {
+  for (const key of ['C', 'H', 'M', 'P', 'L', 'I']) {
     if (!(key in t)) {
       return { ok: false, errorType: 'missing' }
     }
@@ -71,8 +71,8 @@ function checkTally(tally: unknown): { ok: boolean; errorType?: 'missing' | 'typ
   return { ok: true }
 }
 
-/** Severity ordering: C=5 > H=4 > M=3 > L=2 > I=1. Returns true when a is less severe than b. */
-const SEV_ORDER: Record<string, number> = { C: 5, H: 4, M: 3, L: 2, I: 1 }
+/** Severity ordering: C=5 > H=4 > M=3 > P=2 > L=1 > I=0. P=Proposal (quality-level, does not reset consecutive-zero). Returns true when a is less severe than b. */
+const SEV_ORDER: Record<string, number> = { C: 5, H: 4, M: 3, P: 2, L: 1, I: 0 }
 function severityLt(a: string, b: string): boolean {
   return (SEV_ORDER[a] ?? 0) < (SEV_ORDER[b] ?? 0)
 }
@@ -152,12 +152,12 @@ export function validateTransition(
         if (tc.errorType === 'type') {
           return fail(
             'Invalid tally field type',
-            'ralph_round_complete requires tally with C, H, M, L, I as non-negative integers.',
+            'ralph_round_complete requires tally with C, H, M, P, L, I as non-negative integers.',
           )
         }
         return fail(
           'Missing required field',
-          'ralph_round_complete requires tally with C, H, M, L, I as non-negative integers.',
+          'ralph_round_complete requires tally with C, H, M, P, L, I as non-negative integers.',
         )
       }
       if (payload.contested_resolutions !== undefined) {
@@ -330,14 +330,14 @@ export function validateTransition(
         return fail('Too many findings', `ralph_round_finding accepts at most ${MAX_FINDINGS_PER_ROUND} findings per round, got ${(payload.findings as unknown[]).length}.`)
       }
       // Validate each finding structure
-      const validSeverities = new Set(['C', 'H', 'M', 'L', 'I'])
+      const validSeverities = new Set(['C', 'H', 'M', 'P', 'L', 'I'])
       for (let i = 0; i < (payload.findings as unknown[]).length; i++) {
         const f = (payload.findings as Record<string, unknown>[])[i]
         if (!f || typeof f !== 'object') {
           return fail(`Invalid finding at index ${i}`, 'Each finding must be an object.')
         }
         if (!validSeverities.has(f.severity as string)) {
-          return fail(`Invalid severity at index ${i}`, `Finding severity must be one of C/H/M/L/I, got "${f.severity}".`)
+          return fail(`Invalid severity at index ${i}`, `Finding severity must be one of C/H/M/P/L/I, got "${f.severity}".`)
         }
         if (typeof f.description !== 'string' || (f.description as string).length === 0) {
           return fail(`Missing description at index ${i}`, 'Each finding must have a non-empty description.')
@@ -347,7 +347,7 @@ export function validateTransition(
         }
         if (f.original !== undefined) {
           if (!validSeverities.has(f.original as string)) {
-            return fail(`Invalid original severity at index ${i}`, `Original severity must be one of C/H/M/L/I, got "${f.original}".`)
+            return fail(`Invalid original severity at index ${i}`, `Original severity must be one of C/H/M/P/L/I, got "${f.original}".`)
           }
           if (severityLt(f.severity as string, f.original as string)) {
             if (typeof f.downgrade_reason !== 'string' || (f.downgrade_reason as string).length === 0) {
@@ -563,11 +563,11 @@ export function validateTransition(
         // all rounds. If not, fall through to KI-24 fallback (completedRecords empty
         // or partial). This branch handles partial coverage gracefully.
         if (completedRecords.length > 0) {
-          // Compute consecutiveZero from completed records with strict definition: C=H=M=L=0
+          // Compute consecutiveZero from completed records with strict definition: C=H=M=0, P/L excluded
           let strictConsecutive = 0
           for (let i = completedRecords.length - 1; i >= 0; i--) {
             const c = completedRecords[i].counts
-            if (c.C === 0 && c.H === 0 && c.M === 0 && c.L === 0) {
+            if (c.C === 0 && c.H === 0 && c.M === 0) {
               strictConsecutive++
             } else {
               break
@@ -582,17 +582,17 @@ export function validateTransition(
               )
             }
             const lastRec = completedRecords[completedRecords.length - 1]
-            if (!lastRec || lastRec.counts.C + lastRec.counts.H + lastRec.counts.M + lastRec.counts.L > 0) {
+            if (!lastRec || lastRec.counts.C + lastRec.counts.H + lastRec.counts.M > 0) {
               return fail(
                 'Unresolved issues remain (GPAV)',
-                'Gate pass requires the last completed round to have C=H=M=L=0 per Watchdog records.',
+                'Gate pass requires the last completed round to have C=H=M=0 per Watchdog records.',
               )
             }
           } else if (termination === 'early_stop') {
             if (strictConsecutive < EARLY_STOP_CONSECUTIVE) {
               return fail(
                 'Insufficient consecutive zero rounds (GPAV)',
-                `Early stop requires at least ${EARLY_STOP_CONSECUTIVE} consecutive completed rounds with C=H=M=L=0. Current: ${strictConsecutive}.`,
+                `Early stop requires at least ${EARLY_STOP_CONSECUTIVE} consecutive completed rounds with C=H=M=0. Current: ${strictConsecutive}.`,
               )
             }
           } else if (termination === 'max_rounds') {
@@ -603,10 +603,10 @@ export function validateTransition(
               )
             }
             const lastRec = completedRecords[completedRecords.length - 1]
-            if (!lastRec || lastRec.counts.C + lastRec.counts.H + lastRec.counts.M + lastRec.counts.L === 0) {
+            if (!lastRec || lastRec.counts.C + lastRec.counts.H + lastRec.counts.M === 0) {
               return fail(
                 'No unresolved issues (GPAV)',
-                'max_rounds termination requires the last completed round to have C+H+M+L > 0 per Watchdog records.',
+                'max_rounds termination requires the last completed round to have C+H+M > 0 per Watchdog records.',
               )
             }
           }
@@ -940,6 +940,7 @@ export function applyTransition(
         C: number
         H: number
         M: number
+        P: number
         L: number
         I: number
       }
@@ -955,16 +956,17 @@ export function applyTransition(
         C: tally.C,
         H: tally.H,
         M: tally.M,
+        P: tally.P,
         L: tally.L,
         I: tally.I,
         timestamp: now,
       }
 
-      // NOTE: consecutiveZero uses the legacy definition (C+H+M=0, L excluded).
+      // NOTE: consecutiveZero uses the legacy definition (C+H+M=0, P/L excluded).
       // Legacy path only — GPAV mode blocks ralph_round_complete at validate,
       // so this apply branch is unreachable when autoValidated=true.
       // ralph_terminate recomputes from roundRecords using the strict definition
-      // (C+H+M+L=0) when autoValidated=true.
+      // (C+H+M=0, P/L excluded) when autoValidated=true.
       const chmZero = tally.C + tally.H + tally.M === 0
       const newConsecutiveZero = chmZero
         ? state.ralph.consecutiveZero + 1
@@ -1037,7 +1039,7 @@ export function applyTransition(
       const findings = payload.findings as FindingSubmission[]
 
       // Compute counts from findings
-      const counts = { C: 0, H: 0, M: 0, L: 0, I: 0 }
+      const counts = { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 }
       for (const f of findings) {
         counts[f.severity]++
       }
@@ -1058,6 +1060,7 @@ export function applyTransition(
             C: existing.counts.C + counts.C,
             H: existing.counts.H + counts.H,
             M: existing.counts.M + counts.M,
+            P: existing.counts.P + counts.P,
             L: existing.counts.L + counts.L,
             I: existing.counts.I + counts.I,
           },

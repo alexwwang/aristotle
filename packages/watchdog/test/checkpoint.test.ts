@@ -160,7 +160,7 @@ describe('CheckpointHandler', () => {
         'ralph_round_complete',
         JSON.stringify({
           phase: 3, round: 5,
-          tally: { C: 0, H: 0, M: 0, L: 0, I: 0 },
+          tally: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 },
         }),
         CONTEXT,
       )
@@ -269,7 +269,7 @@ describe('CheckpointHandler', () => {
           phases: { 1: { phase: 1, enteredAt: NOW, ralphCompleted: false, ralphTermination: null, userApproved: false, approvedAt: null, articulationAttempted: false, articulationVerified: false, articulationDegraded: false, articulationFailures: 0 } },
           ralph: {
             phase: 1, round: r - 1, consecutiveZero: r - 1,
-            tallyHistory: Array.from({ length: r - 1 }, (_, i) => ({ round: i + 1, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW })),
+            tallyHistory: Array.from({ length: r - 1 }, (_, i) => ({ round: i + 1, C: 0, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: NOW })),
             openContested: [], escalated: false, escalatedAt: null, termination: null,
           },
         })
@@ -277,7 +277,7 @@ describe('CheckpointHandler', () => {
 
         result = await handler.handle(
           'ralph_round_complete',
-          JSON.stringify({ phase: 1, round: r, tally: { C: 0, H: 0, M: 0, L: 0, I: 0 } }),
+          JSON.stringify({ phase: 1, round: r, tally: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 } }),
           CONTEXT,
         )
         parsed = parseResult(result)
@@ -290,7 +290,7 @@ describe('CheckpointHandler', () => {
         phases: { 1: { phase: 1, enteredAt: NOW, ralphCompleted: false, ralphTermination: null, userApproved: false, approvedAt: null, articulationAttempted: false, articulationVerified: false, articulationDegraded: false, articulationFailures: 0 } },
         ralph: {
           phase: 1, round: 5, consecutiveZero: 5,
-          tallyHistory: Array.from({ length: 5 }, (_, i) => ({ round: i + 1, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW })),
+          tallyHistory: Array.from({ length: 5 }, (_, i) => ({ round: i + 1, C: 0, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: NOW })),
           openContested: [], escalated: false, escalatedAt: null, termination: null,
         },
       })
@@ -511,7 +511,7 @@ describe('CheckpointHandler', () => {
 
       await handler.handle(
         'ralph_round_complete',
-        JSON.stringify({ phase: 1, round: 1, tally: { C: 0, H: 0, M: 0, L: 0, I: 0 } }),
+        JSON.stringify({ phase: 1, round: 1, tally: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 } }),
         CONTEXT,
       )
 
@@ -661,7 +661,7 @@ describe('CheckpointHandler', () => {
 
       const result = await handler.handle(
         'ralph_round_complete',
-        JSON.stringify({ phase: 1, round: 1, tally: { C: 0, H: 0, M: 0, L: 0, I: 0 } }),
+        JSON.stringify({ phase: 1, round: 1, tally: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 } }),
         CONTEXT,
       )
       const parsed = parseResult(result)

@@ -15,6 +15,27 @@
  */
 import { randomUUID } from 'node:crypto'
 import type { PipelineStore } from './pipeline-store.js'
+
+/**
+ * Normalize severity strings from TDD protocol notation to wire format.
+ * Maps: M₁→M, M₂→P (Unicode subscripts) and M1→M, M2→P (ASCII fallback).
+ * Applied to both severity and original fields in ralph_round_finding.
+ */
+export function normalizeSeverities(event: string, payload: Record<string, unknown>): void {
+  if (event !== 'ralph_round_finding') return
+  const findings = payload.findings as Array<Record<string, unknown>> | undefined
+  if (!Array.isArray(findings)) return
+  const map: Record<string, string> = {
+    '\u004D\u2081': 'M', '\u004D\u2082': 'P', // M₁→M, M₂→P (Unicode)
+    'M1': 'M', 'M2': 'P',                     // ASCII fallback
+  }
+  for (const f of findings) {
+    if (f && typeof f === 'object') {
+      if (typeof f.severity === 'string' && map[f.severity]) f.severity = map[f.severity]
+      if (typeof f.original === 'string' && map[f.original]) f.original = map[f.original]
+    }
+  }
+}
 import type {
   CheckpointResult,
   CheckpointOk,
@@ -200,7 +221,10 @@ export class CheckpointHandler {
     }
     payload._now = now
 
-    // ── 8. Validate transition ────────────────────────────────────────
+    // ── 8. Normalize severities (Phase 2.3) ──────────────────────────
+    normalizeSeverities(event, payload)
+
+    // ── 9. Validate transition ────────────────────────────────────────
     const validation = validateTransition(event, payload, currentState)
 
     if (!validation.valid) {

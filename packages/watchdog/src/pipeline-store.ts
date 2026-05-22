@@ -1,5 +1,8 @@
 import type { StateStore } from '@opencode-ai/core/store/state-store';
 import type { Logger } from '@opencode-ai/core/logger';
+import {
+  SCHEMA_VERSION,
+} from './schema.js';
 import type {
   ActiveRun,
   AuditLogEntry,
@@ -129,6 +132,26 @@ export class PipelineStore {
   readState(projectId: string, runId: string): PipelineState | null {
     this.validatePathComponents(projectId, runId)
     let state = this.stateStore.read<PipelineState>(this.stateKey(projectId, runId));
+    // Version gate: reject state files from newer versions
+    if (state && state.version > SCHEMA_VERSION) {
+      throw new Error(
+        `State file version ${state.version} is newer than supported version ${SCHEMA_VERSION}. Update the watchdog to support this version.`
+      )
+    }
+    // Phase 2.3: defensive migration — add P:0 to old tallyHistory entries
+    // See schema.ts RoundRecord docstring for design context.
+    if (state?.ralph?.tallyHistory) {
+      for (const t of state.ralph.tallyHistory) {
+        if (!('P' in t)) (t as Record<string, unknown>).P = 0
+      }
+    }
+    // Phase 2.3: defensive migration — add P:0 to old roundRecords counts
+    // This MUST run before any code accesses .counts.P on loaded records.
+    if (state?.ralph?.roundRecords) {
+      for (const r of state.ralph.roundRecords) {
+        if (!('P' in r.counts)) (r.counts as Record<string, unknown>).P = 0
+      }
+    }
     // Migration: pre-v2 state files lack totalPhases field
     if (state && !('totalPhases' in state)) {
       (state as Record<string, unknown>).totalPhases = 5;

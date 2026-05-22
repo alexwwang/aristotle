@@ -627,7 +627,7 @@ describe('CheckpointHandler Phase 2', () => {
 
       const result = parseResult(await handler.handle(
         'ralph_round_complete',
-        JSON.stringify({ phase: 1, round: 2, tally: { C: 0, H: 0, M: 0, L: 0, I: 0 } }),
+        JSON.stringify({ phase: 1, round: 2, tally: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 } }),
         CONTEXT,
       ))
       expect(result.ok).toBe(true)
@@ -648,7 +648,7 @@ describe('CheckpointHandler Phase 2', () => {
 
       const result = parseResult(await handler.handle(
         'ralph_round_complete',
-        JSON.stringify({ phase: 1, round: 2, tally: { C: 0, H: 0, M: 0, L: 0, I: 0 } }),
+        JSON.stringify({ phase: 1, round: 2, tally: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 } }),
         CONTEXT,
       ))
       expect(result.ok).toBe(false)
@@ -672,7 +672,7 @@ describe('CheckpointHandler Phase 2', () => {
 
       const result = parseResult(await handler.handle(
         'ralph_round_complete',
-        JSON.stringify({ phase: 1, round: 2, tally: { C: 0, H: 0, M: 0, L: 0, I: 0 } }),
+        JSON.stringify({ phase: 1, round: 2, tally: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 } }),
         CONTEXT,
       ))
       expect(result.ok).toBe(true)
@@ -700,7 +700,7 @@ describe('CheckpointHandler Phase 2', () => {
 
       const result = parseResult(await handler.handle(
         'ralph_round_complete',
-        JSON.stringify({ phase: 1, round: 2, tally: { C: 0, H: 0, M: 0, L: 0, I: 0 } }),
+        JSON.stringify({ phase: 1, round: 2, tally: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 } }),
         CONTEXT,
       ))
       expect(result.ok).toBe(false)
@@ -1092,12 +1092,12 @@ describe('CheckpointHandler Phase 2', () => {
 
         // ralph_round_complete ×2 (enough for early_stop)
         state = applyTransition('ralph_round_complete', {
-          phase, round: 1, tally: { C: 0, H: 0, M: 0, L: 0, I: 0 }, _now: NOW,
+          phase, round: 1, tally: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 }, _now: NOW,
         }, state)
         expect(state.ownerSessionId).toBe(ownerSessionId)
 
         state = applyTransition('ralph_round_complete', {
-          phase, round: 2, tally: { C: 0, H: 0, M: 0, L: 0, I: 0 }, _now: NOW,
+          phase, round: 2, tally: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 }, _now: NOW,
         }, state)
         expect(state.ownerSessionId).toBe(ownerSessionId)
 
@@ -1165,10 +1165,10 @@ describe('CheckpointHandler Phase 2', () => {
         await localHandler.handle('ralph_loop_start', JSON.stringify({ phase }), CONTEXT)
         // Two zero-tally rounds to satisfy early_stop termination requirement
         await localHandler.handle('ralph_round_complete', JSON.stringify({
-          phase, round: 1, tally: { C: 0, H: 0, M: 0, L: 0, I: 0 },
+          phase, round: 1, tally: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 },
         }), CONTEXT)
         await localHandler.handle('ralph_round_complete', JSON.stringify({
-          phase, round: 2, tally: { C: 0, H: 0, M: 0, L: 0, I: 0 },
+          phase, round: 2, tally: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 },
         }), CONTEXT)
         await localHandler.handle('ralph_terminate', JSON.stringify({
           phase, termination: 'early_stop',

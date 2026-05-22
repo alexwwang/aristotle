@@ -31,7 +31,7 @@ function makeRalphState(
     round: 1,
     consecutiveZero: 0,
     tallyHistory: [
-      { round: 1, C: 1, H: 0, M: 0, L: 0, I: 0, timestamp: '2026-01-01T00:00:00.000Z' },
+      { round: 1, C: 1, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: '2026-01-01T00:00:00.000Z' },
     ],
     openContested: [],
     escalated: false,
@@ -164,7 +164,7 @@ describe('payload validation', () => {
   it('rejects ralph_round_complete with tally.C="abc"', () => {
     const result = validateTransition(
       'ralph_round_complete',
-      basePayload({ phase: 1, round: 2, tally: { C: 'abc', H: 0, M: 0, L: 0, I: 0 } }),
+      basePayload({ phase: 1, round: 2, tally: { C: 'abc', H: 0, M: 0, P: 0, L: 0, I: 0 } }),
       makeRalphState(),
     )
     expect(result.valid).toBe(false)
@@ -190,7 +190,7 @@ describe('payload validation', () => {
   it('rejects ralph_round_complete with round=-1', () => {
     const result = validateTransition(
       'ralph_round_complete',
-      basePayload({ phase: 1, round: -1, tally: { C: 0, H: 0, M: 0, L: 0, I: 0 } }),
+      basePayload({ phase: 1, round: -1, tally: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 } }),
       makeRalphState(),
     )
     expect(result.valid).toBe(false)
@@ -202,7 +202,7 @@ describe('payload validation', () => {
   it('rejects ralph_round_complete with round=0.5', () => {
     const result = validateTransition(
       'ralph_round_complete',
-      basePayload({ phase: 1, round: 0.5, tally: { C: 0, H: 0, M: 0, L: 0, I: 0 } }),
+      basePayload({ phase: 1, round: 0.5, tally: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 } }),
       makeRalphState(),
     )
     expect(result.valid).toBe(false)
@@ -381,7 +381,7 @@ describe('state preconditions', () => {
   it('rejects ralph_round_complete when round skips', () => {
     const result = validateTransition(
       'ralph_round_complete',
-      basePayload({ phase: 1, round: 3, tally: { C: 0, H: 0, M: 0, L: 0, I: 0 } }),
+      basePayload({ phase: 1, round: 3, tally: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 } }),
       makeRalphState(),
     )
     expect(result.valid).toBe(false)
@@ -398,7 +398,7 @@ describe('state preconditions', () => {
     })
     const result = validateTransition(
       'ralph_round_complete',
-      basePayload({ phase: 1, round: 2, tally: { C: 0, H: 0, M: 0, L: 0, I: 0 } }),
+      basePayload({ phase: 1, round: 2, tally: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 } }),
       state,
     )
     expect(result.valid).toBe(false)
@@ -417,7 +417,7 @@ describe('state preconditions', () => {
       'ralph_round_complete',
       basePayload({
         phase: 1, round: 2,
-        tally: { C: 0, H: 0, M: 0, L: 0, I: 0 },
+        tally: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 },
         contested_resolutions: [],
       }),
       state,
@@ -437,7 +437,7 @@ describe('state preconditions', () => {
       'ralph_round_complete',
       basePayload({
         phase: 1, round: 2,
-        tally: { C: 0, H: 0, M: 0, L: 0, I: 0 },
+        tally: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 },
         contested_resolutions: [{ id: 'fake-id', action: 'accepted' }],
       }),
       state,
@@ -453,7 +453,7 @@ describe('state preconditions', () => {
     const state = makeRalphState({}, {
       round: MIN_GATE_ROUNDS - 1,
       tallyHistory: [
-        { round: 1, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 1, C: 0, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: NOW },
       ],
     })
     const result = validateTransition(
@@ -471,7 +471,7 @@ describe('state preconditions', () => {
     const state = makeRalphState({}, {
       round: MIN_GATE_ROUNDS,
       tallyHistory: [
-        { round: 1, C: 1, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 1, C: 1, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: NOW },
       ],
     })
     const result = validateTransition(
@@ -505,7 +505,7 @@ describe('state preconditions', () => {
     const state = makeRalphState({}, {
       round: MAX_RALPH_ROUNDS - 1,
       tallyHistory: [
-        { round: 1, C: 1, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 1, C: 1, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: NOW },
       ],
     })
     const result = validateTransition(
@@ -523,7 +523,7 @@ describe('state preconditions', () => {
     const state = makeRalphState({}, {
       round: MAX_RALPH_ROUNDS,
       tallyHistory: [
-        { round: 1, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 1, C: 0, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: NOW },
       ],
     })
     const result = validateTransition(
@@ -668,7 +668,7 @@ describe('happy path', () => {
   it('accepts ralph_round_complete with correct round sequence', () => {
     const result = validateTransition(
       'ralph_round_complete',
-      basePayload({ phase: 1, round: 2, tally: { C: 0, H: 0, M: 0, L: 0, I: 0 } }),
+      basePayload({ phase: 1, round: 2, tally: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 } }),
       makeRalphState(),
     )
     expect(result.valid).toBe(true)
@@ -678,7 +678,7 @@ describe('happy path', () => {
     const state = makeRalphState({}, {
       round: MIN_GATE_ROUNDS,
       tallyHistory: [
-        { round: 1, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 1, C: 0, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: NOW },
       ],
     })
     const result = validateTransition(
@@ -706,7 +706,7 @@ describe('happy path', () => {
     const state = makeRalphState({}, {
       round: MAX_RALPH_ROUNDS,
       tallyHistory: [
-        { round: 1, C: 1, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 1, C: 1, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: NOW },
       ],
     })
     const result = validateTransition(
@@ -885,7 +885,7 @@ describe('applyTransition', () => {
     const state = makeRalphState()
     const newState = applyTransition(
       'ralph_round_complete',
-      basePayload({ phase: 1, round: 2, tally: { C: 0, H: 0, M: 0, L: 1, I: 0 } }),
+      basePayload({ phase: 1, round: 2, tally: { C: 0, H: 0, M: 0, P: 0, L: 1, I: 0 } }),
       state,
     )
     expect(newState.ralph!.round).toBe(2)
@@ -895,6 +895,7 @@ describe('applyTransition', () => {
       C: 0,
       H: 0,
       M: 0,
+      P: 0,
       L: 1,
       I: 0,
       timestamp: NOW,
@@ -907,7 +908,7 @@ describe('applyTransition', () => {
     const state1 = makeRalphState({}, { consecutiveZero: 1 })
     const newState1 = applyTransition(
       'ralph_round_complete',
-      basePayload({ phase: 1, round: 2, tally: { C: 0, H: 0, M: 0, L: 1, I: 0 } }),
+      basePayload({ phase: 1, round: 2, tally: { C: 0, H: 0, M: 0, P: 0, L: 1, I: 0 } }),
       state1,
     )
     expect(newState1.ralph!.consecutiveZero).toBe(2)
@@ -915,7 +916,7 @@ describe('applyTransition', () => {
     const state2 = makeRalphState({}, { consecutiveZero: 2 })
     const newState2 = applyTransition(
       'ralph_round_complete',
-      basePayload({ phase: 1, round: 2, tally: { C: 1, H: 0, M: 0, L: 0, I: 0 } }),
+      basePayload({ phase: 1, round: 2, tally: { C: 1, H: 0, M: 0, P: 0, L: 0, I: 0 } }),
       state2,
     )
     expect(newState2.ralph!.consecutiveZero).toBe(0)
@@ -933,7 +934,7 @@ describe('applyTransition', () => {
       basePayload({
         phase: 1,
         round: 2,
-        tally: { C: 0, H: 0, M: 0, L: 0, I: 0 },
+        tally: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 },
         contested_resolutions: [
           { id: 'M-1', action: 'accepted' },
           { id: 'M-2', action: 're_raised' },
@@ -958,7 +959,7 @@ describe('applyTransition', () => {
       basePayload({
         phase: 1,
         round: 2,
-        tally: { C: 0, H: 0, M: 0, L: 0, I: 0 },
+        tally: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 },
         contested_resolutions: [{ id: 'M-1', action: 'accepted' }],
       }),
       state,
@@ -975,7 +976,7 @@ describe('applyTransition', () => {
       basePayload({
         phase: 1,
         round: 2,
-        tally: { C: 0, H: 0, M: 0, L: 0, I: 0 },
+        tally: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 },
         new_contested: [
           { id: 'M-3', description: 'new issue' },
         ],
@@ -1088,7 +1089,7 @@ describe('full pipeline flow', () => {
       phase: number,
       rounds: number,
       termination: 'gate_pass' | 'early_stop' | 'max_rounds',
-      finalTally: { C: number; H: number; M: number; L: number; I: number },
+      finalTally: { C: number; H: number; M: number; P: number; L: number; I: number },
     ) {
       // phase_enter
       state = applyTransition('phase_enter', basePayload({ phase }), state)
@@ -1108,7 +1109,7 @@ describe('full pipeline flow', () => {
         const isLast = r === rounds
         const tally = isLast
           ? finalTally
-          : { C: 0, H: 0, M: 0, L: 0, I: 0 }
+          : { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 }
         state = applyTransition(
           'ralph_round_complete',
           basePayload({ phase, round: r, tally }),
@@ -1150,20 +1151,20 @@ describe('full pipeline flow', () => {
     }
 
     // Phase 1: gate_pass after 5 rounds
-    runPhase(1, MIN_GATE_ROUNDS, 'gate_pass', { C: 0, H: 0, M: 0, L: 0, I: 0 })
+    runPhase(1, MIN_GATE_ROUNDS, 'gate_pass', { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 })
 
     // Phase 2: early_stop after 2 rounds
-    runPhase(2, EARLY_STOP_CONSECUTIVE, 'early_stop', { C: 0, H: 0, M: 0, L: 0, I: 0 })
+    runPhase(2, EARLY_STOP_CONSECUTIVE, 'early_stop', { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 })
 
     // Phase 3: max_rounds after 10 rounds (last tally must have C+H+M > 0)
-    runPhase(3, MAX_RALPH_ROUNDS, 'max_rounds', { C: 1, H: 0, M: 0, L: 0, I: 0 })
+    runPhase(3, MAX_RALPH_ROUNDS, 'max_rounds', { C: 1, H: 0, M: 0, P: 0, L: 0, I: 0 })
 
     // Phase 4: gate_pass after 5 rounds + test evidence
-    runPhase(4, MIN_GATE_ROUNDS, 'gate_pass', { C: 0, H: 0, M: 0, L: 0, I: 0 })
+    runPhase(4, MIN_GATE_ROUNDS, 'gate_pass', { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 })
     expect(state!.testEvidenceConfirmed).toBe(true)
 
     // Phase 5: gate_pass after 5 rounds
-    runPhase(5, MIN_GATE_ROUNDS, 'gate_pass', { C: 0, H: 0, M: 0, L: 0, I: 0 })
+    runPhase(5, MIN_GATE_ROUNDS, 'gate_pass', { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 })
 
     // Final state assertions
     expect(state!.currentPhase).toBe(5)
@@ -1280,7 +1281,7 @@ describe('full pipeline flow', () => {
           phase: 1,
           round: 2,
           consecutiveZero: 0,
-          tallyHistory: [{ round: 1, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW }],
+          tallyHistory: [{ round: 1, C: 0, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: NOW }],
           openContested: [{ id: 'issue-42', description: 'existing issue', firstContestedRound: 1, disputeRounds: 0 }],
           escalated: false,
           escalatedAt: null,
@@ -1306,7 +1307,7 @@ describe('full pipeline flow', () => {
       const result = validateTransition('ralph_round_complete', {
         phase: 1,
         round: 3,
-        tally: { C: 0, H: 0, M: 0, L: 0, I: 0 },
+        tally: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 },
         contested_resolutions: [],
         new_contested: [{ id: 'issue-42', description: 'duplicate ID' }],
       }, state)
@@ -1481,13 +1482,13 @@ describe('Phase 2.1 GPAV — ralph_round_finding apply', () => {
     expect(newState.ralph!.autoValidated).toBe(true)
     expect(newState.ralph!.roundRecords).toHaveLength(1)
     expect(newState.ralph!.roundRecords[0].round).toBe(2)
-    expect(newState.ralph!.roundRecords[0].counts).toEqual({ C: 0, H: 0, M: 1, L: 1, I: 1 })
+    expect(newState.ralph!.roundRecords[0].counts).toEqual({ C: 0, H: 0, M: 1, P: 0, L: 1, I: 1  })
   })
 
   it('TC-G-12: merges multiple submissions for same round', () => {
     const state = makeRalphState({}, {
       round: 1,
-      roundRecords: [{ round: 2, counts: { C: 0, H: 0, M: 1, L: 0, I: 0 }, submittedAt: NOW }],
+      roundRecords: [{ round: 2, counts: { C: 0, H: 0, M: 1, P: 0, L: 0, I: 0 }, submittedAt: NOW }],
       autoValidated: true,
     })
     const newState = applyTransition('ralph_round_finding', basePayload({
@@ -1495,15 +1496,15 @@ describe('Phase 2.1 GPAV — ralph_round_finding apply', () => {
       findings: [{ severity: 'L', description: 'another issue' }],
     }), state)
     expect(newState.ralph!.roundRecords).toHaveLength(1)
-    expect(newState.ralph!.roundRecords[0].counts).toEqual({ C: 0, H: 0, M: 1, L: 1, I: 0 })
+    expect(newState.ralph!.roundRecords[0].counts).toEqual({ C: 0, H: 0, M: 1, P: 0, L: 1, I: 0 })
   })
 
   it('TC-G-13: adds new round record when round changes', () => {
     const state = makeRalphState({}, {
       round: 2,
       roundRecords: [
-        { round: 1, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
-        { round: 2, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 1, counts: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 2, counts: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 }, submittedAt: NOW },
       ],
       autoValidated: true,
     })
@@ -1522,11 +1523,11 @@ describe('Phase 2.1 GPAV — ralph_round_complete with autoValidated', () => {
     const state = makeRalphState({}, {
       round: 1,
       autoValidated: true,
-      roundRecords: [{ round: 1, counts: { C: 0, H: 0, M: 1, L: 0, I: 0 }, submittedAt: NOW }],
+      roundRecords: [{ round: 1, counts: { C: 0, H: 0, M: 1, P: 0, L: 0, I: 0 }, submittedAt: NOW }],
     })
     const result = validateTransition('ralph_round_complete', basePayload({
       phase: 1, round: 2,
-      tally: { C: 0, H: 0, M: 1, L: 0, I: 0 },
+      tally: { C: 0, H: 0, M: 1, P: 0, L: 0, I: 0 },
     }), state)
     expect(result.valid).toBe(false)
     if (!result.valid) {
@@ -1543,7 +1544,7 @@ describe('Phase 2.1 GPAV — ralph_round_complete with autoValidated', () => {
     })
     const result = validateTransition('ralph_round_complete', basePayload({
       phase: 1, round: 2,
-      tally: { C: 0, H: 0, M: 0, L: 0, I: 0 },
+      tally: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 },
     }), state)
     expect(result.valid).toBe(true)
   })
@@ -1555,9 +1556,9 @@ describe('Phase 2.1 GPAV — ralph_terminate with autoValidated', () => {
       round: 6,
       autoValidated: true,
       roundRecords: [
-        { round: 1, counts: { C: 1, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
-        { round: 2, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
-        { round: 3, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 1, counts: { C: 1, H: 0, M: 0, P: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 2, counts: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 3, counts: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 }, submittedAt: NOW },
       ],
     })
     const result = validateTransition('ralph_terminate', basePayload({
@@ -1566,13 +1567,13 @@ describe('Phase 2.1 GPAV — ralph_terminate with autoValidated', () => {
     expect(result.valid).toBe(true)
   })
 
-  it('TC-G-19: early_stop rejected when L=1 in last round (AC-G2 strict)', () => {
+  it('TC-G-19: early_stop rejected when M=1 in last round (AC-G2 strict)', () => {
     const state = makeRalphState({}, {
       round: 6,
       autoValidated: true,
       roundRecords: [
-        { round: 1, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
-        { round: 2, counts: { C: 0, H: 0, M: 0, L: 1, I: 0 }, submittedAt: NOW },
+        { round: 1, counts: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 2, counts: { C: 0, H: 0, M: 1, P: 0, L: 0, I: 0 }, submittedAt: NOW },
       ],
     })
     const result = validateTransition('ralph_terminate', basePayload({
@@ -1589,18 +1590,18 @@ describe('Phase 2.1 GPAV — ralph_terminate with autoValidated', () => {
       round: 5,
       autoValidated: true,
       tallyHistory: [
-        { round: 1, C: 1, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
-        { round: 2, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
-        { round: 3, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
-        { round: 4, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
-        { round: 5, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 1, C: 1, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 2, C: 0, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 3, C: 0, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 4, C: 0, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 5, C: 0, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: NOW },
       ],
       roundRecords: [
-        { round: 1, counts: { C: 1, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
-        { round: 2, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
-        { round: 3, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
-        { round: 4, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
-        { round: 5, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 1, counts: { C: 1, H: 0, M: 0, P: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 2, counts: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 3, counts: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 4, counts: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 5, counts: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 }, submittedAt: NOW },
       ],
     })
     const result = validateTransition('ralph_terminate', basePayload({
@@ -1609,23 +1610,23 @@ describe('Phase 2.1 GPAV — ralph_terminate with autoValidated', () => {
     expect(result.valid).toBe(true)
   })
 
-  it('TC-G-21: gate_pass rejected when L>0 in last record (GPAV strict)', () => {
+  it('TC-G-21: gate_pass rejected when M>0 in last record (GPAV strict)', () => {
     const state = makeRalphState({}, {
       round: 5,
       autoValidated: true,
       tallyHistory: [
-        { round: 1, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
-        { round: 2, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
-        { round: 3, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
-        { round: 4, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
-        { round: 5, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 1, C: 0, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 2, C: 0, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 3, C: 0, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 4, C: 0, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 5, C: 0, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: NOW },
       ],
       roundRecords: [
-        { round: 1, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
-        { round: 2, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
-        { round: 3, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
-        { round: 4, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
-        { round: 5, counts: { C: 0, H: 0, M: 0, L: 1, I: 0 }, submittedAt: NOW },
+        { round: 1, counts: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 2, counts: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 3, counts: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 4, counts: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 5, counts: { C: 0, H: 0, M: 1, P: 0, L: 0, I: 0 }, submittedAt: NOW },
       ],
     })
     const result = validateTransition('ralph_terminate', basePayload({
@@ -1642,11 +1643,11 @@ describe('Phase 2.1 GPAV — ralph_terminate with autoValidated', () => {
       round: 5,
       autoValidated: false,
       tallyHistory: [
-        { round: 1, C: 1, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
-        { round: 2, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
-        { round: 3, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
-        { round: 4, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
-        { round: 5, C: 0, H: 0, M: 0, L: 1, I: 0, timestamp: NOW },
+        { round: 1, C: 1, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 2, C: 0, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 3, C: 0, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 4, C: 0, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 5, C: 0, H: 0, M: 0, P: 0, L: 1, I: 0, timestamp: NOW },
       ],
     })
     // Legacy mode: L=1 is fine for gate_pass (only checks C+H+M)
@@ -1656,15 +1657,15 @@ describe('Phase 2.1 GPAV — ralph_terminate with autoValidated', () => {
     expect(result.valid).toBe(true)
   })
 
-  it('TC-G-23: max_rounds with GPAV checks C+H+M+L>0', () => {
+  it('TC-G-23: max_rounds with GPAV checks C+H+M>0', () => {
     const state = makeRalphState({}, {
       round: 10,
       autoValidated: true,
       tallyHistory: Array.from({ length: 10 }, (_, i) => ({
-        round: i + 1, C: 0, H: 0, M: 0, L: 1, I: 0, timestamp: NOW,
+        round: i + 1, C: 0, H: 0, M: 1, P: 0, L: 0, I: 0, timestamp: NOW,
       })),
       roundRecords: Array.from({ length: 10 }, (_, i) => ({
-        round: i + 1, counts: { C: 0, H: 0, M: 0, L: 1, I: 0 }, submittedAt: NOW,
+        round: i + 1, counts: { C: 0, H: 0, M: 1, P: 0, L: 0, I: 0 }, submittedAt: NOW,
       })),
     })
     const result = validateTransition('ralph_terminate', basePayload({
@@ -1678,10 +1679,10 @@ describe('Phase 2.1 GPAV — ralph_terminate with autoValidated', () => {
       round: 10,
       autoValidated: true,
       tallyHistory: Array.from({ length: 10 }, (_, i) => ({
-        round: i + 1, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW,
+        round: i + 1, C: 0, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: NOW,
       })),
       roundRecords: Array.from({ length: 10 }, (_, i) => ({
-        round: i + 1, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW,
+        round: i + 1, counts: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 }, submittedAt: NOW,
       })),
     })
     const result = validateTransition('ralph_terminate', basePayload({
@@ -1711,20 +1712,20 @@ describe('Phase 2.1 GPAV — migration', () => {
       round: 5,
       autoValidated: true,
       tallyHistory: [
-        { round: 1, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
-        { round: 2, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
-        { round: 3, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
-        { round: 4, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
-        { round: 5, C: 1, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 1, C: 0, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 2, C: 0, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 3, C: 0, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 4, C: 0, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 5, C: 1, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: NOW },
       ],
       roundRecords: [
-        { round: 1, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
-        { round: 2, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
-        { round: 3, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
-        { round: 4, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
-        { round: 5, counts: { C: 1, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 1, counts: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 2, counts: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 3, counts: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 4, counts: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 5, counts: { C: 1, H: 0, M: 0, P: 0, L: 0, I: 0 }, submittedAt: NOW },
         // Uncommitted round 6 — submitted via ralph_round_finding but not yet completed
-        { round: 6, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 6, counts: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 }, submittedAt: NOW },
       ],
     })
     const result = validateTransition('ralph_terminate', basePayload({
@@ -1743,20 +1744,20 @@ describe('Phase 2.1 GPAV — migration', () => {
       round: 5,
       autoValidated: true,
       tallyHistory: [
-        { round: 1, C: 1, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
-        { round: 2, C: 0, H: 0, M: 1, L: 0, I: 0, timestamp: NOW },
-        { round: 3, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
-        { round: 4, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
-        { round: 5, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 1, C: 1, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 2, C: 0, H: 0, M: 1, P: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 3, C: 0, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 4, C: 0, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 5, C: 0, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: NOW },
       ],
       roundRecords: [
-        { round: 1, counts: { C: 1, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
-        { round: 2, counts: { C: 0, H: 0, M: 1, L: 0, I: 0 }, submittedAt: NOW },
-        { round: 3, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
-        { round: 4, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
-        { round: 5, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 1, counts: { C: 1, H: 0, M: 0, P: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 2, counts: { C: 0, H: 0, M: 1, P: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 3, counts: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 4, counts: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 5, counts: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 }, submittedAt: NOW },
         // Uncommitted round 6 — should not inflate count
-        { round: 6, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: NOW },
+        { round: 6, counts: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 }, submittedAt: NOW },
       ],
     })
     const result = validateTransition('ralph_terminate', basePayload({
@@ -1773,7 +1774,7 @@ describe('Phase 2.1 GPAV — migration', () => {
       round: 0,
       autoValidated: true,
       tallyHistory: [],
-      roundRecords: [{ round: 1, counts: { C: 0, H: 0, M: 0, L: 0, I: 1 }, submittedAt: NOW }],
+      roundRecords: [{ round: 1, counts: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 1  }, submittedAt: NOW }],
     })
     const result = validateTransition('ralph_terminate', basePayload({
       phase: 1, termination: 'gate_pass',
@@ -1789,7 +1790,7 @@ describe('Phase 2.1 GPAV — migration', () => {
       round: 0,
       autoValidated: true,
       tallyHistory: [],
-      roundRecords: [{ round: 1, counts: { C: 0, H: 0, M: 0, L: 0, I: 1 }, submittedAt: NOW }],
+      roundRecords: [{ round: 1, counts: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 1  }, submittedAt: NOW }],
     })
     const result = validateTransition('ralph_terminate', basePayload({
       phase: 1, termination: 'early_stop',
@@ -1805,13 +1806,13 @@ describe('Phase 2.1 GPAV — migration', () => {
       round: 5,
       autoValidated: true,
       tallyHistory: [
-        { round: 1, C: 1, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
-        { round: 2, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
-        { round: 3, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
-        { round: 4, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
-        { round: 5, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 1, C: 1, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 2, C: 0, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 3, C: 0, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 4, C: 0, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: NOW },
+        { round: 5, C: 0, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: NOW },
       ],
-      roundRecords: [{ round: 6, counts: { C: 0, H: 0, M: 0, L: 0, I: 1 }, submittedAt: NOW }],
+      roundRecords: [{ round: 6, counts: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 1  }, submittedAt: NOW }],
     })
     const result = validateTransition('ralph_terminate', basePayload({
       phase: 1, termination: 'gate_pass',
@@ -1825,10 +1826,10 @@ describe('Phase 2.1 GPAV — migration', () => {
       autoValidated: true,
       tallyHistory: Array.from({ length: MAX_RALPH_ROUNDS }, (_, i) => ({
         round: i + 1,
-        C: i === 9 ? 1 : 0, H: 0, M: 0, L: 0, I: 0,
+        C: i === 9 ? 1 : 0, H: 0, M: 0, P: 0, L: 0, I: 0,
         timestamp: NOW,
       })),
-      roundRecords: [{ round: 11, counts: { C: 0, H: 0, M: 0, L: 0, I: 1 }, submittedAt: NOW }],
+      roundRecords: [{ round: 11, counts: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 1  }, submittedAt: NOW }],
     })
     const result = validateTransition('ralph_terminate', basePayload({
       phase: 1, termination: 'max_rounds',
