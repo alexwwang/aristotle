@@ -71,7 +71,7 @@ function checkTally(tally: unknown): { ok: boolean; errorType?: 'missing' | 'typ
   return { ok: true }
 }
 
-/** Severity ordering: C=5 > H=4 > M=3 > P=2 > L=1 > I=0. P=Proposal (quality-level, does not reset consecutive-zero). Returns true when a is less severe than b. */
+/** Severity ordering: C=5 > H=4 > M=3 > P=2 > L=1 > I=0. P=Proposal (quality-tier, does not reset consecutive-zero). Returns true when a is less severe than b. */
 const SEV_ORDER: Record<string, number> = { C: 5, H: 4, M: 3, P: 2, L: 1, I: 0 }
 function severityLt(a: string, b: string): boolean {
   return (SEV_ORDER[a] ?? 0) < (SEV_ORDER[b] ?? 0)

@@ -140,16 +140,23 @@ export class PipelineStore {
     }
     // Phase 2.3: defensive migration — add P:0 to old tallyHistory entries
     // See schema.ts RoundRecord docstring for design context.
+    // Null guard on t mirrors the roundRecords.counts guard below: corrupted
+    // state files may have null entries; prevents TypeError on `'P' in null`.
     if (state?.ralph?.tallyHistory) {
       for (const t of state.ralph.tallyHistory) {
-        if (!('P' in t)) (t as Record<string, unknown>).P = 0
+        if (t && !('P' in t)) (t as Record<string, unknown>).P = 0
       }
     }
     // Phase 2.3: defensive migration — add P:0 to old roundRecords counts
     // This MUST run before any code accesses .counts.P on loaded records.
+    // Defense-in-depth: corrupted state files may have counts as undefined OR
+    // a non-object primitive (string/number). The typeof check + truthy guard
+    // ensures `'P' in r.counts` and the subsequent property assignment are safe.
     if (state?.ralph?.roundRecords) {
       for (const r of state.ralph.roundRecords) {
-        if (!('P' in r.counts)) (r.counts as Record<string, unknown>).P = 0
+        if (r.counts && typeof r.counts === 'object' && !('P' in r.counts)) {
+          (r.counts as Record<string, unknown>).P = 0
+        }
       }
     }
     // Migration: pre-v2 state files lack totalPhases field
