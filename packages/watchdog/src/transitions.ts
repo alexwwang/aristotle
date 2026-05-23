@@ -82,6 +82,53 @@ const START_FIRST =
   "Start a pipeline first by calling tdd_checkpoint with event='pipeline_start'." as const
 
 /**
+ * Tally-based termination validation (legacy + KI-24 fallback).
+ * Used when GPAV roundRecords are unavailable — checks tallyHistory and consecutiveZero.
+ */
+function validateTallyTermination(
+  termination: RalphTermination,
+  ralph: { round: number; tallyHistory: RoundTally[]; consecutiveZero: number },
+): ValidationResult {
+  if (termination === 'gate_pass') {
+    if (ralph.round < MIN_GATE_ROUNDS) {
+      return fail(
+        'Insufficient rounds for gate pass',
+        `Gate pass requires at least ${MIN_GATE_ROUNDS} rounds. Current: ${ralph.round}.`,
+      )
+    }
+    const last = ralph.tallyHistory[ralph.tallyHistory.length - 1]
+    if (!last || last.C + last.H + last.M > 0) {
+      return fail(
+        'Unresolved issues remain',
+        'Gate pass requires the last tally to have C+H+M equal to 0.',
+      )
+    }
+  } else if (termination === 'early_stop') {
+    if (ralph.consecutiveZero < EARLY_STOP_CONSECUTIVE) {
+      return fail(
+        'Insufficient consecutive zero rounds',
+        `Early stop requires at least ${EARLY_STOP_CONSECUTIVE} consecutive zero rounds. Current: ${ralph.consecutiveZero}.`,
+      )
+    }
+  } else if (termination === 'max_rounds') {
+    if (ralph.round < MAX_RALPH_ROUNDS) {
+      return fail(
+        'Insufficient rounds for max_rounds termination',
+        `max_rounds termination requires at least ${MAX_RALPH_ROUNDS} rounds. Current: ${ralph.round}.`,
+      )
+    }
+    const last = ralph.tallyHistory[ralph.tallyHistory.length - 1]
+    if (!last || last.C + last.H + last.M === 0) {
+      return fail(
+        'No unresolved issues',
+        'max_rounds termination requires the last tally to have C+H+M greater than 0.',
+      )
+    }
+  }
+  return ok()
+}
+
+/**
  * Validate a state transition WITHOUT mutating state.
  * Pure function — no I/O, no side effects.
  *
@@ -350,7 +397,7 @@ export function validateTransition(
             return fail(`Invalid original severity at index ${i}`, `Original severity must be one of C/H/M/P/L/I, got "${f.original}".`)
           }
           if (severityLt(f.severity as string, f.original as string)) {
-            if (typeof f.downgrade_reason !== 'string' || (f.downgrade_reason as string).length === 0) {
+            if (typeof f.downgrade_reason !== 'string' || (f.downgrade_reason as string).trim().length === 0) {
               return fail(`Missing downgrade_reason at index ${i}`, `Severity downgrade from ${f.original} to ${f.severity} requires a downgrade_reason.`)
             }
           }
@@ -559,9 +606,6 @@ export function validateTransition(
       // are excluded to prevent gate_pass bypass.
       if (ralph.autoValidated && ralph.roundRecords.length > 0) {
         const completedRecords = ralph.roundRecords.filter(r => r.round <= ralph.round)
-        // KI-22 defensive check: in normal GPAV flow, completedRecords should cover
-        // all rounds. If not, fall through to KI-24 fallback (completedRecords empty
-        // or partial). This branch handles partial coverage gracefully.
         if (completedRecords.length > 0) {
           // Compute consecutiveZero from completed records with strict definition: C=H=M=0, P/L excluded
           let strictConsecutive = 0
@@ -611,88 +655,13 @@ export function validateTransition(
             }
           }
         } else {
-          // [KI-24] Known design decision: when autoValidated=true but completedRecords is empty
-          // (agent activated GPAV mid-loop by submitting findings for an uncommitted round),
-          // we fall back to legacy tallyHistory checks. This is intentional — legacy rounds
-          // were validated through ralph_round_complete. Once SKILL.md is updated to include
-          // ralph_round_finding, agents will use GPAV from round 1 and this path becomes
-          // unreachable. See KnownIssues-Watchdog.md KI-24 for full analysis.
-          // Reviewers: this is a documented design choice, NOT a defect.
-          if (termination === 'gate_pass') {
-            if (ralph.round < MIN_GATE_ROUNDS) {
-              return fail(
-                'Insufficient rounds for gate pass',
-                `Gate pass requires at least ${MIN_GATE_ROUNDS} rounds. Current: ${ralph.round}.`,
-              )
-            }
-            const last = ralph.tallyHistory[ralph.tallyHistory.length - 1]
-            if (!last || last.C + last.H + last.M > 0) {
-              return fail(
-                'Unresolved issues remain',
-                'Gate pass requires the last tally to have C+H+M equal to 0.',
-              )
-            }
-          } else if (termination === 'early_stop') {
-            if (ralph.consecutiveZero < EARLY_STOP_CONSECUTIVE) {
-              return fail(
-                'Insufficient consecutive zero rounds',
-                `Early stop requires at least ${EARLY_STOP_CONSECUTIVE} consecutive zero rounds. Current: ${ralph.consecutiveZero}.`,
-              )
-            }
-          } else if (termination === 'max_rounds') {
-            if (ralph.round < MAX_RALPH_ROUNDS) {
-              return fail(
-                'Insufficient rounds for max_rounds termination',
-                `max_rounds termination requires at least ${MAX_RALPH_ROUNDS} rounds. Current: ${ralph.round}.`,
-              )
-            }
-            const last = ralph.tallyHistory[ralph.tallyHistory.length - 1]
-            if (!last || last.C + last.H + last.M === 0) {
-              return fail(
-                'No unresolved issues',
-                'max_rounds termination requires the last tally to have C+H+M greater than 0.',
-              )
-            }
-          }
+          // [KI-24] Fallback: autoValidated but completedRecords empty — use shared tally validation.
+          // See KnownIssues-Watchdog.md KI-24 for rationale.
+          return validateTallyTermination(termination, ralph)
         }
       } else {
-        // Legacy mode — use tallyHistory (current behavior)
-        if (termination === 'gate_pass') {
-          if (ralph.round < MIN_GATE_ROUNDS) {
-            return fail(
-              'Insufficient rounds for gate pass',
-              `Gate pass requires at least ${MIN_GATE_ROUNDS} rounds. Current: ${ralph.round}.`,
-            )
-          }
-          const last = ralph.tallyHistory[ralph.tallyHistory.length - 1]
-          if (!last || last.C + last.H + last.M > 0) {
-            return fail(
-              'Unresolved issues remain',
-              'Gate pass requires the last tally to have C+H+M equal to 0.',
-            )
-          }
-        } else if (termination === 'early_stop') {
-          if (ralph.consecutiveZero < EARLY_STOP_CONSECUTIVE) {
-            return fail(
-              'Insufficient consecutive zero rounds',
-              `Early stop requires at least ${EARLY_STOP_CONSECUTIVE} consecutive zero rounds. Current: ${ralph.consecutiveZero}.`,
-            )
-          }
-        } else if (termination === 'max_rounds') {
-          if (ralph.round < MAX_RALPH_ROUNDS) {
-            return fail(
-              'Insufficient rounds for max_rounds termination',
-              `max_rounds termination requires at least ${MAX_RALPH_ROUNDS} rounds. Current: ${ralph.round}.`,
-            )
-          }
-          const last = ralph.tallyHistory[ralph.tallyHistory.length - 1]
-          if (!last || last.C + last.H + last.M === 0) {
-            return fail(
-              'No unresolved issues',
-              'max_rounds termination requires the last tally to have C+H+M greater than 0.',
-            )
-          }
-        }
+        // Legacy mode — use shared tally validation
+        return validateTallyTermination(termination, ralph)
       }
       return ok()
     }

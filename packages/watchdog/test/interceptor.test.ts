@@ -1,17 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { Interceptor, WatchdogInterceptError } from '../src/interceptor.js'
+import { Interceptor, WatchdogInterceptError, type InterceptorConfig } from '../src/interceptor.js'
 import { extractFilePath } from '../src/path-extractor.js'
 import { classifyFile } from '../src/file-classifier.js'
 import { createRules, type InterceptRule } from '../src/intercept-rules.js'
 import { FALLBACK_PATTERNS } from '../src/watchdog-config.js'
 import { PipelineStateCache } from '../src/state-cache.js'
+import type { FileCategory } from '../src/file-classifier.js'
 import { makeState, makePhaseRecord, createMockStore } from './helpers.js'
 
 describe('Interceptor', () => {
-  let mockCache: { get: ReturnType<typeof vi.fn>; update: ReturnType<typeof vi.fn>; clear: ReturnType<typeof vi.fn> }
+  let mockCache: any
   let mockStore: ReturnType<typeof createMockStore>
   let mockLogger: { info: ReturnType<typeof vi.fn>; warn: ReturnType<typeof vi.fn>; debug: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> }
-  let config: Record<string, unknown>
+  let config: InterceptorConfig
   let rules: InterceptRule[]
 
   beforeEach(() => {
@@ -32,8 +33,6 @@ describe('Interceptor', () => {
       monitoredTools: ['edit', 'write'],
       phaseDeliverables: FALLBACK_PATTERNS,
       ignorePatterns: [],
-      store: mockStore,
-      logger: mockLogger,
     }
 
     // Use production rules from source (not inline copies)
@@ -88,7 +87,7 @@ describe('Interceptor', () => {
   it('Rule 1: allows business code in Phase 5 when Phase 4 gate passed', async () => {
     mockCache.get.mockReturnValue(makeState({
       currentPhase: 5,
-      phases: { 4: { ralphCompleted: true, userApproved: true } },
+      phases: { 4: makePhaseRecord(4, { ralphCompleted: true, userApproved: true }) },
     }))
     const interceptor = new Interceptor(mockCache, config, extractFilePath, classifyFile, rules)
     await expect(
@@ -108,7 +107,7 @@ describe('Interceptor', () => {
     mockCache.get.mockReturnValue(state)
 
     // Business code classification
-    const classification = { category: 'business_code', ruleIndex: 3, pattern: null }
+    const classification = { category: 'business_code' as FileCategory, phase: undefined, ruleIndex: 3, pattern: null }
 
     const ac3Rule = rules.find(r => r.id === 'NO_BUSINESS_CODE_BEFORE_PHASE5')!
     expect(ac3Rule.evaluate('edit', '/project/src/app.ts', classification, state)).toEqual(
@@ -130,7 +129,7 @@ describe('Interceptor', () => {
     mockCache.get.mockReturnValue(
       makeState({
         currentPhase: 2,
-        phases: { 2: { ralphCompleted: false, userApproved: false } },
+        phases: { 2: makePhaseRecord(2, { ralphCompleted: false, userApproved: false }) },
       }),
     )
     const interceptor = new Interceptor(mockCache, config, extractFilePath, classifyFile, rules)
@@ -147,7 +146,7 @@ describe('Interceptor', () => {
     mockCache.get.mockReturnValue(
       makeState({
         currentPhase: 2,
-        phases: { 2: { ralphCompleted: true, userApproved: true } },
+        phases: { 2: makePhaseRecord(2, { ralphCompleted: true, userApproved: true }) },
       }),
     )
     const interceptor = new Interceptor(mockCache, config, extractFilePath, classifyFile, rules)
@@ -162,7 +161,7 @@ describe('Interceptor', () => {
     mockCache.get.mockReturnValue(
       makeState({
         currentPhase: 4,
-        phases: { 4: { ralphCompleted: false, userApproved: false } },
+        phases: { 4: makePhaseRecord(4, { ralphCompleted: false, userApproved: false }) },
       }),
     )
     const interceptor = new Interceptor(mockCache, config, extractFilePath, classifyFile, rules)
@@ -321,7 +320,7 @@ describe('Interceptor', () => {
   it('logs warning and allows write when path extraction returns null', async () => {
     mockCache.get.mockReturnValue(makeState({ currentPhase: 4 }))
     const nullExtractor = vi.fn().mockReturnValue(null)
-    const interceptor = new Interceptor(mockCache, config, nullExtractor, classifyFile, rules, mockStore, mockLogger as any)
+    const interceptor = new Interceptor(mockCache, config, nullExtractor, classifyFile, rules, mockStore as any, mockLogger as any)
     await expect(interceptor.handle('edit', { filePath: 'foo.ts' }, 'sess-001', 'call-318')).resolves.toBeUndefined()
     expect(mockLogger.warn).toHaveBeenCalledWith(expect.stringContaining('missing target path'), expect.anything())
   })
@@ -331,7 +330,7 @@ describe('Interceptor', () => {
     const state = makeState({
       currentPhase: 5,
       phaseStatus: 'active',
-      phases: { 4: { ralphCompleted: true, userApproved: true } },
+      phases: { 4: makePhaseRecord(4, { ralphCompleted: true, userApproved: true }) },
     })
     mockCache.get.mockReturnValue(state)
 

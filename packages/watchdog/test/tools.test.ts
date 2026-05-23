@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { createWatchdogTools } from '../src/tools.js'
 
 // Mock handler — tools.ts only needs the shape, not real behavior
-const mockHandler = { handle: (() => Promise.resolve('{}')) as any }
+const mockHandler: any = { handle: (() => Promise.resolve('{}')), articulationFailures: new Map(), store: null, staleThresholdMs: 0, getFailureCount: () => 0 }
 
 describe('tools.ts: ralph_round_finding registration', () => {
   const tools = createWatchdogTools({ checkpointHandler: mockHandler })

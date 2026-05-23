@@ -5,6 +5,7 @@
  */
 import { vi } from 'vitest'
 import { SCHEMA_VERSION } from '../src/schema.js'
+import type { PipelineState, RalphLoopState, PhaseRecord } from '../src/schema.js'
 import type { FileClassification } from '../src/file-classifier.js'
 
 export { SCHEMA_VERSION } from '../src/schema.js'
@@ -12,28 +13,95 @@ export { STALE_THRESHOLD_MS, MAX_RALPH_ROUNDS, MIN_GATE_ROUNDS, EARLY_STOP_CONSE
 
 // ── Schema helpers ─────────────────────────────────────────────────────────
 
+/** Fixed timestamp for deterministic tests. */
+export const NOW = '2026-01-01T00:00:00.000Z'
+
 const FRESH_NOW = new Date().toISOString()
 
-export function makeState(overrides: Record<string, any> = {}): Record<string, any> {
+export function makeLegacyState(overrides: Record<string, any> & { version: number }): PipelineState {
+  const { version, ...rest } = overrides
   return {
-    version: SCHEMA_VERSION,
-    projectId: 'proj-test',
-    runId: 'run-test',
-    startedAt: FRESH_NOW,
-    description: 'test',
+    version: version ?? SCHEMA_VERSION,
+    projectId: 'abc12345',
+    runId: 'run-001',
+    startedAt: NOW,
+    description: 'test feature',
     currentPhase: 0,
-    phaseStatus: 'idle' as const,
+    phaseStatus: 'idle',
     totalPhases: 5,
     phases: {},
     ralph: null,
     testEvidenceConfirmed: false,
-    lastCheckpointAt: FRESH_NOW,
-    // Phase 2 field — optional in schema, defaults for convenience
+    lastCheckpointAt: NOW,
+    ...rest,
+  } as PipelineState
+}
+
+export function makeState(overrides: Partial<PipelineState> = {}): PipelineState {
+  return {
+    version: SCHEMA_VERSION,
+    projectId: 'abc12345',
+    runId: 'run-001',
+    startedAt: NOW,
+    description: 'test feature',
+    currentPhase: 0,
+    phaseStatus: 'idle',
+    totalPhases: 5,
+    phases: {},
+    ralph: null,
+    testEvidenceConfirmed: false,
+    lastCheckpointAt: NOW,
     ...overrides,
   }
 }
 
-export function makePhaseRecord(phase: number, overrides: Record<string, any> = {}): Record<string, any> {
+export function makeRalphState(
+  overrides: Partial<PipelineState> = {},
+  ralphOverrides: Partial<RalphLoopState> = {},
+): PipelineState {
+  const baseRalph: RalphLoopState = {
+    phase: 1,
+    round: 1,
+    consecutiveZero: 0,
+    tallyHistory: [
+      { round: 1, C: 1, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: NOW },
+    ],
+    openContested: [],
+    escalated: false,
+    escalatedAt: null,
+    termination: null,
+    roundRecords: [],
+    autoValidated: false,
+    ...ralphOverrides,
+  }
+
+  return makeState({
+    currentPhase: 1,
+    phaseStatus: 'ralph_loop',
+    ralph: baseRalph,
+    phases: {
+      1: {
+        phase: 1,
+        enteredAt: NOW,
+        ralphCompleted: false,
+        ralphTermination: null,
+        userApproved: false,
+        approvedAt: null,
+        articulationAttempted: false,
+        articulationVerified: false,
+        articulationDegraded: false,
+        articulationFailures: 0,
+      },
+    },
+    ...overrides,
+  })
+}
+
+export function basePayload(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return { _now: NOW, ...overrides }
+}
+
+export function makePhaseRecord(phase: number, overrides: Partial<PhaseRecord> = {}): PhaseRecord {
   return {
     phase,
     enteredAt: FRESH_NOW,
@@ -118,7 +186,7 @@ export const VALID_CONFIG_MAP_RALPH_ONLY: PhaseLoopMap = {
 }
 
 /** Create a state with loopPhaseMap and maxPhase for loopType-aware tests. */
-export function makeStateWithConfig(phaseLoopMap: PhaseLoopMap, maxPhase: number): Record<string, any> {
+export function makeStateWithConfig(phaseLoopMap: PhaseLoopMap, maxPhase: number): PipelineState {
   return makeState({ loopPhaseMap: phaseLoopMap, maxPhase, totalPhases: maxPhase })
 }
 
@@ -151,11 +219,27 @@ export const FIXTURES = {
 } as const
 
 /** Create a mock FileClassification for intercept-rule tests. */
-export function mockClassification(category: string, phase: number): FileClassification {
-  return {
+export function mockClassification(category: string, phase?: number): FileClassification {
+  const result: FileClassification = {
     category: category as FileClassification['category'],
-    phase,
-    confidence: 1,
-    reason: 'test',
+  }
+  if (phase !== undefined) result.phase = phase
+  return result
+}
+
+/** Create a minimal RalphLoopState for tests that need to mock ralph state. */
+export function makeRalphLoop(overrides: Partial<RalphLoopState> = {}): RalphLoopState {
+  return {
+    phase: 1,
+    round: 1,
+    consecutiveZero: 0,
+    tallyHistory: [],
+    openContested: [],
+    escalated: false,
+    escalatedAt: null,
+    termination: null,
+    roundRecords: [],
+    autoValidated: false,
+    ...overrides,
   }
 }

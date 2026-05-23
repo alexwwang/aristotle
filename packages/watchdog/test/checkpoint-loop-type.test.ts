@@ -23,9 +23,9 @@ describe('CheckpointHandler constructor — loopConfig injection', () => {
     // Per §D.2 Change 1: handle() injects _loopPhaseMap/_maxPhase into pipeline_start payload.
     // This test verifies the full chain: constructor stores loopConfig → handle injects it.
     const loopConfig = createMockLoopConfig({ maxPhase: 7 })
-    const store = createMockStore()
-    const cache = createMockCache()
-    const observer = createMockObserver()
+    const store: any = createMockStore()
+    const cache: any = createMockCache()
+    const observer: any = createMockObserver()
     // Phase 5: constructor accepts loopConfig as 3rd param.
     // After Phase 5: CheckpointHandler(store, staleThresholdMs, loopConfig, cache, observer)
     const handler = new CheckpointHandler(store, 300_000, loopConfig, cache, observer)
@@ -49,9 +49,9 @@ describe('CheckpointHandler constructor — loopConfig injection', () => {
 
   it('should use empty loopPhaseMap for default config', async () => {
     const defaultConfig = { loopPhaseMap: {} as Record<number, never>, maxPhase: undefined }
-    const store = createMockStore()
-    const cache = createMockCache()
-    const observer = createMockObserver()
+    const store: any = createMockStore()
+    const cache: any = createMockCache()
+    const observer: any = createMockObserver()
     const handler = new CheckpointHandler(store, 300_000, defaultConfig, cache, observer)
 
     await handler.handle('pipeline_start', JSON.stringify({
@@ -80,9 +80,9 @@ describe('pipeline completion — archive trigger uses effectiveMax', () => {
     // Pipeline with maxPhase=7 but totalPhases=9.
     // After completing phase 7 (=maxPhase), archive must fire even though 7 < 9.
     const loopConfig = createMockLoopConfig({ maxPhase: 7 })
-    const store = createMockStore()
-    const cache = createMockCache()
-    const observer = createMockObserver()
+    const store: any = createMockStore()
+    const cache: any = createMockCache()
+    const observer: any = createMockObserver()
     const handler = new CheckpointHandler(store, 300_000, loopConfig, cache, observer)
 
     // Step 1: pipeline_start with totalPhases=9
@@ -120,9 +120,9 @@ describe('pipeline completion — archive trigger uses effectiveMax', () => {
     // Same pipeline (maxPhase=7, totalPhases=9).
     // Completing phase 6 should NOT trigger archive.
     const loopConfig = createMockLoopConfig({ maxPhase: 7 })
-    const store = createMockStore()
-    const cache = createMockCache()
-    const observer = createMockObserver()
+    const store: any = createMockStore()
+    const cache: any = createMockCache()
+    const observer: any = createMockObserver()
     const handler = new CheckpointHandler(store, 300_000, loopConfig, cache, observer)
 
     await handler.handle('pipeline_start', JSON.stringify({
@@ -152,9 +152,9 @@ describe('pipeline completion — archive trigger uses effectiveMax', () => {
   it('should archive at totalPhases for legacy state (no maxPhase)', async () => {
     // Legacy: maxPhase=undefined → effectiveMax = totalPhases(5)
     const defaultConfig = { loopPhaseMap: {} as Record<number, never>, maxPhase: undefined }
-    const store = createMockStore()
-    const cache = createMockCache()
-    const observer = createMockObserver()
+    const store: any = createMockStore()
+    const cache: any = createMockCache()
+    const observer: any = createMockObserver()
     const handler = new CheckpointHandler(store, 300_000, defaultConfig, cache, observer)
 
     await handler.handle('pipeline_start', JSON.stringify({
@@ -200,9 +200,9 @@ describe('pipeline completion — archive trigger uses effectiveMax', () => {
 describe('security: payload injection defense for _loopPhaseMap/_maxPhase', () => {
   it('should overwrite malicious _loopPhaseMap in pipeline_start payload', async () => {
     const loopConfig = createMockLoopConfig({ maxPhase: 7 })
-    const store = createMockStore()
-    const cache = createMockCache()
-    const observer = createMockObserver()
+    const store: any = createMockStore()
+    const cache: any = createMockCache()
+    const observer: any = createMockObserver()
     const handler = new CheckpointHandler(store, 300_000, loopConfig, cache, observer)
 
     // Caller injects malicious _loopPhaseMap and _maxPhase in payload

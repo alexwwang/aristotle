@@ -14,7 +14,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { CheckpointResult, CheckpointOk, CheckpointViolation, CheckpointRecovery } from '../src/schema.js'
-import { SCHEMA_VERSION, STALE_THRESHOLD_MS } from './helpers.js'
+import { SCHEMA_VERSION, STALE_THRESHOLD_MS, NOW, makeState, makeRalphLoop } from './helpers.js'
 import { computeProjectId } from '../src/project-id.js'
 
 // Import the class under test — will fail until checkpoint.ts is implemented (TDD RED)
@@ -61,30 +61,21 @@ function createMockStore() {
 const WORKTREE = '/Users/test/my-project'
 const SESSION_ID = 'sess-001'
 const CONTEXT = { worktree: WORKTREE, sessionID: SESSION_ID }
-const NOW = '2026-01-01T00:00:00.000Z'
 const PROJECT_ID = computeProjectId(WORKTREE)  // '45eb2922'
 const FRESH_NOW = new Date().toISOString()  // Not stale
 
-function parseResult(raw: string): CheckpointResult {
-  return JSON.parse(raw) as CheckpointResult
+function checkpointState(overrides: Partial<PipelineState> = {}): PipelineState {
+  return makeState({
+    projectId: PROJECT_ID,
+    startedAt: FRESH_NOW,
+    lastCheckpointAt: FRESH_NOW,
+    description: 'test',
+    ...overrides,
+  })
 }
 
-function makeState(overrides: Partial<PipelineState> = {}): PipelineState {
-  return {
-    version: SCHEMA_VERSION,
-    projectId: PROJECT_ID,
-    runId: 'run-001',
-    startedAt: FRESH_NOW,
-    description: 'test',
-    currentPhase: 0,
-    phaseStatus: 'idle',
-    totalPhases: 5,
-    phases: {},
-    ralph: null,
-    testEvidenceConfirmed: false,
-    lastCheckpointAt: FRESH_NOW,
-    ...overrides,
-  }
+function parseResult(raw: string): CheckpointResult {
+  return JSON.parse(raw) as CheckpointResult
 }
 
 // ── Tests ───────────────────────────────────────────────────────────────────
@@ -124,7 +115,7 @@ describe('CheckpointHandler', () => {
       mockStore._setActiveRun(PROJECT_ID, {
         runId: 'run-001', projectId: PROJECT_ID, startedAt: NOW,
       })
-      mockStore._setState(PROJECT_ID, 'run-001', makeState({
+      mockStore._setState(PROJECT_ID, 'run-001', checkpointState({
         currentPhase: 1, phaseStatus: 'active',
       }))
 
@@ -150,7 +141,7 @@ describe('CheckpointHandler', () => {
       mockStore._setActiveRun(PROJECT_ID, {
         runId: 'run-001', projectId: PROJECT_ID, startedAt: staleTime,
       })
-      mockStore._setState(PROJECT_ID, 'run-001', makeState({
+      mockStore._setState(PROJECT_ID, 'run-001', checkpointState({
         lastCheckpointAt: staleTime,
         currentPhase: 3,
         phaseStatus: 'ralph_loop',
@@ -187,7 +178,7 @@ describe('CheckpointHandler', () => {
       mockStore._setActiveRun(PROJECT_ID, {
         runId: 'run-stale', projectId: PROJECT_ID, startedAt: staleTime,
       })
-      mockStore._setState(PROJECT_ID, 'run-stale', makeState({
+      mockStore._setState(PROJECT_ID, 'run-stale', checkpointState({
         runId: 'run-stale',
         lastCheckpointAt: staleTime,
       }))
@@ -231,7 +222,7 @@ describe('CheckpointHandler', () => {
       expect(runId).toBeTruthy()
 
       // Set up mock to return the state that was written
-      const startState = makeState({ runId, phaseStatus: 'idle' })
+      const startState = checkpointState({ runId, phaseStatus: 'idle' })
       mockStore._setState(PROJECT_ID, runId, startState)
 
       // 2. phase_enter(1)
@@ -248,30 +239,29 @@ describe('CheckpointHandler', () => {
       }
 
       // 3. ralph_loop_start(1)
-      const afterEnter = makeState({ runId, currentPhase: 1, phaseStatus: 'active', phases: { 1: { phase: 1, enteredAt: NOW, ralphCompleted: false, ralphTermination: null, userApproved: false, approvedAt: null, articulationAttempted: false, articulationVerified: false, articulationDegraded: false, articulationFailures: 0 } } })
+      const afterEnter = checkpointState({ runId, currentPhase: 1, phaseStatus: 'active', phases: { 1: { phase: 1, enteredAt: NOW, ralphCompleted: false, ralphTermination: null, userApproved: false, approvedAt: null, articulationAttempted: false, articulationVerified: false, articulationDegraded: false, articulationFailures: 0 } } })
       mockStore._setState(PROJECT_ID, runId, afterEnter)
       result = await handler.handle('ralph_loop_start', JSON.stringify({ phase: 1 }), CONTEXT)
       parsed = parseResult(result)
       expect(parsed.ok).toBe(true)
 
       // 4. 5 rounds of ralph_round_complete
-      const afterRalphStart = makeState({
+      const afterRalphStart = checkpointState({
         runId, currentPhase: 1, phaseStatus: 'ralph_loop',
         phases: { 1: { phase: 1, enteredAt: NOW, ralphCompleted: false, ralphTermination: null, userApproved: false, approvedAt: null, articulationAttempted: false, articulationVerified: false, articulationDegraded: false, articulationFailures: 0 } },
-        ralph: { phase: 1, round: 0, consecutiveZero: 0, tallyHistory: [], openContested: [], escalated: false, escalatedAt: null, termination: null },
+        ralph: makeRalphLoop({ phase: 1, round: 0, consecutiveZero: 0 }),
       })
       mockStore._setState(PROJECT_ID, runId, afterRalphStart)
 
       for (let r = 1; r <= 5; r++) {
         // Update mock state to reflect current round before next call
-        const currentRalphState = makeState({
+        const currentRalphState = checkpointState({
           runId, currentPhase: 1, phaseStatus: 'ralph_loop',
           phases: { 1: { phase: 1, enteredAt: NOW, ralphCompleted: false, ralphTermination: null, userApproved: false, approvedAt: null, articulationAttempted: false, articulationVerified: false, articulationDegraded: false, articulationFailures: 0 } },
-          ralph: {
+          ralph: makeRalphLoop({
             phase: 1, round: r - 1, consecutiveZero: r - 1,
             tallyHistory: Array.from({ length: r - 1 }, (_, i) => ({ round: i + 1, C: 0, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: NOW })),
-            openContested: [], escalated: false, escalatedAt: null, termination: null,
-          },
+          }),
         })
         mockStore._setState(PROJECT_ID, runId, currentRalphState)
 
@@ -285,14 +275,13 @@ describe('CheckpointHandler', () => {
       }
 
       // 5. ralph_terminate('gate_pass')
-      const after5Rounds = makeState({
+      const after5Rounds = checkpointState({
         runId, currentPhase: 1, phaseStatus: 'ralph_loop',
         phases: { 1: { phase: 1, enteredAt: NOW, ralphCompleted: false, ralphTermination: null, userApproved: false, approvedAt: null, articulationAttempted: false, articulationVerified: false, articulationDegraded: false, articulationFailures: 0 } },
-        ralph: {
+        ralph: makeRalphLoop({
           phase: 1, round: 5, consecutiveZero: 5,
           tallyHistory: Array.from({ length: 5 }, (_, i) => ({ round: i + 1, C: 0, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: NOW })),
-          openContested: [], escalated: false, escalatedAt: null, termination: null,
-        },
+        }),
       })
       mockStore._setState(PROJECT_ID, runId, after5Rounds)
       result = await handler.handle(
@@ -304,10 +293,10 @@ describe('CheckpointHandler', () => {
       expect(parsed.ok).toBe(true)
 
       // 6. user_approval(1)
-      const afterTerminate = makeState({
+      const afterTerminate = checkpointState({
         runId, currentPhase: 1, phaseStatus: 'awaiting_approval',
         phases: { 1: { phase: 1, enteredAt: NOW, ralphCompleted: true, ralphTermination: 'gate_pass', userApproved: false, approvedAt: null, articulationAttempted: false, articulationVerified: false, articulationDegraded: false, articulationFailures: 0 } },
-        ralph: { phase: 1, round: 5, consecutiveZero: 5, tallyHistory: [], openContested: [], escalated: false, escalatedAt: null, termination: 'gate_pass' },
+        ralph: makeRalphLoop({ phase: 1, round: 5, consecutiveZero: 5, termination: 'gate_pass' }),
       })
       mockStore._setState(PROJECT_ID, runId, afterTerminate)
       result = await handler.handle('user_approval', JSON.stringify({ phase: 1 }), CONTEXT)
@@ -315,10 +304,10 @@ describe('CheckpointHandler', () => {
       expect(parsed.ok).toBe(true)
 
       // 7. phase_complete(1)
-      const afterApproval = makeState({
+      const afterApproval = checkpointState({
         runId, currentPhase: 1, phaseStatus: 'awaiting_approval',
         phases: { 1: { phase: 1, enteredAt: NOW, ralphCompleted: true, ralphTermination: 'gate_pass', userApproved: true, approvedAt: NOW, articulationAttempted: false, articulationVerified: false, articulationDegraded: false, articulationFailures: 0 } },
-        ralph: { phase: 1, round: 5, consecutiveZero: 5, tallyHistory: [], openContested: [], escalated: false, escalatedAt: null, termination: 'gate_pass' },
+        ralph: makeRalphLoop({ phase: 1, round: 5, consecutiveZero: 5, termination: 'gate_pass' }),
       })
       mockStore._setState(PROJECT_ID, runId, afterApproval)
       result = await handler.handle('phase_complete', JSON.stringify({ phase: 1 }), CONTEXT)
@@ -337,7 +326,7 @@ describe('CheckpointHandler', () => {
       mockStore._setActiveRun(PROJECT_ID, {
         runId: 'run-001', projectId: PROJECT_ID, startedAt: NOW,
       })
-      mockStore._setState(PROJECT_ID, 'run-001', makeState({
+      mockStore._setState(PROJECT_ID, 'run-001', checkpointState({
         runId: 'run-001',
         currentPhase: 5,
         phaseStatus: 'awaiting_approval',
@@ -345,7 +334,7 @@ describe('CheckpointHandler', () => {
         phases: {
           5: { phase: 5, enteredAt: NOW, ralphCompleted: true, ralphTermination: 'gate_pass', userApproved: true, approvedAt: NOW, articulationAttempted: false, articulationVerified: false, articulationDegraded: false, articulationFailures: 0 },
         },
-        ralph: { phase: 5, round: 5, consecutiveZero: 5, tallyHistory: [], openContested: [], escalated: false, escalatedAt: null, termination: 'gate_pass' },
+        ralph: makeRalphLoop({ phase: 5, round: 5, consecutiveZero: 5, termination: 'gate_pass' }),
       }))
 
       const result = await handler.handle(
@@ -392,7 +381,7 @@ describe('CheckpointHandler', () => {
       mockStore._setActiveRun(PROJECT_ID, {
         runId: 'run-001', projectId: PROJECT_ID, startedAt: NOW,
       })
-      mockStore._setState(PROJECT_ID, 'run-001', makeState({
+      mockStore._setState(PROJECT_ID, 'run-001', checkpointState({
         phaseStatus: 'idle', // Can't enter phase 2 when phase 1 hasn't been entered
       }))
 
@@ -451,8 +440,8 @@ describe('CheckpointHandler', () => {
       expect(parsed1.ok).toBe(true)
 
       // Complete the first pipeline so second can start
-      const runId1 = parsed1.state!.runId
-      mockStore._setState(PROJECT_ID, runId1, makeState({
+      const runId1 = parsed1.ok ? parsed1.state.runId : ''
+      mockStore._setState(PROJECT_ID, runId1, checkpointState({
         runId: runId1,
         currentPhase: 5,
         phaseStatus: 'awaiting_approval',
@@ -470,7 +459,9 @@ describe('CheckpointHandler', () => {
       )
       const parsed2 = parseResult(result2)
       expect(parsed2.ok).toBe(true)
-      expect(parsed1.state!.runId).not.toBe(parsed2.state!.runId)
+      if (parsed1.ok && parsed2.ok) {
+        expect(parsed1.state.runId).not.toBe(parsed2.state.runId)
+      }
     })
   })
 
@@ -501,12 +492,12 @@ describe('CheckpointHandler', () => {
       mockStore._setActiveRun(PROJECT_ID, {
         runId: 'run-001', projectId: PROJECT_ID, startedAt: FRESH_NOW,
       })
-      mockStore._setState(PROJECT_ID, 'run-001', makeState({
+      mockStore._setState(PROJECT_ID, 'run-001', checkpointState({
         runId: 'run-001',
         currentPhase: 1,
         phaseStatus: 'ralph_loop',
         phases: { 1: { phase: 1, enteredAt: FRESH_NOW, ralphCompleted: false, ralphTermination: null, userApproved: false, approvedAt: null, articulationAttempted: false, articulationVerified: false, articulationDegraded: false, articulationFailures: 0 } },
-        ralph: { phase: 1, round: 0, consecutiveZero: 0, tallyHistory: [], openContested: [], escalated: false, escalatedAt: null, termination: null },
+        ralph: makeRalphLoop({ phase: 1, round: 0, consecutiveZero: 0 }),
       }))
 
       await handler.handle(
@@ -650,7 +641,7 @@ describe('CheckpointHandler', () => {
       mockStore._setActiveRun(PROJECT_ID, {
         runId: 'run-001', projectId: PROJECT_ID, startedAt: FRESH_NOW,
       })
-      mockStore._setState(PROJECT_ID, 'run-001', makeState({
+      mockStore._setState(PROJECT_ID, 'run-001', checkpointState({
         currentPhase: 1,
         phaseStatus: 'ralph_loop',
         phases: {

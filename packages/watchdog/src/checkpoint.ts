@@ -465,6 +465,7 @@ function summarizeState(state: PipelineState): PipelineStateSummary {
 }
 
 function formatElapsed(ms: number): string {
+  if (ms < 0) return '<1s' // KI-13: clock skew guard
   if (ms < 1000) return '<1s'
   const hours = Math.floor(ms / (60 * 60 * 1000))
   const minutes = Math.floor((ms % (60 * 60 * 1000)) / (60 * 1000))

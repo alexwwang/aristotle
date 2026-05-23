@@ -4,6 +4,7 @@ import {
   getLoopType,
   isLoopConfigError,
   ConfigValidationError,
+  type LoopConfigError,
 } from '../src/loop-config.js'
 import {
   FIXTURES,

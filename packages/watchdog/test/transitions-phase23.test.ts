@@ -1,74 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { validateTransition, applyTransition } from '../src/transitions.js'
 import { normalizeSeverities } from '../src/checkpoint.js'
-import { SCHEMA_VERSION } from '../src/schema.js'
-import type { PipelineState, RalphLoopState } from '../src/schema.js'
 import { MAX_RALPH_ROUNDS, MIN_GATE_ROUNDS, EARLY_STOP_CONSECUTIVE } from '../src/constants.js'
-
-function makeState(overrides: Partial<PipelineState> = {}): PipelineState {
-  return {
-    version: SCHEMA_VERSION,
-    projectId: 'abc12345',
-    runId: 'run-001',
-    startedAt: '2026-01-01T00:00:00.000Z',
-    description: 'test feature',
-    currentPhase: 0,
-    phaseStatus: 'idle',
-    totalPhases: 5,
-    phases: {},
-    ralph: null,
-    testEvidenceConfirmed: false,
-    lastCheckpointAt: '2026-01-01T00:00:00.000Z',
-    ...overrides,
-  }
-}
-
-function makeRalphState(
-  overrides: Partial<PipelineState> = {},
-  ralphOverrides: Partial<RalphLoopState> = {},
-): PipelineState {
-  const baseRalph: RalphLoopState = {
-    phase: 1,
-    round: 1,
-    consecutiveZero: 0,
-    tallyHistory: [
-      { round: 1, C: 1, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: '2026-01-01T00:00:00.000Z' },
-    ],
-    openContested: [],
-    escalated: false,
-    escalatedAt: null,
-    termination: null,
-    roundRecords: [],
-    autoValidated: false,
-    ...ralphOverrides,
-  }
-
-  return makeState({
-    currentPhase: 1,
-    phaseStatus: 'ralph_loop',
-    ralph: baseRalph,
-    phases: {
-      1: {
-        phase: 1,
-        enteredAt: '2026-01-01T00:00:00.000Z',
-        ralphCompleted: false,
-        ralphTermination: null,
-        userApproved: false,
-        approvedAt: null,
-        articulationAttempted: false,
-        articulationVerified: false,
-        articulationDegraded: false,
-        articulationFailures: 0,
-      },
-    },
-    ...overrides,
-  })
-}
-
-const NOW = '2026-01-01T00:00:00.000Z'
-function basePayload(overrides: Record<string, unknown> = {}): Record<string, unknown> {
-  return { _now: NOW, ...overrides }
-}
+import { makeState, makeRalphState, NOW, basePayload, SCHEMA_VERSION } from './helpers.js'
 
 describe('Phase 2.3 — P Severity Addition', () => {
   // ── TC-03: ralph_round_finding with severity 'P' accepted ─────────────────

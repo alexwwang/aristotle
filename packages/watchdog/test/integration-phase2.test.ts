@@ -26,12 +26,23 @@ import {
   STALE_THRESHOLD_MS,
 } from './helpers.js'
 import { applyTransition } from '../src/transitions.js'
+import type { PipelineState } from '../src/schema.js'
 
 const WORKTREE = '/workspace/my-project'
 const SESSION_ID = 'sess-001'
 const CONTEXT = { worktree: WORKTREE, sessionID: SESSION_ID }
 const PROJECT_ID = computeProjectId(WORKTREE)
 const NOW = '2026-01-01T00:00:00.000Z'
+const FRESH_NOW = new Date().toISOString()
+
+function checkpointState(overrides: Partial<PipelineState> = {}): PipelineState {
+  return makeState({
+    projectId: PROJECT_ID,
+    startedAt: FRESH_NOW,
+    lastCheckpointAt: FRESH_NOW,
+    ...overrides,
+  })
+}
 
 function parseResult(raw: string): CheckpointResult {
   return JSON.parse(raw) as CheckpointResult
@@ -48,9 +59,9 @@ function getLastWrittenState(store: any): any {
 // ═════════════════════════════════════════════════════════════════════════════
 
 describe('Integration Tests Phase 2', () => {
-  let mockStore: ReturnType<typeof createMockStore>
-  let mockCache: ReturnType<typeof createMockCache>
-  let mockObserver: ReturnType<typeof createMockObserver>
+  let mockStore: any
+  let mockCache: any
+  let mockObserver: any
 
   beforeEach(() => {
     mockStore = createMockStore()
@@ -204,7 +215,7 @@ describe('Integration Tests Phase 2', () => {
 
     // Setup active pipeline at phase 1
     mockStore._setActiveRun(PROJECT_ID, { runId: 'run-001', projectId: PROJECT_ID, startedAt: NOW })
-    mockStore._setState(PROJECT_ID, 'run-001', makeState({
+    mockStore._setState(PROJECT_ID, 'run-001', checkpointState({
       runId: 'run-001',
       currentPhase: 1,
       phaseStatus: 'active',
@@ -231,7 +242,7 @@ describe('Integration Tests Phase 2', () => {
     expect(articulationAudits[articulationAudits.length - 1].decision).toBe('PASS')
 
     // Feed state forward for second attempt
-    mockStore._setState(PROJECT_ID, 'run-001', makeState({
+    mockStore._setState(PROJECT_ID, 'run-001', checkpointState({
       runId: 'run-001',
       currentPhase: 1,
       phaseStatus: 'active',
@@ -353,7 +364,7 @@ describe('Integration Tests Phase 2', () => {
   // ── TC-I-05: Adaptive cache single-agent ──────────────────────────────────
   it('TC-I-05: Adaptive cache single-agent', () => {
     const store = createMockStore()
-    const expectedState = makeState({ runId: 'run-cache-test' })
+    const expectedState = checkpointState({ runId: 'run-cache-test' })
 
     // Single-agent mode (multiAgent=false)
     const cache = new PipelineStateCache(store as any, WORKTREE, undefined, false)
@@ -378,7 +389,7 @@ describe('Integration Tests Phase 2', () => {
   // ── TC-I-06: Adaptive cache multi-agent ───────────────────────────────────
   it('TC-I-06: Adaptive cache multi-agent', () => {
     const store = createMockStore()
-    const state1 = makeState({ runId: 'run-1', currentPhase: 2 })
+    const state1 = checkpointState({ runId: 'run-1', currentPhase: 2 })
     store.getActiveRun.mockReturnValue({ runId: 'run-1', projectId: PROJECT_ID, startedAt: NOW })
     store.readState.mockReturnValue(state1)
 
@@ -391,7 +402,7 @@ describe('Integration Tests Phase 2', () => {
     expect(store.readState).toHaveBeenCalledTimes(1)
 
     // Simulate state change on disk
-    const state2 = makeState({ runId: 'run-1', currentPhase: 3 })
+    const state2 = checkpointState({ runId: 'run-1', currentPhase: 3 })
     store.readState.mockReturnValue(state2)
 
     // Next get() should reflect the new disk state
@@ -483,7 +494,7 @@ describe('Integration Tests Phase 2', () => {
 
   // ── TC-I-10: Custom monitoredTools ────────────────────────────────────────
   it('TC-I-10: Custom monitoredTools', async () => {
-    const localCache = createMockCache()
+    const localCache: any = createMockCache()
     const config = {
       worktreeRoot: WORKTREE,
       monitoredTools: ['edit', 'write', 'custom_edit'],
@@ -494,7 +505,7 @@ describe('Integration Tests Phase 2', () => {
     const interceptor = new Interceptor(localCache, config, extractFilePath, classifyFile, rules)
 
     // Set state to Phase 4 with no test evidence
-    localCache.get.mockReturnValue(makeState({
+    localCache.get.mockReturnValue(checkpointState({
       currentPhase: 4,
       testEvidenceConfirmed: false,
       phases: { 4: makePhaseRecord(4) },
@@ -564,7 +575,7 @@ describe('Integration Tests Phase 2', () => {
     const handler = new CheckpointHandler(mockStore as any, STALE_THRESHOLD_MS, undefined, mockCache, mockObserver)
     const staleTime = new Date(Date.now() - STALE_THRESHOLD_MS - 1000).toISOString()
     mockStore._setActiveRun(PROJECT_ID, { runId: 'run-stale', projectId: PROJECT_ID, startedAt: staleTime })
-    mockStore._setState(PROJECT_ID, 'run-stale', makeState({
+    mockStore._setState(PROJECT_ID, 'run-stale', checkpointState({
       runId: 'run-stale',
       startedAt: staleTime,
       lastCheckpointAt: staleTime,
@@ -583,7 +594,7 @@ describe('Integration Tests Phase 2', () => {
     const handler = new CheckpointHandler(mockStore as any, STALE_THRESHOLD_MS, undefined, mockCache, mockObserver)
     const staleTime = new Date(Date.now() - STALE_THRESHOLD_MS - 1000).toISOString()
     mockStore._setActiveRun(PROJECT_ID, { runId: 'run-stale', projectId: PROJECT_ID, startedAt: staleTime })
-    mockStore._setState(PROJECT_ID, 'run-stale', makeState({
+    mockStore._setState(PROJECT_ID, 'run-stale', checkpointState({
       runId: 'run-stale',
       startedAt: staleTime,
       lastCheckpointAt: staleTime,
@@ -610,7 +621,7 @@ describe('Integration Tests Phase 2', () => {
   it('TC-I-18: non-stale active pipeline — owner also rejected', async () => {
     const handler = new CheckpointHandler(mockStore as any, STALE_THRESHOLD_MS, undefined, mockCache, mockObserver)
     mockStore._setActiveRun(PROJECT_ID, { runId: 'run-active', projectId: PROJECT_ID, startedAt: NOW })
-    mockStore._setState(PROJECT_ID, 'run-active', makeState({
+    mockStore._setState(PROJECT_ID, 'run-active', checkpointState({
       runId: 'run-active',
       startedAt: NOW,
       ownerSessionId: SESSION_ID,

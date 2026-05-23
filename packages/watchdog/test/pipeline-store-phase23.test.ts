@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { PipelineStore } from '../src/pipeline-store.js'
-import { SCHEMA_VERSION } from '../src/schema.js'
 import type { StateStore } from '@opencode-ai/core/store/state-store'
 import type { Logger } from '@opencode-ai/core/logger'
+import { makeState, makeLegacyState, SCHEMA_VERSION } from './helpers.js'
 
 // ------------------------------------------------------------------
 // Helpers
@@ -45,24 +45,6 @@ function createMockLogger(): Logger {
   }
 }
 
-function makeState(overrides: Record<string, unknown> = {}): Record<string, unknown> {
-  return {
-    version: SCHEMA_VERSION,
-    projectId: 'testproj',
-    runId: 'run-001',
-    startedAt: '2026-01-01T00:00:00.000Z',
-    description: 'test',
-    currentPhase: 0,
-    phaseStatus: 'idle',
-    totalPhases: 5,
-    phases: {},
-    ralph: null,
-    testEvidenceConfirmed: false,
-    lastCheckpointAt: '2026-01-01T00:00:00.000Z',
-    ...overrides,
-  }
-}
-
 // ------------------------------------------------------------------
 // Tests
 // ------------------------------------------------------------------
@@ -80,7 +62,7 @@ describe('Phase 2.3 — P Severity Persistence', () => {
 
   // ── TC-21 (AC-17): readState migrates pre-v4 roundRecords counts → adds P:0 ──
   it('TC-21 (AC-17): readState migrates pre-v4 roundRecords counts → adds P:0', () => {
-    const legacyState = makeState({
+    const legacyState = makeLegacyState({
       version: 3,
       ralph: {
         phase: 1,
@@ -113,7 +95,7 @@ describe('Phase 2.3 — P Severity Persistence', () => {
 
   // ── TC-21b (AC-12): readState migrates pre-v4 tallyHistory entries → adds P:0 ──
   it('TC-21b (AC-12): readState migrates pre-v4 tallyHistory entries → adds P:0', () => {
-    const legacyState = makeState({
+    const legacyState = makeLegacyState({
       version: 3,
       ralph: {
         phase: 1,
@@ -146,7 +128,7 @@ describe('Phase 2.3 — P Severity Persistence', () => {
 
   // ── TC-21c (Phase 2 R1 F-6 regression): readState handles corrupted roundRecords with missing counts field ──
   it('TC-21c (F-6 regression): readState does not throw when roundRecord.counts is missing', () => {
-    const corruptedState = makeState({
+    const corruptedState = makeLegacyState({
       version: 3,
       ralph: {
         phase: 1,
@@ -179,7 +161,7 @@ describe('Phase 2.3 — P Severity Persistence', () => {
 
   // ── TC-21d (Phase 2 R2 F-1 regression): readState handles null tallyHistory entries ──
   it('TC-21d (F-1 regression): readState does not throw when tallyHistory contains null entries', () => {
-    const corruptedState = makeState({
+    const corruptedState = makeLegacyState({
       version: 3,
       ralph: {
         phase: 1,
@@ -210,7 +192,7 @@ describe('Phase 2.3 — P Severity Persistence', () => {
 
   // ── TC-21e (Phase 2 R4 F-2 regression): readState handles non-object roundRecord.counts (string/number primitive) ──
   it('TC-21e (F-2 regression): readState does not throw when roundRecord.counts is a non-object primitive', () => {
-    const corruptedState = makeState({
+    const corruptedState = makeLegacyState({
       version: 3,
       ralph: {
         phase: 1,
@@ -243,7 +225,7 @@ describe('Phase 2.3 — P Severity Persistence', () => {
 
   // ── TC-22 (AC-13): readState throws when state.version > SCHEMA_VERSION ──
   it('TC-22 (AC-13): readState throws when state.version > SCHEMA_VERSION', () => {
-    const futureState = makeState({
+    const futureState = makeLegacyState({
       version: 99,
     })
 
@@ -303,7 +285,7 @@ describe('Phase 2.3 — P Severity Persistence', () => {
 
   // ── TC-21g (C8 combined): readState migrates both roundRecords AND tallyHistory in single load ──
   it('TC-21g (C8 combined): readState migrates both roundRecords AND tallyHistory in single load', () => {
-    const legacyState = makeState({
+    const legacyState = makeLegacyState({
       version: 3,
       ralph: {
         phase: 1,
@@ -335,7 +317,7 @@ describe('Phase 2.3 — P Severity Persistence', () => {
   })
 
   it('R4-F26 regression: primitive tallyHistory entry (number) does not throw during P migration', () => {
-    const corruptedState = makeState({
+    const corruptedState = makeLegacyState({
       version: 3,
       ralph: {
         round: 1,
@@ -362,7 +344,7 @@ describe('Phase 2.3 — P Severity Persistence', () => {
   })
 
   it('R5-F1 regression: null roundRecords entry does not throw during P migration', () => {
-    const corruptedState = makeState({
+    const corruptedState = makeLegacyState({
       version: 3,
       ralph: {
         round: 1,

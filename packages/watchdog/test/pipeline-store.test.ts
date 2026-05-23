@@ -1,15 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { PipelineStore } from '../src/pipeline-store.js'
-import { SCHEMA_VERSION } from '../src/schema.js'
 import type { StateStore } from '@opencode-ai/core/store/state-store'
 import type { Logger } from '@opencode-ai/core/logger'
 import type { ActiveRun, PipelineState, AuditLogEntry } from '../src/schema.js'
+import { makeState, NOW } from './helpers.js'
 
 // ------------------------------------------------------------------
 // Helpers
 // ------------------------------------------------------------------
-
-const NOW = '2026-01-01T00:00:00.000Z'
 
 function createMockStateStore(): StateStore {
   const store = new Map<string, any>()
@@ -46,24 +44,6 @@ function createMockLogger(): Logger {
     info: vi.fn(),
     warn: vi.fn(),
     error: vi.fn(),
-  }
-}
-
-function makeState(overrides: Partial<PipelineState> = {}): PipelineState {
-  return {
-    version: SCHEMA_VERSION,
-    projectId: 'testproj',
-    runId: 'run-001',
-    startedAt: '2026-01-01T00:00:00.000Z',
-    description: 'test',
-    currentPhase: 0,
-    phaseStatus: 'idle',
-    totalPhases: 5,
-    phases: {},
-    ralph: null,
-    testEvidenceConfirmed: false,
-    lastCheckpointAt: '2026-01-01T00:00:00.000Z',
-    ...overrides,
   }
 }
 

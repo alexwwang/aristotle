@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { Observer } from '../src/observer.js'
-import { makeState, makePhaseRecord, createMockStore, createMockCache, createMockSessionBuffer } from './helpers.js'
+import { makeState as _makeState, makePhaseRecord, makeRalphLoop, createMockStore, createMockCache, createMockSessionBuffer } from './helpers.js'
+import type { PipelineState } from '../src/schema.js'
+
+function makeState(overrides: Partial<PipelineState> = {}): PipelineState {
+  return _makeState({ projectId: 'proj-test', runId: 'run-test', ...overrides })
+}
 
 describe('Observer', () => {
   let mockStore: ReturnType<typeof createMockStore>
@@ -12,7 +17,7 @@ describe('Observer', () => {
     mockStore = createMockStore()
     mockCache = createMockCache()
     mockSessionBuffer = createMockSessionBuffer()
-    observer = new Observer(mockCache, mockSessionBuffer, mockStore)
+    observer = new Observer(mockCache as any, mockSessionBuffer as any, mockStore as any)
   })
 
   // ── TC-A-01 ───────────────────────────────────────────────────────────────
@@ -20,7 +25,7 @@ describe('Observer', () => {
     mockCache.get.mockReturnValue(
       makeState({
         phaseStatus: 'ralph_loop',
-        ralph: { round: 2 },
+        ralph: makeRalphLoop({ round: 2 }),
       }),
     )
 
@@ -58,7 +63,7 @@ describe('Observer', () => {
     mockCache.get.mockReturnValue(
       makeState({
         phaseStatus: 'ralph_loop',
-        ralph: { round: 2 },
+        ralph: makeRalphLoop({ round: 2 }),
       }),
     )
 
@@ -73,7 +78,7 @@ describe('Observer', () => {
     mockCache.get.mockReturnValue(
       makeState({
         phaseStatus: 'ralph_loop',
-        ralph: { round: 2 },
+        ralph: makeRalphLoop({ round: 2 }),
       }),
     )
 
@@ -124,7 +129,7 @@ describe('Observer', () => {
       .mockReturnValueOnce(
         makeState({
           phaseStatus: 'ralph_loop',
-          ralph: { round: 2 },
+          ralph: makeRalphLoop({ round: 2 }),
         }),
       )
 
@@ -150,7 +155,7 @@ describe('Observer', () => {
         currentPhase: 1,
         phaseStatus: 'ralph_loop',
         phases: { 1: makePhaseRecord(1) },
-        ralph: { round: 1 },
+        ralph: makeRalphLoop({ round: 1 }),
       }),
     )
     mockStore.appendObservation.mockImplementation(() => { throw new Error('disk full') })
@@ -168,7 +173,7 @@ describe('Observer', () => {
       .mockReturnValueOnce(
         makeState({
           phaseStatus: 'ralph_loop',
-          ralph: { round: 1 },
+          ralph: makeRalphLoop({ round: 1 }),
         }),
       )
 
@@ -192,7 +197,7 @@ describe('Observer', () => {
       .mockReturnValueOnce(
         makeState({
           phaseStatus: 'ralph_loop',
-          ralph: { round: 2 },
+          ralph: makeRalphLoop({ round: 2 }),
         }),
       )
 
@@ -210,7 +215,7 @@ describe('Observer', () => {
       .mockReturnValueOnce(
         makeState({
           phaseStatus: 'ralph_loop',
-          ralph: { round: 2 },
+          ralph: makeRalphLoop({ round: 2 }),
         }),
       )
 
@@ -235,7 +240,7 @@ describe('Observer', () => {
       .mockReturnValueOnce(
         makeState({
           phaseStatus: 'ralph_loop',
-          ralph: { round: 2 },
+          ralph: makeRalphLoop({ round: 2 }),
         }),
       )
 
@@ -253,7 +258,7 @@ describe('Observer', () => {
       makeState({
         currentPhase: 1,
         phaseStatus: 'ralph_loop',
-        ralph: { round: 1 },
+        ralph: makeRalphLoop({ round: 1 }),
       }),
     )
 
@@ -277,7 +282,7 @@ describe('Observer', () => {
       .mockReturnValueOnce(
         makeState({
           phaseStatus: 'ralph_loop',
-          ralph: { round: 2 },
+          ralph: makeRalphLoop({ round: 2 }),
         }),
       )
 
@@ -311,7 +316,7 @@ describe('Observer', () => {
       .mockReturnValueOnce(
         makeState({
           phaseStatus: 'ralph_loop',
-          ralph: { round: 2 },
+          ralph: makeRalphLoop({ round: 2 }),
         }),
       )
 
@@ -340,7 +345,7 @@ describe('Observer', () => {
       .mockReturnValueOnce(
         makeState({
           phaseStatus: 'ralph_loop',
-          ralph: { round: 1 },
+          ralph: makeRalphLoop({ round: 1 }),
         }),
       )
       .mockReturnValueOnce(
@@ -380,7 +385,7 @@ describe('Observer', () => {
           currentPhase: 1,
           phaseStatus: 'ralph_loop',
           phases: { 1: makePhaseRecord(1) },
-          ralph: { round: 1 },
+          ralph: makeRalphLoop({ round: 1 }),
         }),
       )
 
@@ -410,7 +415,7 @@ describe('Observer', () => {
           currentPhase: 1,
           phaseStatus: 'ralph_loop',
           phases: { 1: makePhaseRecord(1) },
-          ralph: { round: 1 },
+          ralph: makeRalphLoop({ round: 1 }),
         }),
       )
 
@@ -434,7 +439,7 @@ describe('Observer', () => {
           currentPhase: 1,
           phaseStatus: 'ralph_loop',
           phases: { 1: makePhaseRecord(1) },
-          ralph: { round: 1 },
+          ralph: makeRalphLoop({ round: 1 }),
         }),
       )
       mockStore.appendObservation.mockImplementation(() => { throw new Error('disk error') })
@@ -470,7 +475,7 @@ describe('Observer', () => {
         makeState({
           currentPhase: 1,
           phaseStatus: 'ralph_loop',
-          ralph: { round: 2 },
+          ralph: makeRalphLoop({ round: 2 }),
         }),
       )
 
@@ -501,7 +506,7 @@ describe('Observer', () => {
         makeState({
           currentPhase: 1,
           phaseStatus: 'ralph_loop',
-          ralph: { round: 2 },
+          ralph: makeRalphLoop({ round: 2 }),
         }),
       )
 
@@ -521,7 +526,7 @@ describe('Observer', () => {
         makeState({
           currentPhase: 1,
           phaseStatus: 'ralph_loop',
-          ralph: { round: 2 },
+          ralph: makeRalphLoop({ round: 2 }),
         }),
       )
       // Make appendAudit throw to simulate RPS scan failure path
@@ -544,7 +549,7 @@ describe('Observer', () => {
         makeState({
           currentPhase: 1,
           phaseStatus: 'ralph_loop',
-          ralph: { round: 2 },
+          ralph: makeRalphLoop({ round: 2 }),
         }),
       )
 
@@ -568,7 +573,7 @@ describe('Observer', () => {
         makeState({
           currentPhase: 1,
           phaseStatus: 'ralph_loop',
-          ralph: { round: 2 },
+          ralph: makeRalphLoop({ round: 2 }),
         }),
       )
 
