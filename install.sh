@@ -24,22 +24,22 @@ echo ""
 # Step 1: Install skill files (SKILL.md + docs)
 SKILL_DEST="$OPENCODE_CONFIG/skills/aristotle"
 MCP_DEST="$OPENCODE_CONFIG/aristotle"
-echo -e "${BLUE}[1/6]${NC} Installing Aristotle skill to $SKILL_DEST..."
+echo -e "${BLUE}[1/7]${NC} Installing Aristotle skill to $SKILL_DEST..."
 
 mkdir -p "$SKILL_DEST"
-cp "$SKILL_SRC/SKILL.md" "$SKILL_DEST/SKILL.md"
+cp "$SKILL_SRC/skill/SKILL.md" "$SKILL_DEST/SKILL.md"
 
 # Protocol files go to MCP dir (SKILL_DIR resolves to MCP install dir at runtime)
 mkdir -p "$MCP_DEST"
-cp "$SKILL_SRC/REFLECTOR.md" "$MCP_DEST/REFLECTOR.md"
-cp "$SKILL_SRC/REFLECT.md" "$MCP_DEST/REFLECT.md"
-cp "$SKILL_SRC/REVIEW.md" "$MCP_DEST/REVIEW.md"
-cp "$SKILL_SRC/CHECKER.md" "$MCP_DEST/CHECKER.md"
-cp "$SKILL_SRC/LEARN.md" "$MCP_DEST/LEARN.md"
+cp "$SKILL_SRC/skill/REFLECTOR.md" "$MCP_DEST/REFLECTOR.md"
+cp "$SKILL_SRC/skill/REFLECT.md" "$MCP_DEST/REFLECT.md"
+cp "$SKILL_SRC/skill/REVIEW.md" "$MCP_DEST/REVIEW.md"
+cp "$SKILL_SRC/skill/CHECKER.md" "$MCP_DEST/CHECKER.md"
+cp "$SKILL_SRC/skill/LEARN.md" "$MCP_DEST/LEARN.md"
 echo -e "${GREEN}✓${NC} Skill files installed."
 
 # Step 2: Deploy MCP server files
-echo -e "${BLUE}[2/6]${NC} Deploying MCP server to $MCP_DEST..."
+echo -e "${BLUE}[2/7]${NC} Deploying MCP server to $MCP_DEST..."
 
 mkdir -p "$MCP_DEST/aristotle_mcp"
 cp -r "$SKILL_SRC/aristotle_mcp/"* "$MCP_DEST/aristotle_mcp/"
@@ -52,7 +52,7 @@ echo -e "${GREEN}✓${NC} MCP server deployed."
 # Step 3: Initialize the learnings file
 LEARNINGS_FILE="$OPENCODE_CONFIG/aristotle-learnings.md"
 if [ ! -f "$LEARNINGS_FILE" ]; then
-    echo -e "${BLUE}[3/6]${NC} Initializing learnings file at $LEARNINGS_FILE..."
+    echo -e "${BLUE}[3/7]${NC} Initializing learnings file at $LEARNINGS_FILE..."
     cat > "$LEARNINGS_FILE" << 'LEARNINGS_INIT'
 # Aristotle Learnings (User-Level)
 
@@ -62,11 +62,11 @@ if [ ! -f "$LEARNINGS_FILE" ]; then
 LEARNINGS_INIT
     echo -e "${GREEN}✓${NC} Learnings file created."
 else
-    echo -e "${BLUE}[3/6]${NC} Learnings file already exists at $LEARNINGS_FILE — preserving."
+    echo -e "${BLUE}[3/7]${NC} Learnings file already exists at $LEARNINGS_FILE — preserving."
 fi
 
 # Step 4: Verify installation
-echo -e "${BLUE}[4/6]${NC} Verifying installation..."
+echo -e "${BLUE}[4/7]${NC} Verifying installation..."
 
 ERRORS=0
 

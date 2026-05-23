@@ -4,7 +4,7 @@
 [![Release](https://img.shields.io/github/v/release/alexwwang/aristotle?include_prereleases)](https://github.com/alexwwang/aristotle/releases)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
-[![Tests](https://img.shields.io/badge/tests-999%20total-brightgreen)](./docs/testing.md)
+[![Tests](https://img.shields.io/badge/tests-1008%20total-brightgreen)](./docs/testing.md)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19660780.svg)](https://doi.org/10.5281/zenodo.19660780)
 
 English | [中文](./README.zh-CN.md)
@@ -28,6 +28,8 @@ Activate with `/aristotle` to spawn an isolated subagent that analyzes your sess
 - **Two-Tier Output** — User-level rules (`~/.config/opencode/aristotle-learnings.md`) apply globally; project-level rules (`.opencode/aristotle-project-learnings.md`) apply per-project
 - **Auto-Suggestion** — Skill description includes error-correction keywords; when detected in conversation, the AI can suggest running `/aristotle` (automatic, no configuration needed)
 - **Plugin** — Assembles the Core library and Aristotle role into an OpenCode plugin entry point (`plugin/index.ts`). Provides async polling-based reflection, idle detection, and `/undo` support.
+- **Dual-Package Architecture** — Phase 0 extracted a shared `packages/core/` library (logger, config, workflow store, plugin registration) and a role-specific `packages/aristotle/` package (idle handler, snapshot extractor). The plugin composes both via `assemblePlugin()`, enabling reuse across other OpenCode skills without coupling to Aristotle-specific logic.
+- **State-Machine-Guarded TDD Pipeline** — When paired with the [tdd-pipeline skill](https://github.com/opencode-ai/opencode), Aristotle's watchdog state machine enforces Red-Green-Refactor discipline across multi-phase project delivery. The pipeline covers Product Design → Technical Solution → Test Plan → Test Code → Business Code → Pre-Release Testing → System Quality Audit. Given clear requirements, it can produce high-quality, fully-tested deliverables with minimal human intervention — the state machine gates each phase transition, preventing quality regressions.
 
 ## Installation
 
@@ -36,6 +38,16 @@ Aristotle has three components, all installed from the same repo:
 1. **Skill** — Protocol files loaded by OpenCode (`SKILL.md`, `REFLECT.md`, etc.)
 2. **MCP Server** — Python-based Git-backed rule management (`aristotle_mcp/`)
 3. **Plugin** — TypeScript-based async reflection assembled from `packages/core/` + `packages/reflection/` (`plugin/index.ts`). Provides polling-based background reflection with idle detection.
+
+### Prerequisites
+
+| Component | Required | Optional |
+|-----------|----------|----------|
+| Skill | — | — |
+| MCP Server | Python 3.10+, [uv](https://docs.astral.sh/uv/) | — |
+| Plugin | [bun](https://bun.sh/) (for building from source) | — |
+
+> The installer (`install.sh`) will skip the Plugin build if `bun` is not found and continue with Skill + MCP Server. You can install bun later and re-run the installer to add the Plugin.
 
 ### Option 1: Manual Install (macOS / Linux)
 
@@ -51,7 +63,7 @@ bash install.sh
 # See "MCP Configuration" section below for the JSON snippet
 
 # 4. Register Plugin in opencode.json
-# Add to the "plugin" array: "file://$HOME/.config/opencode/aristotle-plugin/index.js"
+# Add to the "plugin" array: "file://$HOME/.config/opencode/aristotle-bridge/index.js"
 ```
 
 ### Option 2: Manual Install (Windows)
@@ -68,7 +80,7 @@ powershell -ExecutionPolicy Bypass -File install.ps1
 # See "MCP Configuration" section below for the JSON snippet
 
 # 4. Register Plugin in opencode.json
-# Add to the "plugin" array: "file://$env:USERPROFILE\.config\opencode\aristotle-plugin\index.js"
+# Add to the "plugin" array: "file://$env:USERPROFILE\.config\opencode\aristotle-bridge\index.js"
 ```
 
 ### Option 3: One-Line Clone (skill only, no MCP)
@@ -92,7 +104,7 @@ Install the Aristotle skill with MCP server from https://github.com/alexwwang/ar
 2. cd into the cloned directory, run `bash install.sh` (macOS/Linux) or `powershell -File install.ps1` (Windows)
 3. Verify: run `bash test.sh` — all assertions must pass
 4. Add MCP config to opencode.json: { "mcp": { "aristotle": { "type": "local", "command": ["uv", "run", "--project", "$HOME/.config/opencode/aristotle", "python", "-m", "aristotle_mcp.server"], "enabled": true } } }
-5. Register Plugin: add `"file://$HOME/.config/opencode/aristotle-plugin/index.js"` to the `"plugin"` array in opencode.json
+5. Register Plugin: add `"file://$HOME/.config/opencode/aristotle-bridge/index.js"` to the `"plugin"` array in opencode.json
 6. Verify MCP: run `uv run --project ~/.config/opencode/aristotle python -c "from aristotle_mcp.server import mcp; print(len(mcp._tool_manager._tools), 'tools loaded')"` — should print "20 tools loaded"
 ```
 
@@ -467,13 +479,14 @@ The full protocol specification — state machine, frontmatter schema, Δ decisi
 
 ```
 .
-├── SKILL.md              # Router — argument parsing, phase routing (5.6 KB)
-├── REFLECTOR.md          # Subagent protocol — error analysis, DRAFT generation
-├── REFLECT.md            # Coordinator reflect phase — fire subagent, state tracking, passive trigger
-├── REVIEW.md             # Coordinator review phase — DRAFT review, rule writing, revision
-├── CHECKER.md            # Checker protocol — schema + content validation (loaded on confirm only)
-├── LEARN.md              # Coordinator learn phase — intent extraction, query construction, result filtering
-├── install.sh            # Installer (macOS/Linux)
+├── skill/                 # Skill documents (copied to install dirs by install.sh)
+│   ├── SKILL.md           # Router — argument parsing, phase routing (5.6 KB)
+│   ├── REFLECTOR.md       # Subagent protocol — error analysis, DRAFT generation
+│   ├── REFLECT.md         # Coordinator reflect phase — fire subagent, state tracking, passive trigger
+│   ├── REVIEW.md          # Coordinator review phase — DRAFT review, rule writing, revision
+│   ├── CHECKER.md         # Checker protocol — schema + content validation (loaded on confirm only)
+│   └── LEARN.md           # Coordinator learn phase — intent extraction, query construction, result filtering
+├── install.sh             # Installer (macOS/Linux)
 ├── install.ps1           # Installer (Windows)
 ├── pyproject.toml        # Python dependencies for MCP server
 ├── test.sh               # Static test suite (103 assertions)

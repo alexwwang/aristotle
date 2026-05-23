@@ -43,7 +43,7 @@
 | # | 检查项 | 验证命令 | 预期结果 |
 |---|--------|----------|----------|
 | 4.1 | 文件存在 | `ls ~/.config/opencode/skills/aristotle/SKILL.md` | 文件存在 |
-| 4.2 | 与源码一致 | `diff SKILL.md ~/.config/opencode/skills/aristotle/SKILL.md` | 无差异 |
+| 4.2 | 与源码一致 | `diff skill/SKILL.md ~/.config/opencode/skills/aristotle/SKILL.md` | 无差异 |
 | 4.3 | 无 agent 参数引用 | `grep 'agent=response.sub_role' ~/.config/opencode/skills/aristotle/SKILL.md` | 无匹配 |
 | 4.4 | 包含 Bridge 路径 | `grep 'aristotle_fire_o' ~/.config/opencode/skills/aristotle/SKILL.md` | 有匹配 |
 
@@ -53,14 +53,14 @@
 |---|--------|----------|----------|
 | 5.1 | Sessions 目录 | `ls -d ~/.config/opencode/aristotle-sessions/` | 目录存在 |
 | 5.2 | Drafts 目录 | `ls -d ~/.config/opencode/aristotle-drafts/` | 目录存在 |
-| 5.3 | REFLECTOR.md 存在 | `ls $ARISTOTLE_PROJECT_DIR/REFLECTOR.md` | 文件存在 |
-| 5.4 | CHECKER.md 存在 | `ls $ARISTOTLE_PROJECT_DIR/CHECKER.md` | 文件存在 |
+| 5.3 | REFLECTOR.md 存在 | `ls $ARISTOTLE_PROJECT_DIR/skill/REFLECTOR.md` | 文件存在 |
+| 5.4 | CHECKER.md 存在 | `ls $ARISTOTLE_PROJECT_DIR/skill/CHECKER.md` | 文件存在 |
 
 ## 6. Git 状态
 
 | # | 检查项 | 验证命令 | 预期结果 |
 |---|--------|----------|----------|
-| 6.1 | 无未提交的部署文件变更 | `git status --short plugin/ aristotle_mcp/ SKILL.md` | 无输出 |
+| 6.1 | 无未提交的部署文件变更 | `git status --short plugin/ aristotle_mcp/ skill/` | 无输出 |
 | 6.2 | dist/index.js 是最新构建 | `git diff HEAD -- plugin/dist/index.js` | 无差异 |
 
 ---
@@ -78,10 +78,10 @@ check "2.2 _cli.py sync"       "diff aristotle_mcp/_cli.py ~/.config/opencode/ar
 check "2.3 _orch_start sync"   "diff aristotle_mcp/_orch_start.py ~/.config/opencode/aristotle/aristotle_mcp/_orch_start.py"
 check "2.6 module importable"  "cd ~/.config/opencode/aristotle && uv run python -c \"from aristotle_mcp.server import mcp\""
 check "3.4 permission set"     "grep aristotle_\\* ~/.config/opencode/opencode.json"
-check "4.2 SKILL.md sync"      "diff SKILL.md ~/.config/opencode/skills/aristotle/SKILL.md"
+check "4.2 SKILL.md sync"      "diff skill/SKILL.md ~/.config/opencode/skills/aristotle/SKILL.md"
 check "4.3 no agent param"     "test $(grep -c agent=response.sub_role ~/.config/opencode/skills/aristotle/SKILL.md) -eq 0"
 check "5.1 sessions dir"       "ls -d ~/.config/opencode/aristotle-sessions/"
-check "5.3 REFLECTOR.md"       "ls $ARISTOTLE_PROJECT_DIR/REFLECTOR.md"
+check "5.3 REFLECTOR.md"       "ls $ARISTOTLE_PROJECT_DIR/skill/REFLECTOR.md"
 echo ""; echo "Result: $PASS passed, $FAIL failed"
 test $FAIL -eq 0
 '
@@ -104,8 +104,13 @@ cp -r $ARISTOTLE_PROJECT_DIR/aristotle_mcp/* ~/.config/opencode/aristotle/aristo
 cp $ARISTOTLE_PROJECT_DIR/pyproject.toml ~/.config/opencode/aristotle/pyproject.toml
 cp $ARISTOTLE_PROJECT_DIR/uv.lock ~/.config/opencode/aristotle/uv.lock
 
-# 4. 同步 SKILL.md
-cp $ARISTOTLE_PROJECT_DIR/SKILL.md ~/.config/opencode/skills/aristotle/SKILL.md
+# 4. 同步 SKILL.md + 协议文件
+cp $ARISTOTLE_PROJECT_DIR/skill/SKILL.md ~/.config/opencode/skills/aristotle/SKILL.md
+cp $ARISTOTLE_PROJECT_DIR/skill/REFLECTOR.md ~/.config/opencode/aristotle/REFLECTOR.md
+cp $ARISTOTLE_PROJECT_DIR/skill/REFLECT.md ~/.config/opencode/aristotle/REFLECT.md
+cp $ARISTOTLE_PROJECT_DIR/skill/REVIEW.md ~/.config/opencode/aristotle/REVIEW.md
+cp $ARISTOTLE_PROJECT_DIR/skill/CHECKER.md ~/.config/opencode/aristotle/CHECKER.md
+cp $ARISTOTLE_PROJECT_DIR/skill/LEARN.md ~/.config/opencode/aristotle/LEARN.md
 
 # 5. 跑 checklist
 # 见上方"快速验证命令"

@@ -4,7 +4,7 @@
 [![Release](https://img.shields.io/github/v/release/alexwwang/aristotle?include_prereleases)](https://github.com/alexwwang/aristotle/releases)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
-[![Tests](https://img.shields.io/badge/tests-999%20total-brightgreen)](./docs/testing.zh-CN.md)
+[![Tests](https://img.shields.io/badge/tests-1008%20total-brightgreen)](./docs/testing.zh-CN.md)
 
 **[English](./README.md)** | 中文
 
@@ -27,6 +27,8 @@
 - **双层输出** — 用户级规则（`~/.config/opencode/aristotle-learnings.md`）全局生效；项目级规则（`.opencode/aristotle-project-learnings.md`）按项目生效
 - **自动建议** — 技能描述中包含错误纠正关键词；当对话中出现这些模式时，AI 会自动建议运行 `/aristotle`（无需配置）
 - **Plugin** — 将 Core 库和 Aristotle 角色组装为 OpenCode 插件入口（`plugin/index.ts`）。提供异步轮询式反思、空闲检测和 `/undo` 支持。
+- **双包架构** — Phase 0 抽取了共享的 `packages/core/` 库（logger、config、workflow store、plugin registration）和角色专用的 `packages/aristotle/` 包（idle handler、snapshot extractor）。插件通过 `assemblePlugin()` 组合两者，使其他 OpenCode 技能可复用核心机制而不耦合 Aristotle 特有逻辑。
+- **状态机守护的 TDD 管线** — 搭配 [tdd-pipeline 技能](https://github.com/opencode-ai/opencode)，Aristotle 的 watchdog 状态机在整个多阶段项目交付中强制执行 Red-Green-Refactor 纪律。管线覆盖产品设计 → 技术方案 → 测试计划 → 测试代码 → 业务代码 → 预发布测试 → 系统质量审计。给定清晰需求后，可在极少人工干预的前提下产出高质量、全测试覆盖的交付物——状态机在每个阶段转换时设卡，防止质量回退。
 
 ## 安装
 
@@ -35,6 +37,16 @@ Aristotle 包含三个组件，均从同一仓库安装：
 1. **Skill** — OpenCode 加载的协议文件（`SKILL.md`、`REFLECT.md` 等）
 2. **MCP Server** — 基于 Python 的 Git 版本管理规则引擎（`aristotle_mcp/`）
 3. **Plugin** — 基于 TypeScript 的异步反思，由 `packages/core/` + `packages/reflection/` 组装而成（`plugin/index.ts`）。提供轮询式后台反思和空闲检测。
+
+### 前置依赖
+
+| 组件 | 必需 | 可选 |
+|------|------|------|
+| Skill | — | — |
+| MCP Server | Python 3.10+, [uv](https://docs.astral.sh/uv/) | — |
+| Plugin | [bun](https://bun.sh/)（从源码构建） | — |
+
+> 安装脚本（`install.sh`）在未检测到 `bun` 时会跳过 Plugin 构建，仅安装 Skill + MCP Server。后续安装 bun 后可重新运行安装脚本来添加 Plugin。
 
 ### 方式一：手动安装（macOS / Linux）
 
@@ -50,7 +62,7 @@ bash install.sh
 # 见下方"MCP 配置"部分的 JSON 示例
 
 # 4. 在 opencode.json 中注册 Plugin
-# 将 "file://$HOME/.config/opencode/aristotle-plugin/index.js" 添加到 "plugin" 数组
+# 将 "file://$HOME/.config/opencode/aristotle-bridge/index.js" 添加到 "plugin" 数组
 ```
 
 ### 方式二：手动安装（Windows）
@@ -67,7 +79,7 @@ powershell -ExecutionPolicy Bypass -File install.ps1
 # 见下方"MCP 配置"部分的 JSON 示例
 
 # 4. 在 opencode.json 中注册 Plugin
-# 将 "file://$env:USERPROFILE\.config\opencode\aristotle-plugin\index.js" 添加到 "plugin" 数组
+# 将 "file://$env:USERPROFILE\.config\opencode\aristotle-bridge\index.js" 添加到 "plugin" 数组
 ```
 
 ### 方式三：直接下载（仅 skill，不含 MCP）
@@ -91,7 +103,7 @@ Install the Aristotle skill with MCP server from https://github.com/alexwwang/ar
 2. cd into the cloned directory, run `bash install.sh` (macOS/Linux) or `powershell -File install.ps1` (Windows)
 3. Verify: run `bash test.sh` — all assertions must pass
 4. Add MCP config to opencode.json: { "mcp": { "aristotle": { "type": "local", "command": ["uv", "run", "--project", "$HOME/.config/opencode/aristotle", "python", "-m", "aristotle_mcp.server"], "enabled": true } } }
-5. Register Plugin: add `"file://$HOME/.config/opencode/aristotle-plugin/index.js"` to the `"plugin"` array in opencode.json
+5. Register Plugin: add `"file://$HOME/.config/opencode/aristotle-bridge/index.js"` to the `"plugin"` array in opencode.json
 6. Verify MCP: run `uv run --project $HOME/.config/opencode/aristotle python -c "from aristotle_mcp.server import mcp; print(len(mcp._tool_manager._tools), 'tools loaded')"` — should print "20 tools loaded"
 ```
 
@@ -461,29 +473,32 @@ GEAR 协议操作映射到 Aristotle 的 MCP 工具：`produce` → `write_rule`
 
 > Phase 2 已完成。详见 **[TESTING.zh-CN.md](./docs/testing.zh-CN.md)**。
 
-| 里程碑 | pytest | 静态测试 | e2e |
-|--------|--------|----------|-----|
-| 基线（修复前） | 111 | 67 | — |
-| 修复后 | 134 | 67 | — |
-| 协程 O 合并后 | 166 | 84 | — |
-| GEAR 编排 (M1-M4) | 218 | 98 | — |
-| M4 异常路径测试 | 227 | 98 | — |
-| **Phase 2 (M1/M5-M9)** | **295** | **104** | **70** |
-| Phase 0 Bridge (MCP 扩展) | 318 | 103 | 9 |
-| Phase 1 Bridge (插件) | 325 | 103 | 9 + 162 vitest |
-| **v1.2.0 Review 流程增强** | **382** | **103** | **9 + 162 vitest** |
+| 里程碑 | pytest | 静态测试 | vitest | e2e |
+|--------|--------|----------|--------|-----|
+| 基线（修复前） | 111 | 67 | — | — |
+| 修复后 | 134 | 67 | — | — |
+| 协程 O 合并后 | 166 | 84 | — | — |
+| GEAR 编排 (M1-M4) | 218 | 98 | — | — |
+| M4 异常路径测试 | 227 | 98 | — | — |
+| **Phase 2 (M1/M5-M9)** | **295** | **104** | — | **70** |
+| Phase 0 Bridge (MCP 扩展) | 318 | 103 | — | 9 |
+| Phase 1 Bridge (插件) | 325 | 103 | — | 9 + 162 vitest |
+| **v1.2.0 Review 流程增强** | **382** | **103** | — | **9 + 162 vitest** |
+| **v1.3.0 Per-Rec Isolation** | **395** | **103** | — | **80 pytest + 162 vitest** |
+| **Phase 0 Core Extraction** | **405** | **103** | **150 core + 115 aristotle** | **9 + 162 bridge + 64 regression** |
 
 ## 项目结构
 
 ```
 .
-├── SKILL.md              # 路由器 — 参数解析、阶段路由（5.6 KB）
-├── REFLECTOR.md          # 子代理协议 — 错误分析、DRAFT 生成
-├── REFLECT.md            # 协调器反思阶段 — 启动子代理、状态追踪、被动触发
-├── REVIEW.md             # 协调器审核阶段 — DRAFT 审核、规则写入、修订
-├── CHECKER.md            # 审核者协议 — schema + 内容校验（仅确认时加载）
-├── LEARN.md              # 协调器学习阶段 — 意图提取、查询构造、结果过滤
-├── install.sh            # 安装脚本（macOS/Linux）
+├── skill/                 # 技能文档（由 install.sh 复制到安装目录）
+│   ├── SKILL.md           # 路由器 — 参数解析、阶段路由（5.6 KB）
+│   ├── REFLECTOR.md       # 子代理协议 — 错误分析、DRAFT 生成
+│   ├── REFLECT.md         # 协调器反思阶段 — 启动子代理、状态追踪、被动触发
+│   ├── REVIEW.md          # 协调器审核阶段 — DRAFT 审核、规则写入、修订
+│   ├── CHECKER.md         # 审核者协议 — schema + 内容校验（仅确认时加载）
+│   └── LEARN.md           # 协调器学习阶段 — 意图提取、查询构造、结果过滤
+├── install.sh             # 安装脚本（macOS/Linux）
 ├── install.ps1           # 安装脚本（Windows）
 ├── pyproject.toml        # MCP server 的 Python 依赖声明
 ├── test.sh               # 静态测试套件（103 断言）
