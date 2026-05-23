@@ -962,8 +962,10 @@ export function applyTransition(
             continue
           }
           // re_raised or escalated: treat as re_raised in Phase 2
-          // Phase 3 TODO: when action === 'escalated', set state.ralph.escalated = true
+          // Phase 3 TODO (see KI-17/KI-49): when action === 'escalated',
+          //   set state.ralph.escalated = true
           //   and state.ralph.escalatedAt = now to activate the user_approval safety gate.
+          //   Also update RalphTermination handling in ralph_terminate validate.
           newOpenContested.push({
             ...issue,
             disputeRounds: issue.disputeRounds + 1,

@@ -92,7 +92,9 @@ export interface RalphLoopState {
   termination: RalphTermination | null
   // Phase 2.1: GPAV — authoritative per-round counts from ralph_round_finding
   roundRecords: RoundRecord[]
-  autoValidated: boolean           // true after first ralph_round_finding submission
+  autoValidated: boolean           // true after first ralph_round_finding submission;
+                                   // signals GPAV mode active (agent using structured findings
+                                   // rather than legacy ralph_round_complete tallies)
 }
 
 export interface RoundTally {
