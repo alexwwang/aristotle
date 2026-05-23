@@ -13,6 +13,7 @@ import { getLoopType } from './loop-config.js'
 import type { PhaseLoopMap } from './loop-config.js'
 import {
   EARLY_STOP_CONSECUTIVE,
+  MAX_DOWNGRADE_REASON_LENGTH,
   MAX_FINDING_DESCRIPTION_LENGTH,
   MAX_FINDINGS_PER_ROUND,
   MAX_RALPH_ROUNDS,
@@ -400,6 +401,9 @@ export function validateTransition(
           if (severityLt(f.severity as string, f.original as string)) {
             if (typeof f.downgrade_reason !== 'string' || (f.downgrade_reason as string).trim().length === 0) {
               return fail(`Missing downgrade_reason at index ${i}`, `Severity downgrade from ${f.original} to ${f.severity} requires a downgrade_reason.`)
+            }
+            if ((f.downgrade_reason as string).length > MAX_DOWNGRADE_REASON_LENGTH) {
+              return fail(`Downgrade reason too long at index ${i}`, `downgrade_reason must be at most ${MAX_DOWNGRADE_REASON_LENGTH} characters, got ${(f.downgrade_reason as string).length}.`)
             }
           }
         }

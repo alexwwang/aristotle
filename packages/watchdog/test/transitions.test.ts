@@ -1672,8 +1672,8 @@ describe('Phase 2.1 GPAV — migration', () => {
   })
 
   it('TC-G-34: early_stop ignores uncommitted round in consecutive count (H-1 regression)', () => {
-    // Rounds 4-5 are completed and clean. Round 6 submitted but not completed.
-    // strictConsecutive should be 2 (rounds 4-5), not 3 (rounds 4-6).
+    // Rounds 3-5 are completed and clean (C=H=M=0). Round 6 submitted but not completed.
+    // strictConsecutive should be 3 (rounds 3-5), not 4 (rounds 3-6).
     const state = makeRalphState({}, {
       round: 5,
       autoValidated: true,

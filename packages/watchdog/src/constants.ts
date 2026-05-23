@@ -24,3 +24,6 @@ export const MAX_FINDINGS_PER_ROUND = 50
 
 /** Max length of a single finding description in characters. */
 export const MAX_FINDING_DESCRIPTION_LENGTH = 2000
+
+/** Max length of a downgrade_reason string in characters. */
+export const MAX_DOWNGRADE_REASON_LENGTH = 1000
