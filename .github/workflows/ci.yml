@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, phase0-core-extraction]
+    branches: [main]
   pull_request:
     branches: [main]
 
@@ -46,10 +46,12 @@ jobs:
       - name: Run tests
         run: bun run --filter '*' test
 
-      - name: Type check (src/ only)
+      - name: Type check
         run: |
-          cd packages/watchdog
-          bunx tsc --noEmit --project tsconfig.json 2>&1 | grep "src/" || true
+          for pkg in packages/core packages/reflection packages/watchdog; do
+            echo "=== $pkg ==="
+            cd "$pkg" && bunx tsc --noEmit && cd -
+          done
 
   lint-python:
     runs-on: ubuntu-latest
