@@ -267,4 +267,126 @@ describe('Phase 2.3 — P Severity Persistence', () => {
     expect(result).not.toBeNull()
     expect(result!.version).toBe(SCHEMA_VERSION)
   })
+
+  // ── TC-39 (C9 invariant): readState with valid v4 state → P values preserved unchanged ──
+  it('TC-39 (C9 invariant): readState with valid v4 state → P values preserved unchanged', () => {
+    const v4State = makeState({
+      version: SCHEMA_VERSION,
+      ralph: {
+        phase: 1,
+        round: 1,
+        consecutiveZero: 0,
+        tallyHistory: [
+          { round: 1, C: 0, H: 0, M: 0, P: 2, L: 0, I: 0, timestamp: '2026-01-01T00:00:00.000Z' },
+        ],
+        openContested: [],
+        escalated: false,
+        escalatedAt: null,
+        termination: null,
+        roundRecords: [
+          { round: 1, counts: { C: 0, H: 0, M: 0, P: 3, L: 0, I: 0 }, submittedAt: '2026-01-01T00:00:00.000Z' },
+        ],
+        autoValidated: false,
+      },
+    })
+
+    const stateKey = 'watchdog/testproj/run-001/state'
+    mockStore.write(stateKey, v4State)
+
+    const result = pipelineStore.readState('testproj', 'run-001')
+
+    expect(result).not.toBeNull()
+    expect(result!.ralph).not.toBeNull()
+    expect(result!.ralph!.roundRecords[0].counts.P).toBe(3)
+    expect(result!.ralph!.tallyHistory[0].P).toBe(2)
+  })
+
+  // ── TC-21g (C8 combined): readState migrates both roundRecords AND tallyHistory in single load ──
+  it('TC-21g (C8 combined): readState migrates both roundRecords AND tallyHistory in single load', () => {
+    const legacyState = makeState({
+      version: 3,
+      ralph: {
+        phase: 1,
+        round: 1,
+        consecutiveZero: 0,
+        tallyHistory: [
+          { round: 1, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: '2026-01-01T00:00:00.000Z' },
+        ],
+        openContested: [],
+        escalated: false,
+        escalatedAt: null,
+        termination: null,
+        roundRecords: [
+          { round: 1, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: '2026-01-01T00:00:00.000Z' },
+        ],
+        autoValidated: false,
+      },
+    })
+
+    const stateKey = 'watchdog/testproj/run-001/state'
+    mockStore.write(stateKey, legacyState)
+
+    const result = pipelineStore.readState('testproj', 'run-001')
+
+    expect(result).not.toBeNull()
+    expect(result!.ralph).not.toBeNull()
+    expect(result!.ralph!.roundRecords[0].counts.P).toBe(0)
+    expect(result!.ralph!.tallyHistory[0].P).toBe(0)
+  })
+
+  it('R4-F26 regression: primitive tallyHistory entry (number) does not throw during P migration', () => {
+    const corruptedState = makeState({
+      version: 3,
+      ralph: {
+        round: 1,
+        phase: 1,
+        consecutiveZero: 0,
+        tallyHistory: [
+          42 as any,
+          { round: 1, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: '2026-01-01T00:00:00.000Z' },
+        ],
+        roundRecords: [],
+        autoValidated: false,
+      },
+    })
+
+    const stateKey = 'watchdog/testproj/run-001/state'
+    mockStore.write(stateKey, corruptedState)
+
+    expect(() => pipelineStore.readState('testproj', 'run-001')).not.toThrow()
+    const result = pipelineStore.readState('testproj', 'run-001')
+    expect(result).not.toBeNull()
+    expect(result!.ralph).not.toBeNull()
+    expect(typeof result!.ralph!.tallyHistory[0]).toBe('number')
+    expect(result!.ralph!.tallyHistory[1].P).toBe(0)
+  })
+
+  it('R5-F1 regression: null roundRecords entry does not throw during P migration', () => {
+    const corruptedState = makeState({
+      version: 3,
+      ralph: {
+        round: 1,
+        phase: 1,
+        consecutiveZero: 0,
+        tallyHistory: [
+          { round: 1, C: 0, H: 0, M: 0, L: 0, I: 0, timestamp: '2026-01-01T00:00:00.000Z' },
+        ],
+        roundRecords: [
+          null as any,
+          { round: 1, counts: { C: 0, H: 0, M: 0, L: 0, I: 0 }, submittedAt: '2026-01-01T00:00:00.000Z' },
+        ],
+        autoValidated: false,
+      },
+    })
+
+    const stateKey = 'watchdog/testproj/run-001/state'
+    mockStore.write(stateKey, corruptedState)
+
+    expect(() => pipelineStore.readState('testproj', 'run-001')).not.toThrow()
+    const result = pipelineStore.readState('testproj', 'run-001')
+    expect(result).not.toBeNull()
+    expect(result!.ralph).not.toBeNull()
+    expect(result!.ralph!.roundRecords[0]).toBeNull()
+    expect(result!.ralph!.roundRecords[1].counts.P).toBe(0)
+  })
 })

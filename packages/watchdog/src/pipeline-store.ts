@@ -144,7 +144,7 @@ export class PipelineStore {
     // state files may have null entries; prevents TypeError on `'P' in null`.
     if (state?.ralph?.tallyHistory) {
       for (const t of state.ralph.tallyHistory) {
-        if (t && !('P' in t)) (t as Record<string, unknown>).P = 0
+        if (t && typeof t === 'object' && !('P' in t)) (t as Record<string, unknown>).P = 0
       }
     }
     // Phase 2.3: defensive migration — add P:0 to old roundRecords counts
@@ -154,7 +154,7 @@ export class PipelineStore {
     // ensures `'P' in r.counts` and the subsequent property assignment are safe.
     if (state?.ralph?.roundRecords) {
       for (const r of state.ralph.roundRecords) {
-        if (r.counts && typeof r.counts === 'object' && !('P' in r.counts)) {
+        if (r && r.counts && typeof r.counts === 'object' && !('P' in r.counts)) {
           (r.counts as Record<string, unknown>).P = 0
         }
       }

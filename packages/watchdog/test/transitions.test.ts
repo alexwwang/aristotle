@@ -177,7 +177,7 @@ describe('payload validation', () => {
   it('rejects ralph_round_complete with tally missing M field', () => {
     const result = validateTransition(
       'ralph_round_complete',
-      basePayload({ phase: 1, round: 2, tally: { C: 0, H: 0, L: 0, I: 0 } }),
+      basePayload({ phase: 1, round: 2, tally: { C: 0, H: 0, P: 0, L: 0, I: 0 } }),
       makeRalphState(),
     )
     expect(result.valid).toBe(false)

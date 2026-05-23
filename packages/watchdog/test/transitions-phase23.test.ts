@@ -104,6 +104,7 @@ describe('Phase 2.3 — P Severity Addition', () => {
 
     const newState = applyTransition('ralph_round_finding', basePayload(payload), state)
     expect(newState.ralph!.roundRecords[0].counts.P).toBe(1)
+    expect(newState.ralph!.roundRecords[0].counts.M).toBe(0)
   })
 
   // ── TC-06: severity 'M2' (ASCII) normalized to P ──────────────────────────
@@ -119,6 +120,7 @@ describe('Phase 2.3 — P Severity Addition', () => {
 
     const newState = applyTransition('ralph_round_finding', basePayload(payload), state)
     expect(newState.ralph!.roundRecords[0].counts.P).toBe(1)
+    expect(newState.ralph!.roundRecords[0].counts.M).toBe(0)
   })
 
   // ── TC-07: severity 'M₁' (Unicode) normalized to M ────────────────────────
@@ -150,7 +152,9 @@ describe('Phase 2.3 — P Severity Addition', () => {
     expect(vResult.valid).toBe(true)
 
     const newState = applyTransition('ralph_round_finding', basePayload(payload), state)
-    expect(newState.ralph!.roundRecords[0].counts.M).toBe(1)
+    const counts = newState.ralph!.roundRecords[0].counts
+    expect(counts.M).toBe(1)
+    expect(counts.P).toBe(0)
   })
 
   // ── TC-09: original field also normalized (validate-only) ────────────────
@@ -249,15 +253,14 @@ describe('Phase 2.3 — P Severity Addition', () => {
     }
   })
 
-  // ── TC-14: early_stop with 2 consecutive zero-C/H/M rounds accepted ───────
+  // ── TC-14: early_stop with EARLY_STOP_CONSECUTIVE zero-C/H/M rounds accepted ──
   it('TC-14 (AC-8): early_stop with 2 consecutive zero-C/H/M rounds accepted', () => {
     const state = makeRalphState({}, {
-      round: 2,
+      round: EARLY_STOP_CONSECUTIVE,
       autoValidated: true,
-      roundRecords: [
-        { round: 1, counts: { C: 0, H: 0, M: 0, P: 3, L: 2, I: 0 }, submittedAt: NOW },
-        { round: 2, counts: { C: 0, H: 0, M: 0, P: 3, L: 2, I: 0 }, submittedAt: NOW },
-      ],
+      roundRecords: Array.from({ length: EARLY_STOP_CONSECUTIVE }, (_, i) => ({
+        round: i + 1, counts: { C: 0, H: 0, M: 0, P: 3, L: 2, I: 0 }, submittedAt: NOW,
+      })),
     })
     const result = validateTransition('ralph_terminate', basePayload({
       phase: 1, termination: 'early_stop',
@@ -266,7 +269,7 @@ describe('Phase 2.3 — P Severity Addition', () => {
   })
 
   // ── TC-15: gate_pass with M=1,P=0 rejected ────────────────────────────────
-  it('TC-15: gate_pass with M=1,P=0 rejected', () => {
+  it('TC-15 (AC-6): gate_pass with M=1,P=0 rejected', () => {
     const state = makeRalphState({}, {
       round: MIN_GATE_ROUNDS,
       autoValidated: true,
@@ -282,6 +285,9 @@ describe('Phase 2.3 — P Severity Addition', () => {
       phase: 1, termination: 'gate_pass',
     }), state)
     expect(result.valid).toBe(false)
+    if (!result.valid) {
+      expect(result.violation.toLowerCase()).toMatch(/unresolved|gpav/)
+    }
   })
 
   // ── TC-16: 2 M + 1 P → counts {M:2, P:1} ──────────────────────────────────
@@ -322,17 +328,20 @@ describe('Phase 2.3 — P Severity Addition', () => {
   })
 
   // ── TC-19: H→P without downgrade_reason rejected ──────────────────────────
-  it('TC-19: H→P without downgrade_reason rejected', () => {
+  it('TC-19 (AC-10): H→P without downgrade_reason rejected', () => {
     const state = makeRalphState({}, { round: 1 })
     const result = validateTransition('ralph_round_finding', basePayload({
       phase: 1, round: 2,
       findings: [{ severity: 'P', original: 'H', description: 'test' }],
     }), state)
     expect(result.valid).toBe(false)
+    if (!result.valid) {
+      expect(result.violation.toLowerCase()).toContain('downgrade_reason')
+    }
   })
 
   // ── TC-20: P→M without downgrade_reason accepted (upgrade) ────────────────
-  it('TC-20: P→M without downgrade_reason accepted (upgrade)', () => {
+  it('TC-20 (AC-11): P→M without downgrade_reason accepted (upgrade)', () => {
     const state = makeRalphState({}, { round: 1 })
     const result = validateTransition('ralph_round_finding', basePayload({
       phase: 1, round: 2,
@@ -352,8 +361,7 @@ describe('Phase 2.3 — P Severity Addition', () => {
       tally: { C: 0, H: 1, M: 2, P: 0, L: 0, I: 0 },
     }), state)
     const lastTally = newState.ralph!.tallyHistory[newState.ralph!.tallyHistory.length - 1]
-    expect(lastTally.P).toBe(0)
-    expect(lastTally.M).toBe(2)
+    expect(lastTally).toMatchObject({ C: 0, H: 1, M: 2, P: 0, L: 0, I: 0 })
   })
 
   // ── TC-29: ralph_round_complete payload without P key → rejected ──────────
@@ -388,7 +396,7 @@ describe('Phase 2.3 — P Severity Addition', () => {
   })
 
   // ── TC-27: Unknown severity 'X' rejected ──────────────────────────────────
-  it("TC-27: Unknown severity 'X' rejected", () => {
+  it("TC-27 (Constraint 2): Unknown severity 'X' rejected", () => {
     const state = makeRalphState({}, { round: 1 })
     const result = validateTransition('ralph_round_finding', basePayload({
       phase: 1, round: 2,
@@ -398,7 +406,7 @@ describe('Phase 2.3 — P Severity Addition', () => {
   })
 
   // ── TC-28: P with empty description rejected ──────────────────────────────
-  it('TC-28: P with empty description rejected', () => {
+  it('TC-28 (Constraint 2): P with empty description rejected', () => {
     const state = makeRalphState({}, { round: 1 })
     const result = validateTransition('ralph_round_finding', basePayload({
       phase: 1, round: 2,
@@ -438,6 +446,9 @@ describe('Phase 2.3 — P Severity Addition', () => {
       phase: 1, termination: 'early_stop',
     }), state)
     expect(result.valid).toBe(false)
+    if (!result.valid) {
+      expect(result.violation.toLowerCase()).toMatch(/consecutive|insufficient/)
+    }
   })
 
   // ── TC-33: ralph_round_complete forbidden in GPAV mode ─────────────────────
@@ -456,17 +467,17 @@ describe('Phase 2.3 — P Severity Addition', () => {
 
   // ── TC-34: KI-24 fallback path excludes L/P from zero-checks ───────────────
   it('TC-34 (AC-6/F-18 regression): KI-24 fallback path correctly excludes L and P from gate_pass zero-check', () => {
+    // KI-24 fallback: autoValidated=true + non-empty roundRecords but all records have
+    // round > ralph.round → completedRecords empty → falls through to KI-24 fallback (L613-656)
     const state = makeRalphState({}, {
       round: MIN_GATE_ROUNDS,
       autoValidated: true,
-      roundRecords: [],
-      tallyHistory: [
-        { round: 1, C: 0, H: 0, M: 0, P: 2, L: 3, I: 0, timestamp: NOW },
-        { round: 2, C: 0, H: 0, M: 0, P: 1, L: 2, I: 0, timestamp: NOW },
-        { round: 3, C: 0, H: 0, M: 0, P: 3, L: 1, I: 0, timestamp: NOW },
-        { round: 4, C: 0, H: 0, M: 0, P: 2, L: 2, I: 0, timestamp: NOW },
-        { round: 5, C: 0, H: 0, M: 0, P: 1, L: 3, I: 0, timestamp: NOW },
+      roundRecords: [
+        { round: MIN_GATE_ROUNDS + 1, counts: { C: 0, H: 0, M: 0, P: 2, L: 3, I: 0 }, submittedAt: NOW },
       ],
+      tallyHistory: Array.from({ length: MIN_GATE_ROUNDS }, (_, i) => ({
+        round: i + 1, C: 0, H: 0, M: 0, P: 2, L: 3, I: 0, timestamp: NOW,
+      })),
     })
     const result = validateTransition('ralph_terminate', basePayload({
       phase: 1, termination: 'gate_pass',
@@ -492,13 +503,14 @@ describe('Phase 2.3 — P Severity Addition', () => {
 
   // ── TC-36: KI-24 fallback path — max_rounds correctly rejects when all clean ─
   it('TC-36 (F-4 regression): KI-24 fallback with C=H=M=0 but P/L>0 → max_rounds rejected as "No unresolved issues"', () => {
-    // Setup: autoValidated=true, empty roundRecords forces fallback to tallyHistory.
-    // Last tallyHistory entry has C=H=M=0 (clean) but P>0 L>0.
-    // max_rounds should be REJECTED because there are no unresolved C/H/M (wrong termination type).
+    // KI-24 fallback: autoValidated=true + non-empty roundRecords but all have round > ralph.round
+    // → completedRecords empty → KI-24 fallback path uses tallyHistory for max_rounds check
     const state = makeRalphState({}, {
       round: MAX_RALPH_ROUNDS,
       autoValidated: true,
-      roundRecords: [],
+      roundRecords: [
+        { round: MAX_RALPH_ROUNDS + 1, counts: { C: 1, H: 0, M: 0, P: 0, L: 0, I: 0 }, submittedAt: NOW },
+      ],
       tallyHistory: Array.from({ length: MAX_RALPH_ROUNDS }, (_, i) => ({
         round: i + 1, C: 0, H: 0, M: 0, P: 2, L: 1, I: 0, timestamp: NOW,
       })),
@@ -522,5 +534,112 @@ describe('Phase 2.3 — P Severity Addition', () => {
     const original = JSON.parse(JSON.stringify(payload))
     normalizeSeverities('ralph_round_complete', payload)
     expect(payload).toEqual(original)
+  })
+
+  // ── TC-38 (AC-10 regression): H→P with downgrade_reason accepted ──────────
+  it('TC-38 (AC-10 regression): H→P with downgrade_reason accepted', () => {
+    const state = makeRalphState({}, { round: 1 })
+    const result = validateTransition('ralph_round_finding', basePayload({
+      phase: 1, round: 2,
+      findings: [{ severity: 'P', original: 'H', downgrade_reason: 'recalibrated from critical to proposal', description: 'test' }],
+    }), state)
+    expect(result.valid).toBe(true)
+  })
+
+  // ── TC-40 (C5 legacy regression): Legacy gate_pass with P-only tally accepted ──
+  it('TC-40 (C5 legacy regression): Legacy gate_pass with tally C=0,H=0,M=0,P=5,L=0,I=0 accepted', () => {
+    const state = makeRalphState({}, {
+      round: MIN_GATE_ROUNDS,
+      autoValidated: false,
+      tallyHistory: Array.from({ length: MIN_GATE_ROUNDS }, (_, i) => ({
+        round: i + 1, C: 0, H: 0, M: 0, P: 5, L: 0, I: 0, timestamp: NOW,
+      })),
+    })
+    const result = validateTransition('ralph_terminate', basePayload({
+      phase: 1, termination: 'gate_pass',
+    }), state)
+    expect(result.valid).toBe(true)
+  })
+
+  // ── TC-40b (C5 legacy regression): Legacy max_rounds with P-only tally rejected ──
+  it('TC-40b (C5 legacy regression): Legacy max_rounds with tally C=0,H=0,M=0,P=5,L=0,I=0 rejected', () => {
+    const state = makeRalphState({}, {
+      round: MAX_RALPH_ROUNDS,
+      autoValidated: false,
+      tallyHistory: Array.from({ length: MAX_RALPH_ROUNDS }, (_, i) => ({
+        round: i + 1, C: 0, H: 0, M: 0, P: 5, L: 0, I: 0, timestamp: NOW,
+      })),
+    })
+    const result = validateTransition('ralph_terminate', basePayload({
+      phase: 1, termination: 'max_rounds',
+    }), state)
+    expect(result.valid).toBe(false)
+    if (!result.valid) {
+      expect(result.violation).toContain('No unresolved issues')
+    }
+  })
+
+  // ── TC-41 (C6 regression): C→P without downgrade_reason rejected ──────────
+  it('TC-41 (C6 regression): C→P without downgrade_reason rejected', () => {
+    const state = makeRalphState({}, { round: 1 })
+    const result = validateTransition('ralph_round_finding', basePayload({
+      phase: 1, round: 2,
+      findings: [{ severity: 'P', original: 'C', description: 'test' }],
+    }), state)
+    expect(result.valid).toBe(false)
+    if (!result.valid) {
+      expect(result.violation).toContain('downgrade_reason')
+    }
+  })
+
+  // ── TC-42 (C6 regression): C→P with downgrade_reason accepted ─────────────
+  it('TC-42 (C6 regression): C→P with downgrade_reason accepted', () => {
+    const state = makeRalphState({}, { round: 1 })
+    const result = validateTransition('ralph_round_finding', basePayload({
+      phase: 1, round: 2,
+      findings: [{ severity: 'P', original: 'C', downgrade_reason: 'downgraded from critical to proposal', description: 'test' }],
+    }), state)
+    expect(result.valid).toBe(true)
+  })
+
+  // ── TC-43 (Constraint 5 regression): I-only round does NOT reset consecutiveZero ──
+  it('TC-43 (Constraint 5 regression): I-only round does NOT reset consecutiveZero counter', () => {
+    const state = makeRalphState({}, {
+      round: 1,
+      autoValidated: false,
+      consecutiveZero: 1,
+    })
+    const newState = applyTransition('ralph_round_complete', basePayload({
+      phase: 1, round: 2,
+      tally: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 3 },
+    }), state)
+    expect(newState.ralph!.consecutiveZero).toBe(2)
+  })
+
+  // ── TC-44 (Constraint 5 regression): L-only round does NOT reset consecutiveZero ──
+  it('TC-44 (Constraint 5 regression): L-only round does NOT reset consecutiveZero counter', () => {
+    const state = makeRalphState({}, {
+      round: 1,
+      autoValidated: false,
+      consecutiveZero: 1,
+    })
+    const newState = applyTransition('ralph_round_complete', basePayload({
+      phase: 1, round: 2,
+      tally: { C: 0, H: 0, M: 0, P: 0, L: 3, I: 0 },
+    }), state)
+    expect(newState.ralph!.consecutiveZero).toBe(2)
+  })
+
+  // ── KI-26 (Active/Medium): downgrade_reason empty string rejected ──────────
+  it('KI-26 regression: M→P with downgrade_reason: "" (empty string) rejected', () => {
+    const state = makeRalphState({}, { round: 1 })
+    const result = validateTransition('ralph_round_finding', basePayload({
+      phase: 1, round: 2,
+      findings: [{ severity: 'P', original: 'M', downgrade_reason: '', description: 'test' }],
+    }), state)
+    expect(result.valid).toBe(false)
+    if (!result.valid) {
+      expect(result.violation).toContain('downgrade_reason')
+    }
   })
 })
