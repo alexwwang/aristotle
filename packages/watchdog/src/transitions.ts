@@ -73,6 +73,7 @@ function checkTally(tally: unknown): { ok: boolean; errorType?: 'missing' | 'typ
 
 /** Severity ordering: C=5 > H=4 > M=3 > P=2 > L=1 > I=0. P=Proposal (quality-tier, does not reset consecutive-zero). Returns true when a is less severe than b. */
 const SEV_ORDER: Record<string, number> = { C: 5, H: 4, M: 3, P: 2, L: 1, I: 0 }
+const VALID_SEVERITIES = new Set(['C', 'H', 'M', 'P', 'L', 'I'])
 function severityLt(a: string, b: string): boolean {
   return (SEV_ORDER[a] ?? 0) < (SEV_ORDER[b] ?? 0)
 }
@@ -377,7 +378,7 @@ export function validateTransition(
         return fail('Too many findings', `ralph_round_finding accepts at most ${MAX_FINDINGS_PER_ROUND} findings per round, got ${(payload.findings as unknown[]).length}.`)
       }
       // Validate each finding structure
-      const validSeverities = new Set(['C', 'H', 'M', 'P', 'L', 'I'])
+      const validSeverities = VALID_SEVERITIES
       for (let i = 0; i < (payload.findings as unknown[]).length; i++) {
         const f = (payload.findings as Record<string, unknown>[])[i]
         if (!f || typeof f !== 'object') {
