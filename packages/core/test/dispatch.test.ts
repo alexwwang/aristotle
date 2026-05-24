@@ -12,11 +12,9 @@ const createMockRole = (overrides: Partial<RoleRegistration> = {}): RoleRegistra
 describe('TC-I-19: assemblePlugin — tool.execute.before throw propagates', () => {
   it('should propagate error from tool.execute.before and call both roles', async () => {
     const roleA = createMockRole({
-      name: 'RoleA',
       onToolBefore: vi.fn().mockResolvedValue(undefined),
     });
     const roleB = createMockRole({
-      name: 'RoleB',
       onToolBefore: vi.fn().mockRejectedValue(new Error('RoleB before error')),
     });
     const ctx = { client: {} };
@@ -45,11 +43,9 @@ describe('TC-I-19: assemblePlugin — tool.execute.before throw propagates', () 
 describe('TC-I-20: assemblePlugin — tool.execute.after per-role error isolation', () => {
   it('should swallow error from one role and continue calling others', async () => {
     const roleA = createMockRole({
-      name: 'RoleA',
       onToolAfter: vi.fn().mockRejectedValue(new Error('RoleA after error')),
     });
     const roleB = createMockRole({
-      name: 'RoleB',
       onToolAfter: vi.fn().mockResolvedValue(undefined),
     });
     const ctx = { client: {} };
@@ -80,7 +76,6 @@ describe('TC-I-20: assemblePlugin — tool.execute.after per-role error isolatio
 describe('TC-I-21: assemblePlugin — double-firing idempotency for plugin tools', () => {
   it('should handle duplicate (tool, callID) calls without crashing', async () => {
     const observerRole = createMockRole({
-      name: 'Observer',
       onToolBefore: vi.fn().mockResolvedValue(undefined),
       onToolAfter: vi.fn().mockResolvedValue(undefined),
     });

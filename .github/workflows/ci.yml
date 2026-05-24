@@ -50,7 +50,7 @@ jobs:
         run: |
           for pkg in packages/core packages/reflection packages/watchdog; do
             echo "=== $pkg ==="
-            cd "$pkg" && bunx tsc --noEmit && cd -
+            (cd "$pkg" && bunx tsc --noEmit)
           done
 
   lint-python:
