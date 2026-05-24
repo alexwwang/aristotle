@@ -95,6 +95,11 @@ if [ ! -f "$MCP_DEST/CHECKER.md" ]; then
     ERRORS=$((ERRORS+1))
 fi
 
+if [ ! -f "$MCP_DEST/LEARN.md" ]; then
+    echo -e "${YELLOW}✗${NC} LEARN.md not found at $MCP_DEST"
+    ERRORS=$((ERRORS+1))
+fi
+
 if [ ! -f "$MCP_DEST/pyproject.toml" ]; then
     echo -e "${YELLOW}✗${NC} pyproject.toml not found at $MCP_DEST"
     ERRORS=$((ERRORS+1))
@@ -102,6 +107,11 @@ fi
 
 if [ ! -d "$MCP_DEST/aristotle_mcp" ]; then
     echo -e "${YELLOW}✗${NC} aristotle_mcp/ not found at $MCP_DEST"
+    ERRORS=$((ERRORS+1))
+fi
+
+if [ ! -f "$MCP_DEST/uv.lock" ]; then
+    echo -e "${YELLOW}✗${NC} uv.lock not found at $MCP_DEST"
     ERRORS=$((ERRORS+1))
 fi
 
@@ -122,10 +132,17 @@ PLUGIN_DEST="$OPENCODE_CONFIG/aristotle-bridge"
 PLUGIN_SRC="$SKILL_SRC/plugin"
 if [ -d "$PLUGIN_SRC" ] && command -v bun &>/dev/null; then
     echo -e "${BLUE}[5/7]${NC} Building Plugin..."
-    cd "$SKILL_SRC" && bun install && bun run --filter '@opencode-ai/core' build 2>/dev/null; bun run --filter '@opencode-ai/reflection' build 2>/dev/null; cd "$PLUGIN_SRC" && bun run build
-    mkdir -p "$PLUGIN_DEST"
-    cp "$PLUGIN_SRC/dist/index.js" "$PLUGIN_DEST/index.js"
-    echo -e "${GREEN}✓${NC} Plugin deployed to $PLUGIN_DEST"
+    cd "$SKILL_SRC" && bun install \
+      && bun run --filter '@opencode-ai/core' build \
+      && bun run --filter '@opencode-ai/reflection' build \
+      && cd "$PLUGIN_SRC" && bun run build
+    if [ -f "$PLUGIN_SRC/dist/index.js" ]; then
+      mkdir -p "$PLUGIN_DEST"
+      cp "$PLUGIN_SRC/dist/index.js" "$PLUGIN_DEST/index.js"
+      echo -e "${GREEN}✓${NC} Plugin deployed to $PLUGIN_DEST"
+    else
+      echo -e "${YELLOW}⚠${NC} Plugin build failed — skipping deployment. Check bun output above."
+    fi
 elif [ -d "$PLUGIN_SRC" ]; then
     echo -e "${YELLOW}[5/7]${NC} Skipping Plugin (bun not found). Install bun to enable async reflection."
 else
@@ -135,18 +152,21 @@ fi
 # Step 6: Write configuration file
 SESSIONS_DIR="$OPENCODE_CONFIG/aristotle-sessions"
 CONFIG_FILE="$OPENCODE_CONFIG/aristotle-config.json"
-echo -e "${BLUE}[6/7]${NC} Writing configuration to $CONFIG_FILE..."
-
-cat > "$CONFIG_FILE" << EOF
+if [ ! -f "$CONFIG_FILE" ]; then
+    echo -e "${BLUE}[6/7]${NC} Writing configuration to $CONFIG_FILE..."
+    cat > "$CONFIG_FILE" << EOF
 {
   "mcp_dir": "$MCP_DEST",
   "sessions_dir": "$SESSIONS_DIR"
 }
 EOF
-echo -e "${GREEN}✓${NC} Configuration written."
+    echo -e "${GREEN}✓${NC} Configuration written."
+else
+    echo -e "${BLUE}[6/7]${NC} Configuration already exists at $CONFIG_FILE — preserving."
+fi
 
 # Step 7: Initialize the aristotle-repo
-    echo -e "${BLUE}[7/7]${NC} Initializing rule repository..."
+echo -e "${BLUE}[7/7]${NC} Initializing rule repository..."
 if command -v uv &>/dev/null; then
     uv run --project "$MCP_DEST" python -c "from aristotle_mcp.server import init_repo_tool; print(init_repo_tool())"
     echo -e "${GREEN}✓${NC} Rule repository initialized."
