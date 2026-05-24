@@ -39,8 +39,16 @@ export function createAristotleTools(deps: CreateAristotleToolsDeps): Record<str
       },
       execute: async (args: any, context: any) => {
         const sessionId = context?.sessionID || '';
+        const workflowId = args.workflow_id;
+        if (!/^wf_[0-9a-f]{16}$/.test(workflowId)) {
+          return JSON.stringify({
+            status: 'error',
+            workflow_id: workflowId,
+            message: '🦉 Invalid workflow_id format. Expected: wf_ + 16 hex chars.',
+          });
+        }
         const result = await executor.launch({
-          workflowId: args.workflow_id,
+          workflowId,
           oPrompt: args.o_prompt,
           agent: args.agent ?? 'R',
           parentSessionId: sessionId,

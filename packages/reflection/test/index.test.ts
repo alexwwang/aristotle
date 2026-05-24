@@ -358,12 +358,12 @@ describe('createAristotleRole', () => {
 
     const result = await createAristotleRole(ctx);
     await result!.tools!.aristotle_fire_o.execute({
-      workflow_id: 'w1',
+      workflow_id: 'wf_a1b2c3d4e5f67890',
       o_prompt: 'p',
     }, toolContext);
 
     expect(mockExecutor.launch).toHaveBeenCalledWith({
-      workflowId: 'w1',
+      workflowId: 'wf_a1b2c3d4e5f67890',
       oPrompt: 'p',
       agent: 'R',
       parentSessionId: 'tool-ctx-session-1',
@@ -376,13 +376,13 @@ describe('createAristotleRole', () => {
 
     const result = await createAristotleRole(ctx);
     await result!.tools!.aristotle_fire_o.execute({
-      workflow_id: 'w1',
+      workflow_id: 'wf_b2c3d4e5f67890a1',
       o_prompt: 'p',
       target_session_id: 'target-ses-123',
     }, toolContext);
 
     expect(mockExecutor.launch).toHaveBeenCalledWith({
-      workflowId: 'w1',
+      workflowId: 'wf_b2c3d4e5f67890a1',
       oPrompt: 'p',
       agent: 'R',
       parentSessionId: 'tool-ctx-session-1',
