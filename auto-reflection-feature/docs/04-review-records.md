@@ -187,3 +187,49 @@
 ---
 
 *Document updated: 2026-05-25*
+
+
+---
+
+### [RALPH-LOOP] Intervention Requirements Review (Phase 1)
+
+**Timestamp**: 2026-05-25T14:30:00+08:00
+**Phase**: 1 (Product Design)
+**Document**: intervention-requirements-v1.md
+**Branch**: feature/watchdog-intervention
+
+#### Round 1
+
+- **Recall Pass**: 32 findings (12H, 13M, 7L)
+- **Precision Filter**: 7H + 10M + 1L adopted (17 total)
+- **Key fixes**:
+  - F-01: Removed git commands from ACs
+  - F-02: Added consecutive to AC-I2
+  - F-07: Added 13-term Definitions section
+  - F-10: Added Violation Priority table
+  - F-11: Chinese lookaround matching
+  - F-12: V-4 semi-auto (no skeleton)
+  - F-17: V-5 assertion-only scope
+- **Result**: v1.3 committed (9e364f8)
+
+#### Round 2
+
+- **Recall Pass**: 0C / 0H / 4M / 3L / 2I
+- **ADOPTed**: 4M + 2L + 1I (7 total)
+- **Key fixes**:
+  - F-01: File-in-git definition
+  - F-02: Last legitimate commit definition
+  - F-03: Merge Rule overrides Priority
+  - F-04: Empty assessment invalid
+- **Result**: v1.3 R2 committed (affef85)
+
+#### Gate Status
+
+| Round | C | H | M | Status |
+|-------|---|---|---|--------|
+| R1 | 0 | 7 | 10 | FAIL |
+| R2 | 0 | 0 | 4 | FAIL (M remaining) |
+
+**Next**: Round 3 required (4M remaining)
+
+---
