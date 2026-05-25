@@ -1,7 +1,7 @@
 # Requirements: Watchdog Intervention for TDD Pipeline (MVP v1)
 
 > **Version**: v1.4 (MVP)
-> **Status**: Draft - Ralph Loop Round 3 Review
+> **Status**: Gate Passed - Ralph Loop Review Complete
 > **Branch**: feature/watchdog-intervention
 > **Depends on**: auto-reflection-feature (watchdog, reflector, rule_generator, committer, queue)
 > **TDD Pipeline Reference**: Phase definitions per tdd-pipeline skill (phase-1 through phase-7)
@@ -393,7 +393,7 @@ No auto-fix: 6 (V-1, V-2, V-3, V-6, V-7, V-13)
 ---
 
 Document created: 2026-05-25
-Version: v1.3
+Version: v1.4
 Changelog from v1.2:
 - F-01: Removed git commands from AC-I5/AC-I6, replaced with behavioral descriptions
 - F-02: AC-I2 added "consecutive" to match matrix V-2
