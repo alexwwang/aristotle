@@ -1,11 +1,12 @@
 # Test Plan: Watchdog Intervention for TDD Pipeline
 
-> **Version**: v1.0
-> **Status**: Draft — Ralph Loop Review Pending
+> **Version**: v1.1
+> **Status**: Ralph Loop Review R1 fixes applied
 > **Branch**: feature/watchdog-intervention
 > **Phase**: 3 (Test Plan)
 > **Based on**: intervention-requirements-v1.md (v1.4), 02-intervention-technical-solution.md (v1.4)
 > **Date**: 2026-05-25
+> **Changelog v1.1**: R1 fixes — 1H/12M from Precision Filter (F-01 V-7 flaky test, F-02 V-13 missing prompt, F-03 partial code block, F-04 V-5 scope note, F-05/F-06 untraced tests, F-08 ISO 8601 regex, F-09 leading-dash, F-11 req_number, F-12 V-7 baseline, F-13 V-2/V-3 plans, F-14 test count, F-15 V-7 integration, F-24 empty round_results)
 
 ---
 
@@ -40,7 +41,7 @@ All 10 user stories are Core. No secondary stories exist.
 | 6 | Restore modified test from git (Phase 5) | US-I3 (Core) / AC-I6 | RollbackEngine._restore_test | happy: tracked file restored from boundary_commit_hash; happy: HEAD fallback when boundary_commit_hash is None; edge: untracked file → skip; error: git checkout failure |
 | 7 | Detect missing test and require LLM to write it | US-I4 (Core) / AC-I7 | InterventionCoordinator._build_plan (V-6) | happy: MISSING_TEST blocked, no auto-fix; edge: system does NOT create skeleton; error: affected_file_path missing |
 | 8 | SKIP_RED_PHASE rollback targets Phase 4 | US-I2 (Core) / AC-I8 | InterventionCoordinator._build_plan (V-4) | happy: target_phase = 4; edge: already at Phase 4 |
-| 9 | Regression rollback targets Phase 5 | US-I7 (Core) / AC-I9 | RollbackEngine.rollback (V-7), InterventionCoordinator._build_plan | happy: Phase 5 end tests pass → Phase 6 fail → rollback to Phase 5; edge: flaky test (deterministic failure required); error: no phase5_test_results in context |
+| 9 | Regression rollback targets Phase 5 | US-I7 (Core) / AC-I9 | RollbackEngine.rollback (V-7), InterventionCoordinator._build_plan | happy: Phase 5 end tests pass → Phase 6 fail → rollback to Phase 5; edge: all Phase 6 failures treated as regression in MVP (including flaky false positives, per Phase 1 Constraint); error: no phase5_test_results in context |
 | 10 | REGRESSION target_phase = 5 | US-I7 (Core) / AC-I10 | InterventionCoordinator._build_plan (V-7) | happy: target_phase = 5 |
 | 11 | Auto-update ki document on every intervention | US-I5 (Core) / AC-I11 | KiDocManager.record_intervention | happy: entry appended with violation_type, target_phase, auto_fix_applied, timestamp; edge: multiple interventions = multiple entries; error: file not found → create with header |
 | 12 | Update ki document on Ralph Loop round end | US-I5 (Core) / AC-I12 | KiDocManager.record_intervention (round context) | happy: round results recorded; edge: Round 1 fails = still recorded |
@@ -53,6 +54,8 @@ All 10 user stories are Core. No secondary stories exist.
 | 19 | Validate Ralph Loop prompts for forbidden content (bilingual) | US-I10 (Core) / AC-I17 | PromptValidator.validate | happy: clean prompt → valid; happy: single EN match → invalid; edge: code block content → exempt; error: empty prompt → valid |
 | 20 | Report matched pattern details for invalid prompts | US-I10 (Core) / AC-I18 | PromptValidator.validate → PatternMatch fields | happy: report includes category, pattern, line_number, language; edge: multiple matches → report all |
 | 21 | Chinese forbidden pattern detection using lookaround matching | US-I10 (Core) / AC-I19 | PromptValidator.validate (ZH_COMPILED) | happy: ZH pattern detected; edge: mixed EN+ZH → both strategies; error: lookaround false positive in code block |
+
+> **Note on Core Scenario 21 error case**: Missing 'prompt' key returns empty string → valid → Watchdog false positive; this is by design as prompt key presence is Watchdog's responsibility.
 | 22 | Phase 5→4 rollback preserves Phase 5 work via auto-commit | US-I2 (Core) / AC-I22 | InterventionCoordinator.intervene (pre-rollback commit), RollbackEngine | happy: Phase 5 work committed before rollback; edge: untracked file staged with git add; error: commit fails → still proceed with rollback |
 
 ### Key Functional Points (from Phase 2 — priority: key)
@@ -133,7 +136,9 @@ _Traces Phase 1 user stories and acceptance criteria to test cases. For Phase 2 
 | 18 | Core | US-I2 | AC-I8 | Unit | `test_intervention_coordinator.py` | `should_target_phase_4_for_skip_red_phase_rollback` | SKIP_RED_PHASE plan.target_phase = 4 |
 | 19 | Core | US-I7 | AC-I9 | Unit | `test_intervention_coordinator.py` | `should_rollback_to_phase_5_on_regression` | Phase 5 tests pass → Phase 6 fail → rollback Phase 5 |
 | 20 | Core | US-I7 | AC-I9 | Unit | `test_intervention_coordinator.py` | `should_mark_failure_range_on_regression` | REGRESSION plan marks failure range, no auto-fix |
+| 20b | Core | US-I7 | AC-I9 | Unit | `test_intervention_coordinator.py` | `should_treat_all_phase6_failures_as_regression_in_mvp` | MVP treats all Phase 6 failures as regression per Phase 1 Constraint (flaky false positives acknowledged) |
 | 21 | Core | US-I7 | AC-I10 | Unit | `test_intervention_coordinator.py` | `should_target_phase_5_for_regression_rollback` | REGRESSION plan.target_phase = 5 |
+| 21b | Core | US-I7 | AC-I9 | Unit | `test_intervention_coordinator.py` | `should_raise_regression_without_auto_fix_when_no_baseline` | phase5_test_results=None → V-7 plan built with instruction noting no baseline |
 | 22 | Core | US-I5 | AC-I11 | Unit | `test_ki_doc_manager.py` | `should_append_intervention_entry_to_ki_doc` | Intervention → ki doc updated with violation_type, target_phase, auto_fix_applied, timestamp |
 | 23 | Core | US-I5 | AC-I11 | Unit | `test_ki_doc_manager.py` | `should_create_ki_doc_with_header_when_not_found` | File not found → create with header, then append |
 | 24 | Core | US-I5 | AC-I11 | Unit | `test_ki_doc_manager.py` | `should_append_multiple_entries_for_multiple_interventions` | Multiple interventions = multiple entries |
@@ -157,6 +162,7 @@ _Traces Phase 1 user stories and acceptance criteria to test cases. For Phase 2 
 | 42 | Core | US-I10 | AC-I17 | Unit | `test_prompt_validator.py` | `should_exempt_patterns_in_inline_code` | Pattern inside single backtick → exempt |
 | 43 | Core | US-I10 | AC-I17 | Unit | `test_prompt_validator.py` | `should_exempt_patterns_in_quoted_reference_context` | Pattern in quoted text → exempt |
 | 44 | Core | US-I10 | AC-I17 | Unit | `test_prompt_validator.py` | `should_exempt_patterns_in_markdown_headings` | Pattern in heading → exempt |
+| 44b | Core | US-I10 | AC-I17 | Unit | `test_prompt_validator.py` | `should_handle_pattern_partially_inside_code_block` | Forbidden phrase starting inside code block and ending outside → code block regex strips entire block, no match on remainder |
 | 45 | Core | US-I10 | AC-I17 | Unit | `test_prompt_validator.py` | `should_pass_clean_prompt` | No forbidden content → is_valid=True, matches=[] |
 | 46 | Core | US-I10 | AC-I18 | Unit | `test_prompt_validator.py` | `should_report_matched_pattern_details` | Match includes category, pattern text, line_number |
 | 47 | Core | US-I10 | AC-I18 | Unit | `test_prompt_validator.py` | `should_report_all_matches_when_multiple` | Multiple matches → report all with details |
@@ -176,7 +182,10 @@ _Traces Phase 1 user stories and acceptance criteria to test cases. For Phase 2 
 | 2 | Key | InterventionCoordinator.intervene() — unknown type | Interface | Unit | `test_intervention_coordinator.py` | `should_log_warning_and_not_block_for_unknown_violation_type` | Unknown type → log warning, no TDDViolationError |
 | 3 | Key | InterventionCoordinator.intervene() — prompt validation dispatch | Interface | Unit | `test_intervention_coordinator.py` | `should_dispatch_to_prompt_validator_only_for_v13` | Only V-13 triggers PromptValidator |
 | 4 | Key | InterventionCoordinator.intervene() — V-13 false positive | Interface | Unit | `test_intervention_coordinator.py` | `should_return_silently_when_v13_prompt_actually_clean` | Clean prompt on V-13 → return (false positive) |
+| 4b | Key | InterventionCoordinator.intervene() — V-13 missing prompt key | Interface | Unit | `test_intervention_coordinator.py` | `should_return_silently_when_v13_prompt_key_missing` | Missing 'prompt' in context → empty string → valid → return (by design, Watchdog responsibility) |
 | 5 | Key | InterventionCoordinator._build_plan() — all 13 types | Interface | Unit | `test_intervention_coordinator.py` | `should_map_v1_skip_review_to_correct_plan` | V-1 → InterventionPlan(phase, False, False, False, "Execute Ralph Loop Review") |
+| 5b | Key | InterventionCoordinator._build_plan() — V-2 | Interface | Unit | `test_intervention_coordinator.py` | `should_map_v2_insufficient_review_to_no_auto_fix_plan` | V-2 → InterventionPlan(phase, False, False, False, "Continue Ralph Loop until 2 consecutive ZERO_C_H_M") |
+| 5c | Key | InterventionCoordinator._build_plan() — V-3 | Interface | Unit | `test_intervention_coordinator.py` | `should_map_v3_unfixed_issues_to_no_auto_fix_plan` | V-3 → InterventionPlan(phase, False, False, False, "Fix issues before proceeding") |
 | 6 | Key | InterventionCoordinator._build_plan() — all 13 types | Interface | Unit | `test_intervention_coordinator.py` | `should_map_v4_skip_red_phase_to_destructive_plan` | V-4 → InterventionPlan(4, True, True, True, ...) |
 | 7 | Key | InterventionCoordinator._build_plan() — all 13 types | Interface | Unit | `test_intervention_coordinator.py` | `should_map_v5_modified_test_to_destructive_plan` | V-5 → InterventionPlan(5, True, True, True, ...) |
 | 8 | Key | InterventionCoordinator._build_plan() — all 13 types | Interface | Unit | `test_intervention_coordinator.py` | `should_map_v7_regression_to_phase5_plan` | V-7 → InterventionPlan(5, False, False, False, ...) |
@@ -186,11 +195,13 @@ _Traces Phase 1 user stories and acceptance criteria to test cases. For Phase 2 
 | 12 | Key | InterventionCoordinator.intervene_batch() — priority sorting | Interface | Unit | `test_intervention_coordinator.py` | `should_sort_events_by_priority_before_handling` | P1 events handled before P4 events |
 | 13 | Key | InterventionCoordinator.intervene_batch() — non-mergeable first | Interface | Unit | `test_intervention_coordinator.py` | `should_handle_non_mergeable_events_before_mergeable` | V-4 (P1) handled before V-10 (P4) |
 | 14 | Key | InterventionCoordinator.intervene_batch() — empty list | Interface | Unit | `test_intervention_coordinator.py` | `should_return_silently_for_empty_event_list` | Empty list → no action |
+| 14b | Key | InterventionCoordinator.intervene_batch() — performance | Interface | Unit | `test_intervention_coordinator.py` | `should_handle_many_violations_in_batch_efficiently` | Batch with many events sorted and handled in <100ms |
 | 15 | Key | InterventionCoordinator._handle_merged() — ordering | Interface | Unit | `test_intervention_coordinator.py` | `should_execute_commit_before_assessment_before_ki_update` | V-10/V-11 → V-12 → V-8/V-9 ordering enforced |
 | 16 | Key | InterventionCoordinator._handle_merged() — single ki entry | Interface | Unit | `test_intervention_coordinator.py` | `should_write_single_merged_ki_entry_for_combined_events` | Multiple events → one ki doc entry |
 | 17 | Key | InterventionCoordinator._compute_assessment() — FAIL | Interface | Unit | `test_intervention_coordinator.py` | `should_derive_fail_when_c_or_h_greater_than_zero` | C>0 or H>0 → status="FAIL" |
 | 18 | Key | InterventionCoordinator._compute_assessment() — CONDITIONAL | Interface | Unit | `test_intervention_coordinator.py` | `should_derive_conditional_when_m_greater_than_zero` | M>0, C=0, H=0 → status="CONDITIONAL" |
 | 19 | Key | InterventionCoordinator._compute_assessment() — PASS | Interface | Unit | `test_intervention_coordinator.py` | `should_derive_pass_when_all_zero` | C=0, H=0, M=0 → status="PASS" |
+| 19b | Key | InterventionCoordinator._compute_assessment() — empty round_results | Interface | Unit | `test_intervention_coordinator.py` | `should_derive_pass_when_round_results_empty` | Empty round_results → defaults to all zeros → PASS (by design: no rounds = no issues) |
 | 20 | Key | InterventionCoordinator._compute_assessment() — priority_counts | Interface | Unit | `test_intervention_coordinator.py` | `should_populate_priority_counts_dict_in_assessment` | P0=C, P1=H, P2=M, P3=P_count, P4=L_count |
 | 21 | Key | InterventionCoordinator._is_valid_event() — no affected_file_path for process | Interface | Unit | `test_intervention_coordinator.py` | `should_accept_process_violations_without_affected_file_path` | V-1/V-2/V-3/V-13 valid without affected_file_path |
 | 22 | Key | InterventionCoordinator._is_valid_event() — missing phase | Interface | Unit | `test_intervention_coordinator.py` | `should_reject_event_missing_phase_in_context` | No "phase" key in context → invalid |
@@ -198,6 +209,7 @@ _Traces Phase 1 user stories and acceptance criteria to test cases. For Phase 2 
 | 24 | Key | InterventionCoordinator.intervene() — pre-rollback for destructive | Interface | Unit | `test_intervention_coordinator.py` | `should_trigger_pre_rollback_commit_for_destructive_plan` | is_destructive=True → ensure_committed called before rollback |
 | 25 | Key | InterventionCoordinator.intervene() — pre-rollback for phase rollback | Interface | Unit | `test_intervention_coordinator.py` | `should_trigger_pre_rollback_commit_for_phase_rollback` | target_phase < current_phase → ensure_committed called |
 | 26 | Key | InterventionCoordinator.intervene() — post-intervention commit | Interface | Unit | `test_intervention_coordinator.py` | `should_commit_after_intervention_completes` | ensure_committed called after ki doc update |
+| 26b | Key | InterventionCoordinator.intervene() — cascading failure | Failure Mode | Unit | `test_intervention_coordinator.py` | `should_update_ki_doc_even_when_rollback_fails` | Rollback failure → ki doc still updated (coordinator continues to step 7) |
 | 27 | Key | PromptValidator — FP-1 EN patterns | Component | Unit | `test_prompt_validator.py` | `should_detect_fp1_en_stop_condition_patterns` | "stop condition", "gate pass", "2 consecutive rounds" |
 | 28 | Key | PromptValidator — FP-2 EN patterns | Component | Unit | `test_prompt_validator.py` | `should_detect_fp2_en_cumulative_tally_patterns` | "cumulative tally", "running total", "total C" |
 | 29 | Key | PromptValidator — FP-3 EN patterns | Component | Unit | `test_prompt_validator.py` | `should_detect_fp3_en_prior_round_patterns` | "prior round", "previous round", "last round" |
@@ -221,16 +233,19 @@ _Traces Phase 1 user stories and acceptance criteria to test cases. For Phase 2 
 | 47 | Key | RollbackEngine._validate_path() — path traversal | Component | Unit | `test_rollback_engine.py` | `should_reject_path_traversal_attempt` | "../etc/passwd" → False |
 | 48 | Key | RollbackEngine._validate_path() — absolute path outside repo | Component | Unit | `test_rollback_engine.py` | `should_reject_absolute_path_outside_repo` | "/etc/passwd" → False |
 | 49 | Key | RollbackEngine._validate_path() — git unavailable | Component | Unit | `test_rollback_engine.py` | `should_return_false_when_git_unavailable_for_path_validation` | git rev-parse fails → False |
+| 49b | Key | RollbackEngine._validate_path() — leading dash | Component | Unit | `test_rollback_engine.py` | `should_reject_path_starting_with_dash` | "-rf /" → False (git argument injection prevention) |
 | 50 | Key | RollbackEngine._is_tracked() — tracked | Component | Unit | `test_rollback_engine.py` | `should_return_true_for_tracked_file` | git ls-files returns path → True |
 | 51 | Key | RollbackEngine._is_tracked() — untracked | Component | Unit | `test_rollback_engine.py` | `should_return_false_for_untracked_file` | git ls-files returns empty → False |
 | 52 | Key | RollbackEngine._is_tracked() — git failure | Component | Unit | `test_rollback_engine.py` | `should_return_false_when_git_ls_files_fails` | git command fails → False |
 | 53 | Key | KiDocManager._parse_newest_timestamp() — extraction | Component | Unit | `test_ki_doc_manager.py` | `should_extract_iso8601_timestamp_from_ki_doc` | Parses "**Timestamp**: 2026-05-25T14:30:00+08:00" |
 | 54 | Key | KiDocManager._parse_newest_timestamp() — multiple | Component | Unit | `test_ki_doc_manager.py` | `should_return_latest_timestamp_when_multiple_present` | Multiple entries → last timestamp |
 | 55 | Key | KiDocManager._parse_newest_timestamp() — file not found | Component | Unit | `test_ki_doc_manager.py` | `should_return_none_when_ki_doc_not_found` | File missing → None |
+| 55b | Key | KiDocManager._parse_newest_timestamp() — timezone variants | Component | Unit | `test_ki_doc_manager.py` | `should_parse_iso8601_with_z_and_compact_timezones` | Regex matches Z suffix and +HHMM compact timezone (requires Phase 2 regex update) |
 | 56 | Key | KiDocManager.record_merge() — single entry | Component | Unit | `test_ki_doc_manager.py` | `should_write_single_merged_entry_documenting_all_combined_actions` | Multiple events → one entry with all violation types |
 | 57 | Key | KiDocManager._append() — file creation | Component | Unit | `test_ki_doc_manager.py` | `should_create_parent_directories_when_missing` | Parent dirs don't exist → mkdir -p |
 | 58 | Peripheral | CommitGuard.ensure_committed() — clean skip | Component | Unit | `test_commit_guard.py` | `should_skip_commit_when_repo_clean` | _is_clean() → True → CommitResult("skip") |
-| 59 | Peripheral | CommitGuard.ensure_committed() — dirty commit | Component | Unit | `test_commit_guard.py` | `should_commit_when_repo_dirty` | _is_clean() → False → git add -u + git commit |
+| 59 | Peripheral | CommitGuard.ensure_committed() — dirty commit | Component | Unit | `test_commit_guard.py` | `should_commit_when_repo_dirty` | _is_clean() → False → git add -u + git commit with req_number prefix in message |
+| 59b | Peripheral | CommitGuard._build_message() — req_number prefix | Component | Unit | `test_commit_guard.py` | `should_include_req_number_in_commit_message` | Message starts with context.req_number (e.g., "INT-001: PHASE-4-RED auto-commit") |
 | 60 | Peripheral | CommitGuard.ensure_committed() — failure | Component | Unit | `test_commit_guard.py` | `should_return_failure_when_git_commit_fails` | git commit returns non-zero → CommitResult(success=False) |
 | 61 | Peripheral | CommitGuard._build_message() — with loop_round | Component | Unit | `test_commit_guard.py` | `should_include_loop_round_in_commit_message` | loop_round=3 → "[Loop 3]" in message |
 | 62 | Peripheral | CommitGuard._build_message() — without loop_round | Component | Unit | `test_commit_guard.py` | `should_omit_loop_tag_when_no_loop_round` | loop_round=None → no [Loop N] |
@@ -431,8 +446,11 @@ CLEAN_PROMPT = "Review the following code changes for correctness and style. Che
 | 2 | subprocess.run timeout: Should git commands have explicit timeouts? | Current design: no timeout. In SYNC mode, LLM is blocked anyway. If git hangs, intervention hangs. Mitigated by container timeout. Recommend adding 30s timeout in implementation but not blocking test plan. |
 | 3 | PromptValidator truncation threshold: Confirm 10KB | Phase 2 specifies 10KB truncation for long prompts. Test should verify truncation behavior at threshold boundary (9999 bytes = no truncate, 10241 bytes = truncate). |
 | 4 | KiDocManager file creation: parent directory creation depth | Design uses `mkdir(parents=True, exist_ok=True)`. Test should verify deeply nested paths work (e.g., `a/b/c/ki-doc.md`). |
-| 5 | V-7 regression: How are phase5_test_results populated? | PipelineContext.phase5_test_results is Optional. Test both present (regression detected) and absent (no baseline → cannot detect). Coordinator behavior when absent is documented as open question. |
+| 5 | V-7 regression: How are phase5_test_results populated? | Resolution: When phase5_test_results is None/empty, coordinator builds V-7 plan (target_phase=5, auto_fix=False) but cannot determine which tests regressed. Plan instruction includes "no baseline available". Test: `should_raise_regression_without_auto_fix_when_no_baseline`. |
 | 6 | Integration test scope: real git or mocked? | Integration tests (`test_intervention_integration.py`) use real git operations in `tmp_path`. Unit tests mock subprocess.run. This split ensures integration tests catch real git edge cases. |
+| 7 | V-5 detection scope (assertion-only vs refactoring) | Detection is Watchdog/ViolationFilter responsibility, not InterventionCoordinator. The intervention layer receives V-5 events after detection. V-5 scope tests belong in Watchdog test plan, documented here as out of scope. |
+| 8 | KiDocManager timestamp regex timezone coverage | Current Phase 2 regex only matches +HH:MM. Must extend to support Z and +HHMM in implementation phase. This test verifies the fix. |
+| 9 | RollbackEngine._validate_path leading-dash check | Implementation must add `filepath.startswith('-')` check. This test verifies the security fix. |
 
 ---
 
@@ -462,15 +480,17 @@ No peripheral-to-key upgrades detected. CommitGuard remains Peripheral with basi
 
 ## Test File Summary
 
+> **Note on test counts**: The Requirements Coverage Matrix and Design Coverage Matrix trace different dimensions (ACs vs design elements). Many matrix rows map to the same test function verified from different angles. The counts below reflect unique test functions.
+
 | Test File | Component | Priority | Estimated Test Count |
 |-----------|-----------|----------|---------------------|
-| `test_intervention_coordinator.py` | InterventionCoordinator | Key | ~30 |
-| `test_prompt_validator.py` | PromptValidator | Key | ~20 |
-| `test_rollback_engine.py` | RollbackEngine | Key | ~15 |
-| `test_ki_doc_manager.py` | KiDocManager | Key | ~12 |
-| `test_commit_guard.py` | CommitGuard | Peripheral | ~8 |
-| `test_intervention_integration.py` | Cross-component flows | — | ~6 |
-| **Total** | | | **~91** |
+| `test_intervention_coordinator.py` | InterventionCoordinator | Key | ~35 |
+| `test_prompt_validator.py` | PromptValidator | Key | ~21 |
+| `test_rollback_engine.py` | RollbackEngine | Key | ~16 |
+| `test_ki_doc_manager.py` | KiDocManager | Key | ~13 |
+| `test_commit_guard.py` | CommitGuard | Peripheral | ~9 |
+| `test_intervention_integration.py` | Cross-component flows | — | ~7 |
+| **Total** | | | **~101** |
 
 ### Integration Test Scenarios (`test_intervention_integration.py`)
 
@@ -482,6 +502,7 @@ No peripheral-to-key upgrades detected. CommitGuard remains Peripheral with basi
 | 4 | `should_end_to_end_preserve_committed_work_on_phase_rollback` | V-6 detected in Phase 5 → commit Phase 5 work → rollback to Phase 4 → Phase 5 work in git history | Coordinator, RollbackEngine, CommitGuard |
 | 5 | `should_end_to_end_handle_rollback_failure_gracefully` | V-4 with git rm failure → RollbackResult(success=False) → ki doc still updated → TDDViolationError with auto_fix_applied=False | Coordinator, RollbackEngine, KiDocManager |
 | 6 | `should_end_to_end_validate_prompt_and_block_with_details` | V-13 with forbidden EN+ZH content → PromptValidator → multiple PatternMatches → ki doc PROMPT-VALIDATION entry → TDDViolationError | Coordinator, PromptValidator, KiDocManager |
+| 7 | `should_end_to_end_rollback_to_phase5_on_regression` | Phase 5 tests pass → Phase 6 detects regression → rollback to Phase 5 → ki doc updated → TDDViolationError | Coordinator, RollbackEngine, KiDocManager, CommitGuard |
 
 ---
 
@@ -495,7 +516,7 @@ No peripheral-to-key upgrades detected. CommitGuard remains Peripheral with basi
 | V-4 | SKIP_RED_PHASE | `test_intervention_coordinator.py`, `test_rollback_engine.py`, `test_intervention_integration.py` | 5 |
 | V-5 | MODIFIED_TEST | `test_intervention_coordinator.py`, `test_rollback_engine.py`, `test_intervention_integration.py` | 6 |
 | V-6 | MISSING_TEST | `test_intervention_coordinator.py` | 3 |
-| V-7 | REGRESSION | `test_intervention_coordinator.py` | 3 |
+| V-7 | REGRESSION | `test_intervention_coordinator.py`, `test_intervention_integration.py` | 5 |
 | V-8 | MISSING_KI_DOC | `test_intervention_coordinator.py`, `test_ki_doc_manager.py`, `test_intervention_integration.py` | 4 |
 | V-9 | KI_DOC_OUTDATED | `test_ki_doc_manager.py` | 3 |
 | V-10 | UNCOMMITTED_PHASE | `test_commit_guard.py`, `test_intervention_integration.py` | 3 |
@@ -506,6 +527,6 @@ No peripheral-to-key upgrades detected. CommitGuard remains Peripheral with basi
 ---
 
 *Document created: 2026-05-25*
-*Version: v1.0*
+*Version: v1.1*
 *Phase: 3 (Test Plan)*
-*Next: Ralph Loop Review*
+*Next: Ralph Loop Review R2*
