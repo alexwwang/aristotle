@@ -1,7 +1,7 @@
 # Test Plan: Watchdog Intervention for TDD Pipeline
 
-> **Version**: v1.4
-> **Status**: Ralph Loop Review R4 fixes applied
+> **Version**: v1.5
+> **Status**: Ralph Loop Review R5 — Open Questions added for Phase 2 gaps
 > **Branch**: feature/watchdog-intervention
 > **Phase**: 3 (Test Plan)
 > **Based on**: intervention-requirements-v1.md (v1.4), 02-intervention-technical-solution.md (v1.4)
@@ -461,6 +461,8 @@ CLEAN_PROMPT = "Review the following code changes for correctness and style. Che
 | 8 | KiDocManager timestamp regex timezone coverage | Current Phase 2 regex only matches +HH:MM. Must extend to support Z and +HHMM in implementation phase. This test verifies the fix. |
 | 9 | RollbackEngine._validate_path leading-dash check | Implementation must add `filepath.startswith('-')` check. This test verifies the security fix. |
 | 10 | CommitGuard untracked file handling at phase boundary | CommitGuard uses git add -u (tracked only). Untracked files are NOT committed at phase boundaries by default. Pre-rollback path handles untracked files via git add <specific_file>. This is intentional to avoid committing unrelated untracked files. |
+| 11 | V-9 standalone auto-fix: ensure_updated() not in Phase 2 intervene() pseudocode | Test 19b expects intervene() to call ensure_updated() for V-9, appending the missing record per AC-I20. Phase 2 pseudocode only shows record_intervention(). Implementation must add ensure_updated() call between steps 4 and 6 for V-9 specifically. Phase 2 design document should be updated accordingly. |
+| 12 | _handle_merged V-10/V-11 only: record_merge not called | Phase 1 Merge Rule requires single ki doc entry for ALL merged violations. Phase 2 _handle_merged only calls record_merge when V-8/V-9 events exist. Test 19a expects ki doc recording for V-10/V-11 only merges. Implementation must always call record_merge for any merged set (move outside ki_events conditional), or Phase 2 must be updated. |
 
 ---
 
@@ -537,6 +539,6 @@ No peripheral-to-key upgrades detected. CommitGuard remains Peripheral with basi
 ---
 
 *Document created: 2026-05-25*
-*Version: v1.4*
+*Version: v1.5*
 *Phase: 3 (Test Plan)*
-*Next: Ralph Loop Review R5*
+*Next: Ralph Loop Review R6*
