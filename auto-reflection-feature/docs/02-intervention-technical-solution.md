@@ -1,10 +1,11 @@
 # Technical Design: Watchdog Intervention for TDD Pipeline
 
-> **Version**: v1.0
-> **Status**: Draft - Pending Ralph Loop Review
+> **Version**: v1.1
+> **Status**: Ralph Loop Review R1 fixes applied
 > **Branch**: feature/watchdog-intervention
 > **Phase**: 2 (Technical Solution)
 > **Based on**: intervention-requirements-v1.md (v1.4, gate passed)
+> **Changelog v1.1**: Fixed 4H + 10M findings from R1 Recall+Precision review
 
 ---
 
@@ -32,7 +33,7 @@ TDD Pipeline
 |  (entry point, routing, priority)        |
 |                                          |
 |  +---> PromptValidator    (V-13)        |
-|  +---> RollbackEngine     (V-4,V-5)     |
+|  +---> RollbackEngine     (V-4,V-5,V-7) |
 |  +---> KiDocManager       (V-8,V-9,V-12)|
 |  +---> CommitGuard        (V-10,V-11)   |
 |                                          |
@@ -48,7 +49,9 @@ TDD Pipeline
 TDD Pipeline (blocked, receives retry instruction)
 ```
 
-**Data Flow**: ViolationEvent -> InterventionCoordinator -> classify by priority -> dispatch to sub-component -> execute auto-fix (if applicable) -> update ki doc -> commit -> raise TDDViolationError -> pipeline retries.
+**Data Flow**: ViolationEvent -> InterventionCoordinator (priority sort) -> classify -> dispatch to sub-component -> execute auto-fix (if applicable) -> update ki doc -> commit -> raise TDDViolationError with InterventionResult -> pipeline retries.
+
+**Multi-violation Data Flow**: List[ViolationEvent] -> InterventionCoordinator.intervene_batch() -> merge same-boundary V-8/V-9/V-10/V-11/V-12 per Merge Rule -> handle highest priority -> single ki doc entry.
 
 ---
 
@@ -200,7 +203,15 @@ class InterventionCoordinator:
         if not self._is_valid_event(event):
             return
 
-        # 2. Prompt validation if applicable
+        # 2. Check if unknown type (don't block unknowns)
+        if event.violation_type not in {"SKIP_REVIEW", "INSUFFICIENT_REVIEW", "UNFIXED_ISSUES",
+            "INVALID_REVIEW_PROMPT", "SKIP_RED_PHASE", "MODIFIED_TEST", "MISSING_TEST",
+            "REGRESSION", "MISSING_KI_DOC", "KI_DOC_OUTDATED", "UNCOMMITTED_PHASE",
+            "UNCOMMITTED_REVIEW", "MISSING_KI_ASSESSMENT"}:
+            logger.warning(f"Unknown violation_type: {event.violation_type}")
+            return  # Do NOT block pipeline for unknown types
+
+        # 3. Prompt validation if applicable
         if self._needs_prompt_validation(event):
             result = self.prompt_validator.validate(event.context.get("prompt", ""))
             if not result.is_valid:
@@ -209,25 +220,25 @@ class InterventionCoordinator:
                 self.commit_guard.ensure_committed(self.context)
                 raise TDDViolationError(event, plan)
 
-        # 3. Build plan
+        # 4. Build plan
         plan = self._build_plan(event)
 
-        # 4. Pre-rollback commit (safety net for destructive ops)
+        # 5. Pre-rollback commit (safety net for destructive ops)
         if plan.is_destructive:
             self.commit_guard.ensure_committed(self.context)
 
-        # 5. Execute rollback
+        # 6. Execute rollback
         rollback_result = None
         if plan.auto_fix and plan.needs_rollback:
             rollback_result = self.rollback_engine.rollback(event, plan)
 
-        # 6. Ki doc update
+        # 7. Ki doc update
         self.ki_doc.record_intervention(event, plan, rollback_result)
 
-        # 7. Post-intervention commit
+        # 8. Post-intervention commit
         self.commit_guard.ensure_committed(self.context)
 
-        # 8. Block pipeline
+        # 9. Block pipeline
         raise TDDViolationError(event, plan)
 
     def _build_plan(self, event: ViolationEvent) -> InterventionPlan:
@@ -240,7 +251,7 @@ class InterventionCoordinator:
             "SKIP_RED_PHASE":        InterventionPlan(4, True, True, True, "Write failing test before implementation"),
             "MODIFIED_TEST":         InterventionPlan(5, True, True, True, "Write implementation to make ORIGINAL test pass"),
             "MISSING_TEST":          InterventionPlan(4, False, False, False, "Write test for this module first"),
-            "REGRESSION":            InterventionPlan(5, False, False, False, "Fix implementation to resolve regression"),
+            "REGRESSION":            InterventionPlan(5, True, True, False, "Fix implementation to resolve regression"),
             "MISSING_KI_DOC":        InterventionPlan(phase, True, False, False, "(auto-fixed)"),
             "KI_DOC_OUTDATED":       InterventionPlan(phase, True, False, False, "(auto-fixed)"),
             "UNCOMMITTED_PHASE":     InterventionPlan(phase, True, False, False, "(auto-fixed)"),
@@ -332,7 +343,7 @@ class RollbackEngine:
     def _delete_implementation(self, event) -> RollbackResult:
         filepath = event.affected_file_path
         if self._is_tracked(filepath):
-            subprocess.run(["git", "checkout", "HEAD", "--", filepath], check=True)
+            subprocess.run(["git", "rm", "-f", filepath], capture_output=True, text=True)
         elif os.path.exists(filepath):
             os.remove(filepath)
         return RollbackResult(True, "deleted implementation", [filepath], None)
@@ -341,8 +352,14 @@ class RollbackEngine:
         filepath = event.affected_file_path
         if not self._is_tracked(filepath):
             return RollbackResult(False, "skip (untracked)", [], None)
-        subprocess.run(["git", "checkout", "HEAD", "--", filepath], check=True)
-        return RollbackResult(True, "restored test", [filepath], None)
+        commit_ref = context.boundary_commit_hash or "HEAD"
+        result = subprocess.run(
+            ["git", "checkout", commit_ref, "--", filepath],
+            capture_output=True, text=True
+        )
+        if result.returncode != 0:
+            return RollbackResult(False, f"git checkout failed: {result.stderr}", [], None)
+        return RollbackResult(True, f"restored test from {commit_ref}", [filepath], None)
 
     def _is_tracked(self, filepath: str) -> bool:
         result = subprocess.run(["git", "ls-files", filepath], capture_output=True, text=True)
@@ -424,7 +441,7 @@ class CommitGuard:
 | Ki doc write fails | Peripheral | Log error, continue. Best-effort. |
 | Prompt too long for regex | Peripheral | Truncate to 10KB, log truncation |
 | Multiple violations same event | Key | Priority table (P1>P2>P3>P4>P5), handle highest only |
-| Unknown violation_type | Peripheral | Log warning, no-op, do not block |
+| Unknown violation_type | Peripheral | Log warning, return (no block) |
 | Empty diff at boundary | Peripheral | Skip commit, log |
 | Git unavailable | Key | Log error, raise TDDViolationError without auto-fix |
 
@@ -486,5 +503,6 @@ Intervention is orthogonal to existing auto-reflection pipeline. Sits between wa
 ---
 
 *Document created: 2026-05-25*
+*Version: v1.1 (R1 fixes: 4H + 10M findings resolved)*
 *Phase: 2 (Technical Solution)*
-*Next: Ralph Loop Review*
+*Next: Ralph Loop R2 Review*
