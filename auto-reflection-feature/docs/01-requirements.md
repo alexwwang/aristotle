@@ -23,6 +23,7 @@ Before implementing this feature, the following schema changes are required:
 5. **commit_rule() extension**: Add schema validation (category non-empty, confidence in [0.0,1.0], error_summary <= 200 chars) before commit
 6. **stream_filter_rules() extension**: Add optional `auto_reflection` filter parameter to enable querying auto-reflected rules
 7. **GEAR conformance exception**: Auto-reflected rules follow abbreviated lifecycle `pending → verified` (bypassing staging). Role separation is maintained: GPAV acts as producer (R) by detecting violations, Aristotle reflection engine acts as auditor (C) by generating and validating rule content. The commit is a mechanical operation, not an audit decision. Documented as intentional exception for machine-generated rules.
+8. **Security analysis**: All external input flows through GPAV violation events (trust boundary at GPAV→Aristotle interface). Violation events are validated before processing (violation_type whitelist, phase range check). No sensitive data exposure: rule content contains only behavioral patterns, not source code or user data. Authentication/authorization handled by MCP server.
 
 ---
 
@@ -39,7 +40,7 @@ Before implementing this feature, the following schema changes are required:
   - Detection of design document errors (e.g., incorrect requirements analysis)
   - Detection of code implementation errors (e.g., test failures, logic bugs)
   - Detection of Aristotle MCP tool call errors
-  - Manual review of auto-generated rules (fully automated)
+  - Manual review of auto-generated rules (out of scope: system is fully automated)
   - Cross-session analysis (only within single TDD Pipeline execution)
 
 - **External dependencies**:
