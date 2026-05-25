@@ -18,9 +18,13 @@ while [[ $# -gt 0 ]]; do
     -h|--help)
       echo "Usage: bash install.sh [options]"
       echo "Options:"
-      echo "  -f, --force     Skip confirmation prompts (non-interactive)"
-      echo "  -n, --dry-run   Show what would be installed without making changes"
-      echo "  -h, --help      Show this help message"
+      echo "  -f, --force     Skip confirmation prompts"
+      echo "  -n, --dry-run   Show what would be installed"
+      echo "  -h, --help      Show help"
+      echo ""
+      echo "Environment:"
+      echo "  DESTDIR=path    Install to custom directory instead of ~/.config/opencode/"
+      echo "                  (Use for testing: DESTDIR=/tmp/test bash install.sh)"
       exit 0
       ;;
     *) echo "Unknown option: $1"; exit 1 ;;
