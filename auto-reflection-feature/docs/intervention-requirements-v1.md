@@ -1,7 +1,7 @@
 # Requirements: Watchdog Intervention for TDD Pipeline (MVP v1)
 
-> **Version**: v1.3 (MVP)
-> **Status**: Draft - Ralph Loop Round 2 Review
+> **Version**: v1.4 (MVP)
+> **Status**: Draft - Ralph Loop Round 3 Review
 > **Branch**: feature/watchdog-intervention
 > **Depends on**: auto-reflection-feature (watchdog, reflector, rule_generator, committer, queue)
 > **TDD Pipeline Reference**: Phase definitions per tdd-pipeline skill (phase-1 through phase-7)
@@ -36,7 +36,7 @@ Approach: 定义完整的干预矩阵，每种违规类型有明确的触发条�
 | **Phase completion** | 当前 Phase 的主要产出物已生成且通过 Ralph Loop gate（Phase 1-5）或通过预发布测试（Phase 6）。 |
 | **SYNC mode** | 干预模式：Watchdog 在每个操作步骤后同步检查，发现违规时立即阻止 LLM 并执行干预。LLM 无法继续下一步直到违规解决。 |
 | **Rollback to Phase N** | 将 pipeline 状态重置为 Phase N 的开始状态。（1）已有 commit 的工作保留；（2）未 commit 的工作先 auto-commit 再回退；（3）仅影响当前 Phase 的产出物。 |
-| **Last legitimate commit** | V-5 detection baseline commit. Defined as Phase 4 to 5 stage boundary commit (the commit made when Phase 4 completes). |
+| **Last legitimate commit** | V-5 detection baseline commit. Defined as Phase 4 to 5 stage boundary commit (the commit made when Phase 4 completes). All Phase 5 work is preserved via pre-rollback commit; restore target is always this boundary commit. |
 | **Regression** | 在 Phase 5 结束时通过的测试用例，在 Phase 6 中失败。不包括：(a) 新增但从未通过的测试；(b) flaky test（同一用例在相同代码下有时通过有时失败）。 |
 | **Stage boundary** | 从 Phase N 进入 Phase N+1 的转换点。此时必须完成：ki assessment + commit + 合规检查。 |
 | **Auto-fix** | 系统自动执行的修复动作（确定性代码操作，不调用 LLM）。分为：full auto（完全自动）和 semi-auto（自动执行 + 要求 LLM 后续操作）。 |
@@ -194,7 +194,7 @@ Ralph Loop 协议要求 reviewer prompt **不得包含** 以下内容。检测�
 
 | # | US | Acceptance Criterion | Edge Cases |
 |---|-----|---------------------|------------|
-| AC-I5 | US-I2 | Given Phase 4 detects implementation file creation with no failing test, When intervention triggers, Then delete implementation file, raise SKIP_RED_PHASE, require LLM to write test first | File not in git = use file system delete; file in git = use git checkout |
+| AC-I5 | US-I2 | Given Phase 4 detects implementation file creation with no failing test, When intervention triggers, Then delete implementation file, raise SKIP_RED_PHASE, require LLM to write test first | Implementation file removed regardless of tracking status |
 | AC-I6 | US-I3 | Given Phase 5 detects test file assertion/expectation change vs last legitimate commit, When intervention triggers, Then restore test to last legitimate commit version, raise MODIFIED_TEST | File not tracked by git = skip restore, log warning; refactor-only changes = not a violation |
 | AC-I7 | US-I4 | Given Phase 4/5 detects implementation file with no corresponding test file, When intervention triggers, Then block pipeline, raise MISSING_TEST, require LLM to write the test | System does NOT create placeholder skeleton |
 | AC-I8 | US-I2 | Given SKIP_RED_PHASE rollback, When target phase calculated, Then target_phase = 4 (Red phase, write test first) | N/A |
@@ -224,7 +224,7 @@ Ralph Loop 协议要求 reviewer prompt **不得包含** 以下内容。检测�
 
 | # | US | Acceptance Criterion | Edge Cases |
 |---|-----|---------------------|------------|
-| AC-I21 | US-I8 | Given any violation detected (V-1 through V-13), When intervention triggers, Then pipeline is blocked immediately, auto-fix (if applicable) executes, LLM receives instruction to retry, no human intervention required | Multiple violations = handle by priority (see Violation Priority table) |
+| AC-I21 | US-I8 | Given any violation detected (V-1 through V-13), When intervention triggers, Then pipeline is blocked immediately, auto-fix (if applicable) executes, LLM receives instruction to retry, no human override permitted | Multiple violations = handle by priority (see Violation Priority table) |
 
 ### Commit Compliance
 
@@ -263,7 +263,7 @@ Examples:
 3. Intervention: When auto-fix is applied, commit fix results
 4. Empty commit: If diff is empty, skip and log
 5. Pre-rollback: Before rollback to earlier phase, auto-commit current phase work
-6. MCP integration: Use MCP commit_rule for rule files, git add -A and git commit for code/docs
+6. MCP integration: Rule files committed via MCP commit tool; code and docs committed via standard version control
 
 ---
 
@@ -363,6 +363,7 @@ When V-8/V-9/V-12 trigger at the same boundary, merge into a single intervention
 - Constraint: V-4 auto-fix deletes implementation but does NOT create test skeleton (changed from earlier versions). LLM must write test.
 - Constraint: V-13 regex may have false positives/negatives; code blocks and inline code exempt. Semantic detection is v2 scope.
 - Constraint: V-5 only detects assertion/expectation changes, not refactoring changes
+- Constraint: V-7 flaky test handling in MVP: all Phase 6 failures treated as regression (no re-run mechanism). Flaky false positives acknowledged as known risk. Re-run confirmation is v2 scope.
 
 ---
 
@@ -374,15 +375,15 @@ When V-8/V-9/V-12 trigger at the same boundary, merge into a single intervention
 | V-2 | INSUFFICIENT_REVIEW | 1-3 | Process | No | Yes |
 | V-3 | UNFIXED_ISSUES | 1-3 | Process | No | Yes |
 | V-13 | INVALID_REVIEW_PROMPT | 1-3 | Process | None (require LLM to reconstruct compliant prompt) | Yes |
-| V-4 | SKIP_RED_PHASE | 4 | Behavioral | Semi-auto - delete impl only | Yes |
+| V-4 | SKIP_RED_PHASE | 4 | Behavioral | Semi-auto (delete impl + require test) | Yes |
 | V-5 | MODIFIED_TEST | 5 | Behavioral | Full auto - restore test | Yes |
 | V-6 | MISSING_TEST | 4-5 | Behavioral | No - require LLM to write | Yes |
 | V-7 | REGRESSION | 6 | Regression | No - mark + flag | Yes |
-| V-8 | MISSING_KI_DOC | 1-7 | Compliance | Yes - auto-append | Self |
-| V-9 | KI_DOC_OUTDATED | 1-7 | Compliance | Yes - auto-append | Self |
+| V-8 | MISSING_KI_DOC | 1-7 | Compliance | Yes - auto-append | Yes (auto) |
+| V-9 | KI_DOC_OUTDATED | 1-7 | Compliance | Yes - auto-append | Yes (auto) |
 | V-10 | UNCOMMITTED_PHASE | 1-7 | Compliance | Yes - auto-commit | Yes |
 | V-11 | UNCOMMITTED_REVIEW | 1-3 | Compliance | Yes - auto-commit | Yes |
-| V-12 | MISSING_KI_ASSESSMENT | 1-7 | KI Assessment | Yes - auto-execute | Self |
+| V-12 | MISSING_KI_ASSESSMENT | 1-7 | KI Assessment | Yes - auto-execute | Yes (auto) |
 
 Total: 13 violation types, 10 user stories, 22 acceptance criteria
 
