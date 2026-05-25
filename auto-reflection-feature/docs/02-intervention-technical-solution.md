@@ -1,11 +1,11 @@
 # Technical Design: Watchdog Intervention for TDD Pipeline
 
-> **Version**: v1.3
-> **Status**: Ralph Loop Review R3 fixes applied
+> **Version**: v1.4
+> **Status**: Ralph Loop Review R4 fixes applied
 > **Branch**: feature/watchdog-intervention
 > **Phase**: 2 (Technical Solution)
 > **Based on**: intervention-requirements-v1.md (v1.4, gate passed)
-> **Changelog v1.3**: R3 fixes — _handle_merged syntax corrected (F-1); missing ZH patterns added (F-2); _validate_path uses repo_root join (F-3); merge path raises + commits ki doc (F-4); heading exemption (F-5); git fail guard (F-6); prompt false positive early return (F-8); single merge entry (F-9); assessment logic (F-10); pre-rollback git add for specific files (F-11)
+> **Changelog v1.4**: R4 fixes — intervene_batch priority: non-mergeable first (F-12); assessment priority breakdown (F-13)
 
 ---
 
@@ -304,10 +304,11 @@ class InterventionCoordinator:
                      {"MISSING_KI_DOC", "KI_DOC_OUTDATED", "UNCOMMITTED_PHASE",
                       "UNCOMMITTED_REVIEW", "MISSING_KI_ASSESSMENT"}]
         non_mergeable = [e for e in sorted_events if e not in mergeable]
-        if mergeable:
-            self._handle_merged(mergeable)
+        # Priority: non-mergeable (P1/P2/P3) first, mergeable (P4/P5) only if alone
         if non_mergeable:
             self.intervene(non_mergeable[0])
+        elif mergeable:
+            self._handle_merged(mergeable)
 
     def _handle_merged(self, events):
         # Step 1: V-10/V-11 (commit first)
@@ -317,8 +318,8 @@ class InterventionCoordinator:
         # Step 2: V-12 (assessment)
         for e in events:
             if e.violation_type == "MISSING_KI_ASSESSMENT":
-                status, issues = self._compute_assessment()
-                self.ki_doc.ensure_assessment(self.context.current_phase, self.context.current_phase + 1, status, issues)
+                status, issues, priority_counts = self._compute_assessment()
+                self.ki_doc.ensure_assessment(self.context.current_phase, self.context.current_phase + 1, status, issues, priority_counts)
         # Step 3: V-8/V-9 (ki doc) — single merged entry only
         ki_events = [e for e in events if e.violation_type in {"MISSING_KI_DOC", "KI_DOC_OUTDATED"}]
         if ki_events:
@@ -339,11 +340,14 @@ class InterventionCoordinator:
         round_results = self.context.metadata.get("round_results", [])
         last_round = round_results[-1] if round_results else {}
         c, h, m = last_round.get("C", 0), last_round.get("H", 0), last_round.get("M", 0)
+        p_count = last_round.get("P", 0)
+        l_count = last_round.get("L", 0)
+        priority_counts = {"P0": c, "P1": h, "P2": m, "P3": p_count, "P4": l_count}
         if c > 0 or h > 0:
-            return "FAIL", [f"{c}C/{h}H/{m}M unresolved"]
+            return "FAIL", [f"{c}C/{h}H/{m}M unresolved"], priority_counts
         elif m > 0:
-            return "CONDITIONAL", [f"{m}M unresolved"]
-        return "PASS", []
+            return "CONDITIONAL", [f"{m}M unresolved"], priority_counts
+        return "PASS", [], priority_counts
 
     def _is_valid_event(self, event: ViolationEvent) -> bool:
         if not event.violation_type:
@@ -545,8 +549,8 @@ class KiDocManager:
     def record_intervention(self, event, plan, rollback_result, validation_result=None):
         self._append(self._format_intervention_entry(event, plan, rollback_result, validation_result))
 
-    def ensure_assessment(self, phase, next_phase, status, issues):
-        self._append(self._format_assessment_entry(phase, next_phase, status, issues))
+    def ensure_assessment(self, phase, next_phase, status, issues, priority_counts=None):
+        self._append(self._format_assessment_entry(phase, next_phase, status, issues, priority_counts))
 
     def ensure_updated(self, last_intervention_ts):
         newest_ts = self._parse_newest_timestamp()
@@ -671,6 +675,6 @@ class CommitGuard:
 ---
 
 *Document created: 2026-05-25*
-*Version: v1.3 (R3: all R3 fixes applied — 1C/3H/6M)*
+*Version: v1.4 (R4: all R4 fixes applied — 0C/1H/1M)*
 *Phase: 2 (Technical Solution)*
-*Next: Ralph Loop R4 Review*
+*Next: Ralph Loop R5 Review*
