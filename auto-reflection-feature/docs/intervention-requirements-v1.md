@@ -419,3 +419,28 @@ Changelog from v1.2:
 - F-29: Added KI Violation Merge Rule section
 - F-30/F-32: Merged into F-01 (behavioral descriptions replace git commands)
 Next step: Round 2 Ralph Loop Review
+
+---
+
+## v2 Backlog (Post-MVP)
+
+### Review Sub-Step Monitoring
+
+Ralph Loop Review protocol mandates **Dual-Pass Mode** (Recall → Fact-Gather → Precision). Current MVP (V-1..V-13) only monitors macro-level review execution. The following violation types cover the **sub-step integrity** within a single review round:
+
+| # | Type | Trigger | Auto-Fix | Priority |
+|---|------|---------|----------|----------|
+| V-14 | SKIP_RECALL | Review round completed but no Recall pass output (no raw findings) | None (require Recall pass) | P2 |
+| V-15 | SKIP_FACT_GATHER | Precision pass ran but VERIFIED_FACTS is empty or missing | None (require fact-gathering step) | P2 |
+| V-16 | SKIP_PRECISION | Recall findings used directly without Precision Filter pass | None (require Precision Filter execution) | P2 |
+
+**Scope**: Phases 1-5 (all phases with Ralph Loop Review).
+
+**Design impact**:
+- VIOLATION_PRIORITY: 3 new P2 entries
+- PipelineContext: needs review sub-step tracking (Recall done? Facts gathered? Precision done?)
+- InterventionCoordinator: 3 new plan entries (all auto_fix=False, needs_rollback=False)
+- New ACs to be defined in v2
+
+**Rationale**: Dual-Pass is mandatory per protocol. Skipping any sub-step defeats the quality gate — Recall-only misses false positives, Precision without facts is guessing, skipping Precision wastes fix rounds on false positives.
+
