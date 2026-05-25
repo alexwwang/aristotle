@@ -1,11 +1,11 @@
 # Technical Design: Watchdog Intervention for TDD Pipeline
 
-> **Version**: v1.2
-> **Status**: Ralph Loop Review R2 fixes applied
+> **Version**: v1.3
+> **Status**: Ralph Loop Review R3 fixes applied
 > **Branch**: feature/watchdog-intervention
 > **Phase**: 2 (Technical Solution)
 > **Based on**: intervention-requirements-v1.md (v1.4, gate passed)
-> **Changelog v1.2**: R2 fixes — all R1 structural changes properly applied; FP patterns completed; RollbackEngine context access fixed; VIOLATION_PRIORITY added; intervene_batch added; _validate_path added; regex pre-compiled; TestResult defined; git add -u; error handling
+> **Changelog v1.3**: R3 fixes — _handle_merged syntax corrected (F-1); missing ZH patterns added (F-2); _validate_path uses repo_root join (F-3); merge path raises + commits ki doc (F-4); heading exemption (F-5); git fail guard (F-6); prompt false positive early return (F-8); single merge entry (F-9); assessment logic (F-10); pre-rollback git add for specific files (F-11)
 
 ---
 
@@ -167,6 +167,7 @@ class PipelineContext:
     boundary_commit_hash: Optional[str]  # Phase 4->5 boundary for V-5
     phase5_test_results: Optional[List[TestResult]]  # For V-7 regression
     ki_doc_path: str = "auto-reflection-feature/docs/04-review-records.md"
+    metadata: Dict[str, Any] = field(default_factory=dict)  # round_results, etc. for assessment
 ```
 
 ### TestResult (for V-7 regression detection)
@@ -205,6 +206,7 @@ class CommitResult:
 | boundary_commit_hash for V-5 | HEAD may include Phase 5 modifications | Always HEAD: incorrect |
 | Path validation | Prevent path traversal before git ops | Trust internal paths: security risk |
 | git add -u instead of -A | Only stage tracked files, not untracked | git add -A: stages unrelated files |
+| Pre-rollback uses `git add <file>` | Before rollback to earlier phase, stage affected files specifically (tracked or untracked) to preserve work per AC-I22 | git add -u misses untracked new files |
 
 ---
 
@@ -261,12 +263,17 @@ class InterventionCoordinator:
                     violation_code=event.violation_type, target_phase=plan.target_phase,
                     auto_fix_applied=False, auto_fix_details="", instruction=plan.instruction,
                     ki_doc_updated=True, committed=True, rollback_result=None, validation_result=result))
+            else:
+                return  # Watchdog false positive — prompt is actually clean
 
         # 4. Build plan
         plan = self._build_plan(event)
 
-        # 5. Pre-rollback commit (safety net for destructive ops)
-        if plan.is_destructive:
+        # 5. Pre-rollback commit (safety net for destructive ops + phase rollback)
+        if plan.is_destructive or plan.target_phase < self.context.current_phase:
+            # Stage affected file specifically (handles untracked files per AC-I22)
+            if event.affected_file_path:
+                subprocess.run(["git", "add", event.affected_file_path], capture_output=True, text=True)
             self.commit_guard.ensure_committed(self.context)
 
         # 6. Execute rollback
@@ -304,15 +311,39 @@ class InterventionCoordinator:
 
     def _handle_merged(self, events):
         # Step 1: V-10/V-11 (commit first)
-        for e in events if e.violation_type in {"UNCOMMITTED_PHASE", "UNCOMMITTED_REVIEW"}:
-            self.commit_guard.ensure_committed(self.context)
+        for e in events:
+            if e.violation_type in {"UNCOMMITTED_PHASE", "UNCOMMITTED_REVIEW"}:
+                self.commit_guard.ensure_committed(self.context)
         # Step 2: V-12 (assessment)
-        for e in events if e.violation_type == "MISSING_KI_ASSESSMENT":
-            self.ki_doc.ensure_assessment(self.context.current_phase, self.context.current_phase + 1, "ASSESSING", [])
-        # Step 3: V-8/V-9 (ki doc) + single merged entry
-        for e in events if e.violation_type in {"MISSING_KI_DOC", "KI_DOC_OUTDATED"}:
-            self.ki_doc.record_intervention(e, self._build_plan(e), None)
-        self.ki_doc.record_merge(events, self.context)
+        for e in events:
+            if e.violation_type == "MISSING_KI_ASSESSMENT":
+                status, issues = self._compute_assessment()
+                self.ki_doc.ensure_assessment(self.context.current_phase, self.context.current_phase + 1, status, issues)
+        # Step 3: V-8/V-9 (ki doc) — single merged entry only
+        ki_events = [e for e in events if e.violation_type in {"MISSING_KI_DOC", "KI_DOC_OUTDATED"}]
+        if ki_events:
+            self.ki_doc.record_merge(events, self.context)
+        # Step 4: Commit ki doc changes
+        self.commit_guard.ensure_committed(self.context)
+        # Step 5: Block pipeline (AC-I21: all violations block)
+        merged_result = InterventionResult(
+            violation_code="MERGED:" + ",".join(e.violation_type for e in events),
+            target_phase=self.context.current_phase,
+            auto_fix_applied=True, auto_fix_details="merged auto-fix",
+            instruction="(auto-fixed)", ki_doc_updated=True, committed=True,
+            rollback_result=None, validation_result=None)
+        raise TDDViolationError(events[0], self._build_plan(events[0]), merged_result)
+
+    def _compute_assessment(self):
+        # Derive assessment status from Ralph Loop results in context
+        round_results = self.context.metadata.get("round_results", [])
+        last_round = round_results[-1] if round_results else {}
+        c, h, m = last_round.get("C", 0), last_round.get("H", 0), last_round.get("M", 0)
+        if c > 0 or h > 0:
+            return "FAIL", [f"{c}C/{h}H/{m}M unresolved"]
+        elif m > 0:
+            return "CONDITIONAL", [f"{m}M unresolved"]
+        return "PASS", []
 
     def _is_valid_event(self, event: ViolationEvent) -> bool:
         if not event.violation_type:
@@ -407,6 +438,7 @@ class PromptValidator:
             r"(?<![\w\u4e00-\u9fff])第\d+轮(?![\w\u4e00-\u9fff])",
             r"(?<![\w\u4e00-\u9fff])第几轮(?![\w\u4e00-\u9fff])",
             r"(?<![\w\u4e00-\u9fff])当前轮次(?![\w\u4e00-\u9fff])",
+            r"(?<![\w\u4e00-\u9fff])loop轮次(?![\w\u4e00-\u9fff])",
         ],
         "FP-6": [
             r"(?<![\w\u4e00-\u9fff])循环状态(?![\w\u4e00-\u9fff])",
@@ -414,21 +446,24 @@ class PromptValidator:
             r"(?<![\w\u4e00-\u9fff])是否通过(?![\w\u4e00-\u9fff])",
         ],
         "FP-7": [
+            r"(?<![\w\u4e00-\u9fff])只检查[\w\u4e00-\u9fff]+(?![\w\u4e00-\u9fff])",
             r"(?<![\w\u4e00-\u9fff])不要审查(?![\w\u4e00-\u9fff])",
             r"(?<![\w\u4e00-\u9fff])限制范围(?![\w\u4e00-\u9fff])",
             r"(?<![\w\u4e00-\u9fff])跳过审查(?![\w\u4e00-\u9fff])",
         ],
     }.items()}
 
-    # Exempt contexts: code blocks, inline code, quoted reference (Detection Rule 3)
+    # Exempt contexts: code blocks, inline code, quoted reference (Detection Rule 3), headings (Detection Rule 4)
     _CODE_BLOCK_RE = re.compile(r"```[\s\S]*?```", re.DOTALL)
     _INLINE_CODE_RE = re.compile(r"`[^`]+`")
     _QUOTED_RE = re.compile(r'"[^"]*"|' + r"'[^']*'")
+    _HEADING_RE = re.compile(r"^#{1,6}\s+.*$", re.MULTILINE)
 
     def validate(self, prompt: str) -> ValidationResult:
         text = self._CODE_BLOCK_RE.sub("", prompt)
         text = self._INLINE_CODE_RE.sub("", text)
         text = self._QUOTED_RE.sub("", text)
+        text = self._HEADING_RE.sub("", text)
         matches = self._match_compiled(text, self.EN_COMPILED, "en") + \
                   self._match_compiled(text, self.ZH_COMPILED, "zh")
         return ValidationResult(is_valid=len(matches) == 0, matches=matches)
@@ -484,9 +519,14 @@ class RollbackEngine:
         return RollbackResult(True, f"restored test from {commit_ref}", [filepath], h.stdout.strip())
 
     def _validate_path(self, filepath: str) -> bool:
-        repo_root = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True).stdout.strip()
-        abs_path = os.path.abspath(filepath)
-        return abs_path.startswith(repo_root) and ".." not in filepath
+        r = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True)
+        if r.returncode != 0:
+            return False  # git unavailable
+        repo_root = r.stdout.strip()
+        if not repo_root:
+            return False  # empty repo root
+        abs_path = os.path.normpath(os.path.join(repo_root, filepath))
+        return (abs_path == repo_root or abs_path.startswith(repo_root + os.sep)) and ".." not in filepath
 
     def _is_tracked(self, filepath: str) -> bool:
         r = subprocess.run(["git", "ls-files", filepath], capture_output=True, text=True)
@@ -631,6 +671,6 @@ class CommitGuard:
 ---
 
 *Document created: 2026-05-25*
-*Version: v1.2 (R2: all R1/R2 fixes applied)*
+*Version: v1.3 (R3: all R3 fixes applied — 1C/3H/6M)*
 *Phase: 2 (Technical Solution)*
-*Next: Ralph Loop R3 Review*
+*Next: Ralph Loop R4 Review*
