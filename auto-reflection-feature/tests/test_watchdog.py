@@ -60,3 +60,25 @@ class TestViolationFilter:
         filter_obj = ViolationFilter()
         result = filter_obj.filter(event)
         assert result is None
+
+    def test_filter_rejects_invalid_operation(self):
+        event = ViolationEvent(
+            violation_type="SKIP_RED_PHASE",
+            affected_file_path="src/calc.py",
+            timestamp="2026-05-25T10:00:00Z",
+            context={"operation": "unknown", "phase": 4}
+        )
+        filter_obj = ViolationFilter()
+        result = filter_obj.filter(event)
+        assert result is None
+
+    def test_filter_rejects_missing_operation(self):
+        event = ViolationEvent(
+            violation_type="SKIP_RED_PHASE",
+            affected_file_path="src/calc.py",
+            timestamp="2026-05-25T10:00:00Z",
+            context={"phase": 4}
+        )
+        filter_obj = ViolationFilter()
+        result = filter_obj.filter(event)
+        assert result is None
