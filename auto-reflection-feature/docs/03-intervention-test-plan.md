@@ -1,11 +1,12 @@
 # Test Plan: Watchdog Intervention for TDD Pipeline
 
-> **Version**: v1.3
-> **Status**: Ralph Loop Review R3 fixes applied
+> **Version**: v1.4
+> **Status**: Ralph Loop Review R4 fixes applied
 > **Branch**: feature/watchdog-intervention
 > **Phase**: 3 (Test Plan)
 > **Based on**: intervention-requirements-v1.md (v1.4), 02-intervention-technical-solution.md (v1.4)
 > **Date**: 2026-05-25
+> **Changelog v1.4**: R4 fixes — 0C/0H/3M from Precision Filter (F-34 Design Coverage renumber, F-36 V-9 auto-append description, F-39 _handle_merged commit-only path)
 > **Changelog v1.3**: R3 fixes — 0C/0H/2M from Precision Filter (F-32 _handle_merged partial-merge trace, F-33 same-priority tie-breaking trace)
 > **Changelog v1.2**: R2 fixes — 1H/4M from Precision Filter (F-25 pre-rollback commit failure, F-26 V-9 coordinator test, F-29 git add failure, F-30 CommitGuard untracked ambiguity, F-27 _is_valid_event coverage)
 > **Changelog v1.1**: R1 fixes — 1H/12M from Precision Filter (F-01 V-7 flaky test, F-02 V-13 missing prompt, F-03 partial code block, F-04 V-5 scope note, F-05/F-06 untraced tests, F-08 ISO 8601 regex, F-09 leading-dash, F-11 req_number, F-12 V-7 baseline, F-13 V-2/V-3 plans, F-14 test count, F-15 V-7 integration, F-24 empty round_results)
@@ -202,12 +203,13 @@ _Traces Phase 1 user stories and acceptance criteria to test cases. For Phase 2 
 | 17 | Key | InterventionCoordinator._handle_merged() — ordering | Interface | Unit | `test_intervention_coordinator.py` | `should_execute_commit_before_assessment_before_ki_update` | V-10/V-11 → V-12 → V-8/V-9 ordering enforced |
 | 18 | Key | InterventionCoordinator._handle_merged() — partial merge (no V-12) | Interface | Unit | `test_intervention_coordinator.py` | `should_skip_assessment_step_when_v12_missing_from_merge_set` | Merge set with V-10/V-11 but no V-12 → commit + ki doc update only, assessment step skipped |
 | 19 | Key | InterventionCoordinator._handle_merged() — single ki entry | Interface | Unit | `test_intervention_coordinator.py` | `should_write_single_merged_ki_entry_for_combined_events` | Multiple events → one ki doc entry |
-| 19b | Key | InterventionCoordinator.intervene() — V-9 routing | Interface | Unit | `test_intervention_coordinator.py` | `should_route_v9_ki_doc_outdated_to_auto_append` | Standalone V-9 event → auto_fix plan → ki_doc.record_intervention called → commit → TDDViolationError |
+| 19a | Key | InterventionCoordinator._handle_merged() — commit-only merge (V-10/V-11 only) | Interface | Unit | `test_intervention_coordinator.py` | `should_commit_and_record_ki_for_v10_v11_only_merge` | V-10 + V-11 with no V-8/V-9/V-12 → ensure_committed called, ki doc records merged commit action, no assessment step |
+| 19b | Key | InterventionCoordinator.intervene() — V-9 routing | Interface | Unit | `test_intervention_coordinator.py` | `should_route_v9_ki_doc_outdated_to_auto_append` | Standalone V-9 event → auto_fix plan → ki_doc.ensure_updated() called (appends missing record if outdated) → record_intervention called → commit → TDDViolationError |
 | 20 | Key | InterventionCoordinator._compute_assessment() — FAIL | Interface | Unit | `test_intervention_coordinator.py` | `should_derive_fail_when_c_or_h_greater_than_zero` | C>0 or H>0 → status="FAIL" |
-| 18 | Key | InterventionCoordinator._compute_assessment() — CONDITIONAL | Interface | Unit | `test_intervention_coordinator.py` | `should_derive_conditional_when_m_greater_than_zero` | M>0, C=0, H=0 → status="CONDITIONAL" |
-| 19 | Key | InterventionCoordinator._compute_assessment() — PASS | Interface | Unit | `test_intervention_coordinator.py` | `should_derive_pass_when_all_zero` | C=0, H=0, M=0 → status="PASS" |
-| 19b | Key | InterventionCoordinator._compute_assessment() — empty round_results | Interface | Unit | `test_intervention_coordinator.py` | `should_derive_pass_when_round_results_empty` | Empty round_results → defaults to all zeros → PASS (by design: no rounds = no issues) |
-| 20 | Key | InterventionCoordinator._compute_assessment() — priority_counts | Interface | Unit | `test_intervention_coordinator.py` | `should_populate_priority_counts_dict_in_assessment` | P0=C, P1=H, P2=M, P3=P_count, P4=L_count |
+| 20b | Key | InterventionCoordinator._compute_assessment() — CONDITIONAL | Interface | Unit | `test_intervention_coordinator.py` | `should_derive_conditional_when_m_greater_than_zero` | M>0, C=0, H=0 → status="CONDITIONAL" |
+| 20c | Key | InterventionCoordinator._compute_assessment() — PASS | Interface | Unit | `test_intervention_coordinator.py` | `should_derive_pass_when_all_zero` | C=0, H=0, M=0 → status="PASS" |
+| 20d | Key | InterventionCoordinator._compute_assessment() — empty round_results | Interface | Unit | `test_intervention_coordinator.py` | `should_derive_pass_when_round_results_empty` | Empty round_results → defaults to all zeros → PASS (by design: no rounds = no issues) |
+| 20e | Key | InterventionCoordinator._compute_assessment() — priority_counts | Interface | Unit | `test_intervention_coordinator.py` | `should_populate_priority_counts_dict_in_assessment` | P0=C, P1=H, P2=M, P3=P_count, P4=L_count |
 | 21 | Key | InterventionCoordinator._is_valid_event() — no affected_file_path for process | Interface | Unit | `test_intervention_coordinator.py` | `should_accept_process_violations_without_affected_file_path` | V-1..V-3, V-8..V-13 valid without affected_file_path (9 exempted types — parametrized) |
 | 22 | Key | InterventionCoordinator._is_valid_event() — missing phase | Interface | Unit | `test_intervention_coordinator.py` | `should_reject_event_missing_phase_in_context` | No "phase" key in context → invalid |
 | 23 | Key | InterventionCoordinator._needs_prompt_validation() | Interface | Unit | `test_intervention_coordinator.py` | `should_only_trigger_prompt_validation_for_invalid_review_prompt` | Only V-13 returns True |
@@ -492,13 +494,13 @@ No peripheral-to-key upgrades detected. CommitGuard remains Peripheral with basi
 
 | Test File | Component | Priority | Estimated Test Count |
 |-----------|-----------|----------|---------------------|
-| `test_intervention_coordinator.py` | InterventionCoordinator | Key | ~40 |
+| `test_intervention_coordinator.py` | InterventionCoordinator | Key | ~42 |
 | `test_prompt_validator.py` | PromptValidator | Key | ~21 |
 | `test_rollback_engine.py` | RollbackEngine | Key | ~16 |
 | `test_ki_doc_manager.py` | KiDocManager | Key | ~13 |
 | `test_commit_guard.py` | CommitGuard | Peripheral | ~9 |
 | `test_intervention_integration.py` | Cross-component flows | — | ~7 |
-| **Total** | | | **~106** |
+| **Total** | | | **~108** |
 
 ### Integration Test Scenarios (`test_intervention_integration.py`)
 
@@ -535,6 +537,6 @@ No peripheral-to-key upgrades detected. CommitGuard remains Peripheral with basi
 ---
 
 *Document created: 2026-05-25*
-*Version: v1.3*
+*Version: v1.4*
 *Phase: 3 (Test Plan)*
-*Next: Ralph Loop Review R4*
+*Next: Ralph Loop Review R5*
