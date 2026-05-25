@@ -139,6 +139,9 @@ This test plan covers 8 acceptance criteria from Phase 1. Tests are organized by
 | AC-6 | TC-6 | — | TC-6 edge |
 | AC-7 | TC-7 | — | TC-7 edge |
 | AC-8 | — | TC-8 | TC-8 edge |
+| Security-1 | — | — | TC-9 |
+| Security-2 | — | — | TC-10 |
+| Compat-1 | TC-11 | — | TC-11 edge |
 
 ---
 
@@ -176,3 +179,50 @@ This test plan covers 8 acceptance criteria from Phase 1. Tests are organized by
     "error_summary": "x" * 201  # Too long → invalid
 }
 ```
+
+---
+
+### TC-9: Input Validation — Violation Type Whitelist (Security)
+
+| Field | Value |
+|-------|-------|
+| **Type** | Boundary |
+| **Input** | GPAV event: violation_type="CODE_QUALITY", context={operation:create, phase:4} |
+| **Expected** | ViolationFilter.filter() returns None (rejected) |
+| **Setup** | Mock GPAV emitting non-behavioral violation |
+| **Validation** | Assert output is None |
+
+**Edge Cases**:
+- Unknown violation_type → rejected
+- Case sensitivity → "skip_red_phase" rejected (must be uppercase)
+- Empty violation_type → rejected
+
+### TC-10: Input Validation — Phase Range (Security)
+
+| Field | Value |
+|-------|-------|
+| **Type** | Boundary |
+| **Input** | GPAV event: violation_type="SKIP_RED_PHASE", context={operation:create, phase:6} |
+| **Expected** | ViolationFilter.filter() returns None (rejected, phase out of TDD scope) |
+| **Setup** | Mock GPAV with phase=6 (Phase 6 is Pre-Release Testing, not behavioral) |
+| **Validation** | Assert output is None |
+
+**Edge Cases**:
+- phase=0 → rejected
+- phase=4.5 → rejected (must be integer)
+- phase=None → rejected
+
+### TC-11: Backward Compatibility — Optional Fields
+
+| Field | Value |
+|-------|-------|
+| **Type** | Unit |
+| **Input** | Rule without auto_reflection or source fields |
+| **Expected** | AutoCommitter.validate_schema() returns is_valid=True (optional fields not required) |
+| **Setup** | Create rule with only mandatory fields: category, confidence, error_summary |
+| **Validation** | Assert ValidationResult.is_valid == True |
+
+**Edge Cases**:
+- Rule with auto_reflection only → valid
+- Rule with source only → valid
+- Rule with both auto_reflection and source → valid
