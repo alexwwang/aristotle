@@ -156,15 +156,17 @@ class InterventionCoordinator:
                 return None
             # Build plan for invalid prompt and proceed to block
             plan = self._build_plan(event)
+            self.ki_doc.record_intervention(event, plan, None, validation_result)
+            v13_commit_result = self.commit_guard.ensure_committed(self.context)
+            v13_commit_ok = v13_commit_result.success if v13_commit_result else True
             result = InterventionResult(
                 violation_code=event.violation_type,
                 target_phase=plan.target_phase,
                 auto_fix_applied=False,
                 instruction=plan.instruction,
                 validation_result=validation_result,
+                committed=v13_commit_ok,
             )
-            self.ki_doc.record_intervention(event, plan, None, validation_result)
-            self.commit_guard.ensure_committed(self.context)
             raise TDDViolationError(event, plan, result)
 
         # 5. Build plan
@@ -177,6 +179,7 @@ class InterventionCoordinator:
             self.ki_doc.ensure_updated(event.timestamp)
 
         # 6. Pre-rollback commit (safety net for destructive ops + phase rollback)
+        pre_commit_ok = True
         if plan.is_destructive or plan.target_phase < self.context.current_phase:
             if event.affected_file_path and self.rollback_engine._validate_path(event.affected_file_path):
                 try:
@@ -186,7 +189,8 @@ class InterventionCoordinator:
                     )
                 except Exception:
                     pass
-            self.commit_guard.ensure_committed(self.context)
+            pre_commit_result = self.commit_guard.ensure_committed(self.context)
+            pre_commit_ok = pre_commit_result.success if pre_commit_result else True
 
         # 6b. Execute rollback if applicable
         if plan.auto_fix and plan.needs_rollback:
@@ -197,7 +201,8 @@ class InterventionCoordinator:
         ki_doc_updated = ki_write_ok is True
 
         # 8. Post-intervention commit
-        self.commit_guard.ensure_committed(self.context)
+        post_commit_result = self.commit_guard.ensure_committed(self.context)
+        post_commit_ok = post_commit_result.success if post_commit_result else True
 
         # 9. Raise TDDViolationError
         result = InterventionResult(
@@ -207,7 +212,7 @@ class InterventionCoordinator:
             auto_fix_details=rollback_result.action if rollback_result else "",
             instruction=plan.instruction,
             ki_doc_updated=ki_doc_updated,
-            committed=True,
+            committed=pre_commit_ok and post_commit_ok,
             rollback_result=rollback_result,
         )
         raise TDDViolationError(event, plan, result)
@@ -292,7 +297,8 @@ class InterventionCoordinator:
             self.ki_doc.record_merge(events, self.context)
 
         # 4. Final commit
-        self.commit_guard.ensure_committed(self.context)
+        final_commit_result = self.commit_guard.ensure_committed(self.context)
+        final_commit_ok = final_commit_result.success if final_commit_result else True
 
         # 5. Raise TDDViolationError
         plan = self._build_plan(events[0])
@@ -302,7 +308,7 @@ class InterventionCoordinator:
             auto_fix_applied=True,
             instruction="Merged auto-fix interventions applied.",
             ki_doc_updated=True,
-            committed=True,
+            committed=final_commit_ok,
         )
         raise TDDViolationError(events[0], plan, result)
 

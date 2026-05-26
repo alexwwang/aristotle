@@ -71,6 +71,9 @@ class KiDocManager:
                 lines.append(f"**Files affected**: {', '.join(rollback_result.files_affected)}\n")
         if plan.instruction:
             lines.append(f"**Instruction**: {plan.instruction}\n")
+        if validation_result and hasattr(validation_result, "matches") and validation_result.matches:
+            pattern_ids = [m.pattern_id for m in validation_result.matches]
+            lines.append(f"**Forbidden patterns**: {', '.join(pattern_ids)}\n")
         lines.append("\n")
         return "".join(lines)
 
