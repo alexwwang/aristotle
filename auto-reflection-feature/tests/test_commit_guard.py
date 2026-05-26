@@ -128,6 +128,10 @@ class TestCommitGuardIsCleanStaged:
             mock_run.side_effect = [MagicMock(returncode=0), MagicMock(returncode=1)]
             result = guard._is_clean()
         assert result is False
+        # Verify call order: first git diff --quiet, then git diff --cached --quiet
+        calls = mock_run.call_args_list
+        assert calls[0][0][0] == ["git", "diff", "--quiet"]
+        assert calls[1][0][0] == ["git", "diff", "--cached", "--quiet"]
 
 
 class TestCommitGuardIsCleanUnstaged:
@@ -136,6 +140,10 @@ class TestCommitGuardIsCleanUnstaged:
             mock_run.side_effect = [MagicMock(returncode=1), MagicMock(returncode=0)]
             result = guard._is_clean()
         assert result is False
+        # Verify call order: first git diff --quiet, then git diff --cached --quiet
+        calls = mock_run.call_args_list
+        assert calls[0][0][0] == ["git", "diff", "--quiet"]
+        assert calls[1][0][0] == ["git", "diff", "--cached", "--quiet"]
 
 
 class TestCommitGuardIsCleanBothDirty:

@@ -69,12 +69,19 @@ class TestE2ERestoreModifiedTest:
         subprocess.run(["git", "commit", "-m", "add test"], cwd=str(repo), capture_output=True)
         hash_result = subprocess.run(["git", "rev-parse", "HEAD"], cwd=str(repo), capture_output=True, text=True)
         integration_context.boundary_commit_hash = hash_result.stdout.strip()
+        test_path.write_text("# modified test")
         event = ViolationEvent("MODIFIED_TEST", test_file, "2026-05-26T10:00:00+08:00", {"phase": 5})
         integration_context.current_phase = 5
-        coord = InterventionCoordinator(integration_context)
-        with pytest.raises(TDDViolationError) as exc_info:
-            coord.intervene(event)
-        assert exc_info.value.result.violation_code == "MODIFIED_TEST"
+        old_cwd = os.getcwd()
+        os.chdir(str(repo))
+        try:
+            coord = InterventionCoordinator(integration_context)
+            with pytest.raises(TDDViolationError) as exc_info:
+                coord.intervene(event)
+            assert exc_info.value.result.violation_code == "MODIFIED_TEST"
+            assert test_path.read_text() == "# original test"
+        finally:
+            os.chdir(old_cwd)
 
 
 class TestE2EMergedViolations:
