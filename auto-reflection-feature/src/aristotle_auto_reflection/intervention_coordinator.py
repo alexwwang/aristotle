@@ -186,7 +186,7 @@ class InterventionCoordinator:
                 [event.affected_file_path] if event.affected_file_path else []
             )
             for fp in files_to_stage:
-                if self.rollback_engine._validate_path(fp):
+                if self.rollback_engine.validate_path(fp):
                     try:
                         subprocess.run(
                             ["git", "add", fp],

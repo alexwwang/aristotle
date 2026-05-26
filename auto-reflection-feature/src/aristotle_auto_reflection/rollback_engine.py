@@ -60,19 +60,21 @@ class RollbackEngine:
 
     def _delete_implementation(self, event: ViolationEvent, context: PipelineContext) -> RollbackResult:
         filepath = event.affected_file_path
-        if not self._validate_path(filepath):
+        if not self.validate_path(filepath):
             return RollbackResult(False, "path validation failed", [], None)
         if self._is_tracked(filepath):
             r = subprocess.run(["git", "rm", "-f", filepath], capture_output=True, text=True)
             if r.returncode != 0:
                 return RollbackResult(False, f"git rm failed: {r.stderr}", [], None)
+            return RollbackResult(True, "deleted via git rm", [filepath], None)
         elif os.path.exists(filepath):
             os.remove(filepath)
+            return RollbackResult(True, "deleted untracked file", [filepath], None)
         return RollbackResult(True, "already deleted, no action needed", [filepath], None)
 
     def _restore_test(self, event: ViolationEvent, context: PipelineContext) -> RollbackResult:
         filepath = event.affected_file_path
-        if not self._validate_path(filepath):
+        if not self.validate_path(filepath):
             return RollbackResult(False, "path validation failed", [], None)
         if not self._is_tracked(filepath):
             return RollbackResult(False, "skip (untracked)", [], None)
@@ -83,7 +85,7 @@ class RollbackEngine:
         h = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True)
         return RollbackResult(True, f"restored test from {commit_ref}", [filepath], h.stdout.strip())
 
-    def _validate_path(self, filepath: str) -> bool:
+    def validate_path(self, filepath: str) -> bool:
         if filepath.startswith("-"):
             return False
         r = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True)
