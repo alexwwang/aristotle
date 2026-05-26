@@ -172,6 +172,10 @@ class InterventionCoordinator:
 
         rollback_result = None
 
+        # 5b. KI_DOC_OUTDATED: call ensure_updated
+        if event.violation_type == "KI_DOC_OUTDATED":
+            self.ki_doc.ensure_updated(event.timestamp)
+
         # 6. Pre-rollback commit + rollback
         if plan.auto_fix and plan.needs_rollback:
             # Stage affected file before rollback
