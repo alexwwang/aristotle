@@ -198,35 +198,35 @@ class TestFP7IndividualWords:
 
 class TestFP1ZH:
     def test_should_detect_fp1_zh_stop_condition_patterns(self, validator):
-        for phrase in ["停止条件", "连续2轮", "审查达标"]:
+        for phrase in ["停止条件", "连续2轮", "连续两轮", "审查达标", "质量达标"]:
             result = validator.validate(f"请检查{phrase}。")
             assert result.is_valid is False, f"FP-1 ZH should detect: {phrase}"
 
 
 class TestFP2ZH:
     def test_should_detect_fp2_zh_cumulative_tally_patterns(self, validator):
-        for phrase in ["累计计数", "总C数"]:
+        for phrase in ["累计计数", "累计统计", "总C数"]:
             result = validator.validate(f"显示{phrase}。")
             assert result.is_valid is False, f"FP-2 ZH should detect: {phrase}"
 
 
 class TestFP3ZH:
     def test_should_detect_fp3_zh_prior_round_patterns(self, validator):
-        for phrase in ["上一轮", "前一轮", "上轮发现"]:
+        for phrase in ["上一轮", "前一轮", "上轮发现", "之前发现"]:
             result = validator.validate(f"{phrase}发现了问题。")
             assert result.is_valid is False, f"FP-3 ZH should detect: {phrase}"
 
 
 class TestFP4ZH:
     def test_should_detect_fp4_zh_fix_list_patterns(self, validator):
-        for phrase in ["修复列表", "已修复", "已解决"]:
+        for phrase in ["修复列表", "已修复", "已解决", "修改清单"]:
             result = validator.validate(f"{phrase}如下。")
             assert result.is_valid is False, f"FP-4 ZH should detect: {phrase}"
 
 
 class TestFP5ZH:
     def test_should_detect_fp5_zh_round_count_patterns(self, validator):
-        for phrase in ["第3轮", "第几轮", "当前轮次"]:
+        for phrase in ["第3轮", "第几轮", "当前轮次", "loop轮次"]:
             result = validator.validate(f"这是{phrase}审查。")
             assert result.is_valid is False, f"FP-5 ZH should detect: {phrase}"
 
@@ -240,7 +240,7 @@ class TestFP6ZH:
 
 class TestFP7ZH:
     def test_should_detect_fp7_zh_scope_limiting_patterns(self, validator):
-        for phrase in ["不要审查", "限制范围", "跳过审查"]:
+        for phrase in ["只检查代码", "不要审查", "限制范围", "跳过审查"]:
             result = validator.validate(f"请{phrase}这个部分。")
             assert result.is_valid is False, f"FP-7 ZH should detect: {phrase}"
 

@@ -494,6 +494,26 @@ class TestPreRollbackCommit:
             add_call = mock_run.call_args_list[0]
             assert "add" in str(add_call)
 
+    def test_should_stage_multiple_files_from_affected_file_paths(self, coordinator):
+        """Multi-file pre-rollback: stages all files in affected_file_paths."""
+        event = ViolationEvent(
+            "SKIP_RED_PHASE", "src/main.py", "2026-05-26T10:00:00+08:00",
+            {"phase": 4},
+            affected_file_paths=["src/main.py", "src/helper.py", "tests/test_main.py"],
+        )
+        with patch("aristotle_auto_reflection.intervention_coordinator.subprocess.run") as mock_run, \
+             patch.object(coordinator, "commit_guard") as mock_cg, \
+             patch.object(coordinator, "rollback_engine") as mock_re, \
+             patch.object(coordinator, "ki_doc"):
+            mock_run.return_value = MagicMock(returncode=0)
+            mock_cg.ensure_committed.return_value = MagicMock(success=True)
+            mock_re.rollback.return_value = RollbackResult(True, "deleted", [])
+            with pytest.raises(TDDViolationError):
+                coordinator.intervene(event)
+            # Verify git add was called for each file in affected_file_paths
+            add_calls = [c for c in mock_run.call_args_list if "add" in str(c)]
+            assert len(add_calls) >= 3, f"Expected >=3 git add calls, got {len(add_calls)}"
+
 
 # ===== SYNC Mode =====
 
