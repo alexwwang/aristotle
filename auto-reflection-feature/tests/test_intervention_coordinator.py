@@ -1,6 +1,5 @@
 import pytest
 import sys
-import os
 import time
 from unittest.mock import patch, MagicMock, PropertyMock
 

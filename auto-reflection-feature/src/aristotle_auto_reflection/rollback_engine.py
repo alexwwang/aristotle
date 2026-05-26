@@ -1,4 +1,6 @@
 """RollbackEngine stub — Phase 4 TDD Red."""
+import subprocess
+import os
 from aristotle_auto_reflection.intervention_types import RollbackResult
 
 

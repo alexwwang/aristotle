@@ -1,6 +1,5 @@
 import pytest
 import sys
-import os
 from unittest.mock import patch, MagicMock, call
 
 sys.path.insert(0, "/Users/alex/aristotle/auto-reflection-feature/src")

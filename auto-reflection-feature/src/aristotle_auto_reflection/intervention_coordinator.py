@@ -1,4 +1,5 @@
 """InterventionCoordinator stub — Phase 4 TDD Red."""
+import subprocess
 from aristotle_auto_reflection.intervention_types import InterventionResult
 
 
