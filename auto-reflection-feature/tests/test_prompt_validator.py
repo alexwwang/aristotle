@@ -179,7 +179,7 @@ class TestFP6EN:
 
 class TestFP7EN:
     def test_should_detect_fp7_en_scope_limiting_phrases(self, validator):
-        for phrase in ["only check the imports", "limit scope to", "do not review"]:
+        for phrase in ["only check the imports", "limit scope to", "focus only on", "do not review"]:
             result = validator.validate(f"Please {phrase}.")
             assert result.is_valid is False, f"FP-7 should detect: {phrase}"
 
