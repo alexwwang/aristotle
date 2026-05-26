@@ -1,8 +1,9 @@
-import pytest
+import os
 import sys
+import pytest
 from unittest.mock import patch, MagicMock
 
-sys.path.insert(0, "/Users/alex/aristotle/auto-reflection-feature/src")
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from aristotle_auto_reflection.commit_guard import CommitGuard
 from aristotle_auto_reflection.intervention_types import PipelineContext, CommitResult

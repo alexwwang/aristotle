@@ -1,8 +1,9 @@
-import pytest
+import os
 import sys
+import pytest
 from unittest.mock import patch, MagicMock
 
-sys.path.insert(0, "/Users/alex/aristotle/auto-reflection-feature/src")
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from aristotle_auto_reflection.rollback_engine import RollbackEngine
 from aristotle_auto_reflection.intervention_types import (
@@ -298,17 +299,22 @@ class TestPartialRollbackFailure:
     """Test plan row 74: Some files succeed, some fail → partial_failure=True."""
 
     def test_should_set_partial_failure_flag_on_partial_rollback(self, rollback_engine, pipeline_context_factory):
-        """Multiple files: first succeeds, second fails → partial_failure=True, failed_files populated."""
-        event = _v4_event("src/a.py src/b.py")
+        """Multiple files via affected_file_paths: first succeeds, second fails → partial_failure=True."""
+        event = ViolationEvent(
+            violation_type="SKIP_RED_PHASE",
+            affected_file_path="src/a.py",
+            timestamp="2026-05-26T00:00:00+08:00",
+            context={},
+            affected_file_paths=["src/a.py", "src/b.py"],
+        )
         plan = InterventionPlan(4, True, True, True, "Delete")
         ctx = pipeline_context_factory()
         with patch.object(rollback_engine, "_validate_path", return_value=True), \
              patch.object(rollback_engine, "_is_tracked", return_value=True), \
              patch("aristotle_auto_reflection.rollback_engine.subprocess.run") as mock_run:
-            # First file succeeds, second file fails
             mock_run.side_effect = [
-                MagicMock(returncode=0),  # git rm src/a.py → success
-                MagicMock(returncode=1, stderr="permission denied"),  # git rm src/b.py → fail
+                MagicMock(returncode=0),
+                MagicMock(returncode=1, stderr="permission denied"),
             ]
             result = rollback_engine.rollback(event, plan, ctx)
         assert result.partial_failure is True

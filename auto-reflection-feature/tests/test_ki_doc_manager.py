@@ -1,9 +1,10 @@
-import pytest
+import os
 import sys
+import pytest
 from unittest.mock import patch, mock_open, MagicMock
 from pathlib import Path
 
-sys.path.insert(0, "/Users/alex/aristotle/auto-reflection-feature/src")
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from aristotle_auto_reflection.ki_doc_manager import KiDocManager
 from aristotle_auto_reflection.intervention_types import (

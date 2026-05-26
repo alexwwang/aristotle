@@ -14,6 +14,7 @@ class ViolationEvent:
     affected_file_path: str
     timestamp: str
     context: Dict[str, Any]
+    affected_file_paths: List[str] = field(default_factory=list)
 
 
 @dataclass
