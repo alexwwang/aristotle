@@ -94,6 +94,7 @@ class TestPartialCodeBlock:
         prompt = "```python\nstop\ncondition```\nnormal text"
         result = validator.validate(prompt)
         assert isinstance(result, ValidationResult)
+        assert result.is_valid is True
 
 
 class TestReportDetails:
@@ -190,6 +191,9 @@ class TestFP7IndividualWords:
         result = validator.validate("skip this part")
         skip_matches = [m for m in result.matches if m.pattern.strip() == "skip"]
         assert len(skip_matches) == 0
+        result2 = validator.validate("only that part matters")
+        only_matches = [m for m in result2.matches if m.pattern.strip() == "only"]
+        assert len(only_matches) == 0
 
 
 class TestFP1ZH:
@@ -263,3 +267,5 @@ class TestLongPromptTruncation:
         long_prompt = "x " * 10000 + "stop condition"
         result = validator.validate(long_prompt)
         assert isinstance(result, ValidationResult)
+        assert result.is_valid is False
+        assert any(m.pattern for m in result.matches)

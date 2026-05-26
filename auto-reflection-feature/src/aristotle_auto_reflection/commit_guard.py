@@ -15,11 +15,12 @@ class CommitGuard:
         msg = self._build_message(context)
         add_result = subprocess.run(["git", "add", "-u"], capture_output=True, text=True)
         if add_result.returncode != 0:
-            return CommitResult(success=False, action=f"commit failed: {add_result.stderr}")
+            return CommitResult(success=False, action=f"add failed: {add_result.stderr}")
         commit_result = subprocess.run(["git", "commit", "-m", msg], capture_output=True, text=True)
         if commit_result.returncode != 0:
             return CommitResult(success=False, action=f"commit failed: {commit_result.stderr}")
-        return CommitResult(success=True, action="committed", hash=commit_result.stdout.strip())
+        hash_result = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True)
+        return CommitResult(success=True, action="committed", hash=hash_result.stdout.strip())
 
     def _is_clean(self) -> bool:
         r1 = subprocess.run(["git", "diff", "--quiet"], capture_output=True)

@@ -152,6 +152,8 @@ class TestMissingTest:
     def test_should_not_create_test_skeleton_for_missing_test(self, coordinator):
         plan = coordinator._build_plan(_event("MISSING_TEST", "src/new_mod.py", 5))
         assert plan.auto_fix is False
+        assert plan.target_phase == 5
+        assert plan.needs_rollback is False
 
 
 # ===== Event Validation =====

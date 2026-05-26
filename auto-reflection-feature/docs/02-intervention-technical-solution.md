@@ -493,9 +493,29 @@ class RollbackEngine:
             "MODIFIED_TEST": self._restore_test,
         }
         handler = handlers.get(event.violation_type)
-        if handler:
-            return handler(event, context)
-        return RollbackResult(True, "no-op", [], None)
+        if not handler:
+            return RollbackResult(True, "no-op", [], None)
+
+        # Multi-file rollback via affected_file_paths (KI-10)
+        all_paths = list(event.affected_file_paths) if event.affected_file_paths else (
+            [event.affected_file_path] if event.affected_file_path else []
+        )
+
+        if len(all_paths) > 1:
+            succeeded, failed = [], []
+            for fp in all_paths:
+                single_event = ViolationEvent(
+                    event.violation_type, fp, event.timestamp, event.context, [])
+                result = handler(single_event, context)
+                (succeeded if result.success else failed).append(fp)
+            if failed and succeeded:
+                return RollbackResult(True, "partial rollback", succeeded, None,
+                                      partial_failure=True, failed_files=failed)
+            elif failed:
+                return RollbackResult(False, "all files failed", [], None)
+            return RollbackResult(True, "all files rolled back", succeeded, None)
+
+        return handler(event, context)
 
     def _delete_implementation(self, event, context) -> RollbackResult:
         filepath = event.affected_file_path
@@ -523,6 +543,8 @@ class RollbackEngine:
         return RollbackResult(True, f"restored test from {commit_ref}", [filepath], h.stdout.strip())
 
     def _validate_path(self, filepath: str) -> bool:
+        if filepath.startswith("-"):
+            return False
         r = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True)
         if r.returncode != 0:
             return False  # git unavailable
@@ -534,6 +556,8 @@ class RollbackEngine:
 
     def _is_tracked(self, filepath: str) -> bool:
         r = subprocess.run(["git", "ls-files", filepath], capture_output=True, text=True)
+        if r.returncode != 0:
+            return False
         return r.stdout.strip() != ""
 ```
 
@@ -675,6 +699,6 @@ class CommitGuard:
 ---
 
 *Document created: 2026-05-25*
-*Version: v1.4 (R4: all R4 fixes applied — 0C/1H/1M)*
+*Version: v1.5 (Phase 5: KI-10 multi-file rollback pseudocode updated, _validate_path leading-dash check added)*
 *Phase: 2 (Technical Solution)*
-*Next: Ralph Loop R5 Review*
+*Next: Phase 6 Pre-Release Testing*

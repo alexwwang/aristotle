@@ -71,9 +71,9 @@ _PLAN_MAP = {
     ),
     "REGRESSION": lambda e, ctx: InterventionPlan(
         target_phase=5,
-        auto_fix=ctx.phase5_test_results is not None,
-        needs_rollback=ctx.phase5_test_results is not None,
-        is_destructive=ctx.phase5_test_results is not None,
+        auto_fix=False,
+        needs_rollback=False,
+        is_destructive=False,
         instruction="Regression detected. Rollback to Phase 5 baseline.",
     ),
     "MISSING_KI_DOC": lambda e, ctx: InterventionPlan(
@@ -176,10 +176,9 @@ class InterventionCoordinator:
         if event.violation_type == "KI_DOC_OUTDATED":
             self.ki_doc.ensure_updated(event.timestamp)
 
-        # 6. Pre-rollback commit + rollback
-        if plan.auto_fix and plan.needs_rollback:
-            # Stage affected file before rollback
-            if event.affected_file_path:
+        # 6. Pre-rollback commit (safety net for destructive ops + phase rollback)
+        if plan.is_destructive or plan.target_phase < self.context.current_phase:
+            if event.affected_file_path and self.rollback_engine._validate_path(event.affected_file_path):
                 try:
                     subprocess.run(
                         ["git", "add", event.affected_file_path],
@@ -187,9 +186,10 @@ class InterventionCoordinator:
                     )
                 except Exception:
                     pass
-            # Pre-rollback commit
             self.commit_guard.ensure_committed(self.context)
-            # Execute rollback
+
+        # 6b. Execute rollback if applicable
+        if plan.auto_fix and plan.needs_rollback:
             rollback_result = self.rollback_engine.rollback(event, plan, self.context)
 
         # 7. KI doc update (even when rollback fails)
@@ -288,7 +288,7 @@ class InterventionCoordinator:
         ki_types = {"MISSING_KI_DOC", "KI_DOC_OUTDATED"}
         ki_events = [e for e in events if e.violation_type in ki_types]
         if ki_events:
-            self.ki_doc.record_merge(ki_events, self.context)
+            self.ki_doc.record_merge(events, self.context)
 
         # 4. Final commit
         self.commit_guard.ensure_committed(self.context)

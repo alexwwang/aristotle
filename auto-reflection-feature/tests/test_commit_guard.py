@@ -42,6 +42,7 @@ class TestCommitGuardDirtyCommit:
              patch("aristotle_auto_reflection.commit_guard.subprocess.run") as mock_run:
             mock_run.side_effect = [
                 MagicMock(returncode=0),
+                MagicMock(returncode=0),
                 MagicMock(returncode=0, stdout="abc1234\n"),
             ]
             result = guard.ensure_committed(ctx)
@@ -94,6 +95,7 @@ class TestCommitGuardPhaseCommit:
              patch("aristotle_auto_reflection.commit_guard.subprocess.run") as mock_run:
             mock_run.side_effect = [
                 MagicMock(returncode=0),
+                MagicMock(returncode=0),
                 MagicMock(returncode=0, stdout="deadbeef\n"),
             ]
             result = guard.ensure_committed(ctx)
@@ -110,6 +112,7 @@ class TestCommitGuardLoopCommit:
         with patch.object(guard, "_is_clean", return_value=False), \
              patch("aristotle_auto_reflection.commit_guard.subprocess.run") as mock_run:
             mock_run.side_effect = [
+                MagicMock(returncode=0),
                 MagicMock(returncode=0),
                 MagicMock(returncode=0, stdout="feedface\n"),
             ]
@@ -141,6 +144,7 @@ class TestCommitGuardBoundaryCommit:
         with patch.object(guard, "_is_clean", return_value=False), \
              patch("aristotle_auto_reflection.commit_guard.subprocess.run") as mock_run:
             mock_run.side_effect = [
+                MagicMock(returncode=0),
                 MagicMock(returncode=0),
                 MagicMock(returncode=0, stdout="baddcafe\n"),
             ]
