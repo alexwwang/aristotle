@@ -154,6 +154,14 @@ class TestCommitGuardIsCleanBothDirty:
         assert result is False
 
 
+class TestCommitGuardIsCleanTrue:
+    def test_should_return_true_when_both_diffs_clean(self, guard):
+        with patch("aristotle_auto_reflection.commit_guard.subprocess.run") as mock_run:
+            mock_run.side_effect = [MagicMock(returncode=0), MagicMock(returncode=0)]
+            result = guard._is_clean()
+        assert result is True
+
+
 class TestCommitGuardIsCleanGitFailure:
     def test_should_return_false_when_git_command_fails(self, guard):
         with patch("aristotle_auto_reflection.commit_guard.subprocess.run") as mock_run:

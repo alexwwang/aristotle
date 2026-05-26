@@ -121,6 +121,7 @@ class TestRegression:
         with pytest.raises(TDDViolationError) as exc_info:
             coordinator.intervene(event)
         assert "REGRESSION" in exc_info.value.result.violation_code
+        assert "Phase 5" in exc_info.value.plan.instruction or "phase 5" in exc_info.value.plan.instruction
 
     def test_should_treat_all_phase6_failures_as_regression_in_mvp(self, coordinator, pipeline_context_factory):
         ctx = pipeline_context_factory(current_phase=6)
@@ -343,7 +344,15 @@ class TestBatchProcessing:
         with patch.object(coordinator, "intervene"):
             coordinator.intervene_batch(events)
         elapsed = time.time() - start
-        assert elapsed < 1.0
+        assert elapsed < 0.1
+
+    def test_should_stop_batch_on_sync_mode_exception(self, coordinator):
+        p1_event = _event("SKIP_RED_PHASE", "src/high.py", 4)
+        p4_event = _event("MISSING_KI_DOC", phase=3)
+        with patch.object(coordinator, "intervene", side_effect=TDDViolationError(p1_event, coordinator._build_plan(p1_event))) as mock_intervene:
+            with pytest.raises(TDDViolationError):
+                coordinator.intervene_batch([p1_event, p4_event])
+            assert mock_intervene.call_count == 1
 
 
 # ===== Merge Handling =====
@@ -361,10 +370,24 @@ class TestMergeHandling:
              patch.object(coord, "ki_doc") as mock_ki, \
              patch.object(coord, "_compute_assessment", return_value=("PASS", [], {})):
             mock_cg.ensure_committed.return_value = MagicMock(success=True)
+            call_order = []
+            original_committed = mock_cg.ensure_committed
+            def track_commit(*a, **kw):
+                call_order.append("commit")
+                return MagicMock(success=True)
+            mock_cg.ensure_committed.side_effect = track_commit
+            def track_ki(*a, **kw):
+                call_order.append("ki")
+                return None
+            mock_ki.record_merge.side_effect = track_ki
+            mock_ki.ensure_assessment.side_effect = track_ki
             with pytest.raises(TDDViolationError):
                 coord._handle_merged(events)
-            commit_calls = mock_cg.ensure_committed.call_count
-            assert commit_calls >= 2
+            assert mock_cg.ensure_committed.call_count >= 2
+            commit_indices = [i for i, c in enumerate(call_order) if c == "commit"]
+            ki_indices = [i for i, c in enumerate(call_order) if c == "ki"]
+            if commit_indices and ki_indices:
+                assert min(commit_indices) < min(ki_indices)
 
     def test_should_skip_assessment_step_when_v12_missing_from_merge_set(self, coordinator, pipeline_context_factory):
         ctx = pipeline_context_factory()
@@ -567,37 +590,36 @@ class TestPreRollbackCommit:
 # ===== SYNC Mode =====
 
 class TestSyncMode:
-    def test_should_raise_tdd_violation_error_for_any_violation(self, coordinator):
-        violation_configs = [
-            ("SKIP_REVIEW", "", 2, {}),
-            ("INSUFFICIENT_REVIEW", "", 2, {}),
-            ("UNFIXED_ISSUES", "", 2, {}),
-            ("SKIP_RED_PHASE", "src/mod.py", 4, {}),
-            ("MODIFIED_TEST", "src/mod.py", 4, {}),
-            ("MISSING_TEST", "src/mod.py", 4, {}),
-            ("REGRESSION", "src/mod.py", 6, {}),
-            ("MISSING_KI_DOC", "", 3, {}),
-            ("KI_DOC_OUTDATED", "", 3, {}),
-            ("UNCOMMITTED_PHASE", "", 3, {}),
-            ("UNCOMMITTED_REVIEW", "", 3, {}),
-            ("MISSING_KI_ASSESSMENT", "", 3, {}),
-            ("INVALID_REVIEW_PROMPT", "", 2, {"prompt": "stop condition gate pass"}),
-        ]
-        for vtype, filepath, phase, extra_ctx in violation_configs:
-            event = _event(vtype, filepath, phase, **extra_ctx)
-            with patch.object(coordinator, "commit_guard") as mock_cg, \
-                 patch.object(coordinator, "ki_doc"), \
-                 patch.object(coordinator, "rollback_engine") as mock_re, \
-                 patch.object(coordinator, "prompt_validator") as mock_pv:
-                mock_cg.ensure_committed.return_value = MagicMock(success=True)
-                mock_re.rollback.return_value = RollbackResult(True, "ok")
-                if vtype == "INVALID_REVIEW_PROMPT":
-                    mock_pv.validate.return_value = ValidationResult(is_valid=False, matches=[
-                        MagicMock(category="stop_condition", pattern="stop condition", line_number=1, language="en")
-                    ])
-                with pytest.raises(TDDViolationError) as exc_info:
-                    coordinator.intervene(event)
-                assert exc_info.value.result.violation_code == vtype
+    @pytest.mark.parametrize("vtype,filepath,phase,extra_ctx", [
+        ("SKIP_REVIEW", "", 2, {}),
+        ("INSUFFICIENT_REVIEW", "", 2, {}),
+        ("UNFIXED_ISSUES", "", 2, {}),
+        ("SKIP_RED_PHASE", "src/mod.py", 4, {}),
+        ("MODIFIED_TEST", "src/mod.py", 4, {}),
+        ("MISSING_TEST", "src/mod.py", 4, {}),
+        ("REGRESSION", "src/mod.py", 6, {}),
+        ("MISSING_KI_DOC", "", 3, {}),
+        ("KI_DOC_OUTDATED", "", 3, {}),
+        ("UNCOMMITTED_PHASE", "", 3, {}),
+        ("UNCOMMITTED_REVIEW", "", 3, {}),
+        ("MISSING_KI_ASSESSMENT", "", 3, {}),
+        ("INVALID_REVIEW_PROMPT", "", 2, {"prompt": "stop condition gate pass"}),
+    ], ids=lambda x: x[0] if isinstance(x, tuple) else str(x))
+    def test_should_raise_tdd_violation_error_for_any_violation(self, coordinator, vtype, filepath, phase, extra_ctx):
+        event = _event(vtype, filepath, phase, **extra_ctx)
+        with patch.object(coordinator, "commit_guard") as mock_cg, \
+             patch.object(coordinator, "ki_doc"), \
+             patch.object(coordinator, "rollback_engine") as mock_re, \
+             patch.object(coordinator, "prompt_validator") as mock_pv:
+            mock_cg.ensure_committed.return_value = MagicMock(success=True)
+            mock_re.rollback.return_value = RollbackResult(True, "ok")
+            if vtype == "INVALID_REVIEW_PROMPT":
+                mock_pv.validate.return_value = ValidationResult(is_valid=False, matches=[
+                    MagicMock(category="stop_condition", pattern="stop condition", line_number=1, language="en")
+                ])
+            with pytest.raises(TDDViolationError) as exc_info:
+                coordinator.intervene(event)
+            assert exc_info.value.result.violation_code == vtype
 
     def test_should_handle_multiple_violations_by_priority(self, coordinator):
         events = [_event("SKIP_RED_PHASE", "src/mod.py", 4), _event("MISSING_KI_DOC", phase=3)]
