@@ -262,15 +262,19 @@ class TestGitUnavailable:
 
 class TestPartialFailure:
     def test_should_set_partial_failure_flag_on_partial_rollback(self, rollback_engine, pipeline_context_factory):
-        event = _v4_event()
+        event = _v4_event("src/module.py")
         plan = InterventionPlan(4, True, True, True, "Delete")
         ctx = pipeline_context_factory()
         with patch.object(rollback_engine, "_validate_path", return_value=True), \
              patch.object(rollback_engine, "_is_tracked", return_value=True), \
              patch("aristotle_auto_reflection.rollback_engine.subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0)
+            mock_run.side_effect = [
+                MagicMock(returncode=0),
+                MagicMock(returncode=1, stderr="permission denied"),
+            ]
             result = rollback_engine.rollback(event, plan, ctx)
         assert isinstance(result, RollbackResult)
+        assert result.partial_failure is True
 
 
 class TestPathValidationRejectLog:

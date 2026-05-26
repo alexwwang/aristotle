@@ -1,7 +1,7 @@
 import pytest
 import sys
 import time
-from unittest.mock import patch, MagicMock, PropertyMock
+from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, "/Users/alex/aristotle/auto-reflection-feature/src")
 
@@ -483,16 +483,33 @@ class TestPreRollbackCommit:
 
 class TestSyncMode:
     def test_should_raise_tdd_violation_error_for_any_violation(self, coordinator):
-        for vtype in ["SKIP_REVIEW", "INSUFFICIENT_REVIEW", "UNFIXED_ISSUES",
-                       "SKIP_RED_PHASE", "MODIFIED_TEST", "MISSING_TEST",
-                       "REGRESSION", "MISSING_KI_DOC", "KI_DOC_OUTDATED",
-                       "UNCOMMITTED_PHASE", "UNCOMMITTED_REVIEW", "MISSING_KI_ASSESSMENT"]:
-            event = _event(vtype, "src/mod.py" if vtype in ("SKIP_RED_PHASE", "MODIFIED_TEST", "MISSING_TEST", "REGRESSION") else "", 4 if vtype in ("SKIP_RED_PHASE", "MODIFIED_TEST", "MISSING_TEST") else 2)
+        violation_configs = [
+            ("SKIP_REVIEW", "", 2, {}),
+            ("INSUFFICIENT_REVIEW", "", 2, {}),
+            ("UNFIXED_ISSUES", "", 2, {}),
+            ("SKIP_RED_PHASE", "src/mod.py", 4, {}),
+            ("MODIFIED_TEST", "src/mod.py", 4, {}),
+            ("MISSING_TEST", "src/mod.py", 4, {}),
+            ("REGRESSION", "src/mod.py", 6, {}),
+            ("MISSING_KI_DOC", "", 3, {}),
+            ("KI_DOC_OUTDATED", "", 3, {}),
+            ("UNCOMMITTED_PHASE", "", 3, {}),
+            ("UNCOMMITTED_REVIEW", "", 3, {}),
+            ("MISSING_KI_ASSESSMENT", "", 3, {}),
+            ("INVALID_REVIEW_PROMPT", "", 2, {"prompt": "stop condition gate pass"}),
+        ]
+        for vtype, filepath, phase, extra_ctx in violation_configs:
+            event = _event(vtype, filepath, phase, **extra_ctx)
             with patch.object(coordinator, "commit_guard") as mock_cg, \
                  patch.object(coordinator, "ki_doc"), \
-                 patch.object(coordinator, "rollback_engine") as mock_re:
+                 patch.object(coordinator, "rollback_engine") as mock_re, \
+                 patch.object(coordinator, "prompt_validator") as mock_pv:
                 mock_cg.ensure_committed.return_value = MagicMock(success=True)
                 mock_re.rollback.return_value = RollbackResult(True, "ok")
+                if vtype == "INVALID_REVIEW_PROMPT":
+                    mock_pv.validate.return_value = ValidationResult(is_valid=False, matches=[
+                        MagicMock(pattern="stop condition", matched_text="stop condition")
+                    ])
                 with pytest.raises(TDDViolationError):
                     coordinator.intervene(event)
 

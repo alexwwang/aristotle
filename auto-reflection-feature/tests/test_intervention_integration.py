@@ -1,6 +1,5 @@
 import pytest
 import sys
-import os
 import subprocess
 from pathlib import Path
 from unittest.mock import patch, MagicMock
@@ -104,7 +103,7 @@ class TestE2EPreserveOnRollback:
         subprocess.run(["git", "add", impl_file], cwd=str(repo), capture_output=True)
         subprocess.run(["git", "commit", "-m", "phase 5"], cwd=str(repo), capture_output=True)
         integration_context.current_phase = 5
-        event = ViolationEvent("MISSING_TEST", impl_file, "2026-05-26T10:00:00+08:00", {"phase": 5})
+        event = ViolationEvent("SKIP_RED_PHASE", impl_file, "2026-05-26T10:00:00+08:00", {"phase": 5})
         coord = InterventionCoordinator(integration_context)
         with pytest.raises(TDDViolationError):
             coord.intervene(event)
