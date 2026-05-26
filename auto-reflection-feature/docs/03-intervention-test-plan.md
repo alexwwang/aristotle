@@ -6,9 +6,8 @@
 > **Phase**: 3 (Test Plan)
 > **Based on**: intervention-requirements-v1.md (v1.4), 02-intervention-technical-solution.md (v1.7)
 > **Date**: 2026-05-26
-> **Changelog v1.6**: Align with spec v1.7 — ZH bare patterns (was lookaround), dynamic target_phase (was hardcoded), REGRESSION instruction clarified, dual field model (affected_file_paths), pre-rollback multi-file coverage
+> **Changelog v1.6**: Align with spec v1.7 — ZH bare patterns/AC-I19 (was lookaround), dynamic target_phase/AC-I8 (was hardcoded), REGRESSION instruction/AC-I9 clarified, dual field model (affected_file_paths), 6 new test rows (#77-82), factory updated, R0 PF fixes (F-01 OQ stale, F-03 unreachable path, F-04 AC-I20 trace, F-05 dupe changelog, F-07 empty prompt trace)
 > **Changelog v1.5**: R4 fixes — 0C/0H/3M from Precision Filter (F-34 Design Coverage renumber, F-36 V-9 auto-append description, F-39 _handle_merged commit-only path)
-> **Changelog v1.6**: Align with spec v1.7 — ZH bare patterns (AC-I19), dynamic target_phase (AC-I8), REGRESSION instruction (AC-I9), dual field model, 6 new test rows (#77-82), factory updated
 > **Changelog v1.3**: R3 fixes — 0C/0H/2M from Precision Filter (F-32 _handle_merged partial-merge trace, F-33 same-priority tie-breaking trace)
 > **Changelog v1.2**: R2 fixes — 1H/4M from Precision Filter (F-25 pre-rollback commit failure, F-26 V-9 coordinator test, F-29 git add failure, F-30 CommitGuard untracked ambiguity, F-27 _is_valid_event coverage)
 > **Changelog v1.1**: R1 fixes — 1H/12M from Precision Filter (F-01 V-7 flaky test, F-02 V-13 missing prompt, F-03 partial code block, F-04 V-5 scope note, F-05/F-06 untraced tests, F-08 ISO 8601 regex, F-09 leading-dash, F-11 req_number, F-12 V-7 baseline, F-13 V-2/V-3 plans, F-14 test count, F-15 V-7 integration, F-24 empty round_results)
@@ -45,7 +44,7 @@ All 10 user stories are Core. No secondary stories exist.
 | 5 | Delete implementation file when test not written first (Phase 4) | US-I2 (Core) / AC-I5 | RollbackEngine._delete_implementation | happy: tracked file git rm; happy: untracked file os.remove; edge: file already deleted; error: path validation failure |
 | 6 | Restore modified test from git (Phase 5) | US-I3 (Core) / AC-I6 | RollbackEngine._restore_test | happy: tracked file restored from boundary_commit_hash; happy: HEAD fallback when boundary_commit_hash is None; edge: untracked file → skip; error: git checkout failure |
 | 7 | Detect missing test and require LLM to write it | US-I4 (Core) / AC-I7 | InterventionCoordinator._build_plan (V-6) | happy: MISSING_TEST blocked, no auto-fix; edge: system does NOT create skeleton; error: affected_file_path missing |
-| 8 | SKIP_RED_PHASE rollback targets Phase from event context (dynamic) | US-I2 (Core) / AC-I8 | InterventionCoordinator._build_plan (V-4) | happy: target_phase = event.context.get("phase", 4) (dynamic, not hardcoded); edge: already at target phase; error: no phase in context → default 4 |
+| 8 | SKIP_RED_PHASE rollback targets Phase from event context (dynamic) | US-I2 (Core) / AC-I8 | InterventionCoordinator._build_plan (V-4) | happy: target_phase = event.context.get("phase", 4) (dynamic, not hardcoded); edge: already at target phase; note: no phase in context → rejected by _is_valid_event (not a _build_plan concern) |
 | 9 | Regression rollback targets Phase 5 | US-I7 (Core) / AC-I9 | RollbackEngine.rollback (V-7), InterventionCoordinator._build_plan | happy: Phase 5 end tests pass → Phase 6 fail → rollback to Phase 5; edge: all Phase 6 failures treated as regression in MVP (including flaky false positives, per Phase 1 Constraint); error: no phase5_test_results in context |
 | 10 | REGRESSION target_phase = 5 | US-I7 (Core) / AC-I10 | InterventionCoordinator._build_plan (V-7) | happy: target_phase = 5 |
 | 11 | Auto-update ki document on every intervention | US-I5 (Core) / AC-I11 | KiDocManager.record_intervention | happy: entry appended with violation_type, target_phase, auto_fix_applied, timestamp; edge: multiple interventions = multiple entries; error: file not found → create with header |
@@ -152,6 +151,7 @@ _Traces Phase 1 user stories and acceptance criteria to test cases. For Phase 2 
 | 27 | Core | US-I5 | AC-I20 | Unit | `test_ki_doc_manager.py` | `should_detect_outdated_ki_doc_by_timestamp` | Newest ki entry timestamp < intervention timestamp → KI_DOC_OUTDATED |
 | 28 | Core | US-I5 | AC-I20 | Unit | `test_ki_doc_manager.py` | `should_auto_append_missing_record_for_outdated_ki_doc` | Outdated → auto-append missing intervention record |
 | 29 | Core | US-I5 | AC-I20 | Unit | `test_ki_doc_manager.py` | `should_use_structured_timestamp_not_file_mtime` | Timestamp from ISO 8601 field in ki entry, not file mtime |
+| 29b | Core | US-I5 | AC-I20 | Unit | `test_intervention_coordinator.py` | `should_route_v9_ki_doc_outdated_to_auto_append` | Coordinator receives KI_DOC_OUTDATED → ensure_updated() called → auto-append missing record → record_intervention → commit → TDDViolationError |
 | 30 | Core | US-I9 | AC-I13 | Unit | `test_ki_doc_manager.py` | `should_block_pipeline_when_ki_assessment_missing` | No assessment record → MISSING_KI_ASSESSMENT, auto-execute |
 | 31 | Core | US-I9 | AC-I13 | Unit | `test_ki_doc_manager.py` | `should_treat_empty_assessment_as_missing` | Completely empty = MISSING_KI_ASSESSMENT |
 | 32 | Core | US-I9 | AC-I13 | Unit | `test_ki_doc_manager.py` | `should_treat_status_only_assessment_as_valid` | Assessment with at least status field = valid |
@@ -292,7 +292,7 @@ Checklist (verify each category is covered — find the analogous risk if catego
   - `should_reject_event_missing_phase_in_context` — context without "phase" key → invalid
   - `should_accept_process_violations_without_affected_file_path` — affected_file_path="" for V-1/V-2/V-3 → valid
   - `should_return_none_when_ki_doc_not_found` — file path doesn't exist → None
-  - `should_pass_clean_prompt` — empty prompt → valid (no forbidden content)
+  - `should_pass_clean_prompt` — empty string → valid (no forbidden content); also parametrized with clean non-empty prompt
 
 - [x] **empty_collections** — empty events list in intervene_batch, no round_results
   - `should_return_silently_for_empty_event_list` — intervene_batch([]) → no action
@@ -460,7 +460,7 @@ CLEAN_PROMPT = "Review the following code changes for correctness and style. Che
 
 | # | Question | Resolution |
 |---|----------|------------|
-| 1 | Phase-appropriateness validation: Should InterventionCoordinator reject V-4 (Phase 4 only) events at Phase 2? | Current design: coordinator builds plan regardless of current_phase. V-4 plan hardcodes target_phase=4. If called at Phase 2, rollback would be to Phase 4 which is forward (no pre-rollback). This is a Watchdog responsibility (should not fire V-4 at Phase 2). Document as known limitation, not a test gap. |
+| 1 | Phase-appropriateness validation: Should InterventionCoordinator reject V-4 (Phase 4 only) events at Phase 2? | Current design: coordinator builds plan regardless of current_phase. V-4 plan uses `event.context.get("phase", 4)` (dynamic per spec v1.7). If called at Phase 2 with context.phase=4, rollback target would be Phase 4 which is forward (no pre-rollback). This is a Watchdog responsibility (should not fire V-4 at Phase 2). Document as known limitation, not a test gap. |
 | 2 | subprocess.run timeout: Should git commands have explicit timeouts? | Current design: no timeout. In SYNC mode, LLM is blocked anyway. If git hangs, intervention hangs. Mitigated by container timeout. Recommend adding 30s timeout in implementation but not blocking test plan. |
 | 3 | PromptValidator truncation threshold: Confirm 10KB | Phase 2 specifies 10KB truncation for long prompts. Test should verify truncation behavior at threshold boundary (9999 bytes = no truncate, 10241 bytes = truncate). |
 | 4 | KiDocManager file creation: parent directory creation depth | Design uses `mkdir(parents=True, exist_ok=True)`. Test should verify deeply nested paths work (e.g., `a/b/c/ki-doc.md`). |
