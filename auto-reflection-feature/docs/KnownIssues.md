@@ -16,7 +16,7 @@
 - **Re-raised-in**: R9, R10, R11, R12, R13, R14
 - **Severity**: L (Low)
 - **Files**:
-  - `tests/test_prompt_validator.py::TestLongPromptTruncation` — `isinstance(result, ValidationResult)`
+  - `tests/test_prompt_validator.py::TestLongPromptHandling` — `isinstance(result, ValidationResult)` (renamed from TestLongPromptTruncation)
   - `tests/test_prompt_validator.py::TestPartialCodeBlock` — `isinstance(result, ValidationResult)`
   - `tests/test_ki_doc_manager.py::TestKiDocOutdatedDetection` — `isinstance(result, bool)`
 - **Description**: These 3 tests only assert type, not specific behavioral values. During TDD Red phase these assertions are unreachable (stubs raise NotImplementedError). Once implemented, tests would pass regardless of actual return value.
@@ -105,6 +105,36 @@
 - **Description**: Matrix references `should_only_trigger_prompt_validation_for_invalid_review_prompt` but actual test is `should_dispatch_to_prompt_validator_only_for_v13`.
 - **Why deferred**: Traceability gap only, no correctness impact.
 - **Plan**: Update test plan to match actual test name.
+
+### KI-13: _validate_path("") returns True for empty string
+- **Raised-in**: Phase 5 R3 (Oracle)
+- **Re-raised-in**: R4, R5
+- **Severity**: L (Low)
+- **Description**: `RollbackEngine._validate_path("")` returns True because `os.path.normpath(os.path.join(repo_root, ""))` equals `repo_root`. However, this edge case is unreachable — all callers guard with `if event.affected_file_path` (empty string is falsy in Python).
+- **Why deferred**: Unreachable in production. Defense-in-depth only.
+- **Plan**: No action needed.
+
+### KI-14: No exception handling for git subprocess FileNotFoundError
+- **Raised-in**: Phase 5 R4 (Oracle)
+- **Re-raised-in**: R5
+- **Severity**: I (Info)
+- **Description**: CommitGuard and RollbackEngine call `subprocess.run(["git", ...])` without try/except for `FileNotFoundError`. If git is not installed, these calls would crash with an unhandled exception rather than raising a clean `TDDViolationError`.
+- **Why deferred**: Git unavailable = broken environment. The entire system depends on git. Adding FileNotFoundError handling for every subprocess call adds complexity with no practical benefit.
+- **Plan**: No action needed.
+
+### KI-15: PatternMatch.line_number based on stripped text, not original prompt
+- **Raised-in**: Phase 5 R5 (Oracle)
+- **Severity**: I (Info)
+- **Description**: `PatternMatch.line_number` is computed from text after code blocks, inline code, quoted text, and headings are stripped. The line number doesn't correspond to the original prompt's line numbers.
+- **Why deferred**: The field is stored but never displayed to users — ki doc entry only renders `category:pattern`. No functional impact.
+- **Plan**: If line numbers are ever surfaced to users, recompute from original prompt with offset tracking.
+
+### KI-16: No test coverage for git FileNotFoundError
+- **Raised-in**: Phase 5 R5 (Oracle)
+- **Severity**: I (Info)
+- **Description**: No test for the scenario where `subprocess.run(["git", ...])` raises `FileNotFoundError`. Related to KI-14.
+- **Why deferred**: Testing git unavailability requires mocking `subprocess.run` globally, which is fragile. The behavior (crash) is acceptable for broken environments.
+- **Plan**: No action needed.
 
 ## Resolved KI Entries
 
