@@ -205,6 +205,8 @@ class TestE2EKiDocOutdatedAutoAppend:
         with pytest.raises(TDDViolationError) as exc_info:
             coord.intervene(event)
         assert exc_info.value.result.violation_code == "KI_DOC_OUTDATED"
+        ki_content = Path(integration_context.ki_doc_path).read_text()
+        assert "KI_DOC_OUTDATED" in ki_content
 
 
 class TestE2EInsufficientReviewAutoFix:

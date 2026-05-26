@@ -51,8 +51,9 @@ class TestSkipReview:
 
     def test_should_treat_zero_rounds_as_skip_review(self, coordinator):
         event = _event("SKIP_REVIEW", phase=2, rounds=0)
-        with pytest.raises(TDDViolationError):
+        with pytest.raises(TDDViolationError) as exc_info:
             coordinator.intervene(event)
+        assert exc_info.value.result.violation_code == "SKIP_REVIEW"
 
 
 class TestInsufficientReview:
@@ -68,6 +69,15 @@ class TestInsufficientReview:
         ]})
         coord = InterventionCoordinator(ctx)
         event = _event("INSUFFICIENT_REVIEW", phase=2, rounds=2)
+        result = coord.intervene(event)
+        assert result is None
+
+    def test_should_pass_when_last_two_consecutive_zero_after_earlier_failure(self, coordinator, pipeline_context_factory):
+        ctx = pipeline_context_factory(metadata={"round_results": [
+            {"C": 1, "H": 0, "M": 0}, {"C": 0, "H": 0, "M": 0}, {"C": 0, "H": 0, "M": 0}
+        ]})
+        coord = InterventionCoordinator(ctx)
+        event = _event("INSUFFICIENT_REVIEW", phase=2, rounds=3)
         result = coord.intervene(event)
         assert result is None
 

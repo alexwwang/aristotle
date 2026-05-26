@@ -182,6 +182,13 @@ class TestCommitGuardIsCleanGitFailure:
         assert result is False
 
 
+class TestCommitGuardIsCleanSubprocessException:
+    def test_should_propagate_exception_when_git_not_found(self, guard):
+        with patch("aristotle_auto_reflection.commit_guard.subprocess.run", side_effect=FileNotFoundError("git not found")):
+            with pytest.raises(FileNotFoundError):
+                guard._is_clean()
+
+
 class TestCommitGuardBoundaryCommit:
     def test_should_auto_commit_all_uncommitted_at_boundary(self, guard, pipeline_context_factory):
         ctx = pipeline_context_factory()
