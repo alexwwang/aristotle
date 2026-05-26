@@ -119,6 +119,26 @@
 - **Resolved-in**: Pre-R15 (commit a806382)
 - **Resolution**: Added `affected_file_paths: List[str]` field to ViolationEvent. Updated test to use explicit list instead of space-separated string.
 
+### KI-RESOLVED-03: CommitGuard hash from git commit stdout instead of git rev-parse
+- **Raised-in**: Phase 5 R0 (Oracle)
+- **Resolved-in**: Phase 5 R0 fix
+- **Resolution**: Added 3rd subprocess call `git rev-parse --short HEAD` after commit. Updated test mocks to provide 3 side_effect entries.
+
+### KI-RESOLVED-04: Coordinator pre-rollback git add without path validation
+- **Raised-in**: Phase 5 R0 (Oracle, H-1)
+- **Resolved-in**: Phase 5 R0 fix
+- **Resolution**: Added `self.rollback_engine._validate_path(event.affected_file_path)` check before `git add` in coordinator step 6.
+
+### KI-RESOLVED-05: REGRESSION plan conditionally set auto_fix=True, contradicts design spec
+- **Raised-in**: Phase 5 R0 (Oracle, H-2)
+- **Resolved-in**: Phase 5 R0 fix
+- **Resolution**: REGRESSION plan now always uses `auto_fix=False, needs_rollback=False, is_destructive=False`, matching design spec.
+
+### KI-RESOLVED-06: Pre-rollback commit condition deviated from design spec
+- **Raised-in**: Phase 5 R0 (Oracle, H-3)
+- **Resolved-in**: Phase 5 R0 fix
+- **Resolution**: Split into two conditions: pre-rollback commit uses `plan.is_destructive or plan.target_phase < current_phase` (design spec), rollback execution uses `plan.auto_fix and plan.needs_rollback`.
+
 ## KI Re-evaluation History
 
 | Round | Action | Notes |
