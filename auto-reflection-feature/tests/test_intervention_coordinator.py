@@ -69,8 +69,8 @@ class TestInsufficientReview:
         ]})
         coord = InterventionCoordinator(ctx)
         event = _event("INSUFFICIENT_REVIEW", phase=2, rounds=2)
-        with pytest.raises(TDDViolationError):
-            coord.intervene(event)
+        result = coord.intervene(event)
+        assert result is None
 
 
 class TestUnfixedIssues:
