@@ -1,6 +1,6 @@
 # Technical Design: Watchdog Intervention for TDD Pipeline
 
-> **Version**: v1.6
+> **Version**: v1.7
 > **Status**: Updated post Phase 5 R5 — design aligned with implementation
 > **Branch**: feature/watchdog-intervention
 > **Phase**: 2 (Technical Solution)
@@ -268,7 +268,7 @@ class InterventionCoordinator:
                     auto_fix_applied=False, auto_fix_details="", instruction=plan.instruction,
                     ki_doc_updated=True, committed=True, rollback_result=None, validation_result=result))
             else:
-                return  # Watchdog false positive — prompt is actually clean
+                return  # Watchdog false positive — prompt is actually clean. logger.info("V-13 false positive cleared")
 
         # 4. Build plan
         plan = self._build_plan(event)
@@ -303,7 +303,8 @@ class InterventionCoordinator:
             rollback_result=rollback_result, validation_result=None))
 
     def intervene_batch(self, events: List[ViolationEvent]) -> None:
-        """Merge Rule: V-10/V-11 -> V-12 -> V-8/V-9, handle highest priority."""
+        """Merge Rule: V-10/V-11 -> V-12 -> V-8/V-9, handle highest priority.
+        Mergeable violations deferred when non-mergeable exists — REQUIRES Watchdog to re-emit all remaining violations on next scan."""
         if not events:
             return
         sorted_events = sorted(events, key=lambda e: VIOLATION_PRIORITY.get(e.violation_type, 99))
@@ -382,6 +383,7 @@ class InterventionCoordinator:
             "SKIP_RED_PHASE":         InterventionPlan(event.context.get("phase", 4), True, True, True, "Write failing test before implementation"),
             "MODIFIED_TEST":          InterventionPlan(event.context.get("phase", 5), True, True, True, "Write implementation to make ORIGINAL test pass"),
             "MISSING_TEST":           InterventionPlan(event.context.get("phase", 4), False, False, False, "Write test for this module first"),
+            # AC-I10: always Phase 5 (Green phase, fix implementation) — not dynamic
             "REGRESSION":             InterventionPlan(5, False, False, False, "Regression detected — return to Phase 5 and fix the failing implementation"),
             "MISSING_KI_DOC":         InterventionPlan(phase, True, False, False, "(auto-fixed)"),
             "KI_DOC_OUTDATED":        InterventionPlan(phase, True, False, False, "(auto-fixed)"),
@@ -548,7 +550,9 @@ class RollbackEngine:
             return RollbackResult(False, "path validation failed", [], None)
         if not self._is_tracked(filepath):
             return RollbackResult(False, "skip (untracked)", [], None)
-        commit_ref = context.boundary_commit_hash or "HEAD"
+        commit_ref = context.boundary_commit_hash or "HEAD"  # Key Decision: HEAD is fallback if boundary not set
+        if not context.boundary_commit_hash:
+            logger.warning("V-5: boundary_commit_hash not set, falling back to HEAD")
         r = subprocess.run(["git", "checkout", commit_ref, "--", filepath], capture_output=True, text=True)
         if r.returncode != 0:
             return RollbackResult(False, f"git checkout failed: {r.stderr}", [], None)
