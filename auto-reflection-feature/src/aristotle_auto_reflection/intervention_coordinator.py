@@ -74,7 +74,7 @@ _PLAN_MAP = {
         auto_fix=False,
         needs_rollback=False,
         is_destructive=False,
-        instruction="Regression detected. Rollback to Phase 5 baseline.",
+        instruction="Regression detected — return to Phase 5 and fix the failing implementation",
     ),
     "MISSING_KI_DOC": lambda e, ctx: InterventionPlan(
         target_phase=e.context.get("phase", 3),
@@ -182,14 +182,18 @@ class InterventionCoordinator:
         # 6. Pre-rollback commit (safety net for destructive ops + phase rollback)
         pre_commit_ok = True
         if plan.is_destructive or plan.target_phase < self.context.current_phase:
-            if event.affected_file_path and self.rollback_engine._validate_path(event.affected_file_path):
-                try:
-                    subprocess.run(
-                        ["git", "add", event.affected_file_path],
-                        capture_output=True, text=True,
-                    )
-                except Exception:
-                    pass
+            files_to_stage = list(event.affected_file_paths) if event.affected_file_paths else (
+                [event.affected_file_path] if event.affected_file_path else []
+            )
+            for fp in files_to_stage:
+                if self.rollback_engine._validate_path(fp):
+                    try:
+                        subprocess.run(
+                            ["git", "add", fp],
+                            capture_output=True, text=True,
+                        )
+                    except Exception:
+                        pass
             pre_commit_result = self.commit_guard.ensure_committed(self.context)
             pre_commit_ok = pre_commit_result.success if pre_commit_result else True
 

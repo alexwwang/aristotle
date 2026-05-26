@@ -203,7 +203,7 @@ class CommitResult:
 | Sub-components as internal classes | Tight coupling acceptable | Plugin registration: adds indirection |
 | Git CLI for rollback | git checkout/rm are atomic, well-tested | Python git libs: adds dependency |
 | File-based ki document | Append-only markdown. Simple and transparent. | SQLite/YAML: over-engineered |
-| Regex + lookaround for V-13 | Pattern-matching sufficient for MVP | LLM semantic detection: v2 |
+| Regex for V-13 (bare patterns for ZH, word-boundary for EN) | Bare ZH patterns avoid false negatives from CJK adjacency; EN uses \b | LLM semantic detection: v2; ZH lookaround: causes false negatives |
 | Exception-based blocking | SYNC mode requires immediate blocking | Return code + poll: adds complexity |
 | Pre-rollback commit | Before destructive op, work never lost | Backup branches: creates clutter |
 | ViolationFilter expansion | Must pass all 13 types (was only 3) | Separate filter per category |
@@ -275,9 +275,12 @@ class InterventionCoordinator:
 
         # 5. Pre-rollback commit (safety net for destructive ops + phase rollback)
         if plan.is_destructive or plan.target_phase < self.context.current_phase:
-            # Stage affected file specifically (handles untracked files per AC-I22)
-            if event.affected_file_path:
-                subprocess.run(["git", "add", event.affected_file_path], capture_output=True, text=True)
+            # Stage ALL affected files (handles untracked files per AC-I22, multi-file per KI-10)
+            files_to_stage = list(event.affected_file_paths) if event.affected_file_paths else (
+                [event.affected_file_path] if event.affected_file_path else []
+            )
+            for fp in files_to_stage:
+                subprocess.run(["git", "add", fp], capture_output=True, text=True)
             self.commit_guard.ensure_committed(self.context)
 
         # 6. Execute rollback
@@ -308,7 +311,7 @@ class InterventionCoordinator:
                      {"MISSING_KI_DOC", "KI_DOC_OUTDATED", "UNCOMMITTED_PHASE",
                       "UNCOMMITTED_REVIEW", "MISSING_KI_ASSESSMENT"}]
         non_mergeable = [e for e in sorted_events if e not in mergeable]
-        # Priority: non-mergeable (P1/P2/P3) first, mergeable (P4/P5) only if alone
+        # Mergeable violations deferred when non-mergeable exists — pipeline retry re-triggers detection
         if non_mergeable:
             self.intervene(non_mergeable[0])
         elif mergeable:
@@ -379,7 +382,7 @@ class InterventionCoordinator:
             "SKIP_RED_PHASE":         InterventionPlan(event.context.get("phase", 4), True, True, True, "Write failing test before implementation"),
             "MODIFIED_TEST":          InterventionPlan(event.context.get("phase", 5), True, True, True, "Write implementation to make ORIGINAL test pass"),
             "MISSING_TEST":           InterventionPlan(event.context.get("phase", 4), False, False, False, "Write test for this module first"),
-            "REGRESSION":             InterventionPlan(5, False, False, False, "Regression detected — flag for manual resolution"),
+            "REGRESSION":             InterventionPlan(5, False, False, False, "Regression detected — return to Phase 5 and fix the failing implementation"),
             "MISSING_KI_DOC":         InterventionPlan(phase, True, False, False, "(auto-fixed)"),
             "KI_DOC_OUTDATED":        InterventionPlan(phase, True, False, False, "(auto-fixed)"),
             "UNCOMMITTED_PHASE":      InterventionPlan(phase, True, False, False, "(auto-fixed)"),
@@ -708,7 +711,17 @@ class CommitGuard:
 
 ---
 
+## Requirements Deviations (v1.4 → v1.6)
+
+| AC | Requirements Say | Implementation Does | Rationale |
+|----|-----------------|---------------------|-----------|
+| AC-I19 | "Chinese forbidden patterns detected using lookaround-based matching" | Bare patterns (no lookaround) for ZH | Lookaround `(?<![\w\u4e00-\u9fff])...(?![\w\u4e00-\u9fff])` caused false negatives — Chinese forbidden phrases are always adjacent to CJK characters (no spaces). Bare patterns match correctly in all tested scenarios. 30 ZH tests GREEN. |
+| AC-I8 | "target_phase = 4 (Red phase, write test first)" — hardcoded | `event.context.get("phase", 4)` — dynamic from event context | `_is_valid_event` validates "phase" key exists. Watchdog always sets correct phase. Dynamic approach preserves flexibility if phase detection evolves. Default fallback matches spec value. |
+| AC-I9 | "rollback to Phase 5, require fix implementation" | `target_phase=5, auto_fix=False, needs_rollback=False` — flags for LLM resolution | V-7 has no system auto-fix (can't automatically fix regressions). Pipeline is correctly blocked via TDDViolationError. LLM receives instruction to return to Phase 5 and fix. |
+
+---
+
 *Document created: 2026-05-25*
-*Version: v1.6 (Phase 5: design aligned with implementation — ZH bare patterns, dynamic target_phase, REGRESSION instruction, dual field model)*
+*Version: v1.7 (Phase 2: formal deviation table added, Key Decisions updated, REGRESSION instruction strengthened, pre-rollback multi-file fix)*
 *Phase: 2 (Technical Solution)*
 *Next: Phase 2 re-review → Phase 3-5 validation → Phase 6 Pre-Release Testing*
