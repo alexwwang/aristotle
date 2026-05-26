@@ -193,7 +193,8 @@ class InterventionCoordinator:
             rollback_result = self.rollback_engine.rollback(event, plan, self.context)
 
         # 7. KI doc update (even when rollback fails)
-        self.ki_doc.record_intervention(event, plan, rollback_result)
+        ki_write_ok = self.ki_doc.record_intervention(event, plan, rollback_result)
+        ki_doc_updated = ki_write_ok is not False
 
         # 8. Post-intervention commit
         self.commit_guard.ensure_committed(self.context)
@@ -205,7 +206,7 @@ class InterventionCoordinator:
             auto_fix_applied=rollback_result.success if rollback_result else False,
             auto_fix_details=rollback_result.action if rollback_result else "",
             instruction=plan.instruction,
-            ki_doc_updated=True,
+            ki_doc_updated=ki_doc_updated,
             committed=True,
             rollback_result=rollback_result,
         )

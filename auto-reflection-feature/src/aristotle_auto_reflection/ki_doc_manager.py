@@ -12,6 +12,7 @@ class KiDocManager:
         entry = self._format_intervention_entry(event, plan, rollback_result, validation_result)
         try:
             self._append(entry)
+            return True
         except IOError:
             return None
 
