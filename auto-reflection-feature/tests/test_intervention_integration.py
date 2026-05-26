@@ -7,11 +7,7 @@ from unittest.mock import patch, MagicMock
 sys.path.insert(0, "/Users/alex/aristotle/auto-reflection-feature/src")
 
 from aristotle_auto_reflection.intervention_coordinator import InterventionCoordinator, TDDViolationError
-from aristotle_auto_reflection.intervention_types import (
-    ViolationEvent, InterventionPlan, RollbackResult, CommitResult,
-    PipelineContext, InterventionResult, ValidationResult, PatternMatch,
-    VIOLATION_PRIORITY,
-)
+from aristotle_auto_reflection.intervention_types import ViolationEvent, PipelineContext
 
 
 @pytest.fixture

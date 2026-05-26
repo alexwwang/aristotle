@@ -260,8 +260,8 @@ class TestGitUnavailable:
         assert result.success is False
 
 
-class TestPartialFailure:
-    def test_should_set_partial_failure_flag_when_git_rm_fails(self, rollback_engine, pipeline_context_factory):
+class TestSingleFileFailure:
+    def test_should_return_failure_when_git_rm_fails_on_single_file(self, rollback_engine, pipeline_context_factory):
         event = _v4_event("src/module.py")
         plan = InterventionPlan(4, True, True, True, "Delete")
         ctx = pipeline_context_factory()
@@ -271,7 +271,19 @@ class TestPartialFailure:
             mock_run.return_value = MagicMock(returncode=1, stderr="permission denied")
             result = rollback_engine.rollback(event, plan, ctx)
         assert isinstance(result, RollbackResult)
-        assert result.partial_failure is True
+        assert result.success is False
+
+
+class TestFileAlreadyDeleted:
+    def test_should_succeed_when_file_already_deleted(self, rollback_engine, pipeline_context_factory):
+        event = _v4_event("src/deleted.py")
+        plan = InterventionPlan(4, True, True, True, "Delete")
+        ctx = pipeline_context_factory()
+        with patch.object(rollback_engine, "_validate_path", return_value=True), \
+             patch.object(rollback_engine, "_is_tracked", return_value=False), \
+             patch("aristotle_auto_reflection.rollback_engine.os.path.exists", return_value=False):
+            result = rollback_engine.rollback(event, plan, ctx)
+        assert result.success is True
 
 
 class TestPathValidationRejectLog:

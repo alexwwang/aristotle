@@ -210,4 +210,4 @@ class TestKiDocWriteFailure:
         plan = InterventionPlan(2, False, False, False, "Fix")
         with patch("builtins.open", side_effect=IOError("disk full")):
             result = ki_doc_manager.record_intervention(event, plan, None)
-            assert result is None or isinstance(result, bool)
+            assert result is None

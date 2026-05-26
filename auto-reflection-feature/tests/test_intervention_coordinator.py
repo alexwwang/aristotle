@@ -7,8 +7,7 @@ sys.path.insert(0, "/Users/alex/aristotle/auto-reflection-feature/src")
 
 from aristotle_auto_reflection.intervention_coordinator import InterventionCoordinator, TDDViolationError
 from aristotle_auto_reflection.intervention_types import (
-    ViolationEvent, InterventionPlan, RollbackResult, PipelineContext,
-    InterventionResult, ValidationResult, PatternMatch, VIOLATION_PRIORITY,
+    ViolationEvent, InterventionPlan, RollbackResult, PipelineContext, ValidationResult,
 )
 
 
@@ -198,6 +197,13 @@ class TestEventValidation:
         event = ViolationEvent("SKIP_REVIEW", "", "2026-05-26T10:00:00+08:00", {})
         assert coordinator._is_valid_event(event) is False
 
+    @pytest.mark.parametrize("vtype", [
+        "SKIP_RED_PHASE", "MODIFIED_TEST", "MISSING_TEST", "REGRESSION",
+    ])
+    def test_should_reject_behavioral_violation_without_affected_file_path(self, coordinator, vtype):
+        event = ViolationEvent(vtype, "", "2026-05-26T10:00:00+08:00", {"phase": 4})
+        assert coordinator._is_valid_event(event) is False
+
 
 # ===== Plan Building =====
 
@@ -366,6 +372,12 @@ class TestAssessment:
         status, issues, counts = coord._compute_assessment()
         assert status == "FAIL"
 
+    def test_should_derive_fail_when_h_greater_than_zero(self, coordinator, pipeline_context_factory):
+        ctx = pipeline_context_factory(metadata={"round_results": [{"C": 0, "H": 1, "M": 0}]})
+        coord = InterventionCoordinator(ctx)
+        status, issues, counts = coord._compute_assessment()
+        assert status == "FAIL"
+
     def test_should_derive_conditional_when_m_greater_than_zero(self, coordinator, pipeline_context_factory):
         ctx = pipeline_context_factory(metadata={"round_results": [{"C": 0, "H": 0, "M": 3}]})
         coord = InterventionCoordinator(ctx)
@@ -509,7 +521,7 @@ class TestSyncMode:
                 mock_re.rollback.return_value = RollbackResult(True, "ok")
                 if vtype == "INVALID_REVIEW_PROMPT":
                     mock_pv.validate.return_value = ValidationResult(is_valid=False, matches=[
-                        MagicMock(pattern="stop condition", matched_text="stop condition")
+                        MagicMock(category="stop_condition", pattern="stop condition", line_number=1, language="en")
                     ])
                 with pytest.raises(TDDViolationError):
                     coordinator.intervene(event)
