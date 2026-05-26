@@ -133,6 +133,8 @@ class TestKiDocAssessmentEmpty:
         ki_doc_manager.ensure_assessment(2, 3, "", [])
         content = Path(ki_doc_manager.ki_doc_path).read_text()
         assert "Review Records" in content
+        assert "PASS" not in content
+        assert "CONDITIONAL" not in content
 
 
 class TestKiDocAssessmentStatusOnly:

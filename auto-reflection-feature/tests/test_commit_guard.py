@@ -99,11 +99,8 @@ class TestCommitGuardPhaseCommit:
         assert result.success is True
         calls = mock_run.call_args_list
         commit_call = calls[1]
-        # commit_call[0][0] is the command list ["git","commit","-m","...PHASE-5-GREEN..."]
-        # Must extract the message string (index 3) for substring containment
         commit_args = commit_call[0][0]
-        msg = commit_args[3] if len(commit_args) > 3 else str(commit_args)
-        assert "PHASE-5-GREEN" in msg
+        assert any("PHASE-5-GREEN" in str(arg) for arg in commit_args)
 
 
 class TestCommitGuardLoopCommit:
@@ -118,8 +115,7 @@ class TestCommitGuardLoopCommit:
             result = guard.ensure_committed(ctx)
         assert result.success is True
         commit_args = mock_run.call_args_list[1][0][0]
-        msg = commit_args[3] if len(commit_args) > 3 else str(commit_args)
-        assert "[Loop 2]" in msg
+        assert any("[Loop 2]" in str(arg) for arg in commit_args)
 
 
 class TestCommitGuardIsCleanStaged:

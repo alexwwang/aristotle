@@ -1,7 +1,7 @@
-"""Data models for Watchdog Intervention (Phase 4 stubs).
+"""Data models and constants for Watchdog Intervention.
 
-These are structural placeholders — NO business logic.
-Every class raises NotImplementedError or returns values that break assertions.
+Dataclasses are structural placeholders (no methods with business logic).
+VIOLATION_PRIORITY is a production lookup table used by InterventionCoordinator.
 """
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, List

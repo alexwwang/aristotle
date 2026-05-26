@@ -354,6 +354,7 @@ class TestMergeHandling:
             mock_cg.ensure_committed.return_value = MagicMock(success=True)
             with pytest.raises(TDDViolationError):
                 coordinator.intervene(event)
+            assert mock_ki.ensure_updated.called
 
 
 # ===== Assessment =====

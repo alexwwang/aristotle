@@ -70,7 +70,8 @@ class TestE2ERestoreModifiedTest:
         test_path.write_text("# original test")
         subprocess.run(["git", "add", test_file], cwd=str(repo), capture_output=True)
         subprocess.run(["git", "commit", "-m", "add test"], cwd=str(repo), capture_output=True)
-        integration_context.boundary_commit_hash = "HEAD"
+        hash_result = subprocess.run(["git", "rev-parse", "HEAD"], cwd=str(repo), capture_output=True, text=True)
+        integration_context.boundary_commit_hash = hash_result.stdout.strip()
         event = ViolationEvent("MODIFIED_TEST", test_file, "2026-05-26T10:00:00+08:00", {"phase": 5})
         integration_context.current_phase = 5
         coord = InterventionCoordinator(integration_context)
