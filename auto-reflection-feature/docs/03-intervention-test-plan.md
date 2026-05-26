@@ -1,12 +1,12 @@
 # Test Plan: Watchdog Intervention for TDD Pipeline
 
 > **Version**: v1.6
-> **Status**: Updated to match spec v1.7 — pending Ralph Loop rerun from R0
+> **Status**: v1.6 — Ralph Loop R1 complete (0C/0H/1M/2L fixed), pending R2
 > **Branch**: feature/watchdog-intervention
 > **Phase**: 3 (Test Plan)
 > **Based on**: intervention-requirements-v1.md (v1.4), 02-intervention-technical-solution.md (v1.7)
 > **Date**: 2026-05-26
-> **Changelog v1.6**: Align with spec v1.7 — ZH bare patterns/AC-I19 (was lookaround), dynamic target_phase/AC-I8 (was hardcoded), REGRESSION instruction/AC-I9 clarified, dual field model (affected_file_paths), 6 new test rows (#77-82), factory updated, R0 PF fixes (F-01 OQ stale, F-03 unreachable path, F-04 AC-I20 trace, F-05 dupe changelog, F-07 empty prompt trace)
+> **Changelog v1.6**: Align with spec v1.7 — ZH bare patterns/AC-I19 (was lookaround), dynamic target_phase/AC-I8 (was hardcoded), REGRESSION instruction/AC-I9 clarified, dual field model (affected_file_paths), 6 new test rows (#77-82), factory updated, R0 PF fixes (F-01 OQ stale, F-03 unreachable path, F-04 AC-I20 trace, F-05 dupe changelog, F-07 empty prompt trace), R1 PF fixes (F-01 V-9 integration test #8, F-02 full instruction text, F-03 dual field precedence test #79b)
 > **Changelog v1.5**: R4 fixes — 0C/0H/3M from Precision Filter (F-34 Design Coverage renumber, F-36 V-9 auto-append description, F-39 _handle_merged commit-only path)
 > **Changelog v1.3**: R3 fixes — 0C/0H/2M from Precision Filter (F-32 _handle_merged partial-merge trace, F-33 same-priority tie-breaking trace)
 > **Changelog v1.2**: R2 fixes — 1H/4M from Precision Filter (F-25 pre-rollback commit failure, F-26 V-9 coordinator test, F-29 git add failure, F-30 CommitGuard untracked ambiguity, F-27 _is_valid_event coverage)
@@ -139,7 +139,7 @@ _Traces Phase 1 user stories and acceptance criteria to test cases. For Phase 2 
 | 17 | Core | US-I4 | AC-I7 | Unit | `test_intervention_coordinator.py` | `should_not_create_test_skeleton_for_missing_test` | V-6 plan has auto_fix=False, instruction requires LLM |
 | 18 | Core | US-I2 | AC-I8 | Unit | `test_intervention_coordinator.py` | `should_target_phase_from_event_context_for_skip_red_phase` | SKIP_RED_PHASE plan.target_phase = event.context.get("phase", 4) — dynamic per spec v1.7 deviation AC-I8 |
 | 19 | Core | US-I7 | AC-I9 | Unit | `test_intervention_coordinator.py` | `should_rollback_to_phase_5_on_regression` | Phase 5 tests pass → Phase 6 fail → rollback Phase 5 |
-| 20 | Core | US-I7 | AC-I9 | Unit | `test_intervention_coordinator.py` | `should_mark_failure_range_on_regression` | REGRESSION plan marks failure range, no auto-fix, instruction: "return to Phase 5 and fix" per spec v1.7 |
+| 20 | Core | US-I7 | AC-I9 | Unit | `test_intervention_coordinator.py` | `should_mark_failure_range_on_regression` | REGRESSION plan marks failure range, no auto-fix, instruction: "Regression detected — return to Phase 5 and fix the failing implementation" per spec v1.7 |
 | 20b | Core | US-I7 | AC-I9 | Unit | `test_intervention_coordinator.py` | `should_treat_all_phase6_failures_as_regression_in_mvp` | MVP treats all Phase 6 failures as regression per Phase 1 Constraint (flaky false positives acknowledged) |
 | 21 | Core | US-I7 | AC-I10 | Unit | `test_intervention_coordinator.py` | `should_target_phase_5_for_regression_rollback` | REGRESSION plan.target_phase = 5 |
 | 21b | Core | US-I7 | AC-I9 | Unit | `test_intervention_coordinator.py` | `should_raise_regression_without_auto_fix_when_no_baseline` | phase5_test_results=None → V-7 plan built with instruction noting no baseline |
@@ -277,6 +277,7 @@ _Traces Phase 1 user stories and acceptance criteria to test cases. For Phase 2 
 | 77 | Key | Multi-file pre-rollback via affected_file_paths | Component | Unit | `test_intervention_coordinator.py` | `should_stage_all_affected_file_paths_before_rollback` | affected_file_paths=["a.py","b.py"] → all staged via git add before rollback |
 | 78 | Key | Multi-file rollback via affected_file_paths | Component | Unit | `test_rollback_engine.py` | `should_rollback_all_files_in_affected_file_paths` | affected_file_paths=["a.py","b.py"] → each file rolled back independently |
 | 79 | Key | affected_file_paths fallback to affected_file_path | Component | Unit | `test_rollback_engine.py` | `should_fallback_to_single_file_when_affected_file_paths_empty` | affected_file_paths=[] → uses affected_file_path (singular) |
+| 79b | Key | Dual field precedence: affected_file_paths wins over affected_file_path | Component | Unit | `test_rollback_engine.py` | `should_use_affected_file_paths_when_both_populated` | Both fields non-empty: affected_file_paths=["a.py","b.py"] + affected_file_path="c.py" → only a.py, b.py processed, c.py ignored |
 | 80 | Key | Multi-file all-fail rollback | Component | Unit | `test_rollback_engine.py` | `should_report_all_failures_in_multi_file_rollback` | All files in affected_file_paths fail → partial_failure=False, all errors reported |
 | 81 | Key | KiDocManager record_merge IOError protection | Failure Mode | Unit | `test_ki_doc_manager.py` | `should_handle_ioerror_on_record_merge` | IOError during record_merge → log error, continue gracefully |
 | 82 | Key | KiDocManager ensure_assessment IOError protection | Failure Mode | Unit | `test_ki_doc_manager.py` | `should_handle_ioerror_on_ensure_assessment` | IOError during ensure_assessment → log error, continue gracefully |
@@ -514,7 +515,7 @@ No peripheral-to-key upgrades detected. CommitGuard remains Peripheral with basi
 | `test_rollback_engine.py` | RollbackEngine | Key | ~26 |
 | `test_ki_doc_manager.py` | KiDocManager | Key | ~18 |
 | `test_commit_guard.py` | CommitGuard | Peripheral | ~12 |
-| `test_intervention_integration.py` | Cross-component flows | — | ~7 |
+| `test_intervention_integration.py` | Cross-component flows | — | ~8 |
 | **Total** | | | **~138+** |
 
 > **Actual test count (Phase 5 implementation)**: 164 tests across 6 files. The difference from estimated ~138 reflects additional edge cases discovered during implementation (multi-file rollback, IOError protection, ZH bare pattern expansion).
@@ -530,6 +531,7 @@ No peripheral-to-key upgrades detected. CommitGuard remains Peripheral with basi
 | 5 | `should_end_to_end_handle_rollback_failure_gracefully` | V-4 with git rm failure → RollbackResult(success=False) → ki doc still updated → TDDViolationError with auto_fix_applied=False | Coordinator, RollbackEngine, KiDocManager |
 | 6 | `should_end_to_end_validate_prompt_and_block_with_details` | V-13 with forbidden EN+ZH content → PromptValidator → multiple PatternMatches → ki doc PROMPT-VALIDATION entry → TDDViolationError | Coordinator, PromptValidator, KiDocManager |
 | 7 | `should_end_to_end_rollback_to_phase5_on_regression` | Phase 5 tests pass → Phase 6 detects regression → rollback to Phase 5 → ki doc updated → TDDViolationError | Coordinator, RollbackEngine, KiDocManager, CommitGuard |
+| 8 | `should_end_to_end_auto_append_outdated_ki_doc_for_v9` | V-9 KI_DOC_OUTDATED → ensure_updated() auto-appends missing record → record_intervention → commit → TDDViolationError | Coordinator, KiDocManager, CommitGuard |
 
 ---
 
@@ -556,4 +558,4 @@ No peripheral-to-key upgrades detected. CommitGuard remains Peripheral with basi
 *Document created: 2026-05-25*
 *Version: v1.6*
 *Phase: 3 (Test Plan)*
-*Next: Ralph Loop Review R0 (full rerun per TDD protocol — spec changed from v1.4 to v1.7)*
+*Next: Ralph Loop Review R2*
