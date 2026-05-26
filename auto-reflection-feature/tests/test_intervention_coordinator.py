@@ -428,7 +428,7 @@ class TestMergeHandling:
                 coord._handle_merged(events)
             assert mock_ki.record_merge.called
 
-    def test_should_commit_and_record_ki_for_v10_v11_only_merge(self, coordinator, pipeline_context_factory):
+    def test_should_commit_without_ki_recording_for_v10_v11_only_merge(self, coordinator, pipeline_context_factory):
         ctx = pipeline_context_factory()
         coord = InterventionCoordinator(ctx)
         events = [_event("UNCOMMITTED_PHASE", phase=3), _event("UNCOMMITTED_REVIEW", phase=3)]
@@ -438,6 +438,7 @@ class TestMergeHandling:
             with pytest.raises(TDDViolationError):
                 coord._handle_merged(events)
             assert mock_cg.ensure_committed.called
+            assert not mock_ki.record_merge.called
 
     def test_should_route_v9_ki_doc_outdated_to_auto_append(self, coordinator):
         event = _event("KI_DOC_OUTDATED", phase=3)
@@ -652,7 +653,7 @@ class TestSyncMode:
 # ===== Failure Modes =====
 
 class TestInsufficientReviewRouting:
-    def test_should_route_v9_auto_fix_to_plan_builder(self, coordinator):
+    def test_should_route_v2_insufficient_review_to_manual_plan(self, coordinator):
         event = ViolationEvent("INSUFFICIENT_REVIEW", "", "2026-05-26T10:00:00+08:00", {"phase": 2})
         with pytest.raises(TDDViolationError) as exc_info:
             coordinator.intervene(event)

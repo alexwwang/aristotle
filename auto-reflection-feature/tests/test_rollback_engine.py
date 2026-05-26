@@ -63,9 +63,11 @@ class TestRollbackDeleteUntracked:
         ctx = pipeline_context_factory()
         with patch.object(rollback_engine, "_validate_path", return_value=True), \
              patch.object(rollback_engine, "_is_tracked", return_value=False), \
+             patch("aristotle_auto_reflection.rollback_engine.os.path.exists", return_value=True), \
              patch("aristotle_auto_reflection.rollback_engine.os.remove") as mock_remove:
             result = rollback_engine.rollback(event, plan, ctx)
         assert result.success is True
+        mock_remove.assert_called_once_with("src/module.py")
 
 
 class TestRollbackDeletePathValidationFail:
@@ -296,6 +298,7 @@ class TestFileAlreadyDeleted:
              patch("aristotle_auto_reflection.rollback_engine.os.path.exists", return_value=False):
             result = rollback_engine.rollback(event, plan, ctx)
         assert result.success is True
+        assert "no action needed" in result.action
 
 
 class TestPathValidationRejectLog:

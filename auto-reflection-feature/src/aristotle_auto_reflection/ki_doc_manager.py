@@ -22,10 +22,11 @@ class KiDocManager:
             if not p.exists():
                 p.parent.mkdir(parents=True, exist_ok=True)
                 p.write_text("# Review Records\n\n")
-            return
+            return True
         entry = self._format_assessment_entry(phase, next_phase, status, issues, priority_counts)
         try:
             self._append(entry)
+            return True
         except IOError:
             pass
 
@@ -39,6 +40,7 @@ class KiDocManager:
         entry = self._format_merge_entry(events, context)
         try:
             self._append(entry)
+            return True
         except IOError:
             pass
 
