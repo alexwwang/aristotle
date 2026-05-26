@@ -135,7 +135,7 @@ _Traces Phase 1 user stories and acceptance criteria to test cases. For Phase 2 
 | 13 | Core | US-I3 | AC-I6 | Unit | `test_rollback_engine.py` | `should_fallback_to_head_when_boundary_commit_hash_none` | boundary_commit_hash=None → git checkout HEAD -- file |
 | 14 | Core | US-I3 | AC-I6 | Unit | `test_rollback_engine.py` | `should_skip_restore_for_untracked_test_file` | Untracked file → RollbackResult(success=False, "skip (untracked)") |
 | 15 | Core | US-I3 | AC-I6 | Unit | `test_rollback_engine.py` | `should_fail_restore_when_git_checkout_fails` | git checkout returns non-zero → RollbackResult(success=False) |
-| 16 | Core | US-I4 | AC-I7 | Unit | `test_intervention_coordinator.py` | `should_block_pipeline_when_test_missing_for_implementation` | Impl file with no corresponding test → MISSING_TEST, no auto-fix |
+| 16 | Core | US-I4 | AC-I7 | Unit | `test_intervention_coordinator.py` | `should_block_pipeline_when_test_missing_for_implementation` | Impl file with no corresponding test → MISSING_TEST, no auto-fix (parametrized for Phase 4 and Phase 5 event contexts per AC-I7 "Phase 4/5 detects"; dynamic target_phase via event.context.get("phase", 4)) |
 | 17 | Core | US-I4 | AC-I7 | Unit | `test_intervention_coordinator.py` | `should_not_create_test_skeleton_for_missing_test` | V-6 plan has auto_fix=False, instruction requires LLM |
 | 18 | Core | US-I2 | AC-I8 | Unit | `test_intervention_coordinator.py` | `should_target_phase_from_event_context_for_skip_red_phase` | SKIP_RED_PHASE plan.target_phase = event.context.get("phase", 4) — dynamic per spec v1.7 deviation AC-I8 |
 | 19 | Core | US-I7 | AC-I9 | Unit | `test_intervention_coordinator.py` | `should_rollback_to_phase_5_on_regression` | Phase 5 tests pass → Phase 6 fail → rollback Phase 5 |
@@ -193,6 +193,7 @@ _Traces Phase 1 user stories and acceptance criteria to test cases. For Phase 2 
 | 5c | Key | InterventionCoordinator._build_plan() — V-3 | Interface | Unit | `test_intervention_coordinator.py` | `should_map_v3_unfixed_issues_to_no_auto_fix_plan` | V-3 → InterventionPlan(phase, False, False, False, "Fix issues before proceeding") |
 | 6 | Key | InterventionCoordinator._build_plan() — V-4 dynamic target_phase | Interface | Unit | `test_intervention_coordinator.py` | `should_map_v4_skip_red_phase_to_destructive_plan` | V-4 → InterventionPlan(event.context.get("phase", 4), True, True, True, ...) — dynamic per spec v1.7 deviation AC-I8 |
 | 7 | Key | InterventionCoordinator._build_plan() — V-5 dynamic target_phase | Interface | Unit | `test_intervention_coordinator.py` | `should_map_v5_modified_test_to_destructive_plan` | V-5 → InterventionPlan(event.context.get("phase", 5), True, True, True, ...) — dynamic per Phase 2 _build_plan |
+| 7b | Key | InterventionCoordinator._build_plan() — V-6 MISSING_TEST | Interface | Unit | `test_intervention_coordinator.py` | `should_map_v6_missing_test_to_no_auto_fix_plan` | V-6 → InterventionPlan(event.context.get("phase", 4), False, False, False, "Write test for this module first") — auto_fix=False, no rollback, dynamic target_phase (see also Req tests #16, #17) |
 | 8 | Key | InterventionCoordinator._build_plan() — V-7 REGRESSION | Interface | Unit | `test_intervention_coordinator.py` | `should_map_v7_regression_to_phase5_plan` | V-7 → InterventionPlan(5, False, False, False, "Regression detected — return to Phase 5 and fix the failing implementation") per spec v1.7 |
 | 9 | Key | InterventionCoordinator._build_plan() — all 13 types | Interface | Unit | `test_intervention_coordinator.py` | `should_map_v8_v9_v10_v11_v12_to_auto_fix_plans` | Compliance/assessment → auto_fix=True, non-destructive |
 | 10 | Key | InterventionCoordinator._build_plan() — all 13 types | Interface | Unit | `test_intervention_coordinator.py` | `should_map_v13_to_non_auto_fix_plan` | V-13 → auto_fix=False, instruction to reconstruct prompt |
@@ -267,7 +268,7 @@ _Traces Phase 1 user stories and acceptance criteria to test cases. For Phase 2 
 | 67 | Peripheral | Ki doc write fails | Failure Mode | Unit | `test_ki_doc_manager.py` | `should_handle_ki_doc_write_failure_gracefully` | I/O error on write → log error, continue |
 | 68 | Peripheral | Prompt too long for regex | Failure Mode | Unit | `test_prompt_validator.py` | `should_truncate_very_long_prompt_and_log` | 10KB+ prompt → truncated, log warning |
 | 69 | Key | Multiple violations same event | Failure Mode | Unit | `test_intervention_coordinator.py` | `should_handle_highest_priority_violation_first_in_batch` | P1 + P4 events → handle P1 only |
-| 70 | Peripheral | Unknown violation_type | Failure Mode | Unit | `test_intervention_coordinator.py` | `should_log_warning_and_not_block_for_unknown_type` | Unknown type → log, no block |
+| 70 | Peripheral | Unknown violation_type | Failure Mode | Unit | `test_intervention_coordinator.py` | `should_log_warning_and_not_block_for_unknown_violation_type` | Unknown type → log, no block (same test as Design row #2, traced from Failure Mode dimension) |
 | 71 | Peripheral | Empty diff at boundary | Failure Mode | Unit | `test_commit_guard.py` | `should_skip_commit_and_log_when_empty_diff` | Clean repo → skip, log |
 | 72 | Key | Git unavailable | Failure Mode | Unit | `test_rollback_engine.py` | `should_return_failure_when_git_unavailable` | All git commands fail → appropriate error handling |
 | 73 | Key | Git unavailable | Failure Mode | Unit | `test_intervention_coordinator.py` | `should_raise_without_auto_fix_when_git_unavailable` | Git down → TDDViolationError with auto_fix_applied=False |
@@ -549,7 +550,7 @@ No peripheral-to-key upgrades detected. CommitGuard remains Peripheral with basi
 | V-6 | MISSING_TEST | `test_intervention_coordinator.py` | 3 |
 | V-7 | REGRESSION | `test_intervention_coordinator.py`, `test_intervention_integration.py` | 5 |
 | V-8 | MISSING_KI_DOC | `test_intervention_coordinator.py`, `test_ki_doc_manager.py`, `test_intervention_integration.py` | 4 |
-| V-9 | KI_DOC_OUTDATED | `test_intervention_coordinator.py`, `test_ki_doc_manager.py` | 4 |
+| V-9 | KI_DOC_OUTDATED | `test_intervention_coordinator.py`, `test_ki_doc_manager.py`, `test_intervention_integration.py` | 5 |
 | V-10 | UNCOMMITTED_PHASE | `test_commit_guard.py`, `test_intervention_integration.py` | 3 |
 | V-11 | UNCOMMITTED_REVIEW | `test_commit_guard.py` | 2 |
 | V-12 | MISSING_KI_ASSESSMENT | `test_ki_doc_manager.py`, `test_intervention_coordinator.py` | 4 |
