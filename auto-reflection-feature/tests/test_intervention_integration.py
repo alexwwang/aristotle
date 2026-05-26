@@ -126,6 +126,28 @@ class TestE2ERollbackFailure:
         assert exc_info.value.result.violation_code == "SKIP_RED_PHASE"
         assert exc_info.value.result.rollback_result.success is True
 
+    def test_should_end_to_end_handle_git_rm_failure(self, temp_git_repo, integration_context):
+        repo, tracked, _ = temp_git_repo
+        event = ViolationEvent("SKIP_RED_PHASE", tracked[0], "2026-05-26T10:00:00+08:00", {"phase": 4})
+        integration_context.current_phase = 4
+        old_cwd = os.getcwd()
+        os.chdir(str(repo))
+        try:
+            coord = InterventionCoordinator(integration_context)
+            with patch("aristotle_auto_reflection.rollback_engine.subprocess.run") as mock_run, \
+                 patch.object(coord.commit_guard, "ensure_committed") as mock_cg:
+                mock_cg.return_value = MagicMock(success=True)
+                mock_run.side_effect = [
+                    MagicMock(returncode=0, stdout=str(repo) + "\n"),
+                    MagicMock(returncode=0, stdout=tracked[0] + "\n"),
+                    MagicMock(returncode=1, stderr="error: unable to stat"),
+                ]
+                with pytest.raises(TDDViolationError) as exc_info:
+                    coord.intervene(event)
+                assert exc_info.value.result.rollback_result.success is False
+        finally:
+            os.chdir(old_cwd)
+
 
 class TestE2EPromptValidation:
     def test_should_end_to_end_validate_prompt_and_block_with_details(self, temp_git_repo, integration_context):
@@ -149,6 +171,30 @@ class TestE2ERegressionRollback:
         assert exc_info.value.plan.target_phase == 5
         ki_content = Path(integration_context.ki_doc_path).read_text()
         assert "REGRESSION" in ki_content
+
+
+class TestE2EMultiFileRollback:
+    def test_should_end_to_end_rollback_multiple_affected_files(self, temp_git_repo, integration_context):
+        repo, tracked, _ = temp_git_repo
+        file_a = "src/a.py"
+        file_b = "src/b.py"
+        (repo / file_a).write_text("# impl a")
+        (repo / file_b).write_text("# impl b")
+        subprocess.run(["git", "add", file_a, file_b], cwd=str(repo), capture_output=True)
+        subprocess.run(["git", "commit", "-m", "add impl files"], cwd=str(repo), capture_output=True)
+        event = ViolationEvent("SKIP_RED_PHASE", file_a, "2026-05-26T10:00:00+08:00",
+                               {"phase": 4}, affected_file_paths=[file_a, file_b])
+        integration_context.current_phase = 4
+        old_cwd = os.getcwd()
+        os.chdir(str(repo))
+        try:
+            coord = InterventionCoordinator(integration_context)
+            with pytest.raises(TDDViolationError) as exc_info:
+                coord.intervene(event)
+            assert exc_info.value.result.rollback_result.success is True
+            assert set(exc_info.value.result.rollback_result.files_affected) == {file_a, file_b}
+        finally:
+            os.chdir(old_cwd)
 
 
 class TestE2EKiDocOutdatedAutoAppend:

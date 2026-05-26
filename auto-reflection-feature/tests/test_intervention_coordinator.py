@@ -98,6 +98,7 @@ class TestRollbackToCurrentPhase:
             mock_cg.ensure_committed.return_value = MagicMock(success=True)
             with pytest.raises(TDDViolationError):
                 coordinator.intervene(event)
+            assert mock_cg.ensure_committed.called
 
 
 # ===== Behavioral Violations (V-4/V-5/V-6/V-7) =====
@@ -381,13 +382,20 @@ class TestMergeHandling:
                 return None
             mock_ki.record_merge.side_effect = track_ki
             mock_ki.ensure_assessment.side_effect = track_ki
+            def track_assessment(*a, **kw):
+                call_order.append("assessment")
+                return ("PASS", [], {})
+            coord._compute_assessment = track_assessment
             with pytest.raises(TDDViolationError):
                 coord._handle_merged(events)
             assert mock_cg.ensure_committed.call_count >= 2
             commit_indices = [i for i, c in enumerate(call_order) if c == "commit"]
             ki_indices = [i for i, c in enumerate(call_order) if c == "ki"]
+            assessment_indices = [i for i, c in enumerate(call_order) if c == "assessment"]
             if commit_indices and ki_indices:
                 assert min(commit_indices) < min(ki_indices)
+            if commit_indices and assessment_indices:
+                assert min(commit_indices) < min(assessment_indices)
 
     def test_should_skip_assessment_step_when_v12_missing_from_merge_set(self, coordinator, pipeline_context_factory):
         ctx = pipeline_context_factory()
@@ -620,6 +628,8 @@ class TestSyncMode:
             with pytest.raises(TDDViolationError) as exc_info:
                 coordinator.intervene(event)
             assert exc_info.value.result.violation_code == vtype
+            needs_rollback = vtype in ("SKIP_RED_PHASE", "MODIFIED_TEST")
+            assert mock_re.rollback.called == needs_rollback
 
     def test_should_handle_multiple_violations_by_priority(self, coordinator):
         events = [_event("SKIP_RED_PHASE", "src/mod.py", 4), _event("MISSING_KI_DOC", phase=3)]

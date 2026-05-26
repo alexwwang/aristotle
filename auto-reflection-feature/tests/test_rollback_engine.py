@@ -333,6 +333,30 @@ class TestPartialRollbackFailure:
         assert "src/a.py" not in result.failed_files
 
 
+class TestMultiFileMixedTracked:
+    def test_should_use_git_rm_for_tracked_and_os_remove_for_untracked(self, rollback_engine, pipeline_context_factory):
+        event = ViolationEvent(
+            violation_type="SKIP_RED_PHASE",
+            affected_file_path="src/a.py",
+            timestamp="2026-05-26T00:00:00+08:00",
+            context={},
+            affected_file_paths=["src/tracked.py", "src/untracked.py"],
+        )
+        plan = InterventionPlan(4, True, True, True, "Delete")
+        ctx = pipeline_context_factory()
+        with patch.object(rollback_engine, "_validate_path", return_value=True), \
+             patch.object(rollback_engine, "_is_tracked", side_effect=[True, False]), \
+             patch("aristotle_auto_reflection.rollback_engine.os.path.exists", return_value=True), \
+             patch("aristotle_auto_reflection.rollback_engine.subprocess.run") as mock_run, \
+             patch("aristotle_auto_reflection.rollback_engine.os.remove") as mock_remove:
+            mock_run.return_value = MagicMock(returncode=0)
+            result = rollback_engine.rollback(event, plan, ctx)
+        assert result.success is True
+        assert "src/tracked.py" in result.files_affected
+        assert "src/untracked.py" in result.files_affected
+        mock_remove.assert_called_once_with("src/untracked.py")
+
+
 class TestMultiFileAllFail:
     def test_should_return_failure_when_all_files_fail_rollback(self, rollback_engine, pipeline_context_factory):
         event = ViolationEvent(

@@ -65,7 +65,19 @@ class TestCommitGuardCommitFailure:
         assert "commit failed" in result.action
 
 
-class TestCommitGuardMessageWithLoop:
+class TestCommitGuardRevParseFailure:
+    def test_should_return_success_with_empty_hash_when_rev_parse_fails(self, guard, pipeline_context_factory):
+        ctx = pipeline_context_factory()
+        with patch.object(guard, "_is_clean", return_value=False), \
+             patch("aristotle_auto_reflection.commit_guard.subprocess.run") as mock_run:
+            mock_run.side_effect = [
+                MagicMock(returncode=0),
+                MagicMock(returncode=0),
+                MagicMock(returncode=1, stdout="", stderr="unknown revision"),
+            ]
+            result = guard.ensure_committed(ctx)
+        assert result.success is True
+        assert result.hash == ""
     def test_should_include_loop_round_in_commit_message(self, guard, pipeline_context_factory):
         ctx = pipeline_context_factory(loop_round=3)
         msg = guard._build_message(ctx)
