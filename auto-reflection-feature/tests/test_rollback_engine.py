@@ -169,6 +169,17 @@ class TestRollbackNoop:
         assert "no-op" in result.action.lower()
 
 
+class TestRollbackNoopRegression:
+    def test_should_return_noop_for_regression_violation(self, rollback_engine, pipeline_context_factory):
+        """REGRESSION (V-7) has needs_rollback=False, rollback engine returns no-op."""
+        event = ViolationEvent("REGRESSION", "src/module.py", "2026-05-26T10:00:00+08:00", {"phase": 6})
+        plan = InterventionPlan(5, False, False, False, "Regression detected")
+        ctx = pipeline_context_factory()
+        result = rollback_engine.rollback(event, plan, ctx)
+        assert result.success is True
+        assert "no-op" in result.action.lower()
+
+
 class TestPathTraversal:
     def test_should_reject_path_traversal_attempt(self, rollback_engine):
         with patch("aristotle_auto_reflection.rollback_engine.subprocess.run") as mock_run:
@@ -337,6 +348,52 @@ class TestMultiFileAllFail:
             result = rollback_engine.rollback(event, plan, ctx)
         assert result.success is False
         assert "all files failed" in result.action
+
+
+class TestFallbackToSingularField:
+    """Test plan row 79: When affected_file_paths is empty, fallback to affected_file_path."""
+
+    def test_should_fallback_to_single_file_when_affected_file_paths_empty(self, rollback_engine, pipeline_context_factory):
+        event = ViolationEvent(
+            violation_type="SKIP_RED_PHASE",
+            affected_file_path="src/module.py",
+            timestamp="2026-05-26T10:00:00+08:00",
+            context={"phase": 4},
+            affected_file_paths=[],
+        )
+        plan = InterventionPlan(4, True, True, True, "Delete")
+        ctx = pipeline_context_factory()
+        with patch.object(rollback_engine, "_validate_path", return_value=True), \
+             patch.object(rollback_engine, "_is_tracked", return_value=True), \
+             patch("aristotle_auto_reflection.rollback_engine.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0)
+            result = rollback_engine.rollback(event, plan, ctx)
+        assert result.success is True
+        assert "src/module.py" in result.files_affected
+
+
+class TestDualFieldPrecedence:
+    """Test plan row 79b: Plural affected_file_paths takes precedence over singular."""
+
+    def test_should_prefer_affected_file_paths_over_singular_when_both_present(self, rollback_engine, pipeline_context_factory):
+        event = ViolationEvent(
+            violation_type="SKIP_RED_PHASE",
+            affected_file_path="c.py",
+            timestamp="2026-05-26T10:00:00+08:00",
+            context={},
+            affected_file_paths=["a.py", "b.py"],
+        )
+        plan = InterventionPlan(4, True, True, True, "Delete")
+        ctx = pipeline_context_factory()
+        with patch.object(rollback_engine, "_validate_path", return_value=True), \
+             patch.object(rollback_engine, "_is_tracked", return_value=True), \
+             patch("aristotle_auto_reflection.rollback_engine.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0)
+            result = rollback_engine.rollback(event, plan, ctx)
+        assert result.success is True
+        assert "a.py" in result.files_affected
+        assert "b.py" in result.files_affected
+        assert "c.py" not in result.files_affected
 
 
 class TestPreRollbackCommit:

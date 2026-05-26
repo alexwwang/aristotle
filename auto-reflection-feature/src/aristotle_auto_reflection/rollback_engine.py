@@ -68,7 +68,7 @@ class RollbackEngine:
                 return RollbackResult(False, f"git rm failed: {r.stderr}", [], None)
         elif os.path.exists(filepath):
             os.remove(filepath)
-        return RollbackResult(True, "deleted implementation", [filepath], None)
+        return RollbackResult(True, "already deleted, no action needed", [filepath], None)
 
     def _restore_test(self, event: ViolationEvent, context: PipelineContext) -> RollbackResult:
         filepath = event.affected_file_path

@@ -139,3 +139,15 @@ class TestE2ERegressionRollback:
         assert exc_info.value.plan.target_phase == 5
         ki_content = Path(integration_context.ki_doc_path).read_text()
         assert "REGRESSION" in ki_content
+
+
+class TestE2EInsufficientReviewAutoFix:
+    def test_should_end_to_end_auto_fix_insufficient_review(self, temp_git_repo, integration_context):
+        integration_context.current_phase = 2
+        event = ViolationEvent("INSUFFICIENT_REVIEW", "", "2026-05-26T10:00:00+08:00", {"phase": 2})
+        coord = InterventionCoordinator(integration_context)
+        with pytest.raises(TDDViolationError) as exc_info:
+            coord.intervene(event)
+        assert exc_info.value.result.violation_code == "INSUFFICIENT_REVIEW"
+        ki_content = Path(integration_context.ki_doc_path).read_text()
+        assert "INSUFFICIENT_REVIEW" in ki_content

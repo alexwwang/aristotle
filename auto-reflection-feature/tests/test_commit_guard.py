@@ -138,6 +138,22 @@ class TestCommitGuardIsCleanUnstaged:
         assert result is False
 
 
+class TestCommitGuardIsCleanBothDirty:
+    def test_should_return_false_when_both_staged_and_unstaged_changes(self, guard):
+        with patch("aristotle_auto_reflection.commit_guard.subprocess.run") as mock_run:
+            mock_run.side_effect = [MagicMock(returncode=1), MagicMock(returncode=1)]
+            result = guard._is_clean()
+        assert result is False
+
+
+class TestCommitGuardIsCleanGitFailure:
+    def test_should_return_false_when_git_command_fails(self, guard):
+        with patch("aristotle_auto_reflection.commit_guard.subprocess.run") as mock_run:
+            mock_run.side_effect = [MagicMock(returncode=128), MagicMock(returncode=0)]
+            result = guard._is_clean()
+        assert result is False
+
+
 class TestCommitGuardBoundaryCommit:
     def test_should_auto_commit_all_uncommitted_at_boundary(self, guard, pipeline_context_factory):
         ctx = pipeline_context_factory()

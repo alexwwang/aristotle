@@ -118,7 +118,7 @@ class TestReportMultipleMatches:
 
 
 class TestZHPatterns:
-    def test_should_detect_chinese_forbidden_patterns_via_lookaround(self, validator):
+    def test_should_detect_chinese_forbidden_patterns_via_bare_regex(self, validator):
         prompt = FORBIDDEN_ZH_SAMPLES["FP-1"]
         result = validator.validate(prompt)
         assert result.is_valid is False
@@ -168,7 +168,7 @@ class TestFP4EN:
 class TestFP5EN:
     def test_should_detect_fp5_en_round_count_patterns(self, validator):
         for phrase in ["round 4", "round count", "this is round"]:
-            result = validator.validate(f"This shows {phrase} info.")
+            result = validator.validate(f'Currently in {phrase} of review.')
             assert result.is_valid is False, f"FP-5 should detect: {phrase}"
 
 

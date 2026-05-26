@@ -207,6 +207,14 @@ class TestEventValidation:
         event = ViolationEvent(vtype, "", "2026-05-26T10:00:00+08:00", {"phase": 4})
         assert coordinator._is_valid_event(event) is False
 
+    @pytest.mark.parametrize("vtype", [
+        "SKIP_RED_PHASE", "MODIFIED_TEST", "MISSING_TEST", "REGRESSION",
+    ])
+    def test_should_return_none_for_behavioral_violation_without_file_via_intervene(self, coordinator, vtype):
+        event = ViolationEvent(vtype, "", "2026-05-26T10:00:00+08:00", {"phase": 4})
+        result = coordinator.intervene(event)
+        assert result is None
+
 
 # ===== Plan Building =====
 
@@ -270,6 +278,7 @@ class TestBatchProcessing:
         ]
         with patch.object(coordinator, "intervene") as mock_intervene:
             coordinator.intervene_batch(events)
+        mock_intervene.assert_called_once()
         called_event = mock_intervene.call_args[0][0]
         assert called_event.violation_type == "SKIP_RED_PHASE"
 
@@ -558,6 +567,16 @@ class TestSyncMode:
 
 
 # ===== Failure Modes =====
+
+class TestInsufficientReviewRouting:
+    def test_should_route_v9_auto_fix_to_plan_builder(self, coordinator):
+        event = ViolationEvent("INSUFFICIENT_REVIEW", "", "2026-05-26T10:00:00+08:00", {"phase": 2})
+        with pytest.raises(TDDViolationError) as exc_info:
+            coordinator.intervene(event)
+        plan = exc_info.value.plan
+        assert "ZERO_C_H_M" in plan.instruction
+        assert exc_info.value.result.violation_code == "INSUFFICIENT_REVIEW"
+
 
 class TestFailureModes:
     def test_should_raise_without_auto_fix_when_git_unavailable(self, coordinator):

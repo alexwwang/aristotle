@@ -102,6 +102,15 @@ class TestKiDocOutdatedDetection:
         assert result is True
 
 
+class TestKiDocOutdatedDetectionActual:
+    def test_should_return_false_when_ki_doc_has_old_timestamp(self, ki_doc_manager):
+        event = ViolationEvent("SKIP_RED_PHASE", "src/a.py", "2026-01-01T00:00:00+08:00", {"phase": 4})
+        plan = InterventionPlan(4, True, True, True, "Write failing test")
+        ki_doc_manager.record_intervention(event, plan, None)
+        result = ki_doc_manager.ensure_updated("2026-06-01T00:00:00+08:00")
+        assert result is False
+
+
 class TestKiDocAutoAppend:
     def test_should_auto_append_missing_record_for_outdated_ki_doc(self, ki_doc_manager):
         event = ViolationEvent("KI_DOC_OUTDATED", "", "2026-05-26T10:00:00+08:00", {"phase": 3})
@@ -204,6 +213,34 @@ class TestKiDocParentDirCreation:
         plan = InterventionPlan(2, False, False, False, "Fix")
         mgr.record_intervention(event, plan, None)
         assert Path(path).exists()
+
+
+class TestKiDocCorruptTimestamp:
+    def test_should_handle_corrupt_timestamp_gracefully(self, ki_doc_manager):
+        Path(ki_doc_manager.ki_doc_path).write_text(
+            "# Review Records\n\n**Timestamp**: not-a-date\n"
+        )
+        ts = ki_doc_manager._parse_newest_timestamp()
+        assert ts is None
+
+
+class TestKiDocIOErrorOnRecordMerge:
+    def test_should_handle_ioerror_on_record_merge(self, ki_doc_manager):
+        events = [
+            ViolationEvent("UNCOMMITTED_PHASE", "", "2026-05-26T10:00:00+08:00", {"phase": 3}),
+            ViolationEvent("MISSING_KI_DOC", "", "2026-05-26T10:00:00+08:00", {"phase": 3}),
+        ]
+        ctx = PipelineContext(current_phase=3, req_number="INT-001")
+        with patch("builtins.open", side_effect=IOError("disk full")):
+            result = ki_doc_manager.record_merge(events, ctx)
+        assert result is None
+
+
+class TestKiDocIOErrorOnEnsureAssessment:
+    def test_should_handle_ioerror_on_ensure_assessment(self, ki_doc_manager):
+        with patch("builtins.open", side_effect=IOError("disk full")):
+            result = ki_doc_manager.ensure_assessment(2, 3, "PASS", [])
+        assert result is None
 
 
 class TestKiDocWriteFailure:
