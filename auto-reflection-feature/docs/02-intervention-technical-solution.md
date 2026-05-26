@@ -1,10 +1,12 @@
 # Technical Design: Watchdog Intervention for TDD Pipeline
 
-> **Version**: v1.4
-> **Status**: Ralph Loop Review R4 fixes applied
+> **Version**: v1.6
+> **Status**: Updated post Phase 5 R5 — design aligned with implementation
 > **Branch**: feature/watchdog-intervention
 > **Phase**: 2 (Technical Solution)
 > **Based on**: intervention-requirements-v1.md (v1.4, gate passed)
+> **Changelog v1.6**: R5 design alignment — ZH bare patterns (was lookaround), dynamic target_phase (was hardcoded), REGRESSION instruction clarified, dual field model documented
+> **Changelog v1.5**: KI-10 multi-file rollback pseudocode, _validate_path leading-dash check
 > **Changelog v1.4**: R4 fixes — intervene_batch priority: non-mergeable first (F-12); assessment priority breakdown (F-13)
 
 ---
@@ -99,7 +101,9 @@ class ViolationEvent:
     affected_file_path: str
     timestamp: str            # ISO 8601 (UTC)
     context: Dict[str, Any]   # phase, operation, rounds, issues, etc.
+    affected_file_paths: List[str] = field(default_factory=list)  # Multi-file rollback (KI-10)
 ```
+**Design note**: `affected_file_path` (singular) is used for single-file operations. `affected_file_paths` (plural) is used for multi-file rollback via RollbackEngine. When `affected_file_paths` is non-empty, RollbackEngine iterates per-file; otherwise falls back to `affected_file_path`.
 
 ### InterventionPlan (new, replaces RemediationPlan)
 ```python
@@ -371,10 +375,11 @@ class InterventionCoordinator:
             "INSUFFICIENT_REVIEW":    InterventionPlan(phase, False, False, False, "Continue Ralph Loop until 2 consecutive ZERO_C_H_M"),
             "UNFIXED_ISSUES":         InterventionPlan(phase, False, False, False, "Fix issues before proceeding"),
             "INVALID_REVIEW_PROMPT":  InterventionPlan(phase, False, False, False, "Reconstruct compliant review prompt"),
-            "SKIP_RED_PHASE":         InterventionPlan(4, True, True, True, "Write failing test before implementation"),
-            "MODIFIED_TEST":          InterventionPlan(5, True, True, True, "Write implementation to make ORIGINAL test pass"),
-            "MISSING_TEST":           InterventionPlan(4, False, False, False, "Write test for this module first"),
-            "REGRESSION":             InterventionPlan(5, False, False, False, "Fix implementation to resolve regression"),
+            # Behavioral: target_phase from event context (Watchdog sets correct phase; _is_valid_event validates "phase" key exists)
+            "SKIP_RED_PHASE":         InterventionPlan(event.context.get("phase", 4), True, True, True, "Write failing test before implementation"),
+            "MODIFIED_TEST":          InterventionPlan(event.context.get("phase", 5), True, True, True, "Write implementation to make ORIGINAL test pass"),
+            "MISSING_TEST":           InterventionPlan(event.context.get("phase", 4), False, False, False, "Write test for this module first"),
+            "REGRESSION":             InterventionPlan(5, False, False, False, "Regression detected — flag for manual resolution"),
             "MISSING_KI_DOC":         InterventionPlan(phase, True, False, False, "(auto-fixed)"),
             "KI_DOC_OUTDATED":        InterventionPlan(phase, True, False, False, "(auto-fixed)"),
             "UNCOMMITTED_PHASE":      InterventionPlan(phase, True, False, False, "(auto-fixed)"),
@@ -412,48 +417,53 @@ class PromptValidator:
             r"\bonly check \w+\b", r"\blimit scope to\b", r"\bfocus only on\b", r"\bdo not review\b"]],
     }
 
-    # Pre-compiled Chinese patterns (complete per Phase 1)
+    # Pre-compiled Chinese patterns
+    # Design Decision: bare patterns (no lookaround) for Chinese.
+    # Rationale: Lookaround assertions (?<![\w\u4e00-\u9fff])...(?![\w\u4e00-\u9fff]) caused
+    # false negatives — CJK characters immediately adjacent to target phrases prevented matching.
+    # Chinese text has no spaces between words, so forbidden phrases are always adjacent to CJK chars.
+    # Bare patterns match correctly in all tested scenarios.
     ZH_COMPILED = {k: [re.compile(p) for p in ps] for k, ps in {
         "FP-1": [
-            r"(?<![\w\u4e00-\u9fff])停止条件(?![\w\u4e00-\u9fff])",
-            r"(?<![\w\u4e00-\u9fff])连续2轮(?![\w\u4e00-\u9fff])",
-            r"(?<![\w\u4e00-\u9fff])连续两轮(?![\w\u4e00-\u9fff])",
-            r"(?<![\w\u4e00-\u9fff])审查达标(?![\w\u4e00-\u9fff])",
-            r"(?<![\w\u4e00-\u9fff])质量达标(?![\w\u4e00-\u9fff])",
+            r"停止条件",
+            r"连续2轮",
+            r"连续两轮",
+            r"审查达标",
+            r"质量达标",
         ],
         "FP-2": [
-            r"(?<![\w\u4e00-\u9fff])累计计数(?![\w\u4e00-\u9fff])",
-            r"(?<![\w\u4e00-\u9fff])累计统计(?![\w\u4e00-\u9fff])",
-            r"(?<![\w\u4e00-\u9fff])总[CHM]数(?![\w\u4e00-\u9fff])",
+            r"累计计数",
+            r"累计统计",
+            r"总[CHM]数",
         ],
         "FP-3": [
-            r"(?<![\w\u4e00-\u9fff])上一轮(?![\w\u4e00-\u9fff])",
-            r"(?<![\w\u4e00-\u9fff])前一轮(?![\w\u4e00-\u9fff])",
-            r"(?<![\w\u4e00-\u9fff])上轮发现(?![\w\u4e00-\u9fff])",
-            r"(?<![\w\u4e00-\u9fff])之前发现(?![\w\u4e00-\u9fff])",
+            r"上一轮",
+            r"前一轮",
+            r"上轮发现",
+            r"之前发现",
         ],
         "FP-4": [
-            r"(?<![\w\u4e00-\u9fff])修复列表(?![\w\u4e00-\u9fff])",
-            r"(?<![\w\u4e00-\u9fff])已修复(?![\w\u4e00-\u9fff])",
-            r"(?<![\w\u4e00-\u9fff])已解决(?![\w\u4e00-\u9fff])",
-            r"(?<![\w\u4e00-\u9fff])修改清单(?![\w\u4e00-\u9fff])",
+            r"修复列表",
+            r"已修复",
+            r"已解决",
+            r"修改清单",
         ],
         "FP-5": [
-            r"(?<![\w\u4e00-\u9fff])第\d+轮(?![\w\u4e00-\u9fff])",
-            r"(?<![\w\u4e00-\u9fff])第几轮(?![\w\u4e00-\u9fff])",
-            r"(?<![\w\u4e00-\u9fff])当前轮次(?![\w\u4e00-\u9fff])",
-            r"(?<![\w\u4e00-\u9fff])loop轮次(?![\w\u4e00-\u9fff])",
+            r"第\d+轮",
+            r"第几轮",
+            r"当前轮次",
+            r"loop轮次",
         ],
         "FP-6": [
-            r"(?<![\w\u4e00-\u9fff])循环状态(?![\w\u4e00-\u9fff])",
-            r"(?<![\w\u4e00-\u9fff])审查状态(?![\w\u4e00-\u9fff])",
-            r"(?<![\w\u4e00-\u9fff])是否通过(?![\w\u4e00-\u9fff])",
+            r"循环状态",
+            r"审查状态",
+            r"是否通过",
         ],
         "FP-7": [
-            r"(?<![\w\u4e00-\u9fff])只检查[\w\u4e00-\u9fff]+(?![\w\u4e00-\u9fff])",
-            r"(?<![\w\u4e00-\u9fff])不要审查(?![\w\u4e00-\u9fff])",
-            r"(?<![\w\u4e00-\u9fff])限制范围(?![\w\u4e00-\u9fff])",
-            r"(?<![\w\u4e00-\u9fff])跳过审查(?![\w\u4e00-\u9fff])",
+            r"只检查[\w\u4e00-\u9fff]+",
+            r"不要审查",
+            r"限制范围",
+            r"跳过审查",
         ],
     }.items()}
 
@@ -699,6 +709,6 @@ class CommitGuard:
 ---
 
 *Document created: 2026-05-25*
-*Version: v1.5 (Phase 5: KI-10 multi-file rollback pseudocode updated, _validate_path leading-dash check added)*
+*Version: v1.6 (Phase 5: design aligned with implementation — ZH bare patterns, dynamic target_phase, REGRESSION instruction, dual field model)*
 *Phase: 2 (Technical Solution)*
-*Next: Phase 6 Pre-Release Testing*
+*Next: Phase 2 re-review → Phase 3-5 validation → Phase 6 Pre-Release Testing*

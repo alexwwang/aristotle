@@ -316,7 +316,7 @@ class InterventionCoordinator:
     def _compute_assessment(self):
         round_results = self.context.metadata.get("round_results", [])
         if not round_results:
-            return "PASS", [], {}
+            return "PASS", [], {"P0": 0, "P1": 0, "P2": 0, "P3": 0, "P4": 0}
 
         last = round_results[-1]
         c = last.get("C", 0)

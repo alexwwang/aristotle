@@ -262,8 +262,8 @@ class TestPatternMatchFields:
         assert m.language == "en"
 
 
-class TestLongPromptTruncation:
-    def test_should_truncate_very_long_prompt_and_log(self, validator):
+class TestLongPromptHandling:
+    def test_should_handle_very_long_prompt(self, validator):
         long_prompt = "x " * 10000 + "stop condition"
         result = validator.validate(long_prompt)
         assert isinstance(result, ValidationResult)
