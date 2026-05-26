@@ -125,7 +125,7 @@ class TestE2EPreserveOnRollback:
             # SKIP_RED_PHASE rollback deletes the file via git rm,
             # but the pre-rollback commit preserves it in git history
             show_result = subprocess.run(
-                ["git", "show", "HEAD:" + impl_file],
+                ["git", "show", "HEAD~1:" + impl_file],
                 capture_output=True, text=True,
             )
             assert "# phase 5 work" in show_result.stdout, "committed work should be recoverable from git history"
