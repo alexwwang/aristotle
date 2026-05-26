@@ -6,7 +6,7 @@
 > **Phase**: 3 (Test Plan)
 > **Based on**: intervention-requirements-v1.md (v1.4), 02-intervention-technical-solution.md (v1.7)
 > **Date**: 2026-05-26
-> **Changelog v1.6**: Align with spec v1.7 — ZH bare patterns/AC-I19 (was lookaround), dynamic target_phase/AC-I8 (was hardcoded), REGRESSION instruction/AC-I9 clarified, dual field model (affected_file_paths), 6 new test rows (#77-82), factory updated, R0 PF fixes (F-01 OQ stale, F-03 unreachable path, F-04 AC-I20 trace, F-05 dupe changelog, F-07 empty prompt trace), R1 PF fixes (F-01 V-9 integration test #8, F-02 full instruction text, F-03 dual field precedence test #79b)
+> **Changelog v1.6**: Align with spec v1.7 — ZH bare patterns/AC-I19 (was lookaround), dynamic target_phase/AC-I8 (was hardcoded), REGRESSION instruction/AC-I9 clarified, dual field model (affected_file_paths), 6 new test rows (#77-82), factory updated, R0 Precision Filter fixes (F-01 OQ stale, F-03 unreachable path, F-04 AC-I20 trace, F-05 dupe changelog, F-07 empty prompt trace), R1 Precision Filter fixes (F-01 V-9 integration test #8, F-02 full instruction text, F-03 dual field precedence test #79b), R2 Precision Filter fixes (F-01 OQ status column + IMPL-ACTION markers, F-02 V-5 dynamic target_phase, F-03 V-9/V-11 sample data, F-05 Scenario 21 table fix, F-06 test #20b rename)
 > **Changelog v1.5**: R4 fixes — 0C/0H/3M from Precision Filter (F-34 Design Coverage renumber, F-36 V-9 auto-append description, F-39 _handle_merged commit-only path)
 > **Changelog v1.3**: R3 fixes — 0C/0H/2M from Precision Filter (F-32 _handle_merged partial-merge trace, F-33 same-priority tie-breaking trace)
 > **Changelog v1.2**: R2 fixes — 1H/4M from Precision Filter (F-25 pre-rollback commit failure, F-26 V-9 coordinator test, F-29 git add failure, F-30 CommitGuard untracked ambiguity, F-27 _is_valid_event coverage)
@@ -58,9 +58,9 @@ All 10 user stories are Core. No secondary stories exist.
 | 19 | Validate Ralph Loop prompts for forbidden content (bilingual) | US-I10 (Core) / AC-I17 | PromptValidator.validate | happy: clean prompt → valid; happy: single EN match → invalid; edge: code block content → exempt; error: empty prompt → valid |
 | 20 | Report matched pattern details for invalid prompts | US-I10 (Core) / AC-I18 | PromptValidator.validate → PatternMatch fields | happy: report includes category, pattern, line_number, language; edge: multiple matches → report all |
 | 21 | Chinese forbidden pattern detection using bare patterns (no lookaround) | US-I10 (Core) / AC-I19 | PromptValidator.validate (ZH_COMPILED) | happy: ZH pattern detected via bare regex (no lookaround, no word-boundary); edge: mixed EN+ZH → both strategies; error: false positive in code block (exempt context handles this) |
+| 22 | Phase 5→4 rollback preserves Phase 5 work via auto-commit | US-I2 (Core) / AC-I22 | InterventionCoordinator.intervene (pre-rollback commit), RollbackEngine | happy: Phase 5 work committed before rollback; edge: untracked file staged with git add; error: commit fails → still proceed with rollback |
 
 > **Note on Core Scenario 21 error case**: Missing 'prompt' key returns empty string → valid → Watchdog false positive; this is by design as prompt key presence is Watchdog's responsibility. ZH uses bare patterns (no lookaround, no \b) per spec v1.7 deviation AC-I19 — lookaround caused false negatives due to CJK character adjacency.
-| 22 | Phase 5→4 rollback preserves Phase 5 work via auto-commit | US-I2 (Core) / AC-I22 | InterventionCoordinator.intervene (pre-rollback commit), RollbackEngine | happy: Phase 5 work committed before rollback; edge: untracked file staged with git add; error: commit fails → still proceed with rollback |
 
 ### Key Functional Points (from Phase 2 — priority: key)
 
@@ -140,7 +140,7 @@ _Traces Phase 1 user stories and acceptance criteria to test cases. For Phase 2 
 | 18 | Core | US-I2 | AC-I8 | Unit | `test_intervention_coordinator.py` | `should_target_phase_from_event_context_for_skip_red_phase` | SKIP_RED_PHASE plan.target_phase = event.context.get("phase", 4) — dynamic per spec v1.7 deviation AC-I8 |
 | 19 | Core | US-I7 | AC-I9 | Unit | `test_intervention_coordinator.py` | `should_rollback_to_phase_5_on_regression` | Phase 5 tests pass → Phase 6 fail → rollback Phase 5 |
 | 20 | Core | US-I7 | AC-I9 | Unit | `test_intervention_coordinator.py` | `should_mark_failure_range_on_regression` | REGRESSION plan marks failure range, no auto-fix, instruction: "Regression detected — return to Phase 5 and fix the failing implementation" per spec v1.7 |
-| 20b | Core | US-I7 | AC-I9 | Unit | `test_intervention_coordinator.py` | `should_treat_all_phase6_failures_as_regression_in_mvp` | MVP treats all Phase 6 failures as regression per Phase 1 Constraint (flaky false positives acknowledged) |
+| 20b | Core | US-I7 | AC-I9 | Unit | `test_intervention_coordinator.py` | `should_treat_all_phase6_failures_as_regression_mvp_limitation` | MVP treats all Phase 6 failures as regression per Phase 1 Constraint (flaky false positives acknowledged) — known limitation, not an AC behavioral expectation |
 | 21 | Core | US-I7 | AC-I10 | Unit | `test_intervention_coordinator.py` | `should_target_phase_5_for_regression_rollback` | REGRESSION plan.target_phase = 5 |
 | 21b | Core | US-I7 | AC-I9 | Unit | `test_intervention_coordinator.py` | `should_raise_regression_without_auto_fix_when_no_baseline` | phase5_test_results=None → V-7 plan built with instruction noting no baseline |
 | 22 | Core | US-I5 | AC-I11 | Unit | `test_ki_doc_manager.py` | `should_append_intervention_entry_to_ki_doc` | Intervention → ki doc updated with violation_type, target_phase, auto_fix_applied, timestamp |
@@ -192,7 +192,7 @@ _Traces Phase 1 user stories and acceptance criteria to test cases. For Phase 2 
 | 5b | Key | InterventionCoordinator._build_plan() — V-2 | Interface | Unit | `test_intervention_coordinator.py` | `should_map_v2_insufficient_review_to_no_auto_fix_plan` | V-2 → InterventionPlan(phase, False, False, False, "Continue Ralph Loop until 2 consecutive ZERO_C_H_M") |
 | 5c | Key | InterventionCoordinator._build_plan() — V-3 | Interface | Unit | `test_intervention_coordinator.py` | `should_map_v3_unfixed_issues_to_no_auto_fix_plan` | V-3 → InterventionPlan(phase, False, False, False, "Fix issues before proceeding") |
 | 6 | Key | InterventionCoordinator._build_plan() — V-4 dynamic target_phase | Interface | Unit | `test_intervention_coordinator.py` | `should_map_v4_skip_red_phase_to_destructive_plan` | V-4 → InterventionPlan(event.context.get("phase", 4), True, True, True, ...) — dynamic per spec v1.7 deviation AC-I8 |
-| 7 | Key | InterventionCoordinator._build_plan() — all 13 types | Interface | Unit | `test_intervention_coordinator.py` | `should_map_v5_modified_test_to_destructive_plan` | V-5 → InterventionPlan(5, True, True, True, ...) |
+| 7 | Key | InterventionCoordinator._build_plan() — V-5 dynamic target_phase | Interface | Unit | `test_intervention_coordinator.py` | `should_map_v5_modified_test_to_destructive_plan` | V-5 → InterventionPlan(event.context.get("phase", 5), True, True, True, ...) — dynamic per Phase 2 _build_plan |
 | 8 | Key | InterventionCoordinator._build_plan() — V-7 REGRESSION | Interface | Unit | `test_intervention_coordinator.py` | `should_map_v7_regression_to_phase5_plan` | V-7 → InterventionPlan(5, False, False, False, "Regression detected — return to Phase 5 and fix the failing implementation") per spec v1.7 |
 | 9 | Key | InterventionCoordinator._build_plan() — all 13 types | Interface | Unit | `test_intervention_coordinator.py` | `should_map_v8_v9_v10_v11_v12_to_auto_fix_plans` | Compliance/assessment → auto_fix=True, non-destructive |
 | 10 | Key | InterventionCoordinator._build_plan() — all 13 types | Interface | Unit | `test_intervention_coordinator.py` | `should_map_v13_to_non_auto_fix_plan` | V-13 → auto_fix=False, instruction to reconstruct prompt |
@@ -416,7 +416,9 @@ SAMPLE_VIOLATION_EVENTS = {
     "V6_missing_test": ViolationEvent("MISSING_TEST", "src/new_module.py", "...", {"phase": 5}),
     "V7_regression": ViolationEvent("REGRESSION", "src/module.py", "...", {"phase": 6}),
     "V8_missing_ki": ViolationEvent("MISSING_KI_DOC", "", "...", {"phase": 3}),
+    "V9_ki_doc_outdated": ViolationEvent("KI_DOC_OUTDATED", "", "...", {"phase": 3}),
     "V10_uncommitted": ViolationEvent("UNCOMMITTED_PHASE", "docs/doc.md", "...", {"phase": 3}),
+    "V11_uncommitted_review": ViolationEvent("UNCOMMITTED_REVIEW", "docs/review.md", "...", {"phase": 2}),
     "V12_missing_assessment": ViolationEvent("MISSING_KI_ASSESSMENT", "", "...", {"phase": 2}),
     "V13_invalid_prompt": ViolationEvent("INVALID_REVIEW_PROMPT", "", "...", {"phase": 2, "prompt": "..."}),
 }
@@ -459,24 +461,24 @@ CLEAN_PROMPT = "Review the following code changes for correctness and style. Che
 
 ## Open Questions
 
-| # | Question | Resolution |
-|---|----------|------------|
-| 1 | Phase-appropriateness validation: Should InterventionCoordinator reject V-4 (Phase 4 only) events at Phase 2? | Current design: coordinator builds plan regardless of current_phase. V-4 plan uses `event.context.get("phase", 4)` (dynamic per spec v1.7). If called at Phase 2 with context.phase=4, rollback target would be Phase 4 which is forward (no pre-rollback). This is a Watchdog responsibility (should not fire V-4 at Phase 2). Document as known limitation, not a test gap. |
-| 2 | subprocess.run timeout: Should git commands have explicit timeouts? | Current design: no timeout. In SYNC mode, LLM is blocked anyway. If git hangs, intervention hangs. Mitigated by container timeout. Recommend adding 30s timeout in implementation but not blocking test plan. |
-| 3 | PromptValidator truncation threshold: Confirm 10KB | Phase 2 specifies 10KB truncation for long prompts. Test should verify truncation behavior at threshold boundary (9999 bytes = no truncate, 10241 bytes = truncate). |
-| 4 | KiDocManager file creation: parent directory creation depth | Design uses `mkdir(parents=True, exist_ok=True)`. Test should verify deeply nested paths work (e.g., `a/b/c/ki-doc.md`). |
-| 5 | V-7 regression: How are phase5_test_results populated? | Resolution: When phase5_test_results is None/empty, coordinator builds V-7 plan (target_phase=5, auto_fix=False) but cannot determine which tests regressed. Plan instruction includes "no baseline available". Test: `should_raise_regression_without_auto_fix_when_no_baseline`. |
-| 6 | Integration test scope: real git or mocked? | Integration tests (`test_intervention_integration.py`) use real git operations in `tmp_path`. Unit tests mock subprocess.run. This split ensures integration tests catch real git edge cases. |
-| 7 | V-5 detection scope (assertion-only vs refactoring) | Detection is Watchdog/ViolationFilter responsibility, not InterventionCoordinator. The intervention layer receives V-5 events after detection. V-5 scope tests belong in Watchdog test plan, documented here as out of scope. |
-| 8 | KiDocManager timestamp regex timezone coverage | Current Phase 2 regex only matches +HH:MM. Must extend to support Z and +HHMM in implementation phase. This test verifies the fix. |
-| 9 | RollbackEngine._validate_path leading-dash check | Implementation must add `filepath.startswith('-')` check. This test verifies the security fix. |
-| 10 | CommitGuard untracked file handling at phase boundary | CommitGuard uses git add -u (tracked only). Untracked files are NOT committed at phase boundaries by default. Pre-rollback path handles untracked files via git add <specific_file>. This is intentional to avoid committing unrelated untracked files. |
-| 11 | V-9 standalone auto-fix: ensure_updated() not in Phase 2 intervene() pseudocode | Test 19b expects intervene() to call ensure_updated() for V-9, appending the missing record per AC-I20. Phase 2 pseudocode only shows record_intervention(). Implementation must add ensure_updated() call between steps 4 and 6 for V-9 specifically. Phase 2 design document should be updated accordingly. |
-| 12 | _handle_merged V-10/V-11 only: record_merge not called | Phase 1 Merge Rule requires single ki doc entry for ALL merged violations. Phase 2 _handle_merged only calls record_merge when V-8/V-9 events exist. Test 19a expects ki doc recording for V-10/V-11 only merges. Implementation must always call record_merge for any merged set (move outside ki_events conditional), or Phase 2 must be updated. |
-| 13 | Spec v1.7 deviation AC-I19: ZH bare patterns | Test plan aligned — all ZH pattern tests expect bare regex matching (no lookaround, no \b). 30 ZH tests in test_prompt_validator.py cover FP-1..FP-7. See Core Scenario 21 and Key Functional Point 17. |
-| 14 | Spec v1.7 deviation AC-I8: Dynamic target_phase | Test plan aligned — V-4 plan uses event.context.get("phase", 4) instead of hardcoded 4. See Core Scenario 8 and test #18. |
-| 15 | Spec v1.7 deviation AC-I9: REGRESSION instruction strengthened | Test plan aligned — V-7 plan instruction is "Regression detected — return to Phase 5 and fix the failing implementation". See test #20 and Design row #8. |
-| 16 | Spec v1.7: Dual field model (affected_file_path + affected_file_paths) | Test plan aligned — new tests #77-80 cover multi-file pre-rollback, multi-file rollback, fallback to singular, and all-fail case. Factory definition updated with affected_file_paths parameter. |
+| # | Status | Question | Resolution |
+|---|--------|----------|------------|
+| 1 | OPEN | Phase-appropriateness validation: Should InterventionCoordinator reject V-4 (Phase 4 only) events at Phase 2? | Current design: coordinator builds plan regardless of current_phase. V-4 plan uses `event.context.get("phase", 4)` (dynamic per spec v1.7). If called at Phase 2 with context.phase=4, rollback target would be Phase 4 which is forward (no pre-rollback). This is a Watchdog responsibility (should not fire V-4 at Phase 2). Document as known limitation, not a test gap. |
+| 2 | OPEN | subprocess.run timeout: Should git commands have explicit timeouts? | Current design: no timeout. In SYNC mode, LLM is blocked anyway. If git hangs, intervention hangs. Mitigated by container timeout. Recommend adding 30s timeout in implementation but not blocking test plan. |
+| 3 | OPEN | PromptValidator truncation threshold: Confirm 10KB | Phase 2 specifies 10KB truncation for long prompts. Test should verify truncation behavior at threshold boundary (9999 bytes = no truncate, 10241 bytes = truncate). |
+| 4 | OPEN | KiDocManager file creation: parent directory creation depth | Design uses `mkdir(parents=True, exist_ok=True)`. Test should verify deeply nested paths work (e.g., `a/b/c/ki-doc.md`). |
+| 5 | RESOLVED | V-7 regression: How are phase5_test_results populated? | Resolution: When phase5_test_results is None/empty, coordinator builds V-7 plan (target_phase=5, auto_fix=False) but cannot determine which tests regressed. Plan instruction includes "no baseline available". Test: `should_raise_regression_without_auto_fix_when_no_baseline`. |
+| 6 | RESOLVED | Integration test scope: real git or mocked? | Integration tests (`test_intervention_integration.py`) use real git operations in `tmp_path`. Unit tests mock subprocess.run. This split ensures integration tests catch real git edge cases. |
+| 7 | RESOLVED | V-5 detection scope (assertion-only vs refactoring) | Detection is Watchdog/ViolationFilter responsibility, not InterventionCoordinator. The intervention layer receives V-5 events after detection. V-5 scope tests belong in Watchdog test plan, documented here as out of scope. |
+| 8 | OPEN | KiDocManager timestamp regex timezone coverage | Current Phase 2 regex only matches +HH:MM. Must extend to support Z and +HHMM in implementation phase. This test verifies the fix. |
+| 9 | OPEN | RollbackEngine._validate_path leading-dash check | Implementation must add `filepath.startswith('-')` check. This test verifies the security fix. |
+| 10 | RESOLVED | CommitGuard untracked file handling at phase boundary | CommitGuard uses git add -u (tracked only). Untracked files are NOT committed at phase boundaries by default. Pre-rollback path handles untracked files via git add <specific_file>. This is intentional to avoid committing unrelated untracked files. |
+| 11 | IMPL-ACTION | V-9 standalone auto-fix: ensure_updated() not in Phase 2 intervene() pseudocode | Test 19b expects intervene() to call ensure_updated() for V-9, appending the missing record per AC-I20. Phase 2 pseudocode only shows record_intervention(). **Action**: Implementation must add ensure_updated() call between steps 4 and 6 for V-9 specifically. Phase 2 design document should be updated accordingly. |
+| 12 | IMPL-ACTION | _handle_merged V-10/V-11 only: record_merge not called | Phase 1 Merge Rule requires single ki doc entry for ALL merged violations. Phase 2 _handle_merged only calls record_merge when V-8/V-9 events exist. Test 19a expects ki doc recording for V-10/V-11 only merges. **Action**: Implementation must always call record_merge for any merged set (move outside ki_events conditional), or Phase 2 must be updated. |
+| 13 | RESOLVED | Spec v1.7 deviation AC-I19: ZH bare patterns | Test plan aligned — all ZH pattern tests expect bare regex matching (no lookaround, no \b). 30 ZH tests in test_prompt_validator.py cover FP-1..FP-7. See Core Scenario 21 and Key Functional Point 17. |
+| 14 | RESOLVED | Spec v1.7 deviation AC-I8: Dynamic target_phase | Test plan aligned — V-4 plan uses event.context.get("phase", 4) instead of hardcoded 4. See Core Scenario 8 and test #18. |
+| 15 | RESOLVED | Spec v1.7 deviation AC-I9: REGRESSION instruction strengthened | Test plan aligned — V-7 plan instruction is "Regression detected — return to Phase 5 and fix the failing implementation". See test #20 and Design row #8. |
+| 16 | RESOLVED | Spec v1.7: Dual field model (affected_file_path + affected_file_paths) | Test plan aligned — new tests #77-80 cover multi-file pre-rollback, multi-file rollback, fallback to singular, and all-fail case. Factory definition updated with affected_file_paths parameter. |
 
 ---
 
