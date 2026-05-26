@@ -1,6 +1,13 @@
-"""InterventionCoordinator stub — Phase 4 TDD Red."""
+"""InterventionCoordinator — orchestrates TDD pipeline violation handling."""
 import subprocess
-from aristotle_auto_reflection.intervention_types import InterventionResult
+from aristotle_auto_reflection.intervention_types import (
+    InterventionResult, InterventionPlan, RollbackResult, ValidationResult,
+    VIOLATION_PRIORITY,
+)
+from aristotle_auto_reflection.prompt_validator import PromptValidator
+from aristotle_auto_reflection.rollback_engine import RollbackEngine
+from aristotle_auto_reflection.ki_doc_manager import KiDocManager
+from aristotle_auto_reflection.commit_guard import CommitGuard
 
 
 class TDDViolationError(Exception):
@@ -11,31 +18,316 @@ class TDDViolationError(Exception):
         super().__init__(f"TDDViolationError: {plan.instruction if plan else 'unknown'}")
 
 
+# Violation types that can be merged in batch processing
+_MERGEABLE_TYPES = {"MISSING_KI_DOC", "KI_DOC_OUTDATED", "UNCOMMITTED_PHASE",
+                    "UNCOMMITTED_REVIEW", "MISSING_KI_ASSESSMENT"}
+
+# Behavioral violations require affected_file_path
+_BEHAVIORAL_TYPES = {"SKIP_RED_PHASE", "MODIFIED_TEST", "MISSING_TEST", "REGRESSION"}
+
+# Plan mapping: violation_type -> InterventionPlan kwargs
+_PLAN_MAP = {
+    "SKIP_REVIEW": lambda e, ctx: InterventionPlan(
+        target_phase=e.context.get("phase", 2),
+        auto_fix=False,
+        needs_rollback=False,
+        is_destructive=False,
+        instruction="Review was skipped. Resume Ralph Loop from current phase.",
+    ),
+    "INSUFFICIENT_REVIEW": lambda e, ctx: InterventionPlan(
+        target_phase=e.context.get("phase", 2),
+        auto_fix=False,
+        needs_rollback=False,
+        is_destructive=False,
+        instruction="Insufficient review rounds. Ensure ZERO_C_H_M across consecutive rounds.",
+    ),
+    "UNFIXED_ISSUES": lambda e, ctx: InterventionPlan(
+        target_phase=e.context.get("phase", 2),
+        auto_fix=False,
+        needs_rollback=False,
+        is_destructive=False,
+        instruction="Fix unfixed issues before proceeding.",
+    ),
+    "SKIP_RED_PHASE": lambda e, ctx: InterventionPlan(
+        target_phase=e.context.get("phase", 4),
+        auto_fix=True,
+        needs_rollback=True,
+        is_destructive=True,
+        instruction="Implementation written before test. Rollback implementation, write test first.",
+    ),
+    "MODIFIED_TEST": lambda e, ctx: InterventionPlan(
+        target_phase=e.context.get("phase", 5),
+        auto_fix=True,
+        needs_rollback=True,
+        is_destructive=True,
+        instruction="Test was modified during GREEN phase. Restore original test.",
+    ),
+    "MISSING_TEST": lambda e, ctx: InterventionPlan(
+        target_phase=e.context.get("phase", 5),
+        auto_fix=False,
+        needs_rollback=False,
+        is_destructive=False,
+        instruction="Missing test for implementation. Write test first.",
+    ),
+    "REGRESSION": lambda e, ctx: InterventionPlan(
+        target_phase=5,
+        auto_fix=ctx.phase5_test_results is not None,
+        needs_rollback=ctx.phase5_test_results is not None,
+        is_destructive=ctx.phase5_test_results is not None,
+        instruction="Regression detected. Rollback to Phase 5 baseline.",
+    ),
+    "MISSING_KI_DOC": lambda e, ctx: InterventionPlan(
+        target_phase=e.context.get("phase", 3),
+        auto_fix=True,
+        needs_rollback=False,
+        is_destructive=False,
+        instruction="KI doc missing. Create or locate KI review document.",
+    ),
+    "KI_DOC_OUTDATED": lambda e, ctx: InterventionPlan(
+        target_phase=e.context.get("phase", 3),
+        auto_fix=True,
+        needs_rollback=False,
+        is_destructive=False,
+        instruction="KI doc outdated. Auto-append missing entries.",
+    ),
+    "UNCOMMITTED_PHASE": lambda e, ctx: InterventionPlan(
+        target_phase=e.context.get("phase", 3),
+        auto_fix=True,
+        needs_rollback=False,
+        is_destructive=False,
+        instruction="Uncommitted phase work. Auto-commit changes.",
+    ),
+    "UNCOMMITTED_REVIEW": lambda e, ctx: InterventionPlan(
+        target_phase=e.context.get("phase", 3),
+        auto_fix=True,
+        needs_rollback=False,
+        is_destructive=False,
+        instruction="Uncommitted review work. Auto-commit changes.",
+    ),
+    "MISSING_KI_ASSESSMENT": lambda e, ctx: InterventionPlan(
+        target_phase=e.context.get("phase", 3),
+        auto_fix=True,
+        needs_rollback=False,
+        is_destructive=False,
+        instruction="Missing KI assessment. Run assessment and record.",
+    ),
+    "INVALID_REVIEW_PROMPT": lambda e, ctx: InterventionPlan(
+        target_phase=e.context.get("phase", 2),
+        auto_fix=False,
+        needs_rollback=False,
+        is_destructive=False,
+        instruction="Review prompt contains forbidden patterns. Rewrite prompt.",
+    ),
+}
+
+
 class InterventionCoordinator:
     def __init__(self, context):
         self.context = context
-        self.prompt_validator = None
-        self.rollback_engine = None
-        self.ki_doc = None
-        self.commit_guard = None
+        self.prompt_validator = PromptValidator()
+        self.rollback_engine = RollbackEngine()
+        self.ki_doc = KiDocManager(context.ki_doc_path)
+        self.commit_guard = CommitGuard()
 
     def intervene(self, event) -> None:
-        raise NotImplementedError("InterventionCoordinator.intervene stub")
+        # 1. Validate event
+        if not self._is_valid_event(event):
+            return None
+
+        # 2. Unknown type → return None (log warning)
+        if event.violation_type not in VIOLATION_PRIORITY:
+            return None
+
+        # 3. Special case: INSUFFICIENT_REVIEW with consecutive zero CHM
+        if event.violation_type == "INSUFFICIENT_REVIEW":
+            rounds = event.context.get("rounds", 0)
+            round_results = self.context.metadata.get("round_results", [])
+            if rounds >= 2 and len(round_results) >= 2:
+                last_two = round_results[-2:]
+                if all(r.get("C", 0) == 0 and r.get("H", 0) == 0 and r.get("M", 0) == 0
+                       for r in last_two):
+                    return None
+
+        # 4. Prompt validation for V-13
+        if self._needs_prompt_validation(event):
+            prompt = event.context.get("prompt", "")
+            validation_result = self.prompt_validator.validate(prompt)
+            if validation_result.is_valid:
+                return None
+            # Build plan for invalid prompt and proceed to block
+            plan = self._build_plan(event)
+            result = InterventionResult(
+                violation_code=event.violation_type,
+                target_phase=plan.target_phase,
+                auto_fix_applied=False,
+                instruction=plan.instruction,
+                validation_result=validation_result,
+            )
+            self.ki_doc.record_intervention(event, plan, None, validation_result)
+            self.commit_guard.ensure_committed(self.context)
+            raise TDDViolationError(event, plan, result)
+
+        # 5. Build plan
+        plan = self._build_plan(event)
+
+        rollback_result = None
+
+        # 6. Pre-rollback commit + rollback
+        if plan.auto_fix and plan.needs_rollback:
+            # Stage affected file before rollback
+            if event.affected_file_path:
+                try:
+                    subprocess.run(
+                        ["git", "add", event.affected_file_path],
+                        capture_output=True, text=True,
+                    )
+                except Exception:
+                    pass
+            # Pre-rollback commit
+            self.commit_guard.ensure_committed(self.context)
+            # Execute rollback
+            rollback_result = self.rollback_engine.rollback(event, plan, self.context)
+
+        # 7. KI doc update (even when rollback fails)
+        self.ki_doc.record_intervention(event, plan, rollback_result)
+
+        # 8. Post-intervention commit
+        self.commit_guard.ensure_committed(self.context)
+
+        # 9. Raise TDDViolationError
+        result = InterventionResult(
+            violation_code=event.violation_type,
+            target_phase=plan.target_phase,
+            auto_fix_applied=rollback_result.success if rollback_result else False,
+            auto_fix_details=rollback_result.action if rollback_result else "",
+            instruction=plan.instruction,
+            ki_doc_updated=True,
+            committed=True,
+            rollback_result=rollback_result,
+        )
+        raise TDDViolationError(event, plan, result)
 
     def intervene_batch(self, events) -> None:
-        raise NotImplementedError("InterventionCoordinator.intervene_batch stub")
+        if not events:
+            return None
 
-    def _build_plan(self, event):
-        raise NotImplementedError("InterventionCoordinator._build_plan stub")
+        # Sort by VIOLATION_PRIORITY
+        sorted_events = sorted(
+            events,
+            key=lambda e: VIOLATION_PRIORITY.get(e.violation_type, 99),
+        )
+
+        # Split into mergeable and non-mergeable
+        non_mergeable = [e for e in sorted_events
+                         if e.violation_type not in _MERGEABLE_TYPES]
+        mergeable = [e for e in sorted_events
+                     if e.violation_type in _MERGEABLE_TYPES]
+
+        # Handle non-mergeable first (highest priority)
+        if non_mergeable:
+            self.intervene(non_mergeable[0])
+            return
+
+        # Only mergeable events → handle merged
+        if mergeable:
+            self._handle_merged(mergeable)
 
     def _is_valid_event(self, event) -> bool:
-        raise NotImplementedError("InterventionCoordinator._is_valid_event stub")
+        if not event.violation_type:
+            return False
+        if "phase" not in event.context:
+            return False
+        if event.violation_type in _BEHAVIORAL_TYPES and not event.affected_file_path:
+            return False
+        return True
 
     def _needs_prompt_validation(self, event) -> bool:
-        raise NotImplementedError("InterventionCoordinator._needs_prompt_validation stub")
+        return event.violation_type == "INVALID_REVIEW_PROMPT"
+
+    def _build_plan(self, event):
+        builder = _PLAN_MAP.get(event.violation_type)
+        if builder:
+            return builder(event, self.context)
+        # Fallback for unknown types
+        return InterventionPlan(
+            target_phase=event.context.get("phase", 0),
+            auto_fix=False,
+            needs_rollback=False,
+            is_destructive=False,
+            instruction=f"Unknown violation type: {event.violation_type}",
+        )
 
     def _handle_merged(self, events):
-        raise NotImplementedError("InterventionCoordinator._handle_merged stub")
+        # 1. V-10/V-11: commit first
+        commit_types = {"UNCOMMITTED_PHASE", "UNCOMMITTED_REVIEW"}
+        for e in events:
+            if e.violation_type in commit_types:
+                self.commit_guard.ensure_committed(self.context)
+                break  # commit once for all V-10/V-11
+
+        # 2. V-12: assessment
+        assessment_events = [e for e in events if e.violation_type == "MISSING_KI_ASSESSMENT"]
+        assessment_status = None
+        assessment_issues = []
+        assessment_counts = {}
+        if assessment_events:
+            assessment_status, assessment_issues, assessment_counts = self._compute_assessment()
+            self.ki_doc.ensure_assessment(
+                self.context.current_phase,
+                self.context.current_phase + 1,
+                assessment_status,
+                assessment_issues,
+                assessment_counts,
+            )
+
+        # 3. V-8/V-9: single merged ki doc entry
+        ki_types = {"MISSING_KI_DOC", "KI_DOC_OUTDATED"}
+        ki_events = [e for e in events if e.violation_type in ki_types]
+        if ki_events:
+            self.ki_doc.record_merge(ki_events, self.context)
+
+        # 4. Final commit
+        self.commit_guard.ensure_committed(self.context)
+
+        # 5. Raise TDDViolationError
+        plan = self._build_plan(events[0])
+        result = InterventionResult(
+            violation_code=", ".join(e.violation_type for e in events),
+            target_phase=plan.target_phase,
+            auto_fix_applied=True,
+            instruction="Merged auto-fix interventions applied.",
+            ki_doc_updated=True,
+            committed=True,
+        )
+        raise TDDViolationError(events[0], plan, result)
 
     def _compute_assessment(self):
-        raise NotImplementedError("InterventionCoordinator._compute_assessment stub")
+        round_results = self.context.metadata.get("round_results", [])
+        if not round_results:
+            return "PASS", [], {}
+
+        last = round_results[-1]
+        c = last.get("C", 0)
+        h = last.get("H", 0)
+        m = last.get("M", 0)
+        p = last.get("P", 0)
+        l = last.get("L", 0)
+
+        counts = {"P0": c, "P1": h, "P2": m, "P3": p, "P4": l}
+
+        issues = []
+        if c > 0:
+            issues.append(f"P0: {c} Critical issues")
+        if h > 0:
+            issues.append(f"P1: {h} High issues")
+        if m > 0:
+            issues.append(f"P2: {m} Medium issues")
+
+        if c > 0 or h > 0:
+            status = "FAIL"
+        elif m > 0:
+            status = "CONDITIONAL"
+        else:
+            status = "PASS"
+
+        return status, issues, counts
