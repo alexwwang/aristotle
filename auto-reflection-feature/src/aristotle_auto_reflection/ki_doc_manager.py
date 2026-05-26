@@ -24,7 +24,10 @@ class KiDocManager:
                 p.write_text("# Review Records\n\n")
             return
         entry = self._format_assessment_entry(phase, next_phase, status, issues, priority_counts)
-        self._append(entry)
+        try:
+            self._append(entry)
+        except IOError:
+            pass
 
     def ensure_updated(self, last_intervention_ts):
         newest_ts = self._parse_newest_timestamp()
@@ -34,7 +37,10 @@ class KiDocManager:
 
     def record_merge(self, events, context):
         entry = self._format_merge_entry(events, context)
-        self._append(entry)
+        try:
+            self._append(entry)
+        except IOError:
+            pass
 
     def _parse_newest_timestamp(self):
         p = Path(self.ki_doc_path)
