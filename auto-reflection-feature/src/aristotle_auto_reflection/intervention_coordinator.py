@@ -296,7 +296,7 @@ class InterventionCoordinator:
         # 5. Raise TDDViolationError
         plan = self._build_plan(events[0])
         result = InterventionResult(
-            violation_code=", ".join(e.violation_type for e in events),
+            violation_code="MERGED:" + ",".join(e.violation_type for e in events),
             target_phase=plan.target_phase,
             auto_fix_applied=True,
             instruction="Merged auto-fix interventions applied.",
