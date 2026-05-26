@@ -3,6 +3,7 @@
 Dataclasses are structural placeholders (no methods with business logic).
 VIOLATION_PRIORITY is a production lookup table used by InterventionCoordinator.
 """
+
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, List
 
@@ -10,6 +11,7 @@ from typing import Optional, Dict, Any, List
 @dataclass
 class ViolationEvent:
     """Existing event type from watchdog.py — re-exported for convenience."""
+
     violation_type: str
     affected_file_path: str
     timestamp: str
@@ -20,6 +22,7 @@ class ViolationEvent:
 @dataclass
 class InterventionPlan:
     """Replaces RemediationPlan. Stub — all fields optional for construction."""
+
     target_phase: int = 0
     auto_fix: bool = False
     needs_rollback: bool = False
@@ -93,11 +96,17 @@ class InterventionResult:
 
 # Priority table for violation types
 VIOLATION_PRIORITY = {
-    "SKIP_RED_PHASE": 1, "MODIFIED_TEST": 1, "MISSING_TEST": 1,
-    "SKIP_REVIEW": 2, "INSUFFICIENT_REVIEW": 2, "UNFIXED_ISSUES": 2,
+    "SKIP_RED_PHASE": 1,
+    "MODIFIED_TEST": 1,
+    "MISSING_TEST": 1,
+    "SKIP_REVIEW": 2,
+    "INSUFFICIENT_REVIEW": 2,
+    "UNFIXED_ISSUES": 2,
     "INVALID_REVIEW_PROMPT": 2,
     "REGRESSION": 3,
-    "MISSING_KI_DOC": 4, "KI_DOC_OUTDATED": 4,
-    "UNCOMMITTED_PHASE": 4, "UNCOMMITTED_REVIEW": 4,
+    "MISSING_KI_DOC": 4,
+    "KI_DOC_OUTDATED": 4,
+    "UNCOMMITTED_PHASE": 4,
+    "UNCOMMITTED_REVIEW": 4,
     "MISSING_KI_ASSESSMENT": 5,
 }

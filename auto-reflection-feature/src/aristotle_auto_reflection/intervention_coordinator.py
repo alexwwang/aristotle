@@ -1,7 +1,9 @@
 """InterventionCoordinator — orchestrates TDD pipeline violation handling."""
+
 import subprocess
 from aristotle_auto_reflection.intervention_types import (
-    InterventionResult, InterventionPlan, RollbackResult, ValidationResult,
+    InterventionResult,
+    InterventionPlan,
     VIOLATION_PRIORITY,
 )
 from aristotle_auto_reflection.prompt_validator import PromptValidator
@@ -19,8 +21,13 @@ class TDDViolationError(Exception):
 
 
 # Violation types that can be merged in batch processing
-_MERGEABLE_TYPES = {"MISSING_KI_DOC", "KI_DOC_OUTDATED", "UNCOMMITTED_PHASE",
-                    "UNCOMMITTED_REVIEW", "MISSING_KI_ASSESSMENT"}
+_MERGEABLE_TYPES = {
+    "MISSING_KI_DOC",
+    "KI_DOC_OUTDATED",
+    "UNCOMMITTED_PHASE",
+    "UNCOMMITTED_REVIEW",
+    "MISSING_KI_ASSESSMENT",
+}
 
 # Behavioral violations require affected_file_path
 _BEHAVIORAL_TYPES = {"SKIP_RED_PHASE", "MODIFIED_TEST", "MISSING_TEST", "REGRESSION"}
@@ -144,8 +151,7 @@ class InterventionCoordinator:
             round_results = self.context.metadata.get("round_results", [])
             if rounds >= 2 and len(round_results) >= 2:
                 last_two = round_results[-2:]
-                if all(r.get("C", 0) == 0 and r.get("H", 0) == 0 and r.get("M", 0) == 0
-                       for r in last_two):
+                if all(r.get("C", 0) == 0 and r.get("H", 0) == 0 and r.get("M", 0) == 0 for r in last_two):
                     return None
 
         # 4. Prompt validation for V-13
@@ -182,15 +188,18 @@ class InterventionCoordinator:
         # 6. Pre-rollback commit (safety net for destructive ops + phase rollback)
         pre_commit_ok = True
         if plan.is_destructive or plan.target_phase < self.context.current_phase:
-            files_to_stage = list(event.affected_file_paths) if event.affected_file_paths else (
-                [event.affected_file_path] if event.affected_file_path else []
+            files_to_stage = (
+                list(event.affected_file_paths)
+                if event.affected_file_paths
+                else ([event.affected_file_path] if event.affected_file_path else [])
             )
             for fp in files_to_stage:
                 if self.rollback_engine.validate_path(fp):
                     try:
                         subprocess.run(
                             ["git", "add", fp],
-                            capture_output=True, text=True,
+                            capture_output=True,
+                            text=True,
                         )
                     except Exception:
                         pass
@@ -233,10 +242,8 @@ class InterventionCoordinator:
         )
 
         # Split into mergeable and non-mergeable
-        non_mergeable = [e for e in sorted_events
-                         if e.violation_type not in _MERGEABLE_TYPES]
-        mergeable = [e for e in sorted_events
-                     if e.violation_type in _MERGEABLE_TYPES]
+        non_mergeable = [e for e in sorted_events if e.violation_type not in _MERGEABLE_TYPES]
+        mergeable = [e for e in sorted_events if e.violation_type in _MERGEABLE_TYPES]
 
         # Handle non-mergeable first (highest priority)
         if non_mergeable:
@@ -327,9 +334,9 @@ class InterventionCoordinator:
         h = last.get("H", 0)
         m = last.get("M", 0)
         p = last.get("P", 0)
-        l = last.get("L", 0)
+        low = last.get("L", 0)
 
-        counts = {"P0": c, "P1": h, "P2": m, "P3": p, "P4": l}
+        counts = {"P0": c, "P1": h, "P2": m, "P3": p, "P4": low}
 
         issues = []
         if c > 0:

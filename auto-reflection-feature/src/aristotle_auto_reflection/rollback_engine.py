@@ -1,8 +1,12 @@
 """RollbackEngine — rollback implementation for TDD pipeline violations."""
+
 import subprocess
 import os
 from aristotle_auto_reflection.intervention_types import (
-    ViolationEvent, InterventionPlan, RollbackResult, PipelineContext,
+    ViolationEvent,
+    InterventionPlan,
+    RollbackResult,
+    PipelineContext,
 )
 
 

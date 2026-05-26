@@ -1,12 +1,18 @@
 """CommitGuard — auto-commits uncommitted changes at phase boundaries."""
+
 import subprocess
 from aristotle_auto_reflection.intervention_types import CommitResult, PipelineContext
 
 
 class CommitGuard:
     PHASE_NAMES = {
-        1: "PHASE-1-DESIGN", 2: "PHASE-2-SOLUTION", 3: "PHASE-3-TEST-PLAN",
-        4: "PHASE-4-RED", 5: "PHASE-5-GREEN", 6: "PHASE-6-PRETEST", 7: "PHASE-7-AUDIT"
+        1: "PHASE-1-DESIGN",
+        2: "PHASE-2-SOLUTION",
+        3: "PHASE-3-TEST-PLAN",
+        4: "PHASE-4-RED",
+        5: "PHASE-5-GREEN",
+        6: "PHASE-6-PRETEST",
+        7: "PHASE-7-AUDIT",
     }
 
     def ensure_committed(self, context: PipelineContext) -> CommitResult:
