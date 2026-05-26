@@ -1,7 +1,7 @@
 # Test Plan: Watchdog Intervention for TDD Pipeline
 
 > **Version**: v1.6
-> **Status**: v1.6 — Ralph Loop R1 complete (0C/0H/1M/2L fixed), pending R2
+> **Status**: v1.6 — Ralph Loop R4 in progress (latest PF: 0C/1H/2M/2L)
 > **Branch**: feature/watchdog-intervention
 > **Phase**: 3 (Test Plan)
 > **Based on**: intervention-requirements-v1.md (v1.4), 02-intervention-technical-solution.md (v1.7)
@@ -192,7 +192,7 @@ _Traces Phase 1 user stories and acceptance criteria to test cases. For Phase 2 
 | 5b | Key | InterventionCoordinator._build_plan() — V-2 | Interface | Unit | `test_intervention_coordinator.py` | `should_map_v2_insufficient_review_to_no_auto_fix_plan` | V-2 → InterventionPlan(phase, False, False, False, "Continue Ralph Loop until 2 consecutive ZERO_C_H_M") |
 | 5c | Key | InterventionCoordinator._build_plan() — V-3 | Interface | Unit | `test_intervention_coordinator.py` | `should_map_v3_unfixed_issues_to_no_auto_fix_plan` | V-3 → InterventionPlan(phase, False, False, False, "Fix issues before proceeding") |
 | 6 | Key | InterventionCoordinator._build_plan() — V-4 dynamic target_phase | Interface | Unit | `test_intervention_coordinator.py` | `should_map_v4_skip_red_phase_to_destructive_plan` | V-4 → InterventionPlan(event.context.get("phase", 4), True, True, True, ...) — dynamic per spec v1.7 deviation AC-I8 |
-| 7 | Key | InterventionCoordinator._build_plan() — V-5 dynamic target_phase | Interface | Unit | `test_intervention_coordinator.py` | `should_map_v5_modified_test_to_destructive_plan` | V-5 → InterventionPlan(event.context.get("phase", 5), True, True, True, ...) — dynamic per Phase 2 _build_plan |
+| 7 | Key | InterventionCoordinator._build_plan() — V-5 dynamic target_phase | Interface | Unit | `test_intervention_coordinator.py` | `should_map_v5_modified_test_to_destructive_plan` | V-5 → InterventionPlan(event.context.get("phase", 5), True, True, True, ...) — dynamic per Phase 2 _build_plan; note: no phase in context → rejected by _is_valid_event (same as V-4, fallback 5 unreachable) |
 | 7b | Key | InterventionCoordinator._build_plan() — V-6 MISSING_TEST | Interface | Unit | `test_intervention_coordinator.py` | `should_map_v6_missing_test_to_no_auto_fix_plan` | V-6 → InterventionPlan(event.context.get("phase", 4), False, False, False, "Write test for this module first") — auto_fix=False, no rollback, dynamic target_phase (see also Req tests #16, #17) |
 | 8 | Key | InterventionCoordinator._build_plan() — V-7 REGRESSION | Interface | Unit | `test_intervention_coordinator.py` | `should_map_v7_regression_to_phase5_plan` | V-7 → InterventionPlan(5, False, False, False, "Regression detected — return to Phase 5 and fix the failing implementation") per spec v1.7 |
 | 9 | Key | InterventionCoordinator._build_plan() — all 13 types | Interface | Unit | `test_intervention_coordinator.py` | `should_map_v8_v9_v10_v11_v12_to_auto_fix_plans` | Compliance/assessment → auto_fix=True, non-destructive |
@@ -255,6 +255,7 @@ _Traces Phase 1 user stories and acceptance criteria to test cases. For Phase 2 
 | 55b | Key | KiDocManager._parse_newest_timestamp() — timezone variants | Component | Unit | `test_ki_doc_manager.py` | `should_parse_iso8601_with_z_and_compact_timezones` | Regex matches Z suffix and +HHMM compact timezone (requires Phase 2 regex update) |
 | 56 | Key | KiDocManager.record_merge() — single entry | Component | Unit | `test_ki_doc_manager.py` | `should_write_single_merged_entry_documenting_all_combined_actions` | Multiple events → one entry with all violation types |
 | 57 | Key | KiDocManager._append() — file creation | Component | Unit | `test_ki_doc_manager.py` | `should_create_parent_directories_when_missing` | Parent dirs don't exist → mkdir -p |
+| 57b | Key | KiDocManager._parse_newest_timestamp() — corrupt data | Component | Unit | `test_ki_doc_manager.py` | `should_return_none_for_corrupt_timestamp_in_ki_doc` | Malformed/non-ISO timestamp data → regex returns None, no crash |
 | 58 | Peripheral | CommitGuard.ensure_committed() — clean skip | Component | Unit | `test_commit_guard.py` | `should_skip_commit_when_repo_clean` | _is_clean() → True → CommitResult("skip") |
 | 59 | Peripheral | CommitGuard.ensure_committed() — dirty commit | Component | Unit | `test_commit_guard.py` | `should_commit_when_repo_dirty` | _is_clean() → False → git add -u + git commit with req_number prefix in message |
 | 59b | Peripheral | CommitGuard._build_message() — req_number prefix | Component | Unit | `test_commit_guard.py` | `should_include_req_number_in_commit_message` | Message starts with context.req_number (e.g., "INT-001: PHASE-4-RED auto-commit") |
@@ -462,6 +463,8 @@ CLEAN_PROMPT = "Review the following code changes for correctness and style. Che
 
 ## Open Questions
 
+> **Status legend**: OPEN = unresolved question | RESOLVED = answered with test/code evidence | IMPL-ACTION = design decision made, implementation phase must apply the fix | DESIGN-FIX = Phase 2 design doc must be updated before implementation
+
 | # | Status | Question | Resolution |
 |---|--------|----------|------------|
 | 1 | OPEN | Phase-appropriateness validation: Should InterventionCoordinator reject V-4 (Phase 4 only) events at Phase 2? | Current design: coordinator builds plan regardless of current_phase. V-4 plan uses `event.context.get("phase", 4)` (dynamic per spec v1.7). If called at Phase 2 with context.phase=4, rollback target would be Phase 4 which is forward (no pre-rollback). This is a Watchdog responsibility (should not fire V-4 at Phase 2). Document as known limitation, not a test gap. |
@@ -475,7 +478,7 @@ CLEAN_PROMPT = "Review the following code changes for correctness and style. Che
 | 9 | OPEN | RollbackEngine._validate_path leading-dash check | Implementation must add `filepath.startswith('-')` check. This test verifies the security fix. |
 | 10 | RESOLVED | CommitGuard untracked file handling at phase boundary | CommitGuard uses git add -u (tracked only). Untracked files are NOT committed at phase boundaries by default. Pre-rollback path handles untracked files via git add <specific_file>. This is intentional to avoid committing unrelated untracked files. |
 | 11 | IMPL-ACTION | V-9 standalone auto-fix: ensure_updated() not in Phase 2 intervene() pseudocode | Test 19b expects intervene() to call ensure_updated() for V-9, appending the missing record per AC-I20. Phase 2 pseudocode only shows record_intervention(). **Action**: Implementation must add ensure_updated() call between steps 4 and 6 for V-9 specifically. Phase 2 design document should be updated accordingly. |
-| 12 | IMPL-ACTION | _handle_merged V-10/V-11 only: record_merge not called | Phase 1 Merge Rule requires single ki doc entry for ALL merged violations. Phase 2 _handle_merged only calls record_merge when V-8/V-9 events exist. Test 19a expects ki doc recording for V-10/V-11 only merges. **Action**: Implementation must always call record_merge for any merged set (move outside ki_events conditional), or Phase 2 must be updated. |
+| 12 | DESIGN-FIX | _handle_merged V-10/V-11 only: record_merge not called | Phase 1 Merge Rule requires single ki doc entry for ALL merged violations. Phase 2 _handle_merged only calls record_merge when V-8/V-9 events exist. Test 19a expects ki doc recording for V-10/V-11 only merges. **Fix**: Phase 2 design must be updated — move `record_merge` call outside the `ki_events` conditional so ALL merged sets produce a ki doc entry, not just those containing V-8/V-9. Implementation then follows updated pseudocode. |
 | 13 | RESOLVED | Spec v1.7 deviation AC-I19: ZH bare patterns | Test plan aligned — all ZH pattern tests expect bare regex matching (no lookaround, no \b). 30 ZH tests in test_prompt_validator.py cover FP-1..FP-7. See Core Scenario 21 and Key Functional Point 17. |
 | 14 | RESOLVED | Spec v1.7 deviation AC-I8: Dynamic target_phase | Test plan aligned — V-4 plan uses event.context.get("phase", 4) instead of hardcoded 4. See Core Scenario 8 and test #18. |
 | 15 | RESOLVED | Spec v1.7 deviation AC-I9: REGRESSION instruction strengthened | Test plan aligned — V-7 plan instruction is "Regression detected — return to Phase 5 and fix the failing implementation". See test #20 and Design row #8. |
