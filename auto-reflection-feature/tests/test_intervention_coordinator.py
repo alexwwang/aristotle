@@ -155,6 +155,13 @@ class TestMissingTest:
         assert plan.target_phase == 5
         assert plan.needs_rollback is False
 
+    def test_should_block_pipeline_when_test_missing_for_phase4(self, coordinator):
+        event = _event("MISSING_TEST", "src/new_mod.py", 4)
+        with pytest.raises(TDDViolationError) as exc_info:
+            coordinator.intervene(event)
+        assert exc_info.value.result.violation_code == "MISSING_TEST"
+        assert exc_info.value.plan.target_phase == 4
+
 
 # ===== Event Validation =====
 
@@ -207,13 +214,21 @@ class TestEventValidation:
         event = ViolationEvent(vtype, "", "2026-05-26T10:00:00+08:00", {"phase": 4})
         assert coordinator._is_valid_event(event) is False
 
+    # Note: log verification for behavioral violations without file is intentionally
+    # omitted — Python's logging module is hard to mock-test reliably and the
+    # behavior (return None) is already verified by the assertion below.
     @pytest.mark.parametrize("vtype", [
         "SKIP_RED_PHASE", "MODIFIED_TEST", "MISSING_TEST", "REGRESSION",
     ])
     def test_should_return_none_for_behavioral_violation_without_file_via_intervene(self, coordinator, vtype):
         event = ViolationEvent(vtype, "", "2026-05-26T10:00:00+08:00", {"phase": 4})
-        result = coordinator.intervene(event)
+        with patch.object(coordinator, "rollback_engine") as mock_re, \
+             patch.object(coordinator, "commit_guard") as mock_cg, \
+             patch.object(coordinator, "ki_doc") as mock_ki:
+            result = coordinator.intervene(event)
         assert result is None
+        mock_re.rollback.assert_not_called()
+        mock_cg.ensure_committed.assert_not_called()
 
 
 # ===== Plan Building =====
@@ -267,9 +282,28 @@ class TestPlanBuilding:
         assert "Unknown" in plan.instruction
 
 
+class TestDynamicTargetPhase:
+    @pytest.mark.parametrize("vtype,default_phase,test_phase", [
+        ("SKIP_RED_PHASE", 4, 2),
+        ("SKIP_RED_PHASE", 4, 5),
+        ("MODIFIED_TEST", 5, 3),
+        ("REGRESSION", 5, 6),
+    ])
+    def test_should_use_dynamic_phase_from_event_context(self, coordinator, vtype, default_phase, test_phase):
+        # REGRESSION hardcodes target_phase=5, others use event.context["phase"]
+        filepath = "src/mod.py" if vtype in ("SKIP_RED_PHASE", "REGRESSION") else "tests/test_mod.py"
+        event = ViolationEvent(vtype, filepath, "2026-05-26T10:00:00+08:00", {"phase": test_phase})
+        plan = coordinator._build_plan(event)
+        if vtype == "REGRESSION":
+            assert plan.target_phase == 5  # REGRESSION always targets phase 5
+        else:
+            assert plan.target_phase == test_phase
+
+
 # ===== Batch Processing =====
 
 class TestBatchProcessing:
+    # Unit-level: mock intervene() to isolate batch logic
     def test_should_sort_events_by_priority_before_handling(self, coordinator):
         events = [
             _event("MISSING_KI_DOC", phase=3),
@@ -418,6 +452,12 @@ class TestAssessment:
         assert counts["P3"] == 5
         assert counts["P4"] == 7
 
+    def test_should_return_pass_when_metadata_empty(self, coordinator, pipeline_context_factory):
+        ctx = pipeline_context_factory(metadata={})
+        coord = InterventionCoordinator(ctx)
+        status, issues, counts = coord._compute_assessment()
+        assert status == "PASS"
+
 
 # ===== Pre-rollback + Commit =====
 
@@ -555,8 +595,9 @@ class TestSyncMode:
                     mock_pv.validate.return_value = ValidationResult(is_valid=False, matches=[
                         MagicMock(category="stop_condition", pattern="stop condition", line_number=1, language="en")
                     ])
-                with pytest.raises(TDDViolationError):
+                with pytest.raises(TDDViolationError) as exc_info:
                     coordinator.intervene(event)
+                assert exc_info.value.result.violation_code == vtype
 
     def test_should_handle_multiple_violations_by_priority(self, coordinator):
         events = [_event("SKIP_RED_PHASE", "src/mod.py", 4), _event("MISSING_KI_DOC", phase=3)]

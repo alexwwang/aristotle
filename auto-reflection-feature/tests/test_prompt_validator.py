@@ -224,6 +224,12 @@ class TestFP4ZH:
             assert result.is_valid is False, f"FP-4 ZH should detect: {phrase}"
 
 
+class TestFP4ZHNegative:
+    def test_should_not_flag_normal_zh_bug_fix_statement(self, validator):
+        result = validator.validate("代码看起来没问题，可以继续下一步")
+        assert result.is_valid is True
+
+
 class TestFP5ZH:
     def test_should_detect_fp5_zh_round_count_patterns(self, validator):
         for phrase in ["第3轮", "第几轮", "当前轮次", "loop轮次"]:

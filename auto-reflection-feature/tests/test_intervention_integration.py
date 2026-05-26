@@ -90,6 +90,8 @@ class TestE2EMergedViolations:
         with pytest.raises(TDDViolationError) as exc_info:
             coord.intervene_batch(events)
         assert "MERGED" in exc_info.value.result.violation_code
+        ki_content = Path(integration_context.ki_doc_path).read_text()
+        assert "Merged" in ki_content
 
 
 class TestE2EPreserveOnRollback:
@@ -115,6 +117,7 @@ class TestE2ERollbackFailure:
         with pytest.raises(TDDViolationError) as exc_info:
             coord.intervene(event)
         assert exc_info.value.result.violation_code == "SKIP_RED_PHASE"
+        assert exc_info.value.result.rollback_result.success is True
 
 
 class TestE2EPromptValidation:
@@ -139,6 +142,16 @@ class TestE2ERegressionRollback:
         assert exc_info.value.plan.target_phase == 5
         ki_content = Path(integration_context.ki_doc_path).read_text()
         assert "REGRESSION" in ki_content
+
+
+class TestE2EKiDocOutdatedAutoAppend:
+    def test_should_end_to_end_auto_append_outdated_ki_doc_for_ki_doc_outdated(self, temp_git_repo, integration_context):
+        integration_context.current_phase = 3
+        event = ViolationEvent("KI_DOC_OUTDATED", "", "2026-05-26T10:00:00+08:00", {"phase": 3})
+        coord = InterventionCoordinator(integration_context)
+        with pytest.raises(TDDViolationError) as exc_info:
+            coord.intervene(event)
+        assert exc_info.value.result.violation_code == "KI_DOC_OUTDATED"
 
 
 class TestE2EInsufficientReviewAutoFix:

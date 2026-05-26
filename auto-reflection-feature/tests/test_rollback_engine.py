@@ -145,7 +145,7 @@ class TestRollbackDispatchV4:
         with patch.object(rollback_engine, "_delete_implementation") as mock_del:
             mock_del.return_value = RollbackResult(True, "deleted", ["src/module.py"])
             result = rollback_engine.rollback(event, plan, ctx)
-        mock_del.assert_called_once()
+        mock_del.assert_called_once_with(event, ctx)
 
 
 class TestRollbackDispatchV5:
@@ -156,7 +156,7 @@ class TestRollbackDispatchV5:
         with patch.object(rollback_engine, "_restore_test") as mock_restore:
             mock_restore.return_value = RollbackResult(True, "restored", ["tests/test_module.py"])
             result = rollback_engine.rollback(event, plan, ctx)
-        mock_restore.assert_called_once()
+        mock_restore.assert_called_once_with(event, ctx)
 
 
 class TestRollbackNoop:
@@ -361,6 +361,20 @@ class TestFallbackToSingularField:
             context={"phase": 4},
             affected_file_paths=[],
         )
+        plan = InterventionPlan(4, True, True, True, "Delete")
+        ctx = pipeline_context_factory()
+        with patch.object(rollback_engine, "_validate_path", return_value=True), \
+             patch.object(rollback_engine, "_is_tracked", return_value=True), \
+             patch("aristotle_auto_reflection.rollback_engine.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0)
+            result = rollback_engine.rollback(event, plan, ctx)
+        assert result.success is True
+        assert "src/module.py" in result.files_affected
+
+
+class TestFallbackDefaultField:
+    def test_should_use_singular_field_when_affected_file_paths_not_provided(self, rollback_engine, pipeline_context_factory):
+        event = ViolationEvent("SKIP_RED_PHASE", "src/module.py", "2026-05-26T10:00:00+08:00", {})
         plan = InterventionPlan(4, True, True, True, "Delete")
         ctx = pipeline_context_factory()
         with patch.object(rollback_engine, "_validate_path", return_value=True), \
