@@ -156,7 +156,7 @@ class InterventionCoordinator:
                 return None
             # Build plan for invalid prompt and proceed to block
             plan = self._build_plan(event)
-            self.ki_doc.record_intervention(event, plan, None, validation_result)
+            v13_ki_ok = self.ki_doc.record_intervention(event, plan, None, validation_result)
             v13_commit_result = self.commit_guard.ensure_committed(self.context)
             v13_commit_ok = v13_commit_result.success if v13_commit_result else True
             result = InterventionResult(
@@ -165,6 +165,7 @@ class InterventionCoordinator:
                 auto_fix_applied=False,
                 instruction=plan.instruction,
                 validation_result=validation_result,
+                ki_doc_updated=v13_ki_ok is True,
                 committed=v13_commit_ok,
             )
             raise TDDViolationError(event, plan, result)
