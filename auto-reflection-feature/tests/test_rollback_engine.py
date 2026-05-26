@@ -322,6 +322,23 @@ class TestPartialRollbackFailure:
         assert "src/a.py" not in result.failed_files
 
 
+class TestMultiFileAllFail:
+    def test_should_return_failure_when_all_files_fail_rollback(self, rollback_engine, pipeline_context_factory):
+        event = ViolationEvent(
+            violation_type="SKIP_RED_PHASE",
+            affected_file_path="src/a.py",
+            timestamp="2026-05-26T00:00:00+08:00",
+            context={},
+            affected_file_paths=["src/a.py", "src/b.py"],
+        )
+        plan = InterventionPlan(4, True, True, True, "Delete")
+        ctx = pipeline_context_factory()
+        with patch.object(rollback_engine, "_validate_path", return_value=False):
+            result = rollback_engine.rollback(event, plan, ctx)
+        assert result.success is False
+        assert "all files failed" in result.action
+
+
 class TestPreRollbackCommit:
     def test_should_preserve_phase5_work_via_pre_rollback_commit(self, rollback_engine, pipeline_context_factory):
         ctx = pipeline_context_factory(current_phase=5)
