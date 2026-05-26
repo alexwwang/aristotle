@@ -83,6 +83,29 @@
 - **Why deferred**: Missing assertions for record_intervention and ensure_committed. Non-blocking for Red phase.
 - **Plan**: Add missing assertions during Phase 5.
 
+### KI-10: Design pseudocode missing multi-file rollback logic for affected_file_paths
+- **Raised-in**: R16
+- **Severity**: P (Proposal)
+- **Description**: Test plan row 74 requires multi-file partial failure handling via `affected_file_paths`. RollbackEngine design pseudocode only shows single `affected_file_path` processing. Phase 5 implementation must add multi-file iteration and partial failure aggregation to RollbackEngine.
+- **Why deferred**: Design gap tracked in Open Questions #11/#12. Implementation concern for Phase 5, not Phase 4 test correctness.
+- **Plan**: Update Phase 2 design pseudocode in Phase 5 to include `for path in event.affected_file_paths` iteration with partial_failure tracking.
+
+### KI-11: FP-7 ZH "只检查" pattern untested
+- **Raised-in**: R16
+- **Severity**: L (Low)
+- **File**: `tests/test_prompt_validator.py::TestFP7ZH`
+- **Description**: Design specifies ZH FP-7 pattern `只检查[\w\u4e00-\u9fff]+` but test only covers "不要审查", "限制范围", "跳过审查". Missing "只检查" variant.
+- **Why deferred**: Low severity — 3 of 4 ZH patterns tested.
+- **Plan**: Add "只检查导入部分" to phrase list during Phase 5.
+
+### KI-12: Test plan design coverage matrix test name mismatch
+- **Raised-in**: R16
+- **Severity**: P (Proposal)
+- **File**: `docs/03-intervention-test-plan.md` row 23
+- **Description**: Matrix references `should_only_trigger_prompt_validation_for_invalid_review_prompt` but actual test is `should_dispatch_to_prompt_validator_only_for_v13`.
+- **Why deferred**: Traceability gap only, no correctness impact.
+- **Plan**: Update test plan to match actual test name.
+
 ## Resolved KI Entries
 
 ### KI-RESOLVED-01: Hardcoded sys.path.insert with absolute path
@@ -101,3 +124,4 @@
 | Round | Action | Notes |
 |-------|--------|-------|
 | R15 | Initial creation | All deferred P/L findings from R6-R14 cataloged |
+| R16 | KI re-eval (R15+1) | Added KI-10 (design gap), KI-11 (FP-7 ZH), KI-12 (name mismatch). All 9 existing KI confirmed correct severity. |
