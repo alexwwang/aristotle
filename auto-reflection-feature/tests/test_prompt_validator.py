@@ -91,7 +91,7 @@ class TestExemptHeadings:
 
 class TestPartialCodeBlock:
     def test_should_handle_pattern_partially_inside_code_block(self, validator):
-        prompt = "```python\nstop\ncondition```\nnormal text"
+        prompt = "```python\nstop condition gate pass\n```\nnormal text"
         result = validator.validate(prompt)
         assert isinstance(result, ValidationResult)
         assert result.is_valid is True

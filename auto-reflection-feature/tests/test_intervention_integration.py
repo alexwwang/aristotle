@@ -50,10 +50,15 @@ class TestE2ESkipRedPhase:
     def test_should_end_to_end_block_pipeline_on_skip_red_phase(self, temp_git_repo, integration_context):
         repo, tracked, _ = temp_git_repo
         event = ViolationEvent("SKIP_RED_PHASE", tracked[0], "2026-05-26T10:00:00+08:00", {"phase": 4})
-        coord = InterventionCoordinator(integration_context)
-        with pytest.raises(TDDViolationError) as exc_info:
-            coord.intervene(event)
-        assert exc_info.value.result.violation_code == "SKIP_RED_PHASE"
+        old_cwd = os.getcwd()
+        os.chdir(str(repo))
+        try:
+            coord = InterventionCoordinator(integration_context)
+            with pytest.raises(TDDViolationError) as exc_info:
+                coord.intervene(event)
+            assert exc_info.value.result.violation_code == "SKIP_RED_PHASE"
+        finally:
+            os.chdir(old_cwd)
         ki_content = Path(integration_context.ki_doc_path).read_text()
         assert "SKIP_RED_PHASE" in ki_content
 
@@ -111,9 +116,15 @@ class TestE2EPreserveOnRollback:
         subprocess.run(["git", "commit", "-m", "phase 5"], cwd=str(repo), capture_output=True)
         integration_context.current_phase = 5
         event = ViolationEvent("SKIP_RED_PHASE", impl_file, "2026-05-26T10:00:00+08:00", {"phase": 5})
-        coord = InterventionCoordinator(integration_context)
-        with pytest.raises(TDDViolationError):
-            coord.intervene(event)
+        old_cwd = os.getcwd()
+        os.chdir(str(repo))
+        try:
+            coord = InterventionCoordinator(integration_context)
+            with pytest.raises(TDDViolationError):
+                coord.intervene(event)
+            assert impl_path.exists(), "committed file should be preserved after rollback"
+        finally:
+            os.chdir(old_cwd)
 
 
 class TestE2ERollbackFailure:
