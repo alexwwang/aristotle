@@ -334,7 +334,7 @@ class TestMergeHandling:
             mock_cg.ensure_committed.return_value = MagicMock(success=True)
             with pytest.raises(TDDViolationError):
                 coord._handle_merged(events)
-            assert mock_ki.record_merge.called or True
+            assert mock_ki.record_merge.called
 
     def test_should_commit_and_record_ki_for_v10_v11_only_merge(self, coordinator, pipeline_context_factory):
         ctx = pipeline_context_factory()

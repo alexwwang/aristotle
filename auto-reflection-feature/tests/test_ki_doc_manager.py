@@ -133,7 +133,7 @@ class TestKiDocAssessmentEmpty:
     def test_should_treat_empty_assessment_as_missing(self, ki_doc_manager):
         ki_doc_manager.ensure_assessment(2, 3, "", [])
         content = Path(ki_doc_manager.ki_doc_path).read_text()
-        assert content is not None
+        assert "Review Records" in content
 
 
 class TestKiDocAssessmentStatusOnly:
@@ -208,4 +208,5 @@ class TestKiDocWriteFailure:
         event = ViolationEvent("SKIP_REVIEW", "", "2026-05-26T10:00:00+08:00", {"phase": 2})
         plan = InterventionPlan(2, False, False, False, "Fix")
         with patch("builtins.open", side_effect=IOError("disk full")):
-            ki_doc_manager.record_intervention(event, plan, None)
+            result = ki_doc_manager.record_intervention(event, plan, None)
+            assert result is None or isinstance(result, bool) or result is None

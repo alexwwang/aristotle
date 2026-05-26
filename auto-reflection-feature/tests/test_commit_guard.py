@@ -118,6 +118,37 @@ class TestCommitGuardLoopCommit:
         assert "[Loop 2]" in commit_msg
 
 
+class TestCommitGuardIsCleanStaged:
+    def test_should_detect_staged_changes_as_dirty(self, guard):
+        with patch("aristotle_auto_reflection.commit_guard.subprocess.run") as mock_run:
+            mock_run.side_effect = [MagicMock(returncode=0), MagicMock(returncode=1)]
+            result = guard._is_clean()
+        assert result is False
+
+
+class TestCommitGuardIsCleanUnstaged:
+    def test_should_detect_unstaged_changes_as_dirty(self, guard):
+        with patch("aristotle_auto_reflection.commit_guard.subprocess.run") as mock_run:
+            mock_run.side_effect = [MagicMock(returncode=1), MagicMock(returncode=0)]
+            result = guard._is_clean()
+        assert result is False
+
+
+class TestCommitGuardBoundaryCommit:
+    def test_should_auto_commit_all_uncommitted_at_boundary(self, guard, pipeline_context_factory):
+        ctx = pipeline_context_factory()
+        with patch.object(guard, "_is_clean", return_value=False), \
+             patch("aristotle_auto_reflection.commit_guard.subprocess.run") as mock_run:
+            mock_run.side_effect = [
+                MagicMock(returncode=0),
+                MagicMock(returncode=0, stdout="baddcafe\n"),
+            ]
+            result = guard.ensure_committed(ctx)
+        assert result.success is True
+        add_call = mock_run.call_args_list[0]
+        assert "add" in str(add_call)
+
+
 class TestCommitGuardIndexLocked:
     def test_should_handle_git_index_locked_gracefully(self, guard, pipeline_context_factory):
         ctx = pipeline_context_factory()

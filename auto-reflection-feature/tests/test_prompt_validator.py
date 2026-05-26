@@ -43,6 +43,11 @@ class TestCleanPrompt:
         assert result.is_valid is True
         assert result.matches == []
 
+    def test_should_pass_empty_prompt(self, validator):
+        result = validator.validate("")
+        assert result.is_valid is True
+        assert result.matches == []
+
 
 class TestFlagENPatterns:
     def test_should_flag_prompt_with_forbidden_en_patterns(self, validator):
