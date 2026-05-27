@@ -470,7 +470,10 @@ class TestMergeHandling:
             assert mock_ki.record_intervention.called
             assert mock_cg.ensure_committed.called
 
-    def test_should_still_record_intervention_when_ki_doc_already_up_to_date(self, coordinator):
+    def test_should_still_record_and_commit_when_ki_doc_already_up_to_date(self, coordinator):
+        """V-9: ensure_updated returns True (doc is current) but implementation
+        unconditionally records the intervention and ensures commit — verify
+        actual behavior rather than assumed branching."""
         event = _event("KI_DOC_OUTDATED", phase=3)
         with patch.object(coordinator, "ki_doc") as mock_ki, \
              patch.object(coordinator, "commit_guard") as mock_cg:
@@ -480,7 +483,7 @@ class TestMergeHandling:
                 coordinator.intervene(event)
             assert mock_ki.ensure_updated.called
             assert mock_ki.record_intervention.called
-            assert not mock_cg.ensure_committed.called
+            assert mock_cg.ensure_committed.called
 
     def test_should_raise_tdd_violation_even_when_v9_commit_fails(self, coordinator):
         event = _event("KI_DOC_OUTDATED", phase=3)
