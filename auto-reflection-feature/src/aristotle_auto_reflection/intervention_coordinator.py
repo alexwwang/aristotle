@@ -181,9 +181,10 @@ class InterventionCoordinator:
 
         rollback_result = None
 
-        # 5b. KI_DOC_OUTDATED: call ensure_updated
+        # 5b. KI_DOC_OUTDATED: verify and skip if doc is current
         if event.violation_type == "KI_DOC_OUTDATED":
-            self.ki_doc.ensure_updated(event.timestamp)
+            if self.ki_doc.ensure_updated(event.timestamp):
+                return None
 
         # 6. Pre-rollback commit (safety net for destructive ops + phase rollback)
         pre_commit_ok = True
