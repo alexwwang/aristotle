@@ -2,6 +2,7 @@
 
 import logging
 import re
+from typing import Dict, List
 from aristotle_auto_reflection.intervention_types import ValidationResult, PatternMatch
 
 logger = logging.getLogger(__name__)
@@ -91,6 +92,7 @@ class PromptValidator:
     _HEADING_RE = re.compile(r"^#{1,6}\s+.*$", re.MULTILINE)
 
     def validate(self, prompt: str) -> ValidationResult:
+        """Strip code blocks, quotes, and headings from *prompt*, then scan for forbidden patterns."""
         text = self._CODE_BLOCK_RE.sub("", prompt)
         text = self._INLINE_CODE_RE.sub("", text)
         text = self._QUOTED_RE.sub("", text)
@@ -100,8 +102,9 @@ class PromptValidator:
         )
         return ValidationResult(is_valid=len(matches) == 0, matches=matches)
 
-    def _match_compiled(self, text, compiled_map, lang):
-        matches = []
+    def _match_compiled(self, text: str, compiled_map: Dict[str, List], lang: str) -> List[PatternMatch]:
+        """Run pre-compiled regex lists against *text* and collect PatternMatch hits."""
+        matches: List[PatternMatch] = []
         for category, cps in compiled_map.items():
             for cp in cps:
                 for m in cp.finditer(text):

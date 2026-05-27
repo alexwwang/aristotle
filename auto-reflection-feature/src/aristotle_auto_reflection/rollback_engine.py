@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 class RollbackEngine:
     def rollback(self, event: ViolationEvent, plan: InterventionPlan, context: PipelineContext) -> RollbackResult:
+        """Dispatch rollback to the appropriate handler based on violation type."""
         handlers = {
             "SKIP_RED_PHASE": self._delete_implementation,
             "MODIFIED_TEST": self._restore_test,
@@ -67,6 +68,7 @@ class RollbackEngine:
         return handler(event, context)
 
     def _delete_implementation(self, event: ViolationEvent, context: PipelineContext) -> RollbackResult:
+        """Remove an implementation file that was written before the RED phase."""
         filepath = event.affected_file_path
         if not self.validate_path(filepath):
             return RollbackResult(False, "path validation failed", [], None)
@@ -81,6 +83,7 @@ class RollbackEngine:
         return RollbackResult(True, "already deleted, no action needed", [filepath], None)
 
     def _restore_test(self, event: ViolationEvent, context: PipelineContext) -> RollbackResult:
+        """Restore a modified test file to its committed state at the boundary."""
         filepath = event.affected_file_path
         if not self.validate_path(filepath):
             return RollbackResult(False, "path validation failed", [], None)
@@ -96,6 +99,7 @@ class RollbackEngine:
         return RollbackResult(True, f"restored test from {commit_ref}", [filepath], h.stdout.strip())
 
     def validate_path(self, filepath: str) -> bool:
+        """Check that a file path is within the git repo root and not malicious."""
         if filepath.startswith("-"):
             return False
         r = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True)
@@ -108,6 +112,7 @@ class RollbackEngine:
         return (abs_path == repo_root or abs_path.startswith(repo_root + os.sep)) and ".." not in filepath
 
     def _is_tracked(self, filepath: str) -> bool:
+        """Return True if the file is tracked by git."""
         r = subprocess.run(["git", "ls-files", filepath], capture_output=True, text=True)
         if r.returncode != 0:
             return False

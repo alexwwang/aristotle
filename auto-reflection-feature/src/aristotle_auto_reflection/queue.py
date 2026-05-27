@@ -6,11 +6,12 @@ from typing import List
 from aristotle_auto_reflection.intervention_types import ViolationEvent
 
 class DurableQueue:
-    def __init__(self, queue_dir: str):
+    def __init__(self, queue_dir: str) -> None:
         self.queue_dir = queue_dir
         os.makedirs(queue_dir, exist_ok=True)
     
     def _next_id(self) -> str:
+        """Return the next sequential zero-padded ID for a queue entry."""
         existing = glob.glob(os.path.join(self.queue_dir, "*.json"))
         if not existing:
             return "0001"
@@ -18,6 +19,7 @@ class DurableQueue:
         return "%04d" % (max(numbers) + 1)
     
     def enqueue(self, event: ViolationEvent) -> None:
+        """Serialize and persist a violation event to the queue directory."""
         event_id = self._next_id()
         filepath = os.path.join(self.queue_dir, f"{event_id}.json")
         data = {
@@ -31,6 +33,7 @@ class DurableQueue:
             json.dump(data, f)
     
     def dequeue_all(self) -> List[ViolationEvent]:
+        """Load and remove all queued events, returning them in order."""
         events = []
         files = sorted(glob.glob(os.path.join(self.queue_dir, "*.json")))
         for filepath in files:

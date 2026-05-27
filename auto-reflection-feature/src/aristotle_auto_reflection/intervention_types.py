@@ -7,6 +7,20 @@ VIOLATION_PRIORITY is a production lookup table used by InterventionCoordinator.
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, List
 
+__all__ = [
+    "ViolationEvent",
+    "InterventionPlan",
+    "RollbackResult",
+    "CommitResult",
+    "PatternMatch",
+    "ValidationResult",
+    "TestResult",
+    "PipelineContext",
+    "InterventionResult",
+    "BEHAVIORAL_VIOLATIONS",
+    "VIOLATION_PRIORITY",
+]
+
 
 @dataclass
 class ViolationEvent:
@@ -32,6 +46,8 @@ class InterventionPlan:
 
 @dataclass
 class RollbackResult:
+    """Outcome of a git-rollback attempt for an intervention."""
+
     success: bool = False
     action: str = ""
     files_affected: List[str] = field(default_factory=list)
@@ -42,6 +58,8 @@ class RollbackResult:
 
 @dataclass
 class CommitResult:
+    """Outcome of an auto-commit operation."""
+
     success: bool = False
     action: str = ""
     hash: Optional[str] = None
@@ -49,6 +67,8 @@ class CommitResult:
 
 @dataclass
 class PatternMatch:
+    """A single forbidden-pattern match found during prompt validation."""
+
     category: str = ""
     pattern: str = ""
     line_number: int = 0
@@ -57,12 +77,16 @@ class PatternMatch:
 
 @dataclass
 class ValidationResult:
+    """Aggregated result of forbidden-pattern validation across all languages."""
+
     is_valid: bool = True
     matches: List[PatternMatch] = field(default_factory=list)
 
 
 @dataclass
 class TestResult:
+    """Record of a single test execution within a pipeline phase."""
+
     test_name: str = ""
     passed: bool = False
     error_message: Optional[str] = None
@@ -71,6 +95,8 @@ class TestResult:
 
 @dataclass
 class PipelineContext:
+    """Runtime context carried across pipeline phases and loop rounds."""
+
     current_phase: int = 0
     req_number: str = ""
     loop_round: Optional[int] = None
@@ -83,6 +109,8 @@ class PipelineContext:
 
 @dataclass
 class InterventionResult:
+    """Final outcome produced after processing a violation through the intervention pipeline."""
+
     violation_code: str = ""
     target_phase: int = 0
     auto_fix_applied: bool = False

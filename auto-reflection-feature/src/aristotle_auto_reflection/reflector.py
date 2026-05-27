@@ -2,7 +2,12 @@ import logging
 from typing import Optional, Dict, Any
 from dataclasses import dataclass
 
+from aristotle_auto_reflection.intervention_types import ViolationEvent
+
 logger = logging.getLogger(__name__)
+
+_HASH_MODULO = 10000
+
 
 @dataclass
 class ReflectionResult:
@@ -15,7 +20,8 @@ class AutoReflector:
     def __init__(self, mcp_available: bool = True):
         self.mcp_available = mcp_available
 
-    def build_reflection_prompt(self, event) -> str:
+    def build_reflection_prompt(self, event: ViolationEvent) -> str:
+        """Format a violation event into a structured reflection prompt for rule generation."""
         return f"""TDD Pipeline Violation Detected
 
 Violation Type: {event.violation_type}
@@ -26,7 +32,8 @@ Phase: {event.context.get("phase", "unknown")}
 
 Generate a preventive rule for this violation."""
 
-    def reflect(self, event) -> Optional[ReflectionResult]:
+    def reflect(self, event: ViolationEvent) -> Optional[ReflectionResult]:
+        """Reflect on a violation event and produce a rule result via MCP (or return None if MCP unavailable)."""
         if not self.mcp_available:
             return None
         
@@ -34,7 +41,7 @@ Generate a preventive rule for this violation."""
         # In a real implementation, this would call MCP write_rule
         # For now, return a mock successful result
         return ReflectionResult(
-            rule_id=f"rule_{event.violation_type}_{hash(event.affected_file_path) % 10000}",
+            rule_id=f"rule_{event.violation_type}_{hash(event.affected_file_path) % _HASH_MODULO}",
             rule_path=f"rules/{event.violation_type}.md",
             success=True
         )

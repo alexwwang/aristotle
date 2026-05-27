@@ -3,15 +3,33 @@
 import logging
 import re
 from pathlib import Path
+from typing import List, Optional
+
+from aristotle_auto_reflection.intervention_types import (
+    InterventionPlan,
+    PipelineContext,
+    RollbackResult,
+    ValidationResult,
+    ViolationEvent,
+)
 
 logger = logging.getLogger(__name__)
 
+_DEFAULT_HEADER: str = "# Review Records\n\n"
+
 
 class KiDocManager:
-    def __init__(self, ki_doc_path: str):
+    def __init__(self, ki_doc_path: str) -> None:
         self.ki_doc_path = ki_doc_path
 
-    def record_intervention(self, event, plan, rollback_result, validation_result=None):
+    def record_intervention(
+        self,
+        event: ViolationEvent,
+        plan: InterventionPlan,
+        rollback_result: RollbackResult,
+        validation_result: Optional[ValidationResult] = None,
+    ) -> Optional[bool]:
+        """Append an intervention entry to the KI document."""
         entry = self._format_intervention_entry(event, plan, rollback_result, validation_result)
         try:
             self._append(entry)
@@ -20,12 +38,20 @@ class KiDocManager:
             logger.warning("Failed to record intervention: %s", e)
             return None
 
-    def ensure_assessment(self, phase, next_phase, status, issues, priority_counts=None):
+    def ensure_assessment(
+        self,
+        phase: str,
+        next_phase: str,
+        status: str,
+        issues: List[str],
+        priority_counts: Optional[dict] = None,
+    ) -> Optional[bool]:
+        """Write a phase assessment entry or create the doc if status is empty."""
         if not status:
             p = Path(self.ki_doc_path)
             if not p.exists():
                 p.parent.mkdir(parents=True, exist_ok=True)
-                p.write_text("# Review Records\n\n")
+                p.write_text(_DEFAULT_HEADER)
             return True
         entry = self._format_assessment_entry(phase, next_phase, status, issues, priority_counts)
         try:
@@ -35,13 +61,19 @@ class KiDocManager:
             logger.warning("Failed to ensure assessment: %s", e)
             return None
 
-    def ensure_updated(self, last_intervention_ts):
+    def ensure_updated(self, last_intervention_ts: str) -> bool:
+        """Return True if the doc already contains entries newer than the given timestamp."""
         newest_ts = self._parse_newest_timestamp()
         if newest_ts is None:
             return True
         return not (newest_ts < last_intervention_ts)
 
-    def record_merge(self, events, context):
+    def record_merge(
+        self,
+        events: List[ViolationEvent],
+        context: PipelineContext,
+    ) -> Optional[bool]:
+        """Append a merged-intervention entry summarizing multiple events."""
         entry = self._format_merge_entry(events, context)
         try:
             self._append(entry)
@@ -65,7 +97,7 @@ class KiDocManager:
         p = Path(self.ki_doc_path)
         if not p.exists():
             p.parent.mkdir(parents=True, exist_ok=True)
-            p.write_text("# Review Records\n\n")
+            p.write_text(_DEFAULT_HEADER)
         with open(p, "a") as f:
             f.write(entry)
 
