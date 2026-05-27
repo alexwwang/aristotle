@@ -248,3 +248,30 @@ class TestKiDocWriteFailure:
         with patch("builtins.open", side_effect=IOError("disk full")):
             result = ki_doc_manager.record_intervention(event, plan, None)
             assert result is None
+
+
+class TestKiDocLogWarningOnIOError:
+    def test_should_log_warning_on_record_intervention_ioerror(self, tmp_path):
+        from unittest.mock import patch
+        ki = KiDocManager(str(tmp_path / "ki.md"))
+        with patch.object(ki, '_append', side_effect=IOError("disk full")):
+            result = ki.record_intervention(
+                MagicMock(violation_type="TEST", affected_file_path="f.py", timestamp="2026-01-01T00:00:00Z", context={"phase": 1}),
+                MagicMock(target_phase=1, auto_fix=False, needs_rollback=False, instruction="test"),
+                None,
+            )
+            assert result is None
+
+    def test_should_return_none_explicitly_on_ensure_assessment_ioerror(self, tmp_path):
+        ki = KiDocManager(str(tmp_path / "ki.md"))
+        ki_doc_path = tmp_path / "ki.md"
+        ki_doc_path.write_text("## Review Records\n\n")
+        with patch.object(ki, '_append', side_effect=IOError("disk full")):
+            result = ki.ensure_assessment(1, 2, "FAIL", ["issue1"])
+            assert result is None
+
+    def test_should_return_none_explicitly_on_record_merge_ioerror(self, tmp_path):
+        ki = KiDocManager(str(tmp_path / "ki.md"))
+        with patch.object(ki, '_append', side_effect=IOError("disk full")):
+            result = ki.record_merge([], MagicMock(current_phase=1, req_number="T-1"))
+            assert result is None

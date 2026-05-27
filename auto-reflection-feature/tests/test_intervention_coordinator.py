@@ -35,9 +35,11 @@ def coordinator(pipeline_context_factory):
 
 
 def _event(vtype, filepath="", phase=4, **ctx_extra):
+    affected_file_paths = ctx_extra.pop("affected_file_paths", None)
     ctx = {"phase": phase}
     ctx.update(ctx_extra)
-    return ViolationEvent(vtype, filepath, "2026-05-26T10:00:00+08:00", ctx)
+    return ViolationEvent(vtype, filepath, "2026-05-26T10:00:00+08:00", ctx,
+                          affected_file_paths=affected_file_paths)
 
 
 # ===== Process Violations (V-1/V-2/V-3) =====
@@ -659,6 +661,35 @@ class TestPreRollbackCommit:
             # Verify git add was called for each file in affected_file_paths
             add_calls = [c for c in mock_run.call_args_list if "add" in str(c)]
             assert len(add_calls) >= 3, f"Expected >=3 git add calls, got {len(add_calls)}"
+
+    def test_should_batch_git_add_for_multiple_files(self, coordinator):
+        event = _event("SKIP_RED_PHASE", "src/a.py", 4, affected_file_paths=["src/a.py", "src/b.py"])
+        with patch.object(coordinator, "commit_guard") as mock_cg, \
+             patch.object(coordinator, "rollback_engine") as mock_re, \
+             patch.object(coordinator, "ki_doc"), \
+             patch("subprocess.run") as mock_run:
+            mock_cg.ensure_committed.return_value = MagicMock(success=True)
+            mock_re.validate_path.return_value = True
+            mock_re.rollback.return_value = RollbackResult(True, "ok")
+            with pytest.raises(TDDViolationError):
+                coordinator.intervene(event)
+            git_add_calls = [c for c in mock_run.call_args_list if c[0][0][0:2] == ["git", "add"]]
+            assert len(git_add_calls) == 1
+            assert set(git_add_calls[0][0][0][2:]) == {"src/a.py", "src/b.py"}
+
+    def test_should_skip_git_add_when_no_valid_files(self, coordinator):
+        event = _event("SKIP_RED_PHASE", "src/a.py", 4)
+        with patch.object(coordinator, "commit_guard") as mock_cg, \
+             patch.object(coordinator, "rollback_engine") as mock_re, \
+             patch.object(coordinator, "ki_doc"), \
+             patch("subprocess.run") as mock_run:
+            mock_cg.ensure_committed.return_value = MagicMock(success=True)
+            mock_re.validate_path.return_value = False
+            mock_re.rollback.return_value = RollbackResult(True, "ok")
+            with pytest.raises(TDDViolationError):
+                coordinator.intervene(event)
+            git_add_calls = [c for c in mock_run.call_args_list if c[0][0][0:2] == ["git", "add"]]
+            assert len(git_add_calls) == 0
 
 
 # ===== SYNC Mode =====
