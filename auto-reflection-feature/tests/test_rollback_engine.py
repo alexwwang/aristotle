@@ -113,6 +113,23 @@ class TestRollbackRestoreFallbackHead:
         checkout_call = mock_run.call_args_list[0]
         assert "HEAD" in str(checkout_call)
 
+    def test_should_fallback_to_head_when_boundary_commit_hash_non_hex(self, rollback_engine, pipeline_context_factory):
+        event = _v5_event()
+        plan = InterventionPlan(5, True, True, True, "Restore test")
+        ctx = pipeline_context_factory(boundary_commit_hash="invalid!ref;rm -rf /")
+        with patch.object(rollback_engine, "validate_path", return_value=True), \
+             patch.object(rollback_engine, "_is_tracked", return_value=True), \
+             patch("aristotle_auto_reflection.rollback_engine.subprocess.run") as mock_run:
+            mock_run.side_effect = [
+                MagicMock(returncode=0),
+                MagicMock(returncode=0, stdout="abc1234\n"),
+            ]
+            result = rollback_engine.rollback(event, plan, ctx)
+        assert result.success is True
+        checkout_call = mock_run.call_args_list[0]
+        assert "HEAD" in str(checkout_call)
+        assert "invalid" not in str(checkout_call)
+
 
 class TestRollbackRestoreUntracked:
     def test_should_skip_restore_for_untracked_test_file(self, rollback_engine, pipeline_context_factory):
