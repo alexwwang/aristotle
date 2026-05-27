@@ -1,5 +1,6 @@
 """Tests for queue module."""
 import os
+import glob
 import pytest
 import sys
 sys.path.insert(0, "/workspace/auto-reflection-feature/src")
@@ -65,3 +66,12 @@ class TestDurableQueue:
         events = queue.dequeue_all()
         assert len(events) == 1
         assert events[0].affected_file_paths == []
+
+    def test_dequeue_reads_all_before_deleting(self, tmp_path):
+        q = DurableQueue(str(tmp_path / "q"))
+        q.enqueue(ViolationEvent("SKIP_RED_PHASE", "a.py", "2026-01-01T00:00:00Z", {"phase": 4}))
+        q.enqueue(ViolationEvent("MODIFIED_TEST", "b.py", "2026-01-01T00:00:01Z", {"phase": 5}))
+        events = q.dequeue_all()
+        assert len(events) == 2
+        remaining = glob.glob(os.path.join(str(tmp_path / "q"), "*.json"))
+        assert len(remaining) == 0
