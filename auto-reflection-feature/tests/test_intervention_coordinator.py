@@ -483,7 +483,7 @@ class TestMergeHandling:
             assert result is None
             assert mock_ki.ensure_updated.called
             assert not mock_ki.record_intervention.called
-            assert not mock_cg.ensure_committed.called
+            assert mock_cg.ensure_committed.called
 
     def test_should_raise_tdd_violation_even_when_v9_commit_fails(self, coordinator):
         event = _event("KI_DOC_OUTDATED", phase=3)
