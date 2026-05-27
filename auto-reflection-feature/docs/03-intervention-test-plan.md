@@ -535,9 +535,9 @@ No peripheral-to-key upgrades detected. CommitGuard remains Peripheral with basi
 | 3 | `should_end_to_end_handle_merged_violations_in_correct_order` | V-10 + V-12 + V-8 at same boundary → commit → assessment → ki doc update → single TDDViolationError | Coordinator, CommitGuard, KiDocManager |
 | 4 | `should_end_to_end_preserve_committed_work_on_phase_rollback` | V-6 detected in Phase 5 → commit Phase 5 work → rollback to Phase 4 → Phase 5 work in git history | Coordinator, RollbackEngine, CommitGuard |
 | 5 | `should_end_to_end_handle_nonexistent_file_gracefully` | V-4 with nonexistent file → RollbackResult(success=True) → ki doc still updated → TDDViolationError with auto_fix_applied=False | Coordinator, RollbackEngine, KiDocManager |
-| 6 | `should_end_to_end_validate_prompt_and_block_with_details` | V-13 with forbidden EN+ZH content → PromptValidator → multiple PatternMatches → ki doc PROMPT-VALIDATION entry → TDDViolationError | Coordinator, PromptValidator, KiDocManager |
+| 6 | `should_end_to_end_validate_prompt_and_block_with_details` | V-13 with forbidden EN content → PromptValidator → PatternMatches → ki doc PROMPT-VALIDATION entry → TDDViolationError | Coordinator, PromptValidator, KiDocManager |
 | 7 | `should_end_to_end_rollback_to_phase5_on_regression` | Phase 5 tests pass → Phase 6 detects regression → rollback to Phase 5 → ki doc updated → TDDViolationError | Coordinator, RollbackEngine, KiDocManager, CommitGuard |
-| 8 | `should_end_to_end_auto_append_outdated_ki_doc_for_v9` | V-9 KI_DOC_OUTDATED → ensure_updated() auto-appends missing record → record_intervention → commit → TDDViolationError | Coordinator, KiDocManager, CommitGuard |
+| 8 | `should_end_to_end_auto_append_outdated_ki_doc_for_ki_doc_outdated` | V-9 KI_DOC_OUTDATED → ensure_updated() auto-appends missing record → record_intervention → commit → TDDViolationError | Coordinator, KiDocManager, CommitGuard |
 
 ---
 
