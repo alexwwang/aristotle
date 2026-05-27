@@ -1,7 +1,10 @@
 """PromptValidator — detects forbidden patterns in prompts (FP-1 through FP-7)."""
 
+import logging
 import re
 from aristotle_auto_reflection.intervention_types import ValidationResult, PatternMatch
+
+logger = logging.getLogger(__name__)
 
 
 class PromptValidator:

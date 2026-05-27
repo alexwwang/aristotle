@@ -94,6 +94,9 @@ class InterventionResult:
     validation_result: Optional[ValidationResult] = None
 
 
+BEHAVIORAL_VIOLATIONS = frozenset({"SKIP_RED_PHASE", "MODIFIED_TEST", "MISSING_TEST", "REGRESSION"})
+
+
 # Priority table for violation types
 VIOLATION_PRIORITY = {
     "SKIP_RED_PHASE": 1,

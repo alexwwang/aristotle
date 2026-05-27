@@ -3,12 +3,12 @@ from dataclasses import dataclass
 from typing import Dict, Any
 
 @dataclass
-class ValidationResult:
+class SchemaValidationResult:
     is_valid: bool
     errors: list
 
 class AutoCommitter:
-    def validate_schema(self, frontmatter: Dict[str, Any]) -> ValidationResult:
+    def validate_schema(self, frontmatter: Dict[str, Any]) -> SchemaValidationResult:
         errors = []
         
         if "category" not in frontmatter:
@@ -25,4 +25,4 @@ class AutoCommitter:
         if len(error_summary) > 200:
             errors.append("error_summary exceeds 200 characters")
         
-        return ValidationResult(is_valid=len(errors) == 0, errors=errors)
+        return SchemaValidationResult(is_valid=len(errors) == 0, errors=errors)

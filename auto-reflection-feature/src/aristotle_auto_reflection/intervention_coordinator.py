@@ -1,5 +1,6 @@
 """InterventionCoordinator — orchestrates TDD pipeline violation handling."""
 
+import logging
 import subprocess
 from aristotle_auto_reflection.intervention_types import (
     InterventionResult,
@@ -10,6 +11,8 @@ from aristotle_auto_reflection.prompt_validator import PromptValidator
 from aristotle_auto_reflection.rollback_engine import RollbackEngine
 from aristotle_auto_reflection.ki_doc_manager import KiDocManager
 from aristotle_auto_reflection.commit_guard import CommitGuard
+
+logger = logging.getLogger(__name__)
 
 
 class TDDViolationError(Exception):
@@ -29,10 +32,6 @@ _MERGEABLE_TYPES = {
     "MISSING_KI_ASSESSMENT",
 }
 
-# Behavioral violations require affected_file_path
-_BEHAVIORAL_TYPES = {"SKIP_RED_PHASE", "MODIFIED_TEST", "MISSING_TEST", "REGRESSION"}
-
-# Plan mapping: violation_type -> InterventionPlan kwargs
 _PLAN_MAP = {
     "SKIP_REVIEW": lambda e, ctx: InterventionPlan(
         target_phase=e.context.get("phase", 2),
@@ -186,8 +185,8 @@ class InterventionCoordinator:
             try:
                 if self.ki_doc.ensure_updated(event.timestamp):
                     return None
-            except (IOError, OSError):
-                pass
+            except (IOError, OSError) as e:
+                logger.warning("ensure_updated failed, falling through to violation path: %s", e)
 
         # 6. Pre-rollback commit (safety net for destructive ops + phase rollback)
         pre_commit_ok = True
@@ -197,16 +196,16 @@ class InterventionCoordinator:
                 if event.affected_file_paths
                 else ([event.affected_file_path] if event.affected_file_path else [])
             )
-            for fp in files_to_stage:
-                if self.rollback_engine.validate_path(fp):
-                    try:
-                        subprocess.run(
-                            ["git", "add", fp],
-                            capture_output=True,
-                            text=True,
-                        )
-                    except Exception:
-                        pass
+            valid_files = [fp for fp in files_to_stage if self.rollback_engine.validate_path(fp)]
+            if valid_files:
+                try:
+                    subprocess.run(
+                        ["git", "add"] + valid_files,
+                        capture_output=True,
+                        text=True,
+                    )
+                except Exception as e:
+                    logger.debug("batch git add failed: %s", e)
             pre_commit_result = self.commit_guard.ensure_committed(self.context)
             pre_commit_ok = pre_commit_result.success if pre_commit_result else True
 
@@ -266,7 +265,7 @@ class InterventionCoordinator:
             return False
         if "phase" not in event.context:
             return False
-        if event.violation_type in _BEHAVIORAL_TYPES and not event.affected_file_path:
+        if event.violation_type in BEHAVIORAL_VIOLATIONS and not event.affected_file_path:
             return False
         return True
 

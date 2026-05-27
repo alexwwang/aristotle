@@ -3,7 +3,7 @@ import os
 import json
 import glob
 from typing import List
-from aristotle_auto_reflection.watchdog import ViolationEvent
+from aristotle_auto_reflection.intervention_types import ViolationEvent
 
 class DurableQueue:
     def __init__(self, queue_dir: str):
@@ -24,7 +24,8 @@ class DurableQueue:
             "violation_type": event.violation_type,
             "affected_file_path": event.affected_file_path,
             "timestamp": event.timestamp,
-            "context": event.context
+            "context": event.context,
+            "affected_file_paths": event.affected_file_paths,
         }
         with open(filepath, "w") as f:
             json.dump(data, f)
@@ -39,7 +40,8 @@ class DurableQueue:
                 violation_type=data["violation_type"],
                 affected_file_path=data["affected_file_path"],
                 timestamp=data["timestamp"],
-                context=data["context"]
+                context=data["context"],
+                affected_file_paths=data.get("affected_file_paths", []),
             ))
             os.remove(filepath)
         return events

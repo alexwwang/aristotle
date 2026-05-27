@@ -1,7 +1,10 @@
 """KiDocManager — manages the KI (Knowledge Integration) review document."""
 
+import logging
 import re
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 class KiDocManager:
@@ -13,7 +16,8 @@ class KiDocManager:
         try:
             self._append(entry)
             return True
-        except IOError:
+        except IOError as e:
+            logger.warning("Failed to record intervention: %s", e)
             return None
 
     def ensure_assessment(self, phase, next_phase, status, issues, priority_counts=None):
@@ -27,8 +31,9 @@ class KiDocManager:
         try:
             self._append(entry)
             return True
-        except IOError:
-            pass
+        except IOError as e:
+            logger.warning("Failed to ensure assessment: %s", e)
+            return None
 
     def ensure_updated(self, last_intervention_ts):
         newest_ts = self._parse_newest_timestamp()
@@ -41,8 +46,9 @@ class KiDocManager:
         try:
             self._append(entry)
             return True
-        except IOError:
-            pass
+        except IOError as e:
+            logger.warning("Failed to record merge: %s", e)
+            return None
 
     def _parse_newest_timestamp(self):
         p = Path(self.ki_doc_path)

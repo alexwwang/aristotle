@@ -1,15 +1,7 @@
 """GPAV integration and violation detection."""
-from dataclasses import dataclass
 from typing import Optional, Dict, Any
+from aristotle_auto_reflection.intervention_types import ViolationEvent, BEHAVIORAL_VIOLATIONS
 
-@dataclass
-class ViolationEvent:
-    violation_type: str
-    affected_file_path: str
-    timestamp: str
-    context: Dict[str, Any]
-
-BEHAVIORAL_VIOLATIONS = {"SKIP_RED_PHASE", "MODIFIED_TEST", "MISSING_TEST"}
 TDD_PHASES = {4, 5}
 VALID_OPERATIONS = {"create", "modify", "delete"}
 

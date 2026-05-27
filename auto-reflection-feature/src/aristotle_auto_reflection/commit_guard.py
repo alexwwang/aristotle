@@ -1,7 +1,10 @@
 """CommitGuard — auto-commits uncommitted changes at phase boundaries."""
 
+import logging
 import subprocess
 from aristotle_auto_reflection.intervention_types import CommitResult, PipelineContext
+
+logger = logging.getLogger(__name__)
 
 
 class CommitGuard:

@@ -1,5 +1,6 @@
 """RollbackEngine — rollback implementation for TDD pipeline violations."""
 
+import logging
 import re
 import subprocess
 import os
@@ -9,6 +10,8 @@ from aristotle_auto_reflection.intervention_types import (
     RollbackResult,
     PipelineContext,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class RollbackEngine:
