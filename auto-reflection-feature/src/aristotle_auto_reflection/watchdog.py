@@ -7,6 +7,7 @@ VALID_OPERATIONS = {"create", "modify", "delete"}
 
 class ViolationFilter:
     def filter(self, event: ViolationEvent) -> Optional[ViolationEvent]:
+        """Return *event* if it is a behavioral violation in a TDD phase with a valid operation, else None."""
         if event.violation_type not in BEHAVIORAL_VIOLATIONS:
             return None
         phase = event.context.get("phase")

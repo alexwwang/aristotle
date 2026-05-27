@@ -1,15 +1,18 @@
 """Auto-commit with validation."""
 from dataclasses import dataclass
-from typing import Dict, Any
+from typing import Dict, Any, List
+
+_MAX_ERROR_SUMMARY_LENGTH = 200
 
 @dataclass
 class SchemaValidationResult:
     is_valid: bool
-    errors: list
+    errors: List[str]
 
 class AutoCommitter:
     def validate_schema(self, frontmatter: Dict[str, Any]) -> SchemaValidationResult:
-        errors = []
+        """Validate frontmatter fields: required keys, confidence range, and summary length."""
+        errors: List[str] = []
         
         if "category" not in frontmatter:
             errors.append("Missing required field: category")
@@ -22,7 +25,7 @@ class AutoCommitter:
                 errors.append("confidence must be between 0.0 and 1.0")
         
         error_summary = frontmatter.get("error_summary", "")
-        if len(error_summary) > 200:
-            errors.append("error_summary exceeds 200 characters")
+        if len(error_summary) > _MAX_ERROR_SUMMARY_LENGTH:
+            errors.append(f"error_summary exceeds {_MAX_ERROR_SUMMARY_LENGTH} characters")
         
         return SchemaValidationResult(is_valid=len(errors) == 0, errors=errors)
