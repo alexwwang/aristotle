@@ -1,5 +1,5 @@
 """GPAV integration and violation detection."""
-from typing import Optional, Dict, Any
+from typing import Optional
 from aristotle_auto_reflection.intervention_types import ViolationEvent, BEHAVIORAL_VIOLATIONS
 
 TDD_PHASES = {4, 5}

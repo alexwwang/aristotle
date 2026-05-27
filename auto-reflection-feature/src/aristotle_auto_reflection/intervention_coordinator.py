@@ -5,6 +5,7 @@ import subprocess
 from aristotle_auto_reflection.intervention_types import (
     InterventionResult,
     InterventionPlan,
+    ViolationEvent,
     VIOLATION_PRIORITY,
     BEHAVIORAL_VIOLATIONS,
 )
@@ -136,7 +137,7 @@ class InterventionCoordinator:
         self.ki_doc = KiDocManager(context.ki_doc_path)
         self.commit_guard = CommitGuard()
 
-    def intervene(self, event) -> None:
+    def intervene(self, event: ViolationEvent) -> None:
         if self._validate_and_early_return(event):
             return None
 
@@ -144,19 +145,18 @@ class InterventionCoordinator:
             if self._handle_prompt_violation(event):
                 return None
 
-        plan = self._build_plan(event)
         if event.violation_type == "KI_DOC_OUTDATED":
             try:
                 if self.ki_doc.ensure_updated(event.timestamp):
-                    self.commit_guard.ensure_committed(self.context)
                     return None
             except (IOError, OSError) as e:
                 logger.warning("ensure_updated failed, falling through to violation path: %s", e)
 
+        plan = self._build_plan(event)
         pre_commit_ok = self._stage_pre_rollback(event, plan)
         self._execute_intervention(event, plan, pre_commit_ok)
 
-    def _validate_and_early_return(self, event) -> bool:
+    def _validate_and_early_return(self, event: ViolationEvent) -> bool:
         if not self._is_valid_event(event):
             return True
         if event.violation_type not in VIOLATION_PRIORITY:
@@ -170,7 +170,7 @@ class InterventionCoordinator:
                     return True
         return False
 
-    def _handle_prompt_violation(self, event) -> bool:
+    def _handle_prompt_violation(self, event: ViolationEvent) -> bool:
         prompt = event.context.get("prompt", "")
         validation_result = self.prompt_validator.validate(prompt)
         if validation_result.is_valid:
@@ -190,7 +190,7 @@ class InterventionCoordinator:
         )
         raise TDDViolationError(event, plan, result)
 
-    def _stage_pre_rollback(self, event, plan) -> bool:
+    def _stage_pre_rollback(self, event: ViolationEvent, plan: InterventionPlan) -> bool:
         pre_commit_ok = True
         if plan.is_destructive or plan.target_phase < self.context.current_phase:
             files_to_stage = (
@@ -212,7 +212,7 @@ class InterventionCoordinator:
             pre_commit_ok = pre_commit_result.success if pre_commit_result else True
         return pre_commit_ok
 
-    def _execute_intervention(self, event, plan, pre_commit_ok: bool) -> None:
+    def _execute_intervention(self, event: ViolationEvent, plan: InterventionPlan, pre_commit_ok: bool) -> None:
         rollback_result = None
         if plan.auto_fix and plan.needs_rollback:
             rollback_result = self.rollback_engine.rollback(event, plan, self.context)
