@@ -493,6 +493,17 @@ class TestMergeHandling:
                 coordinator.intervene(event)
             assert mock_ki.record_intervention.called
             assert mock_cg.ensure_committed.called
+    def test_should_fall_through_to_violation_when_ensure_updated_raises(self, coordinator):
+        event = _event("KI_DOC_OUTDATED", phase=3)
+        with patch.object(coordinator, "ki_doc") as mock_ki, \
+             patch.object(coordinator, "commit_guard") as mock_cg:
+            mock_ki.ensure_updated.side_effect = IOError("permission denied")
+            mock_ki.record_intervention.return_value = True
+            mock_cg.ensure_committed.return_value = MagicMock(success=True)
+            with pytest.raises(TDDViolationError):
+                coordinator.intervene(event)
+            assert mock_ki.record_intervention.called
+            assert mock_cg.ensure_committed.called
 
 
 # ===== Assessment =====
