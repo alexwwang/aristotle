@@ -160,6 +160,8 @@ class TestMissingTest:
         with pytest.raises(TDDViolationError) as exc_info:
             coordinator.intervene(event)
         assert exc_info.value.plan.auto_fix is False
+        assert exc_info.value.plan.target_phase == 5
+        assert exc_info.value.plan.needs_rollback is False
 
     def test_should_not_create_test_skeleton_for_missing_test(self, coordinator):
         plan = coordinator._build_plan(_event("MISSING_TEST", "src/new_mod.py", 5))
@@ -464,6 +466,8 @@ class TestMergeHandling:
             with pytest.raises(TDDViolationError):
                 coordinator.intervene(event)
             assert mock_ki.ensure_updated.called
+            assert mock_ki.record_intervention.called
+            assert mock_cg.ensure_committed.called
 
 
 # ===== Assessment =====
@@ -629,7 +633,7 @@ class TestSyncMode:
         ("INSUFFICIENT_REVIEW", "", 2, {}),
         ("UNFIXED_ISSUES", "", 2, {}),
         ("SKIP_RED_PHASE", "src/mod.py", 4, {}),
-        ("MODIFIED_TEST", "src/mod.py", 4, {}),
+        ("MODIFIED_TEST", "src/mod.py", 5, {}),
         ("MISSING_TEST", "src/mod.py", 4, {}),
         ("REGRESSION", "src/mod.py", 6, {}),
         ("MISSING_KI_DOC", "", 3, {}),

@@ -98,7 +98,6 @@ class TestKiDocFailedRound:
 class TestKiDocOutdatedDetection:
     def test_should_detect_outdated_ki_doc_by_timestamp(self, ki_doc_manager):
         result = ki_doc_manager.ensure_updated("2026-05-27T00:00:00+08:00")
-        assert isinstance(result, bool)
         assert result is True
 
 

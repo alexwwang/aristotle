@@ -93,8 +93,8 @@ class TestPartialCodeBlock:
     def test_should_handle_pattern_partially_inside_code_block(self, validator):
         prompt = "```python\nstop condition gate pass\n```\nnormal text"
         result = validator.validate(prompt)
-        assert isinstance(result, ValidationResult)
         assert result.is_valid is True
+        assert result.matches == []
 
 
 class TestReportDetails:
@@ -246,7 +246,7 @@ class TestFP6ZH:
 
 class TestFP7ZH:
     def test_should_detect_fp7_zh_scope_limiting_patterns(self, validator):
-        for phrase in ["只检查代码", "不要审查", "限制范围", "跳过审查"]:
+        for phrase in ["只检查代码", "不要审查", "限制范围", "跳过审查", "只检查导入部分"]:
             result = validator.validate(f"请{phrase}这个部分。")
             assert result.is_valid is False, f"FP-7 ZH should detect: {phrase}"
 
@@ -272,6 +272,6 @@ class TestLongPromptHandling:
     def test_should_handle_very_long_prompt(self, validator):
         long_prompt = "x " * 10000 + "stop condition"
         result = validator.validate(long_prompt)
-        assert isinstance(result, ValidationResult)
         assert result.is_valid is False
-        assert any(m.pattern for m in result.matches)
+        assert len(result.matches) > 0
+        assert result.matches[0].category == "FP-1"

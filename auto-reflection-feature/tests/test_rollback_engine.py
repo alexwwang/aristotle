@@ -454,8 +454,8 @@ class TestDualFieldPrecedence:
         assert "c.py" not in result.files_affected
 
 
-class TestPreRollbackCommit:
-    def test_should_preserve_phase5_work_via_pre_rollback_commit(self, rollback_engine, pipeline_context_factory):
+class TestRollbackDispatchFromPhase5:
+    def test_should_dispatch_rollback_for_v4_from_phase5_context(self, rollback_engine, pipeline_context_factory):
         ctx = pipeline_context_factory(current_phase=5)
         event = _v4_event()
         plan = InterventionPlan(4, True, True, True, "Rollback to Phase 4")
