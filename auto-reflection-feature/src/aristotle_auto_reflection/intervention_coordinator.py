@@ -261,7 +261,7 @@ class InterventionCoordinator:
         if mergeable:
             self._handle_merged(mergeable)
 
-    def _is_valid_event(self, event) -> bool:
+    def _is_valid_event(self, event: ViolationEvent) -> bool:
         if not event.violation_type:
             return False
         if "phase" not in event.context:
@@ -270,10 +270,10 @@ class InterventionCoordinator:
             return False
         return True
 
-    def _needs_prompt_validation(self, event) -> bool:
+    def _needs_prompt_validation(self, event: ViolationEvent) -> bool:
         return event.violation_type == "INVALID_REVIEW_PROMPT"
 
-    def _build_plan(self, event):
+    def _build_plan(self, event: ViolationEvent) -> InterventionPlan:
         builder = _PLAN_MAP.get(event.violation_type)
         if builder:
             return builder(event, self.context)
@@ -286,7 +286,7 @@ class InterventionCoordinator:
             instruction=f"Unknown violation type: {event.violation_type}",
         )
 
-    def _handle_merged(self, events):
+    def _handle_merged(self, events: list) -> None:
         # 1. V-10/V-11: commit first
         commit_types = {"UNCOMMITTED_PHASE", "UNCOMMITTED_REVIEW"}
         for e in events:
@@ -331,7 +331,7 @@ class InterventionCoordinator:
         )
         raise TDDViolationError(events[0], plan, result)
 
-    def _compute_assessment(self):
+    def _compute_assessment(self) -> tuple:
         round_results = self.context.metadata.get("round_results", [])
         if not round_results:
             return "PASS", [], {"P0": 0, "P1": 0, "P2": 0, "P3": 0, "P4": 0}
