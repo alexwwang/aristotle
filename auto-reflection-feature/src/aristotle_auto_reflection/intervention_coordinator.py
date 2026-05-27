@@ -148,6 +148,7 @@ class InterventionCoordinator:
         if event.violation_type == "KI_DOC_OUTDATED":
             try:
                 if self.ki_doc.ensure_updated(event.timestamp):
+                    self.commit_guard.ensure_committed(self.context)
                     return None
             except (IOError, OSError) as e:
                 logger.warning("ensure_updated failed, falling through to violation path: %s", e)
