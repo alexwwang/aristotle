@@ -137,51 +137,13 @@ class InterventionCoordinator:
         self.commit_guard = CommitGuard()
 
     def intervene(self, event) -> None:
-        # 1. Validate event
-        if not self._is_valid_event(event):
+        if self._validate_and_early_return(event):
             return None
 
-        # 2. Unknown type → return None (log warning)
-        if event.violation_type not in VIOLATION_PRIORITY:
-            return None
-
-        # 3. Special case: INSUFFICIENT_REVIEW with consecutive zero CHM
-        if event.violation_type == "INSUFFICIENT_REVIEW":
-            rounds = event.context.get("rounds", 0)
-            round_results = self.context.metadata.get("round_results", [])
-            if rounds >= 2 and len(round_results) >= 2:
-                last_two = round_results[-2:]
-                if all(r.get("C", 0) == 0 and r.get("H", 0) == 0 and r.get("M", 0) == 0 for r in last_two):
-                    return None
-
-        # 4. Prompt validation for V-13
         if self._needs_prompt_validation(event):
-            prompt = event.context.get("prompt", "")
-            validation_result = self.prompt_validator.validate(prompt)
-            if validation_result.is_valid:
-                return None
-            # Build plan for invalid prompt and proceed to block
-            plan = self._build_plan(event)
-            v13_ki_ok = self.ki_doc.record_intervention(event, plan, None, validation_result)
-            v13_commit_result = self.commit_guard.ensure_committed(self.context)
-            v13_commit_ok = v13_commit_result.success if v13_commit_result else True
-            result = InterventionResult(
-                violation_code=event.violation_type,
-                target_phase=plan.target_phase,
-                auto_fix_applied=False,
-                instruction=plan.instruction,
-                validation_result=validation_result,
-                ki_doc_updated=v13_ki_ok is True,
-                committed=v13_commit_ok,
-            )
-            raise TDDViolationError(event, plan, result)
+            self._handle_prompt_violation(event)
 
-        # 5. Build plan
         plan = self._build_plan(event)
-
-        rollback_result = None
-
-        # 5b. KI_DOC_OUTDATED: verify and skip if doc is current
         if event.violation_type == "KI_DOC_OUTDATED":
             try:
                 if self.ki_doc.ensure_updated(event.timestamp):
@@ -189,7 +151,44 @@ class InterventionCoordinator:
             except (IOError, OSError) as e:
                 logger.warning("ensure_updated failed, falling through to violation path: %s", e)
 
-        # 6. Pre-rollback commit (safety net for destructive ops + phase rollback)
+        pre_commit_ok = self._stage_pre_rollback(event, plan)
+        self._execute_intervention(event, plan, pre_commit_ok)
+
+    def _validate_and_early_return(self, event) -> bool:
+        if not self._is_valid_event(event):
+            return True
+        if event.violation_type not in VIOLATION_PRIORITY:
+            return True
+        if event.violation_type == "INSUFFICIENT_REVIEW":
+            rounds = event.context.get("rounds", 0)
+            round_results = self.context.metadata.get("round_results", [])
+            if rounds >= 2 and len(round_results) >= 2:
+                last_two = round_results[-2:]
+                if all(r.get("C", 0) == 0 and r.get("H", 0) == 0 and r.get("M", 0) == 0 for r in last_two):
+                    return True
+        return False
+
+    def _handle_prompt_violation(self, event) -> None:
+        prompt = event.context.get("prompt", "")
+        validation_result = self.prompt_validator.validate(prompt)
+        if validation_result.is_valid:
+            return None
+        plan = self._build_plan(event)
+        v13_ki_ok = self.ki_doc.record_intervention(event, plan, None, validation_result)
+        v13_commit_result = self.commit_guard.ensure_committed(self.context)
+        v13_commit_ok = v13_commit_result.success if v13_commit_result else True
+        result = InterventionResult(
+            violation_code=event.violation_type,
+            target_phase=plan.target_phase,
+            auto_fix_applied=False,
+            instruction=plan.instruction,
+            validation_result=validation_result,
+            ki_doc_updated=v13_ki_ok is True,
+            committed=v13_commit_ok,
+        )
+        raise TDDViolationError(event, plan, result)
+
+    def _stage_pre_rollback(self, event, plan) -> bool:
         pre_commit_ok = True
         if plan.is_destructive or plan.target_phase < self.context.current_phase:
             files_to_stage = (
@@ -209,20 +208,19 @@ class InterventionCoordinator:
                     logger.warning("batch git add failed: %s", e)
             pre_commit_result = self.commit_guard.ensure_committed(self.context)
             pre_commit_ok = pre_commit_result.success if pre_commit_result else True
+        return pre_commit_ok
 
-        # 6b. Execute rollback if applicable
+    def _execute_intervention(self, event, plan, pre_commit_ok: bool) -> None:
+        rollback_result = None
         if plan.auto_fix and plan.needs_rollback:
             rollback_result = self.rollback_engine.rollback(event, plan, self.context)
 
-        # 7. KI doc update (even when rollback fails)
         ki_write_ok = self.ki_doc.record_intervention(event, plan, rollback_result)
         ki_doc_updated = ki_write_ok is True
 
-        # 8. Post-intervention commit
         post_commit_result = self.commit_guard.ensure_committed(self.context)
         post_commit_ok = post_commit_result.success if post_commit_result else True
 
-        # 9. Raise TDDViolationError
         result = InterventionResult(
             violation_code=event.violation_type,
             target_phase=plan.target_phase,
