@@ -73,6 +73,62 @@
 - **Why deferred**: Testing git unavailability requires mocking `subprocess.run` globally, which is fragile. The behavior (crash) is acceptable for broken environments.
 - **Plan**: No action needed.
 
+### KI-17: Unused `PatternMatch` import in test_prompt_validator.py
+- **Raised-in**: KI-fix CR R3
+- **Severity**: L (Low)
+- **File**: `tests/test_prompt_validator.py:8`
+- **Description**: `PatternMatch` imported but never referenced in test body (no isinstance, no type annotation, no direct usage).
+- **Why deferred**: Pre-existing unused import, no correctness impact.
+- **Plan**: Remove from import line.
+
+### KI-18: Unused `MagicMock` import in test_ki_doc_manager.py
+- **Raised-in**: KI-fix CR R3
+- **Severity**: L (Low)
+- **File**: `tests/test_ki_doc_manager.py:4`
+- **Description**: `MagicMock` imported but never instantiated. All mocks created via `patch()`.
+- **Why deferred**: Pre-existing unused import, no correctness impact.
+- **Plan**: Remove from import line.
+
+### KI-19: Integration test plan table missing 3 entries
+- **Raised-in**: KI-fix CR R2
+- **Severity**: L (Low)
+- **File**: `docs/03-intervention-test-plan.md:531-541`
+- **Description**: Integration table has 8 rows but test file has 10 classes (11 methods). Missing: `TestE2EMultiFileRollback`, `TestE2EInsufficientReviewAutoFix`, and second `TestE2EGracefulDegradation` method (`handle_git_rm_failure`).
+- **Why deferred**: Documentation gap only, tests exist and pass.
+- **Plan**: Add rows 9-11 to integration table.
+
+### KI-20: Coverage summary table has inaccurate file listings and test counts
+- **Raised-in**: KI-fix CR R3
+- **Severity**: I (Info)
+- **File**: `docs/03-intervention-test-plan.md:546-560`
+- **Description**: V-10/V-11 missing `test_intervention_coordinator.py` in file listing. V-4 test count shows 5 but actual is ~30. V-7 shows 5 but actual is ~7.
+- **Why deferred**: Documentation accuracy issue, no test gap.
+- **Plan**: Update coverage summary with accurate counts or note that counts reflect primary tests only.
+
+### KI-21: E2E prompt validation test doesn't verify ki doc content
+- **Raised-in**: KI-fix CR R2
+- **Severity**: L (Low)
+- **File**: `tests/test_intervention_integration.py:170-177`
+- **Description**: Test plan row 6 says verify "ki doc PROMPT-VALIDATION entry" but test only asserts `violation_code`. No ki doc content assertion.
+- **Why deferred**: Coordinator's V-13 path tested via SYNC mode (mocked). Integration test validates error flow, not ki doc content.
+- **Plan**: Add ki doc content assertion to E2E V-13 test.
+
+### KI-22: E2E graceful degradation test doesn't chdir to repo
+- **Raised-in**: KI-fix CR R2
+- **Severity**: L (Low)
+- **File**: `tests/test_intervention_integration.py:137-143`
+- **Description**: Test doesn't `os.chdir(str(repo))` unlike other E2E tests. Works by accident (hits "already deleted" path in CWD), not by design.
+- **Why deferred**: Pre-existing, test passes reliably in practice.
+- **Plan**: Add `os.chdir(str(repo))` with try/finally pattern consistent with other E2E tests.
+
+### KI-23: Test plan design coverage matrix has stale test name references
+- **Raised-in**: KI-fix CR R2
+- **Severity**: L (Low)
+- **File**: `docs/03-intervention-test-plan.md` rows 7b, 14, 23, 19a
+- **Description**: Four rows reference test names that don't match actual tests: Row 7b (`should_map_v6_missing_test_to_no_auto_fix_plan`), Row 14 (`should_handle_same_priority_events_in_list_order`), Row 23 (`should_only_trigger_prompt_validation_for_invalid_review_prompt`), Row 19a (`should_commit_and_record_ki` vs actual `should_commit_without_ki_recording`).
+- **Why deferred**: Traceability gaps only, behavior coverage exists through other test names.
+- **Plan**: Align each Design Coverage Matrix row with actual test names.
+
 ## Resolved KI Entries
 
 ### KI-RESOLVED-01: Hardcoded sys.path.insert with absolute path
@@ -112,3 +168,5 @@
 |-------|--------|-------|
 | R15 | Initial creation | All deferred P/L findings from R6-R14 cataloged |
 | R16 | KI re-eval (R15+1) | Added KI-10 (design gap), KI-11 (FP-7 ZH), KI-12 (name mismatch). All 9 existing KI confirmed correct severity. |
+| KI-fix CR R2 | Pre-existing L/I cataloged | R2 review found 5L+2I pre-existing items: KI-17 (unused PatternMatch import), KI-18 (unused MagicMock import), KI-19 (integration table missing 3 entries), KI-20 (coverage summary inaccurate), KI-21 (E2E prompt test no ki doc verify), KI-22 (E2E graceful no chdir), KI-23 (test plan design matrix name mismatches). |
+| KI-fix CR R3 | Gate passed | R2+R3 consecutive 0C/0H/0M. All R1 fixes verified correct. No new issues. |
