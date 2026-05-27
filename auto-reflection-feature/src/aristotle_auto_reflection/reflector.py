@@ -1,5 +1,8 @@
+import logging
 from typing import Optional, Dict, Any
 from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
 
 @dataclass
 class ReflectionResult:

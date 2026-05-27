@@ -40,8 +40,8 @@ class DurableQueue:
                 violation_type=data["violation_type"],
                 affected_file_path=data["affected_file_path"],
                 timestamp=data["timestamp"],
-                context=data["context"],
-                affected_file_paths=data.get("affected_file_paths", []),
+                context=data["context"]
             ))
+        for filepath in files:
             os.remove(filepath)
         return events

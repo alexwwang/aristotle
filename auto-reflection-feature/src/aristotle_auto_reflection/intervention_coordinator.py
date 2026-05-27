@@ -6,6 +6,7 @@ from aristotle_auto_reflection.intervention_types import (
     InterventionResult,
     InterventionPlan,
     VIOLATION_PRIORITY,
+    BEHAVIORAL_VIOLATIONS,
 )
 from aristotle_auto_reflection.prompt_validator import PromptValidator
 from aristotle_auto_reflection.rollback_engine import RollbackEngine
