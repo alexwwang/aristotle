@@ -464,4 +464,4 @@ class TestRollbackDispatchFromPhase5:
              patch("aristotle_auto_reflection.rollback_engine.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
             result = rollback_engine.rollback(event, plan, ctx)
-        assert isinstance(result, RollbackResult)
+        assert result.success is True

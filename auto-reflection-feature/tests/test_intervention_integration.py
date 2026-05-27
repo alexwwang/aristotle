@@ -133,7 +133,7 @@ class TestE2EPreserveOnRollback:
             os.chdir(old_cwd)
 
 
-class TestE2ERollbackFailure:
+class TestE2EGracefulDegradation:
     def test_should_end_to_end_handle_nonexistent_file_gracefully(self, temp_git_repo, integration_context):
         repo, tracked, _ = temp_git_repo
         event = ViolationEvent("SKIP_RED_PHASE", "nonexistent.py", "2026-05-26T10:00:00+08:00", {"phase": 4})

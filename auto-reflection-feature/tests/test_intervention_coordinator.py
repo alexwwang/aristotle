@@ -175,6 +175,7 @@ class TestMissingTest:
             coordinator.intervene(event)
         assert exc_info.value.result.violation_code == "MISSING_TEST"
         assert exc_info.value.plan.target_phase == 4
+        assert exc_info.value.plan.needs_rollback is False
 
 
 # ===== Event Validation =====

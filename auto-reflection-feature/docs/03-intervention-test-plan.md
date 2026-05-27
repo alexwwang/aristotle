@@ -173,7 +173,7 @@ _Traces Phase 1 user stories and acceptance criteria to test cases. For Phase 2 
 | 47 | Core | US-I10 | AC-I18 | Unit | `test_prompt_validator.py` | `should_report_all_matches_when_multiple` | Multiple matches → report all with details |
 | 48 | Core | US-I10 | AC-I19 | Unit | `test_prompt_validator.py` | `should_detect_chinese_forbidden_patterns_via_bare_regex` | ZH patterns detected via bare regex (no lookaround, no \b), per spec v1.7 deviation AC-I19 |
 | 49 | Core | US-I10 | AC-I19 | Unit | `test_prompt_validator.py` | `should_detect_both_en_and_zh_in_mixed_prompt` | Mixed EN+ZH → both strategies, correct language tag |
-| 50 | Core | US-I2 | AC-I22 | Unit | `test_rollback_engine.py` | `should_preserve_phase5_work_via_pre_rollback_commit` | Phase 5→4 rollback: Phase 5 work committed first |
+| 50 | Core | US-I2 | AC-I22 | Unit | `test_rollback_engine.py` | `should_dispatch_rollback_for_v4_from_phase5_context` | Phase 5→4 rollback: Phase 5 work committed first |
 | 51 | Core | US-I2 | AC-I22 | Integration | `test_intervention_integration.py` | `should_end_to_end_preserve_committed_work_on_phase_rollback` | Full lifecycle: V-6 detected in Phase 5 → commit → rollback Phase 4 |
 | 52 | Core | US-I2 | AC-I22 | Unit | `test_intervention_coordinator.py` | `should_stage_untracked_file_before_rollback` | Untracked affected_file_path → git add before commit |
 
@@ -356,7 +356,7 @@ Checklist (verify each category is covered — find the analogous risk if catego
   - `should_update_ki_doc_even_when_rollback_fails` — rollback failure → ki doc still updated (coordinator continues)
   - `should_commit_after_intervention_completes` — post-intervention commit attempt
   - `should_raise_without_auto_fix_when_git_unavailable` — commit failure → intervention still blocks pipeline
-  - Integration test: `should_end_to_end_handle_rollback_failure_gracefully` — full lifecycle with rollback failure
+  - Integration test: `should_end_to_end_handle_nonexistent_file_gracefully` — full lifecycle with nonexistent file handling
 
 - [x] **performance_logic** — PromptValidator regex on long prompt, intervene_batch with many events
   - `should_truncate_very_long_prompt_and_log` — 10KB+ prompt → truncation
@@ -534,7 +534,7 @@ No peripheral-to-key upgrades detected. CommitGuard remains Peripheral with basi
 | 2 | `should_end_to_end_restore_modified_test_from_git` | Full lifecycle: V-5 event → pre-commit → git checkout → ki doc → commit → TDDViolationError | Coordinator, RollbackEngine, KiDocManager, CommitGuard |
 | 3 | `should_end_to_end_handle_merged_violations_in_correct_order` | V-10 + V-12 + V-8 at same boundary → commit → assessment → ki doc update → single TDDViolationError | Coordinator, CommitGuard, KiDocManager |
 | 4 | `should_end_to_end_preserve_committed_work_on_phase_rollback` | V-6 detected in Phase 5 → commit Phase 5 work → rollback to Phase 4 → Phase 5 work in git history | Coordinator, RollbackEngine, CommitGuard |
-| 5 | `should_end_to_end_handle_rollback_failure_gracefully` | V-4 with git rm failure → RollbackResult(success=False) → ki doc still updated → TDDViolationError with auto_fix_applied=False | Coordinator, RollbackEngine, KiDocManager |
+| 5 | `should_end_to_end_handle_nonexistent_file_gracefully` | V-4 with nonexistent file → RollbackResult(success=True) → ki doc still updated → TDDViolationError with auto_fix_applied=False | Coordinator, RollbackEngine, KiDocManager |
 | 6 | `should_end_to_end_validate_prompt_and_block_with_details` | V-13 with forbidden EN+ZH content → PromptValidator → multiple PatternMatches → ki doc PROMPT-VALIDATION entry → TDDViolationError | Coordinator, PromptValidator, KiDocManager |
 | 7 | `should_end_to_end_rollback_to_phase5_on_regression` | Phase 5 tests pass → Phase 6 detects regression → rollback to Phase 5 → ki doc updated → TDDViolationError | Coordinator, RollbackEngine, KiDocManager, CommitGuard |
 | 8 | `should_end_to_end_auto_append_outdated_ki_doc_for_v9` | V-9 KI_DOC_OUTDATED → ensure_updated() auto-appends missing record → record_intervention → commit → TDDViolationError | Coordinator, KiDocManager, CommitGuard |

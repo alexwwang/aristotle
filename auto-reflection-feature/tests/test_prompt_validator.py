@@ -39,7 +39,6 @@ def validator():
 class TestCleanPrompt:
     def test_should_pass_clean_prompt(self, validator):
         result = validator.validate(CLEAN_PROMPT)
-        assert isinstance(result, ValidationResult)
         assert result.is_valid is True
         assert result.matches == []
 
@@ -146,14 +145,14 @@ class TestFP1EN:
 
 class TestFP2EN:
     def test_should_detect_fp2_en_cumulative_tally_patterns(self, validator):
-        for phrase in ["cumulative tally", "running total", "total C"]:
+        for phrase in ["cumulative tally", "running total", "total C", "total H", "total M"]:
             result = validator.validate(f"Show the {phrase}.")
             assert result.is_valid is False, f"FP-2 should detect: {phrase}"
 
 
 class TestFP3EN:
     def test_should_detect_fp3_en_prior_round_patterns(self, validator):
-        for phrase in ["prior round", "previous round", "last round"]:
+        for phrase in ["prior round", "previous round", "last round", "round 1 found"]:
             result = validator.validate(f"In the {phrase}, we found issues.")
             assert result.is_valid is False, f"FP-3 should detect: {phrase}"
 
@@ -167,7 +166,7 @@ class TestFP4EN:
 
 class TestFP5EN:
     def test_should_detect_fp5_en_round_count_patterns(self, validator):
-        for phrase in ["round 4", "round count", "this is round"]:
+        for phrase in ["round 4", "round count", "this is round", "loop round"]:
             result = validator.validate(f'Currently in {phrase} of review.')
             assert result.is_valid is False, f"FP-5 should detect: {phrase}"
 
@@ -205,7 +204,7 @@ class TestFP1ZH:
 
 class TestFP2ZH:
     def test_should_detect_fp2_zh_cumulative_tally_patterns(self, validator):
-        for phrase in ["累计计数", "累计统计", "总C数"]:
+        for phrase in ["累计计数", "累计统计", "总C数", "总H数", "总M数"]:
             result = validator.validate(f"显示{phrase}。")
             assert result.is_valid is False, f"FP-2 ZH should detect: {phrase}"
 
