@@ -1,5 +1,6 @@
 """RollbackEngine — rollback implementation for TDD pipeline violations."""
 
+import re
 import subprocess
 import os
 from aristotle_auto_reflection.intervention_types import (
@@ -83,6 +84,8 @@ class RollbackEngine:
         if not self._is_tracked(filepath):
             return RollbackResult(False, "skip (untracked)", [], None)
         commit_ref = context.boundary_commit_hash or "HEAD"
+        if commit_ref != "HEAD" and not re.match(r"^[a-fA-F0-9]+$", commit_ref):
+            commit_ref = "HEAD"
         r = subprocess.run(["git", "checkout", commit_ref, "--", filepath], capture_output=True, text=True)
         if r.returncode != 0:
             return RollbackResult(False, f"git checkout failed: {r.stderr}", [], None)
