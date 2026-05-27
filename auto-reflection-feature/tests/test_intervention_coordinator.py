@@ -671,10 +671,11 @@ class TestSyncMode:
     def test_should_raise_tdd_violation_error_for_any_violation(self, coordinator, vtype, filepath, phase, extra_ctx):
         event = _event(vtype, filepath, phase, **extra_ctx)
         with patch.object(coordinator, "commit_guard") as mock_cg, \
-             patch.object(coordinator, "ki_doc"), \
+             patch.object(coordinator, "ki_doc") as mock_ki, \
              patch.object(coordinator, "rollback_engine") as mock_re, \
              patch.object(coordinator, "prompt_validator") as mock_pv:
             mock_cg.ensure_committed.return_value = MagicMock(success=True)
+            mock_ki.ensure_updated.return_value = False
             mock_re.rollback.return_value = RollbackResult(True, "ok")
             if vtype == "INVALID_REVIEW_PROMPT":
                 mock_pv.validate.return_value = ValidationResult(is_valid=False, matches=[

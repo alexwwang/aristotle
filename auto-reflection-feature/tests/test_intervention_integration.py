@@ -218,11 +218,14 @@ class TestE2EKiDocOutdatedAutoAppend:
     def test_should_end_to_end_auto_append_outdated_ki_doc_for_ki_doc_outdated(self, temp_git_repo, integration_context):
         integration_context.current_phase = 3
         event = ViolationEvent("KI_DOC_OUTDATED", "", "2026-05-26T10:00:00+08:00", {"phase": 3})
+        ki_path = Path(integration_context.ki_doc_path)
+        ki_path.parent.mkdir(parents=True, exist_ok=True)
+        ki_path.write_text("## Intervention\n\n**Timestamp**: 2026-05-25T09:00:00+08:00\n\n")
         coord = InterventionCoordinator(integration_context)
         with pytest.raises(TDDViolationError) as exc_info:
             coord.intervene(event)
         assert exc_info.value.result.violation_code == "KI_DOC_OUTDATED"
-        ki_content = Path(integration_context.ki_doc_path).read_text()
+        ki_content = ki_path.read_text()
         assert "KI_DOC_OUTDATED" in ki_content
 
 
