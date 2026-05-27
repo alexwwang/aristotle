@@ -43,5 +43,6 @@ class DurableQueue:
                 context=data["context"],
                 affected_file_paths=data.get("affected_file_paths", []),
             ))
+        for filepath in files:
             os.remove(filepath)
         return events

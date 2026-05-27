@@ -206,7 +206,7 @@ class InterventionCoordinator:
                         text=True,
                     )
                 except Exception as e:
-                    logger.debug("batch git add failed: %s", e)
+                    logger.warning("batch git add failed: %s", e)
             pre_commit_result = self.commit_guard.ensure_committed(self.context)
             pre_commit_ok = pre_commit_result.success if pre_commit_result else True
 
