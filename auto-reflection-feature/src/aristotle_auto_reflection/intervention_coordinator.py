@@ -141,7 +141,8 @@ class InterventionCoordinator:
             return None
 
         if self._needs_prompt_validation(event):
-            self._handle_prompt_violation(event)
+            if self._handle_prompt_violation(event):
+                return None
 
         plan = self._build_plan(event)
         if event.violation_type == "KI_DOC_OUTDATED":
@@ -168,11 +169,11 @@ class InterventionCoordinator:
                     return True
         return False
 
-    def _handle_prompt_violation(self, event) -> None:
+    def _handle_prompt_violation(self, event) -> bool:
         prompt = event.context.get("prompt", "")
         validation_result = self.prompt_validator.validate(prompt)
         if validation_result.is_valid:
-            return None
+            return True
         plan = self._build_plan(event)
         v13_ki_ok = self.ki_doc.record_intervention(event, plan, None, validation_result)
         v13_commit_result = self.commit_guard.ensure_committed(self.context)
