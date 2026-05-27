@@ -470,7 +470,7 @@ class TestMergeHandling:
             assert mock_ki.record_intervention.called
             assert mock_cg.ensure_committed.called
 
-    def test_should_skip_auto_append_when_ki_doc_already_up_to_date(self, coordinator):
+    def test_should_still_record_intervention_when_ki_doc_already_up_to_date(self, coordinator):
         event = _event("KI_DOC_OUTDATED", phase=3)
         with patch.object(coordinator, "ki_doc") as mock_ki, \
              patch.object(coordinator, "commit_guard") as mock_cg:
@@ -479,7 +479,7 @@ class TestMergeHandling:
             with pytest.raises(TDDViolationError):
                 coordinator.intervene(event)
             assert mock_ki.ensure_updated.called
-            assert not mock_ki.record_intervention.called
+            assert mock_ki.record_intervention.called
             assert not mock_cg.ensure_committed.called
 
     def test_should_raise_tdd_violation_even_when_v9_commit_fails(self, coordinator):
