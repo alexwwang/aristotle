@@ -2,7 +2,11 @@ import logging
 from typing import Dict, Any
 from dataclasses import dataclass
 
+from aristotle_auto_reflection.intervention_types import ViolationEvent
+
 logger = logging.getLogger(__name__)
+
+_DEFAULT_CONFIDENCE = 0.85
 
 @dataclass
 class RuleContent:
@@ -16,10 +20,11 @@ VIOLATION_TO_CATEGORY = {
 }
 
 class RuleGenerator:
-    def build_frontmatter(self, event) -> Dict[str, Any]:
+    def build_frontmatter(self, event: ViolationEvent) -> Dict[str, Any]:
+        """Build YAML frontmatter dict from a violation event."""
         return {
             "category": VIOLATION_TO_CATEGORY.get(event.violation_type, "UNKNOWN"),
-            "confidence": 0.85,
+            "confidence": _DEFAULT_CONFIDENCE,
             "error_summary": f"LLM {event.violation_type} in {event.affected_file_path}",
             "auto_reflection": True,
             "source": "tdd-pipeline",
@@ -30,7 +35,8 @@ class RuleGenerator:
             "failed_skill": "tdd_pipeline"
         }
 
-    def build_body(self, event) -> str:
+    def build_body(self, event: ViolationEvent) -> str:
+        """Build Markdown rule body with Context, Rule, Why, and Example sections."""
         return f"""## Context
 During TDD Pipeline execution, the LLM {event.context.get("operation", "performed an action")} in phase {event.context.get("phase", "unknown")}.
 
@@ -45,7 +51,8 @@ Skipping the Red phase undermines test-driven development. Tests must fail befor
 **Good**: Write tests that fail, then implement code to make them pass.
 """
 
-    def generate(self, event) -> RuleContent:
+    def generate(self, event: ViolationEvent) -> RuleContent:
+        """Produce a complete RuleContent (frontmatter + body) from a violation event."""
         return RuleContent(
             frontmatter=self.build_frontmatter(event),
             body=self.build_body(event)
