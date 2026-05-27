@@ -660,7 +660,11 @@ class TestPreRollbackCommit:
                 coordinator.intervene(event)
             # Verify git add was called for each file in affected_file_paths
             add_calls = [c for c in mock_run.call_args_list if "add" in str(c)]
-            assert len(add_calls) >= 3, f"Expected >=3 git add calls, got {len(add_calls)}"
+            assert len(add_calls) >= 1
+            add_call_args = add_calls[0][0][0]
+            assert "src/main.py" in add_call_args
+            assert "src/helper.py" in add_call_args
+            assert "tests/test_main.py" in add_call_args
 
     def test_should_batch_git_add_for_multiple_files(self, coordinator):
         event = _event("SKIP_RED_PHASE", "src/a.py", 4, affected_file_paths=["src/a.py", "src/b.py"])
