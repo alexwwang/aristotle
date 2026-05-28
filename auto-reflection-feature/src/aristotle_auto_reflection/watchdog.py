@@ -1,4 +1,4 @@
-"""GPAV integration and violation detection."""
+"""Violation filter for TDD pipeline behavioral violations."""
 from typing import Optional
 from aristotle_auto_reflection.intervention_types import ViolationEvent, BEHAVIORAL_VIOLATIONS
 

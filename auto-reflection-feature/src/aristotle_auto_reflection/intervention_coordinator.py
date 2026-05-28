@@ -24,7 +24,7 @@ class TDDViolationError(Exception):
         self.event = event
         self.plan = plan
         self.result = result
-        super().__init__(f"TDDViolationError: {plan.instruction if plan else 'unknown'}")
+        super().__init__(f"TDDViolationError: {plan.instruction}")
 
 
 # Violation types that can be merged in batch processing

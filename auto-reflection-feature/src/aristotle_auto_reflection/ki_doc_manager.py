@@ -62,7 +62,7 @@ class KiDocManager:
             return None
 
     def ensure_updated(self, last_intervention_ts: str) -> bool:
-        """Return True if the doc's newest entry is at least as recent as the given timestamp."""
+        """Return True if the doc is up-to-date. Non-existent docs are treated as up-to-date."""
         newest_ts = self._parse_newest_timestamp()
         if newest_ts is None:
             return True
