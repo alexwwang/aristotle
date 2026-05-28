@@ -40,8 +40,8 @@ class KiDocManager:
 
     def ensure_assessment(
         self,
-        phase: str,
-        next_phase: str,
+        phase: int,
+        next_phase: int,
         status: str,
         issues: List[str],
         priority_counts: Optional[dict] = None,

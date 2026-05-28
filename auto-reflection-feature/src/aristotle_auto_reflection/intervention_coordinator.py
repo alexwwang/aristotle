@@ -2,10 +2,12 @@
 
 import logging
 import subprocess
+from typing import List
 from aristotle_auto_reflection.intervention_types import (
     InterventionResult,
     InterventionPlan,
     ViolationEvent,
+    PipelineContext,
     VIOLATION_PRIORITY,
     BEHAVIORAL_VIOLATIONS,
 )
@@ -18,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 class TDDViolationError(Exception):
-    def __init__(self, event, plan, result: InterventionResult = None):
+    def __init__(self, event: ViolationEvent, plan: InterventionPlan, result: InterventionResult = None):
         self.event = event
         self.plan = plan
         self.result = result
@@ -130,7 +132,7 @@ _PLAN_MAP = {
 
 
 class InterventionCoordinator:
-    def __init__(self, context):
+    def __init__(self, context: PipelineContext):
         self.context = context
         self.prompt_validator = PromptValidator()
         self.rollback_engine = RollbackEngine()
@@ -235,7 +237,7 @@ class InterventionCoordinator:
         )
         raise TDDViolationError(event, plan, result)
 
-    def intervene_batch(self, events) -> None:
+    def intervene_batch(self, events: List[ViolationEvent]) -> None:
         if not events:
             return None
 
