@@ -268,7 +268,7 @@ class InterventionCoordinator:
             return False
         if "phase" not in event.context:
             return False
-        if event.violation_type in BEHAVIORAL_VIOLATIONS and not event.affected_file_path:
+        if event.violation_type in BEHAVIORAL_VIOLATIONS and not (event.affected_file_path or event.affected_file_paths):
             return False
         return True
 
