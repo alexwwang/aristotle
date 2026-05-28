@@ -132,7 +132,7 @@ _PLAN_MAP = {
 
 
 class InterventionCoordinator:
-    def __init__(self, context: PipelineContext):
+    def __init__(self, context: PipelineContext) -> None:
         self.context = context
         self.prompt_validator = PromptValidator()
         self.rollback_engine = RollbackEngine()

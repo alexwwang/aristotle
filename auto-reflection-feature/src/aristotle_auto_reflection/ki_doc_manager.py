@@ -26,7 +26,7 @@ class KiDocManager:
         self,
         event: ViolationEvent,
         plan: InterventionPlan,
-        rollback_result: RollbackResult,
+        rollback_result: Optional[RollbackResult] = None,
         validation_result: Optional[ValidationResult] = None,
     ) -> Optional[bool]:
         """Append an intervention entry to the KI document."""
@@ -82,7 +82,7 @@ class KiDocManager:
             logger.warning("Failed to record merge: %s", e)
             return None
 
-    def _parse_newest_timestamp(self):
+    def _parse_newest_timestamp(self) -> Optional[str]:
         p = Path(self.ki_doc_path)
         if not p.exists():
             return None
@@ -93,7 +93,7 @@ class KiDocManager:
         )
         return matches[-1] if matches else None
 
-    def _append(self, entry):
+    def _append(self, entry: str) -> None:
         p = Path(self.ki_doc_path)
         if not p.exists():
             p.parent.mkdir(parents=True, exist_ok=True)
@@ -103,7 +103,7 @@ class KiDocManager:
 
     # ── Formatting helpers ──────────────────────────────────────
 
-    def _format_intervention_entry(self, event, plan, rollback_result, validation_result=None):
+    def _format_intervention_entry(self, event: ViolationEvent, plan: InterventionPlan, rollback_result: Optional[RollbackResult], validation_result: Optional[ValidationResult] = None) -> str:
         lines = [
             "## Intervention\n",
             f"**Violation**: {event.violation_type}\n",
@@ -123,7 +123,7 @@ class KiDocManager:
         lines.append("\n")
         return "".join(lines)
 
-    def _format_assessment_entry(self, phase, next_phase, status, issues, priority_counts=None):
+    def _format_assessment_entry(self, phase: int, next_phase: int, status: str, issues: List[str], priority_counts: Optional[dict] = None) -> str:
         lines = [
             "## Assessment\n",
             f"**Phase**: {phase} → {next_phase}\n",
@@ -136,7 +136,7 @@ class KiDocManager:
         lines.append("\n")
         return "".join(lines)
 
-    def _format_merge_entry(self, events, context):
+    def _format_merge_entry(self, events: List[ViolationEvent], context: PipelineContext) -> str:
         violation_types = [e.violation_type for e in events]
         lines = [
             "## Merged Intervention\n",
