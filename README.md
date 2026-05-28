@@ -29,7 +29,8 @@ Activate with `/aristotle` to spawn an isolated subagent that analyzes your sess
 - **Auto-Suggestion** — Skill description includes error-correction keywords; when detected in conversation, the AI can suggest running `/aristotle` (automatic, no configuration needed)
 - **Plugin** — Assembles the Core library and Aristotle role into an OpenCode plugin entry point (`plugin/index.ts`). Provides async polling-based reflection, idle detection, and `/undo` support.
 - **Dual-Package Architecture** — Phase 0 extracted a shared `packages/core/` library (logger, config, workflow store, plugin registration) and a role-specific `packages/aristotle/` package (idle handler, snapshot extractor). The plugin composes both via `assemblePlugin()`, enabling reuse across other OpenCode skills without coupling to Aristotle-specific logic.
-- **State-Machine-Guarded TDD Pipeline** — When paired with the [tdd-pipeline skill](https://github.com/opencode-ai/opencode), Aristotle's watchdog state machine enforces Red-Green-Refactor discipline across multi-phase project delivery. The pipeline covers Product Design → Technical Solution → Test Plan → Test Code → Business Code → Pre-Release Testing → System Quality Audit. Given clear requirements, it can produce high-quality, fully-tested deliverables with minimal human intervention — the state machine gates each phase transition, preventing quality regressions.
+- **State-Machine-Guarded TDD Pipeline** — When paired with the [tdd-pipeline skill](https://github.com/opencode-ai/opencode) (≥ v0.17.0), Aristotle's watchdog state machine enforces Red-Green-Refactor discipline across multi-phase project delivery. The pipeline covers Product Design → Technical Solution → Test Plan → Test Code → Business Code → Pre-Release Testing → System Quality Audit → Functional Acceptance. Given clear requirements, it can produce high-quality, fully-tested deliverables with minimal human intervention — the state machine gates each phase transition, preventing quality regressions.
+- **Watchdog Intervention System** — Detects 13 TDD violation types (process, behavioral, regression, compliance) and executes SYNC-mode blocking interventions with automatic rollback, git commit safety, and KI document tracking. Includes bilingual (EN/ZH) Ralph Loop prompt validation.
 
 ## Installation
 
@@ -511,6 +512,20 @@ The full protocol specification — state machine, frontmatter schema, Δ decisi
 │   ├── _orch_start.py    # orchestrate_start tool (session_file + use_bridge)
 │   ├── _orch_event.py    # orchestrate_on_event tool
 │   └── _orch_review.py   # orchestrate_review_action tool
+├── auto-reflection-feature/   # Watchdog Intervention System (TDD Pipeline v1.4, 243 tests)
+│   ├── src/aristotle_auto_reflection/
+│   │   ├── intervention_coordinator.py  # Central hub: intervene(), batch, assessment
+│   │   ├── intervention_types.py        # 13 dataclasses + VIOLATION_PRIORITY
+│   │   ├── watchdog.py                  # ViolationFilter (Phase 4-5)
+│   │   ├── rollback_engine.py           # Git-based rollback
+│   │   ├── ki_doc_manager.py            # KI document CRUD
+│   │   ├── prompt_validator.py          # Bilingual forbidden pattern detection
+│   │   ├── rule_generator.py            # Violation-type-specific templates
+│   │   ├── committer.py                 # Frontmatter schema validation
+│   │   ├── commit_guard.py              # Phase/loop auto-commit
+│   │   └── reflector.py                 # Auto-reflection stub
+│   ├── tests/                           # 243 pytest cases
+│   └── docs/                            # Requirements, test plans, KI docs
 ├── packages/
 │   ├── core/              # Core library — shared mechanism (logger, config, workflow-store, executor, plugin registration)
 │   │   ├── src/           # 10 modules

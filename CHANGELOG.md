@@ -1,5 +1,60 @@
 # Changelog
 
+## [1.5.0] — 2025-05-28 — Watchdog Intervention System (TDD Pipeline v1.4)
+
+> **TDD Pipeline compatibility**: tdd-pipeline ≥ v0.17.0 (8-phase protocol with Phase 6 Pre-Release Testing, Phase 7 System Quality Audit, Phase 8 Functional Acceptance).
+>
+> Built through TDD Pipeline Phase 1–8 with Ralph Loop dual-pass review (R2–R19, 18 rounds, consecutive 2-round 0C/0H/0M gate pass at R18+R19).
+
+### Added — Intervention Subsystem (`auto-reflection-feature/`)
+
+Complete SYNC-mode intervention system for the TDD Pipeline Watchdog. Detects 13 violation types, executes blocking interventions with automatic rollback, git commit safety, and KI document tracking.
+
+**10 source modules, 243 tests, 22 acceptance criteria, 0 blockers.**
+
+#### Modules
+
+| Module | Responsibility |
+|--------|---------------|
+| `intervention_coordinator.py` | Central hub: `intervene()`, `intervene_batch()`, assessment, pre-rollback staging |
+| `watchdog.py` | `ViolationFilter`: phase/operation/violation-type filtering for Phase 4-5 |
+| `rollback_engine.py` | Git-based rollback: delete untracked files, checkout tracked files, multi-file support |
+| `ki_doc_manager.py` | KI document CRUD: record intervention, ensure_updated, record_merge, ensure_assessment |
+| `prompt_validator.py` | FP-1~FP-7 bilingual forbidden pattern detection (EN word-boundary + ZH lookaround) |
+| `rule_generator.py` | Violation-type-specific rule template generation (SKIP_RED_PHASE, MODIFIED_TEST, MISSING_TEST) |
+| `committer.py` | Frontmatter schema validation (category non-empty, confidence [0.0,1.0], error_summary ≤200 chars) |
+| `commit_guard.py` | Phase/loop boundary auto-commit via git subprocess |
+| `reflector.py` | Auto-reflection stub (MCP integration pending) |
+| `intervention_types.py` | 13 data classes + `VIOLATION_PRIORITY` lookup table |
+
+#### 13 Violation Types
+
+| Category | Types | Auto-Fix |
+|----------|-------|----------|
+| Process (Phase 1-3) | V-1 SKIP_REVIEW, V-2 INSUFFICIENT_REVIEW, V-3 UNFIXED_ISSUES, V-13 INVALID_REVIEW_PROMPT | None |
+| Behavioral (Phase 4-5) | V-4 SKIP_RED_PHASE, V-5 MODIFIED_TEST, V-6 MISSING_TEST | Semi-auto (V-4), Full-auto (V-5) |
+| Regression (Phase 6) | V-7 REGRESSION | None |
+| Compliance | V-8 MISSING_KI_DOC, V-9 KI_DOC_OUTDATED, V-10 UNCOMMITTED_PHASE, V-11 UNCOMMITTED_REVIEW, V-12 MISSING_KI_ASSESSMENT | Full-auto |
+
+#### Safety Guarantees
+
+- All destructive auto-fixes have **commit-before-fix** safety (recoverable via `git reflog`)
+- Pre-rollback commit preserves current phase work
+- KI document is append-only — no deletion or modification of existing entries
+- V-5 scope limited to assertion/expectation changes (refactoring excluded)
+
+### Compatibility
+
+- **tdd-pipeline**: ≥ v0.17.0 (8-phase protocol)
+- **Python**: ≥ 3.10
+- **No breaking changes** to existing MCP tools, GEAR protocol, or Watchdog observer
+
+### Known Issues
+
+17 KIs documented in `auto-reflection-feature/docs/KnownIssues.md`, all L/I/P severity, zero production risk. Deferred to v2 backlog.
+
+---
+
 ## [Unreleased] — Watchdog Phase 5 Audit Review Fixes
 
 > All changes since commit `a16ce76` (test: add TC-C-41b/45/46 per frozen design doc test plan).
