@@ -75,7 +75,7 @@ git clone https://github.com/alexwwang/aristotle.git "$env:TEMP\aristotle"
 
 # 2. Run the installer (deploys SKILL.md + MCP server + Plugin)
 cd "$env:TEMP\aristotle"
-powershell -ExecutionPolicy Bypass -File install.ps1
+powershell -ExecutionPolicy Bypass -File scripts/install.ps1
 
 # 3. Add MCP config to opencode.json
 # See "MCP Configuration" section below for the JSON snippet
@@ -102,7 +102,7 @@ Copy and paste this prompt into any OpenCode session — it will install Aristot
 ```
 Install the Aristotle skill with MCP server from https://github.com/alexwwang/aristotle.git:
 1. Clone to /tmp/aristotle
-2. cd into the cloned directory, run `bash scripts/install.sh` (macOS/Linux) or `powershell -File install.ps1` (Windows)
+2. cd into the cloned directory, run `bash scripts/install.sh` (macOS/Linux) or `powershell -File scripts/install.ps1` (Windows)
 3. Verify: run `bash scripts/test.sh` — all assertions must pass
 4. Add MCP config to opencode.json: { "mcp": { "aristotle": { "type": "local", "command": ["uv", "run", "--project", "$HOME/.config/opencode/aristotle", "python", "-m", "aristotle_mcp.server"], "enabled": true } } }
 5. Register Plugin: add `"file://$HOME/.config/opencode/aristotle-bridge/index.js"` to the `"plugin"` array in opencode.json

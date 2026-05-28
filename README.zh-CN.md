@@ -73,7 +73,7 @@ git clone https://github.com/alexwwang/aristotle.git "$env:TEMP\aristotle"
 
 # 2. 运行安装脚本（部署 SKILL.md + MCP server + Plugin）
 cd "$env:TEMP\aristotle"
-powershell -ExecutionPolicy Bypass -File install.ps1
+powershell -ExecutionPolicy Bypass -File scripts/install.ps1
 
 # 3. 添加 MCP 配置到 opencode.json
 # 见下方"MCP 配置"部分的 JSON 示例
@@ -100,7 +100,7 @@ curl -sL https://raw.githubusercontent.com/alexwwang/aristotle/main/SKILL.md -o 
 ```
 Install the Aristotle skill with MCP server from https://github.com/alexwwang/aristotle.git:
 1. Clone to /tmp/aristotle
-2. cd into the cloned directory, run `bash scripts/install.sh` (macOS/Linux) or `powershell -File install.ps1` (Windows)
+2. cd into the cloned directory, run `bash scripts/install.sh` (macOS/Linux) or `powershell -File scripts/install.ps1` (Windows)
 3. Verify: run `bash scripts/test.sh` — all assertions must pass
 4. Add MCP config to opencode.json: { "mcp": { "aristotle": { "type": "local", "command": ["uv", "run", "--project", "$HOME/.config/opencode/aristotle", "python", "-m", "aristotle_mcp.server"], "enabled": true } } }
 5. Register Plugin: add `"file://$HOME/.config/opencode/aristotle-bridge/index.js"` to the `"plugin"` array in opencode.json
