@@ -328,7 +328,7 @@ class InterventionCoordinator:
             target_phase=plan.target_phase,
             auto_fix_applied=True,
             instruction="Merged auto-fix interventions applied.",
-            ki_doc_updated=True,
+            ki_doc_updated=bool(assessment_events) or bool(ki_events),
             committed=final_commit_ok,
         )
         raise TDDViolationError(events[0], plan, result)
