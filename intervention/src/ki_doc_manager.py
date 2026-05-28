@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from aristotle_intervention.intervention_types import (
+from intervention_types import (
     InterventionPlan,
     PipelineContext,
     RollbackResult,

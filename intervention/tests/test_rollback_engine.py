@@ -5,8 +5,8 @@ from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from aristotle_intervention.rollback_engine import RollbackEngine
-from aristotle_intervention.intervention_types import (
+from rollback_engine import RollbackEngine
+from intervention_types import (
     ViolationEvent, InterventionPlan, RollbackResult, PipelineContext,
 )
 

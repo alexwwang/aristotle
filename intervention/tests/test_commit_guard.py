@@ -5,8 +5,8 @@ from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from aristotle_intervention.commit_guard import CommitGuard
-from aristotle_intervention.intervention_types import PipelineContext, CommitResult
+from commit_guard import CommitGuard
+from intervention_types import PipelineContext, CommitResult
 
 
 @pytest.fixture

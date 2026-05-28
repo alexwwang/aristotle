@@ -1,8 +1,8 @@
 import pytest
 import sys
 sys.path.insert(0, "/workspace/auto-reflection-feature/src")
-from aristotle_intervention.rule_generator import RuleGenerator
-from aristotle_intervention.watchdog import ViolationEvent
+from rule_generator import RuleGenerator
+from watchdog import ViolationEvent
 
 class TestRuleGenerator:
     def test_build_frontmatter_contains_auto_reflection(self):

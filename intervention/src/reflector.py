@@ -2,7 +2,7 @@ import logging
 from typing import Optional
 from dataclasses import dataclass
 
-from aristotle_intervention.intervention_types import ViolationEvent
+from intervention_types import ViolationEvent
 
 logger = logging.getLogger(__name__)
 

@@ -7,8 +7,8 @@ from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from aristotle_intervention.intervention_coordinator import InterventionCoordinator, TDDViolationError
-from aristotle_intervention.intervention_types import ViolationEvent, PipelineContext
+from intervention_coordinator import InterventionCoordinator, TDDViolationError
+from intervention_types import ViolationEvent, PipelineContext
 
 
 @pytest.fixture
