@@ -128,7 +128,7 @@
 
 ### P3.4 — Sync 自愈机制
 
-**改动文件：** `git_ops.py`、`server.py`、`LEARN.md`、`test/test_mcp.py`
+**改动文件：** `git_ops.py`、`server.py`、`LEARN.md`、`tests/test_mcp.py`
 
 - `git_ops.py` 新增 `git_show_exists()` 函数
 - `server.py` 新增 2 个 MCP 工具：`check_sync_status`（检测未 commit 的 verified 规则）、`sync_rules`（补提）
@@ -281,7 +281,7 @@ CHECKER.md               (60 行) — 审核者协议（仅 confirm 时加载）
 LEARN.md                 (246 行) — L 学习检索协议（两轮查询 + subagent 评分）
 
 pyproject.toml           — uv + setuptools
-test/test_mcp.py         (1370+ 行) — 104 pytest 测试
+tests/test_mcp.py         (1370+ 行) — 104 pytest 测试
 README.md                — 英文文档（含 GEAR Design section）
 README.zh-CN.md          — 中文文档（含 GEAR Design section）
 ```

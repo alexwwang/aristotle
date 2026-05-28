@@ -462,12 +462,12 @@ GEAR 协议操作映射到 Aristotle 的 MCP 工具：`produce` → `write_rule`
 | 套件 | 命令 | 数量 |
 |------|------|------|
 | 静态测试 | `bash scripts/test.sh` | 103 |
-| 单元/集成测试 (Python) | `uv run pytest test/ -v` | 405 |
+| 单元/集成测试 (Python) | `uv run pytest tests/ -v` | 405 |
 | Core Package (TypeScript) | `cd packages/core && bunx vitest run` | 150 |
 | Aristotle Package (TypeScript) | `cd packages/reflection && bunx vitest run` | 115 |
 | Legacy Bridge（已归档）(TypeScript) | `cd plugins/aristotle-bridge && bunx vitest run` | 162 |
-| E2E 集成测试 | `uv run pytest test/test_e2e_bridge_integration.py -v` | 9 |
-| 回归测试（部署验证） | `bash test/regression/regression_b1_checks.sh` | 64 |
+| E2E 集成测试 | `uv run pytest tests/test_e2e_bridge_integration.py -v` | 9 |
+| 回归测试（部署验证） | `bash tests/regression/regression_b1_checks.sh` | 64 |
 
 ### 测试覆盖率历史
 
@@ -526,6 +526,7 @@ GEAR 协议操作映射到 Aristotle 的 MCP 工具：`produce` → `write_rule`
 │   ├── _orch_start.py    # orchestrate_start 工具（session_file + use_bridge）
 │   ├── _orch_event.py    # orchestrate_on_event 工具
 │   └── _orch_review.py   # orchestrate_review_action 工具
+│   └── tests/              # MCP server 单元测试
 ├── packages/
 │   ├── core/             # 核心库 — 共享机制（logger、config、workflow-store、executor、plugin registration）
 │   │   ├── src/          # 10 个模块
@@ -542,13 +543,16 @@ GEAR 协议操作映射到 Aristotle 的 MCP 工具：`produce` → `write_rule`
 │       ├── test/         # 8 个测试文件，162 vitest 用例（已归档）
 │       ├── testing.en.md # Bridge 独立测试文档（英文）
 │       └── testing.zh.md # Bridge 独立测试文档（中文）
-└── test/
-    ├── e2e/
-    │   ├── e2e_opencode.sh          # E2E 自动化脚本（14 断言）
-    │   └── ...
-    ├── regression/
-    │   └── regression_b1_checks.sh  # 部署验证（64 断言）
-    └── test_e2e_bridge_integration.py  # Bridge↔MCP 集成测试（9 pytest）
+├── tests/
+│   ├── e2e/
+│   │   ├── e2e_opencode.sh          # E2E 自动化脚本（14 断言）
+│   │   └── ...
+│   ├── regression/
+│   │   └── regression_b1_checks.sh  # 部署验证（64 断言）
+│   └── test_e2e_bridge_integration.py  # Bridge↔MCP 集成测试（9 pytest）
+└── intervention/
+    ├── src/                           # 核心干预库
+    └── tests/                         # 243 pytest 用例
 ```
 
 ## 架构：渐进披露

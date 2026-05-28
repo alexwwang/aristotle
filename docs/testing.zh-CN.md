@@ -7,12 +7,12 @@
 | 套件 | 命令 | 数量 | 覆盖范围 |
 |------|------|------|----------|
 | 静态测试 | `bash scripts/test.sh` | 103 | 文件结构、SKILL.md 内容、hook 逻辑、错误模式检测、渐进披露（字节限制） |
-| Python 测试 | `uv run pytest test/ -v` | 405 | MCP 核心、编排与工作流、进化、frontmatter、git 操作、Bridge MCP、Review UX |
+| Python 测试 | `uv run pytest tests/ -v` | 405 | MCP 核心、编排与工作流、进化、frontmatter、git 操作、Bridge MCP、Review UX |
 | Core Package | `cd packages/core && bunx vitest run` | 150 | 10 个模块：logger、config、types、utils、workflow-store、executor、api-probe、session-extractor、plugin registration、plugin config |
 | Aristotle Package | `cd packages/reflection && bunx vitest run` | 115 | 6 个模块：config、idle-handler、executor、snapshot-extractor、index/role、tools |
 | Legacy Bridge（已归档） | `cd plugins/aristotle-bridge && bunx vitest run` | 162 | 7 个模块（旧结构）：types/utils/api-probe/snapshot-extractor/workflow-store/idle-handler/executor |
-| E2E 自动化 | `bash test/e2e/e2e_opencode.sh` | 14 | 真实 opencode 会话：skill 加载、sessions、learn、reflect（需 LLM） |
-| B1 回归 | `bash test/regression/regression_b1_checks.sh` | 64 | B1 修复的部署后验证 |
+| E2E 自动化 | `bash tests/e2e/e2e_opencode.sh` | 14 | 真实 opencode 会话：skill 加载、sessions、learn、reflect（需 LLM） |
+| B1 回归 | `bash tests/regression/regression_b1_checks.sh` | 64 | B1 修复的部署后验证 |
 
 ## 2. 静态测试 (103)
 
@@ -31,41 +31,41 @@ bash scripts/test.sh
 ## 3. Python 测试 (405)
 
 ```bash
-uv run pytest test/ -v
+uv run pytest tests/ -v
 ```
 
 405 个测试，分布在 51+ 个测试类中。所有测试使用隔离的临时目录（`tmp_path` fixture），可安全反复运行。
 
-### 3.1 MCP 核心 (test/mcp/ — 136 tests)
+### 3.1 MCP 核心 (aristotle_mcp/tests/ — 136 tests)
 
 | 测试文件 | 测试类 | 数量 | 测试内容 |
 |----------|--------|------|----------|
-| `test/mcp/test_mcp_config.py` | TestConfig | 14 | 路径解析、环境变量覆盖、RISK_MAP、RISK_WEIGHTS、AUDIT_THRESHOLDS、SKILL_DIR、项目哈希 |
-| `test/mcp/test_mcp_evolution.py` | TestEvolution | 10 | compute_delta（所有风险级别、边界值、输入校验）、decide_audit_level |
-| `test/mcp/test_mcp_models.py` | TestModels | 13 | RuleMetadata 默认值、YAML 序列化往返、GEAR 2.0 字段 |
-| `test/mcp/test_mcp_git_ops.py` | TestGitOps | 8 | init、add+commit、show、log、status、git_show_exists |
-| `test/mcp/test_mcp_frontmatter.py` | TestFrontmatter | 18 | 原子写入、原始读取、字段更新、流式过滤、多维度搜索 |
-| `test/mcp/test_mcp_migration.py` | TestMigration | 8 | 扁平 Markdown 解析、repo 初始化、自动迁移 |
-| `test/mcp/test_mcp_server_tools.py` | TestServerTools, TestSyncTools, TestPathTraversal | 36 | 完整生命周期、reject、restore、sync、路径包含性检查 |
-| `test/mcp/test_mcp_server_delta.py` | TestDeltaDecision | 8 | get_audit_decision、confidence 默认值、Δ 审核级别 |
-| `test/mcp/test_mcp_server_reflection.py` | TestPersistDraft, TestCreateReflectionRecord, TestCompleteReflectionRecord | 21 | Draft 持久化、reflection records、状态管理 |
+| `aristotle_mcp/tests/test_mcp_config.py` | TestConfig | 14 | 路径解析、环境变量覆盖、RISK_MAP、RISK_WEIGHTS、AUDIT_THRESHOLDS、SKILL_DIR、项目哈希 |
+| `aristotle_mcp/tests/test_mcp_evolution.py` | TestEvolution | 10 | compute_delta（所有风险级别、边界值、输入校验）、decide_audit_level |
+| `aristotle_mcp/tests/test_mcp_models.py` | TestModels | 13 | RuleMetadata 默认值、YAML 序列化往返、GEAR 2.0 字段 |
+| `aristotle_mcp/tests/test_mcp_git_ops.py` | TestGitOps | 8 | init、add+commit、show、log、status、git_show_exists |
+| `aristotle_mcp/tests/test_mcp_frontmatter.py` | TestFrontmatter | 18 | 原子写入、原始读取、字段更新、流式过滤、多维度搜索 |
+| `aristotle_mcp/tests/test_mcp_migration.py` | TestMigration | 8 | 扁平 Markdown 解析、repo 初始化、自动迁移 |
+| `aristotle_mcp/tests/test_mcp_server_tools.py` | TestServerTools, TestSyncTools, TestPathTraversal | 36 | 完整生命周期、reject、restore、sync、路径包含性检查 |
+| `aristotle_mcp/tests/test_mcp_server_delta.py` | TestDeltaDecision | 8 | get_audit_decision、confidence 默认值、Δ 审核级别 |
+| `aristotle_mcp/tests/test_mcp_server_reflection.py` | TestPersistDraft, TestCreateReflectionRecord, TestCompleteReflectionRecord | 21 | Draft 持久化、reflection records、状态管理 |
 
 ### 3.2 编排与工作流 (test/ — 246 tests)
 
 | 测试文件 | 测试类 | 数量 | 测试内容 |
 |----------|--------|------|----------|
-| `test/test_orchestration.py` | TestOrchestrateStart, TestOrchestrateOnEvent, TestWorkflowStateManagement, TestIntegrationMockO, TestSearchParamMapping, TestHelperFunctions, TestOrchestrateStartSessions | 52 | Learn 编排、workflow 状态、sessions、helpers |
-| `test/test_review_actions.py` | TestOrchestrateReviewAction, TestExceptionRevise, TestIntegrationReview | 18 | Review actions、异常路径、集成测试 |
-| `test/test_review_ux.py` | TestParseDraftSummary, TestEnrichRulesMetadata, TestFormatReviewOutput, TestInspectAction, TestShowDraftAction, TestReviseAction, TestRuleSummaryDataModel, TestParseConflicts, TestAuditDecisionsNoneFallback, TestOrchestrateStartReviewBranch | 57 | Review UX：DRAFT 摘要、富化通知、inspect/show draft、staging_rule_paths、confidence 显示、conflicts、rule_summary |
-| `test/test_reflect_workflow.py` | TestOrchestrateStartReflect, TestOrchestrateOnEventReflect, TestExceptionReflect, TestExceptionStart | 19 | Reflect 流程、异常处理 |
-| `test/test_count_propagation.py` | TestReReflectCountPropagation | 4 | Re-reflect count 继承和级联 |
-| `test/test_m1_committed_paths.py` | — | 8 | committed_rule_paths 收集 → 传播 → confirm 快路径 |
-| `test/test_m5_two_round.py` | — | 24 | 两轮检索（search → score → compress）、意图提取、评分、压缩 |
-| `test/test_m6_feedback.py` | — | 13 | report_feedback 工具、feedback signal 元数据、自动反思触发 |
-| `test/test_m7_delta_norm.py` | — | 12 | compute_delta log-normalization、sample_size 透传、审核级别阈值 |
-| `test/test_m9_conflicts.py` | — | 11 | detect_conflicts、双向冲突标注、triple 匹配 |
-| `test/test_phase0_snapshot.py` | TestResolveSessionsDir, TestBuildReflectorPrompt, TestOrchestrateStartSessionFile, TestBridgeDetection, TestOnUndo, TestUndoneShortCircuit | 19 | Session 目录解析、reflector prompt SESSION_FILE、Bridge marker 检测、on_undo 工具、undone 状态短路 |
-| `test/test_e2e_bridge_integration.py` | TestContextFixE2E, TestBridgeDetectionE2E, TestAsyncBridgeWorkflowE2E, TestMultiStageBridgeE2E | 9 | Bridge↔MCP 集成：上下文修复、Bridge 检测、异步工作流、多阶段 |
+| `tests/test_orchestration.py` | TestOrchestrateStart, TestOrchestrateOnEvent, TestWorkflowStateManagement, TestIntegrationMockO, TestSearchParamMapping, TestHelperFunctions, TestOrchestrateStartSessions | 52 | Learn 编排、workflow 状态、sessions、helpers |
+| `tests/test_review_actions.py` | TestOrchestrateReviewAction, TestExceptionRevise, TestIntegrationReview | 18 | Review actions、异常路径、集成测试 |
+| `tests/test_review_ux.py` | TestParseDraftSummary, TestEnrichRulesMetadata, TestFormatReviewOutput, TestInspectAction, TestShowDraftAction, TestReviseAction, TestRuleSummaryDataModel, TestParseConflicts, TestAuditDecisionsNoneFallback, TestOrchestrateStartReviewBranch | 57 | Review UX：DRAFT 摘要、富化通知、inspect/show draft、staging_rule_paths、confidence 显示、conflicts、rule_summary |
+| `tests/test_reflect_workflow.py` | TestOrchestrateStartReflect, TestOrchestrateOnEventReflect, TestExceptionReflect, TestExceptionStart | 19 | Reflect 流程、异常处理 |
+| `tests/test_count_propagation.py` | TestReReflectCountPropagation | 4 | Re-reflect count 继承和级联 |
+| `tests/test_m1_committed_paths.py` | — | 8 | committed_rule_paths 收集 → 传播 → confirm 快路径 |
+| `tests/test_m5_two_round.py` | — | 24 | 两轮检索（search → score → compress）、意图提取、评分、压缩 |
+| `tests/test_m6_feedback.py` | — | 13 | report_feedback 工具、feedback signal 元数据、自动反思触发 |
+| `tests/test_m7_delta_norm.py` | — | 12 | compute_delta log-normalization、sample_size 透传、审核级别阈值 |
+| `tests/test_m9_conflicts.py` | — | 11 | detect_conflicts、双向冲突标注、triple 匹配 |
+| `tests/test_phase0_snapshot.py` | TestResolveSessionsDir, TestBuildReflectorPrompt, TestOrchestrateStartSessionFile, TestBridgeDetection, TestOnUndo, TestUndoneShortCircuit | 19 | Session 目录解析、reflector prompt SESSION_FILE、Bridge marker 检测、on_undo 工具、undone 状态短路 |
+| `tests/test_e2e_bridge_integration.py` | TestContextFixE2E, TestBridgeDetectionE2E, TestAsyncBridgeWorkflowE2E, TestMultiStageBridgeE2E | 9 | Bridge↔MCP 集成：上下文修复、Bridge 检测、异步工作流、多阶段 |
 
 ## 4. Core Package 测试 (150 vitest)
 
@@ -128,7 +128,7 @@ cd plugins/aristotle-bridge && bunx vitest run
 ### 7.1 E2E 自动化测试 (opencode run)
 
 ```bash
-bash test/e2e/e2e_opencode.sh
+bash tests/e2e/e2e_opencode.sh
 ```
 
 14 个断言，通过 `opencode run "message" --format json` 驱动。测试真实 skill 加载和 MCP 调用。无运行中 LLM 时 9/14 测试 SKIP。
@@ -155,7 +155,7 @@ bash test/e2e/e2e_opencode.sh
 | A4 | 检查 `.bridge-active` 仍存在 | Marker 文件在 | M2-3 |
 | A5 | 检查 `bridge-workflows.json` | 文件存在，含 workflowId | M2-4 |
 | A6 | 等待 idle 事件或轮询状态 | 状态 running → completed | M2-5,6 |
-| A7 | 验证 R→C 链路 — 已自动化 (B1) | Plugin 通过子进程驱动 R→C 链路。`bash test/e2e/e2e_a7_r2c_chain.sh --project /path/to/project` | M2-7 |
+| A7 | 验证 R→C 链路 — 已自动化 (B1) | Plugin 通过子进程驱动 R→C 链路。`bash tests/e2e/e2e_a7_r2c_chain.sh --project /path/to/project` | M2-7 |
 | A8 | 再次发送 `/aristotle` 启动新工作流 | 新工作流出现，status = running | M3-1 |
 | A9 | 通过 `.trigger-abort.json` 文件取消运行中的 workflow | `checkAbortTrigger()` 读取文件，取消所有 active workflow | M3-2,3 |
 | A10 | 检查 `aristotle_check` 输出 | 返回运行中的工作流 | M3-4 |
@@ -168,7 +168,7 @@ bash test/e2e/e2e_opencode.sh
 ### 7.3 B1 回归检查
 
 ```bash
-bash test/regression/regression_b1_checks.sh
+bash tests/regression/regression_b1_checks.sh
 ```
 
 64 个断言覆盖所有 B1 修复。每次部署前运行。
@@ -274,10 +274,10 @@ bash test/regression/regression_b1_checks.sh
 
 ```bash
 # 快速冒烟测试（Python + 静态）
-bash scripts/test.sh && uv run pytest test/ -q
+bash scripts/test.sh && uv run pytest tests/ -q
 
 # B1 回归测试（每次部署前必须运行）
-bash test/regression/regression_b1_checks.sh
+bash tests/regression/regression_b1_checks.sh
 ```
 
 期望结果：`405 passed` + `103 passed` + `150 passed` + `115 passed` + `162 passed` + `64 passed` = **999 项检查，0 失败**。

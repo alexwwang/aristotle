@@ -8,7 +8,7 @@ These tests mock the OpenCode SDK client but exercise the full MCP↔Bridge
 integration through the actual MCP transport layer (stdio).
 
 Run:
-    uv run pytest test/test_e2e_bridge_integration.py -v
+    uv run pytest tests/test_e2e_bridge_integration.py -v
 """
 
 from __future__ import annotations

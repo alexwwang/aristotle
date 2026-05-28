@@ -482,12 +482,12 @@ The full protocol specification — state machine, frontmatter schema, Δ decisi
 | Suite | Command | Count |
 |-------|---------|-------|
 | Static | `bash scripts/test.sh` | 103 |
-| Unit/Integration (Python) | `uv run pytest test/ -v` | 405 |
+| Unit/Integration (Python) | `uv run pytest tests/ -v` | 405 |
 | Core Package (TypeScript) | `cd packages/core && bunx vitest run` | 150 |
 | Aristotle Package (TypeScript) | `cd packages/reflection && bunx vitest run` | 115 |
 | Legacy Bridge (archived) (TypeScript) | `cd plugins/aristotle-bridge && bunx vitest run` | 162 |
-| E2E Integration | `uv run pytest test/test_e2e_bridge_integration.py -v` | 9 |
-| Regression (deploy verify) | `bash test/regression/regression_b1_checks.sh` | 64 |
+| E2E Integration | `uv run pytest tests/test_e2e_bridge_integration.py -v` | 9 |
+| Regression (deploy verify) | `bash tests/regression/regression_b1_checks.sh` | 64 |
 
 ### Test Coverage History
 
@@ -546,8 +546,9 @@ The full protocol specification — state machine, frontmatter schema, Δ decisi
 │   ├── _orch_start.py    # orchestrate_start tool (session_file + use_bridge)
 │   ├── _orch_event.py    # orchestrate_on_event tool
 │   └── _orch_review.py   # orchestrate_review_action tool
-├── auto-reflection-feature/   # Watchdog Intervention System (TDD Pipeline v1.4, 243 tests)
-│   ├── src/aristotle_auto_reflection/
+│   └── tests/              # MCP server unit tests
+├── intervention/           # Watchdog Intervention System (TDD Pipeline v1.4, 243 tests)
+│   ├── src/
 │   │   ├── intervention_coordinator.py  # Central hub: intervene(), batch, assessment
 │   │   ├── intervention_types.py        # 13 dataclasses + VIOLATION_PRIORITY
 │   │   ├── watchdog.py                  # ViolationFilter (Phase 4-5)
@@ -578,13 +579,16 @@ The full protocol specification — state machine, frontmatter schema, Δ decisi
 │       └── testing.zh.md  # Bridge-specific test documentation (Chinese)
 ├── Dockerfile             # Stateless container image (opencode + Python/uv/bun runtime)
 ├── docker-compose.yml     # Bind mounts host config/data for stateless execution
-└── test/
-    ├── e2e/
-    │   ├── e2e_opencode.sh          # E2E automation script (14 assertions)
-    │   └── ...
-    ├── regression/
-    │   └── regression_b1_checks.sh  # Deploy verification (64 assertions)
-    └── test_e2e_bridge_integration.py  # Bridge↔MCP integration (9 pytest)
+├── tests/
+│   ├── e2e/
+│   │   ├── e2e_opencode.sh          # E2E automation script (14 assertions)
+│   │   └── ...
+│   ├── regression/
+│   │   └── regression_b1_checks.sh  # Deploy verification (64 assertions)
+│   └── test_e2e_bridge_integration.py  # Bridge↔MCP integration (9 pytest)
+└── intervention/
+    ├── src/                           # Core intervention library
+    └── tests/                         # 243 pytest cases
 ```
 
 ## Architecture: Progressive Disclosure

@@ -6,7 +6,7 @@
 >
 > Built through TDD Pipeline Phase 1–8 with Ralph Loop dual-pass review (R2–R19, 18 rounds, consecutive 2-round 0C/0H/0M gate pass at R18+R19).
 
-### Added — Intervention Subsystem (`auto-reflection-feature/`)
+### Added — Intervention Subsystem (`intervention/`)
 
 Complete SYNC-mode intervention system for the TDD Pipeline Watchdog. Detects 13 violation types, executes blocking interventions with automatic rollback, git commit safety, and KI document tracking.
 
@@ -70,7 +70,7 @@ docker compose run opencode-aristotle
 
 ### Known Issues
 
-17 KIs documented in `auto-reflection-feature/docs/KnownIssues.md`, all L/I/P severity, zero production risk. Deferred to v2 backlog.
+17 KIs documented in `intervention/docs/KnownIssues.md`, all L/I/P severity, zero production risk. Deferred to v2 backlog.
 
 ---
 
@@ -240,11 +240,11 @@ docker compose run opencode-aristotle
 
 ### Test Changes
 
-#### `packages/core/test/state-store.test.ts`
+#### `packages/core/tests/state-store.test.ts`
 - **Added SS-27: `readLogSafe` corruption resilience test** — verifies that 3 valid entries
   survive a corrupt line, while `readLog` returns `[]` for the same file.
 
-#### `packages/watchdog/test/interceptor.test.ts`
+#### `packages/watchdog/tests/interceptor.test.ts`
 - **Updated all tests for v1.8 Rule 1** — Phase 4 business code unconditionally blocked,
   Phase 5 requires Phase 4 gate.
 - **Added TC-B-01a** — unknown file classification passes through.
@@ -254,7 +254,7 @@ docker compose run opencode-aristotle
 - **Updated mock patterns** — sync `mockReturnValue` for sync methods, `mockImplementation`
   for error injection.
 
-#### `packages/watchdog/test/observer.test.ts`
+#### `packages/watchdog/tests/observer.test.ts`
 - **Updated all tests** from `mockResolvedValue` to `mockReturnValue` (sync `cache.get()`).
 - **Updated error injection** from `mockRejectedValue` to `mockImplementation(() => throw ...)`.
 - **Added TC-A-11** — `appendObservation` throw with valid cache state → degradation.
@@ -262,43 +262,43 @@ docker compose run opencode-aristotle
 - **Added integration suite (TC-A-20 through TC-A-24)** — full pipeline flow, crash recovery,
   downstream readability, non-degraded round, degradation tracking failure.
 
-#### `packages/watchdog/test/pipeline-store.test.ts`
+#### `packages/watchdog/tests/pipeline-store.test.ts`
 - **Added `readLogSafe` to mock stores**.
 - **Added observation test suite** — append/read roundtrip, multiple entries, filter by type,
   filter by round, combined filter, archive of observations.
 
-#### `packages/watchdog/test/session-buffer.test.ts`
+#### `packages/watchdog/tests/session-buffer.test.ts`
 - **Updated for new `Logger` constructor parameter**.
 - **Added per-session FIFO independence test**.
 - **Added `MAX_TRACKED_SESSIONS` eviction test** — verifies LRU behavior.
 
-#### `packages/watchdog/test/transitions.test.ts`
+#### `packages/watchdog/tests/transitions.test.ts`
 - **Updated all `PhaseRecord` fixtures** to include new required fields
   (`articulationAttempted`, `articulationVerified`, `articulationDegraded`, `articulationFailures`).
 - **Updated `phase_enter(5)` test** — now expects `valid: true` (removed `testEvidenceConfirmed` gate).
 - **Added M5 test** — `ralphTermination === 'escalated'` blocks `user_approval`.
 
-#### `packages/watchdog/test/checkpoint-phase2.test.ts`
+#### `packages/watchdog/tests/checkpoint-phase2.test.ts`
 - **Updated all `PhaseRecord` fixtures** to include new required fields.
 - **Updated mock patterns** for sync consistency.
 
-#### `packages/watchdog/test/checkpoint.test.ts`
+#### `packages/watchdog/tests/checkpoint.test.ts`
 - **Updated `PhaseRecord` fixtures** for new required fields.
 
-#### `packages/watchdog/test/helpers.ts`
+#### `packages/watchdog/tests/helpers.ts`
 - **Updated `makePhaseRecord`** to include articulation fields.
 - **Updated `createMockStore`** — sync methods use `mockReturnValue`, async observation methods
   use `mockResolvedValue`. Added `readLogSafe` mock.
 - **Updated `createMockCache`** — `get()` uses `mockReturnValue` (sync).
 - **Added comments** explaining sync/async mock rationale.
 
-#### `packages/watchdog/test/watchdog-config.test.ts`
+#### `packages/watchdog/tests/watchdog-config.test.ts`
 - **Updated TC-B-41** — now asserts `warn` log + fallback to defaults (was `info` + empty).
 
-#### `packages/core/test/dispatch.test.ts` (new)
+#### `packages/core/tests/dispatch.test.ts` (new)
 - **New dispatch integration test file**.
 
-#### `packages/watchdog/test/integration-phase2.test.ts` (new)
+#### `packages/watchdog/tests/integration-phase2.test.ts` (new)
 - **New Phase 2 integration test file**.
 
 ### Audit Trail

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ═══════════════════════════════════════════════════════════════
-# test/regression/regression_b1_checks.sh — Regression checks for B1 fixes
+# tests/regression/regression_b1_checks.sh — Regression checks for B1 fixes
 #
 # Every fix in B1 has a corresponding check here.
 # This script should pass BEFORE any deployment.
@@ -9,7 +9,7 @@
 # packages/reflection/ (the new code). Checks that grep old
 # plugins/aristotle-bridge/src/ have been migrated or dissolved.
 #
-# Usage: bash test/regression/regression_b1_checks.sh
+# Usage: bash tests/regression/regression_b1_checks.sh
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 
@@ -237,16 +237,16 @@ echo ""
 echo "── Tests: assertions match B1 changes ──"
 
 check "test_count_propagation.py uses 'done' for c_done" \
-    "grep -q \"action.*==.*done\" '$ROOT_DIR/test/test_count_propagation.py'"
+    "grep -q \"action.*==.*done\" '$ROOT_DIR/tests/test_count_propagation.py'"
 
 check "test_e2e_bridge_integration.py uses 'done' for checking completion" \
-    "grep -q \"action.*==.*done\" '$ROOT_DIR/test/test_e2e_bridge_integration.py'"
+    "grep -q \"action.*==.*done\" '$ROOT_DIR/tests/test_e2e_bridge_integration.py'"
 
 check "test_reflect_workflow.py clears .bridge-active marker" \
-    "grep -q 'bridge-active' '$ROOT_DIR/test/test_reflect_workflow.py'"
+    "grep -q 'bridge-active' '$ROOT_DIR/tests/test_reflect_workflow.py'"
 
 check "no stale 'action==notify' assertions for _fire_c_done_event" \
-    "! grep -A1 '_fire_c_done_event' '$ROOT_DIR/test/test_reflect_workflow.py' | grep -q '\"notify\"'"
+    "! grep -A1 '_fire_c_done_event' '$ROOT_DIR/tests/test_reflect_workflow.py' | grep -q '\"notify\"'"
 
 # ───────────────────────────────────────────────────────────────
 # Fix: Bug #11 — idle-handler uses spawn (not execFile) for subprocess

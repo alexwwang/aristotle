@@ -9,7 +9,7 @@
 | Python (pytest) | `uv run pytest` | 325 | ✅ Pass | 2026-04-28 |
 | Bridge Plugin (vitest) | `cd plugins/aristotle-bridge && npx vitest run` | 148 | ✅ Pass | 2026-04-28 |
 | Static tests | `bash scripts/test.sh` | 103 | ✅ Pass | 2026-04-28 |
-| B1 Regression | `bash test/regression/regression_b1_checks.sh` | 64 | ✅ Pass | 2026-04-28 |
+| B1 Regression | `bash tests/regression/regression_b1_checks.sh` | 64 | ✅ Pass | 2026-04-28 |
 | Deploy Checklist | 12 verification items | 12 | ✅ Pass | 2026-04-28 |
 | **Total** | | **640** | **All Pass** | |
 
@@ -23,7 +23,7 @@
 
 ## E2E / Integration Test Progress
 
-### E2E Automated Tests (opencode run) — `bash test/e2e/e2e_opencode.sh`
+### E2E Automated Tests (opencode run) — `bash tests/e2e/e2e_opencode.sh`
 
 | Group | Asserts | Result | Notes |
 |-------|---------|--------|-------|
@@ -35,7 +35,7 @@
 | E2E-6: Bridge marker | 2 | ✅ Conditionally pass | A8-A13 verified per round; no marker when static (by design) |
 | E2E-7: Workflow store | 3 | ✅ Pass | Disk verified: 3 workflows, required fields complete |
 
-### B1 R→C Chain (tmux) — `bash test/e2e/e2e_a7_r2c_chain.sh --project /path`
+### B1 R→C Chain (tmux) — `bash tests/e2e/e2e_a7_r2c_chain.sh --project /path`
 
 | Step | Description | Status | Notes |
 |------|-------------|--------|-------|

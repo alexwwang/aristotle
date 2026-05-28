@@ -6,8 +6,8 @@
 # through the Aristotle skill. Tests MCP integration end-to-end.
 #
 # Usage:
-#   bash test/e2e/e2e_opencode.sh          # run all
-#   bash test/e2e/e2e_opencode.sh --skip   # skip slow tests
+#   bash tests/e2e/e2e_opencode.sh          # run all
+#   bash tests/e2e/e2e_opencode.sh --skip   # skip slow tests
 #
 # Requirements:
 #   - opencode CLI installed and authenticated

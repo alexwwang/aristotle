@@ -7,12 +7,12 @@
 | Suite | Command | Count | What It Covers |
 |-------|---------|-------|----------------|
 | Static | `bash scripts/test.sh` | 103 | File structure, SKILL.md content, hook logic, error pattern detection, progressive disclosure (byte limit) |
-| Python | `uv run pytest test/ -v` | 405 | MCP core, orchestration & workflows, evolution, frontmatter, git ops, Bridge MCP, review UX |
+| Python | `uv run pytest tests/ -v` | 405 | MCP core, orchestration & workflows, evolution, frontmatter, git ops, Bridge MCP, review UX |
 | Core Package | `cd packages/core && bunx vitest run` | 150 | 10 modules: logger, config, types, utils, workflow-store, executor, api-probe, session-extractor, plugin registration, plugin config |
 | Aristotle Package | `cd packages/reflection && bunx vitest run` | 115 | 6 modules: config, idle-handler, executor, snapshot-extractor, index/role, tools |
 | Legacy Bridge (archived) | `cd plugins/aristotle-bridge && bunx vitest run` | 162 | 7 modules (old structure): types/utils/api-probe/snapshot-extractor/workflow-store/idle-handler/executor |
-| E2E Automated | `bash test/e2e/e2e_opencode.sh` | 14 | Real opencode session: skill load, sessions, learn, reflect (requires LLM) |
-| B1 Regression | `bash test/regression/regression_b1_checks.sh` | 64 | Post-deploy verification for B1 fixes |
+| E2E Automated | `bash tests/e2e/e2e_opencode.sh` | 14 | Real opencode session: skill load, sessions, learn, reflect (requires LLM) |
+| B1 Regression | `bash tests/regression/regression_b1_checks.sh` | 64 | Post-deploy verification for B1 fixes |
 
 ## 2. Static Tests (103)
 
@@ -31,41 +31,41 @@ bash scripts/test.sh
 ## 3. Python Tests (405)
 
 ```bash
-uv run pytest test/ -v
+uv run pytest tests/ -v
 ```
 
 405 tests across 51+ test classes. All tests use isolated temp directories (`tmp_path` fixture) and are safe to run repeatedly.
 
-### 3.1 MCP Core (test/mcp/ — 136 tests)
+### 3.1 MCP Core (aristotle_mcp/tests/ — 136 tests)
 
 | Test File | Test Class | Count | What It Tests |
 |-----------|-----------|-------|---------------|
-| `test/mcp/test_mcp_config.py` | TestConfig | 14 | Path resolution, env override, RISK_MAP, RISK_WEIGHTS, AUDIT_THRESHOLDS, SKILL_DIR, project hash |
-| `test/mcp/test_mcp_evolution.py` | TestEvolution | 10 | compute_delta (all risk levels, edge cases, validation), decide_audit_level |
-| `test/mcp/test_mcp_models.py` | TestModels | 13 | RuleMetadata defaults, YAML serialization roundtrip, GEAR 2.0 fields |
-| `test/mcp/test_mcp_git_ops.py` | TestGitOps | 8 | init, add+commit, show, log, status, git_show_exists |
-| `test/mcp/test_mcp_frontmatter.py` | TestFrontmatter | 18 | Atomic write, raw read, field update, stream filter, multi-dimension search |
-| `test/mcp/test_mcp_migration.py` | TestMigration | 8 | Flat Markdown parsing, repo init, auto-migration |
-| `test/mcp/test_mcp_server_tools.py` | TestServerTools, TestSyncTools, TestPathTraversal | 36 | Full lifecycle, reject, restore, sync, path containment |
-| `test/mcp/test_mcp_server_delta.py` | TestDeltaDecision | 8 | get_audit_decision, confidence defaults, Δ audit levels |
-| `test/mcp/test_mcp_server_reflection.py` | TestPersistDraft, TestCreateReflectionRecord, TestCompleteReflectionRecord | 21 | Draft persistence, reflection records, state management |
+| `aristotle_mcp/tests/test_mcp_config.py` | TestConfig | 14 | Path resolution, env override, RISK_MAP, RISK_WEIGHTS, AUDIT_THRESHOLDS, SKILL_DIR, project hash |
+| `aristotle_mcp/tests/test_mcp_evolution.py` | TestEvolution | 10 | compute_delta (all risk levels, edge cases, validation), decide_audit_level |
+| `aristotle_mcp/tests/test_mcp_models.py` | TestModels | 13 | RuleMetadata defaults, YAML serialization roundtrip, GEAR 2.0 fields |
+| `aristotle_mcp/tests/test_mcp_git_ops.py` | TestGitOps | 8 | init, add+commit, show, log, status, git_show_exists |
+| `aristotle_mcp/tests/test_mcp_frontmatter.py` | TestFrontmatter | 18 | Atomic write, raw read, field update, stream filter, multi-dimension search |
+| `aristotle_mcp/tests/test_mcp_migration.py` | TestMigration | 8 | Flat Markdown parsing, repo init, auto-migration |
+| `aristotle_mcp/tests/test_mcp_server_tools.py` | TestServerTools, TestSyncTools, TestPathTraversal | 36 | Full lifecycle, reject, restore, sync, path containment |
+| `aristotle_mcp/tests/test_mcp_server_delta.py` | TestDeltaDecision | 8 | get_audit_decision, confidence defaults, Δ audit levels |
+| `aristotle_mcp/tests/test_mcp_server_reflection.py` | TestPersistDraft, TestCreateReflectionRecord, TestCompleteReflectionRecord | 21 | Draft persistence, reflection records, state management |
 
 ### 3.2 Orchestration & Workflows (test/ — 246 tests)
 
 | Test File | Test Class | Count | What It Tests |
 |-----------|-----------|-------|---------------|
-| `test/test_orchestration.py` | TestOrchestrateStart, TestOrchestrateOnEvent, TestWorkflowStateManagement, TestIntegrationMockO, TestSearchParamMapping, TestHelperFunctions, TestOrchestrateStartSessions | 52 | Learn orchestration, workflow state, sessions, helpers |
-| `test/test_review_actions.py` | TestOrchestrateReviewAction, TestExceptionRevise, TestIntegrationReview | 18 | Review actions, exception paths, integration |
-| `test/test_review_ux.py` | TestParseDraftSummary, TestEnrichRulesMetadata, TestFormatReviewOutput, TestInspectAction, TestShowDraftAction, TestReviseAction, TestRuleSummaryDataModel, TestParseConflicts, TestAuditDecisionsNoneFallback, TestOrchestrateStartReviewBranch | 57 | Review UX: draft summary, enriched notifications, inspect/show draft, staging_rule_paths, confidence display, conflicts, rule_summary |
-| `test/test_reflect_workflow.py` | TestOrchestrateStartReflect, TestOrchestrateOnEventReflect, TestExceptionReflect, TestExceptionStart | 19 | Reflect flow, exception handling |
-| `test/test_count_propagation.py` | TestReReflectCountPropagation | 4 | Re-reflect count inheritance and cascading |
-| `test/test_m1_committed_paths.py` | — | 8 | committed_rule_paths collection → propagation → confirm fast path |
-| `test/test_m5_two_round.py` | — | 24 | Two-round retrieval (search → score → compress), intent extraction, scoring, compression |
-| `test/test_m6_feedback.py` | — | 13 | report_feedback tool, feedback signal metadata, auto-reflect trigger |
-| `test/test_m7_delta_norm.py` | — | 12 | compute_delta log-normalization, sample_size passthrough, audit level thresholds |
-| `test/test_m9_conflicts.py` | — | 11 | detect_conflicts, bidirectional conflict annotation, triple matching |
-| `test/test_phase0_snapshot.py` | TestResolveSessionsDir, TestBuildReflectorPrompt, TestOrchestrateStartSessionFile, TestBridgeDetection, TestOnUndo, TestUndoneShortCircuit | 19 | Session dir resolution, reflector prompt SESSION_FILE, Bridge marker detection, on_undo tool, undone state short-circuit |
-| `test/test_e2e_bridge_integration.py` | TestContextFixE2E, TestBridgeDetectionE2E, TestAsyncBridgeWorkflowE2E, TestMultiStageBridgeE2E | 9 | Bridge↔MCP integration: context fix, Bridge detection, async workflow, multi-stage |
+| `tests/test_orchestration.py` | TestOrchestrateStart, TestOrchestrateOnEvent, TestWorkflowStateManagement, TestIntegrationMockO, TestSearchParamMapping, TestHelperFunctions, TestOrchestrateStartSessions | 52 | Learn orchestration, workflow state, sessions, helpers |
+| `tests/test_review_actions.py` | TestOrchestrateReviewAction, TestExceptionRevise, TestIntegrationReview | 18 | Review actions, exception paths, integration |
+| `tests/test_review_ux.py` | TestParseDraftSummary, TestEnrichRulesMetadata, TestFormatReviewOutput, TestInspectAction, TestShowDraftAction, TestReviseAction, TestRuleSummaryDataModel, TestParseConflicts, TestAuditDecisionsNoneFallback, TestOrchestrateStartReviewBranch | 57 | Review UX: draft summary, enriched notifications, inspect/show draft, staging_rule_paths, confidence display, conflicts, rule_summary |
+| `tests/test_reflect_workflow.py` | TestOrchestrateStartReflect, TestOrchestrateOnEventReflect, TestExceptionReflect, TestExceptionStart | 19 | Reflect flow, exception handling |
+| `tests/test_count_propagation.py` | TestReReflectCountPropagation | 4 | Re-reflect count inheritance and cascading |
+| `tests/test_m1_committed_paths.py` | — | 8 | committed_rule_paths collection → propagation → confirm fast path |
+| `tests/test_m5_two_round.py` | — | 24 | Two-round retrieval (search → score → compress), intent extraction, scoring, compression |
+| `tests/test_m6_feedback.py` | — | 13 | report_feedback tool, feedback signal metadata, auto-reflect trigger |
+| `tests/test_m7_delta_norm.py` | — | 12 | compute_delta log-normalization, sample_size passthrough, audit level thresholds |
+| `tests/test_m9_conflicts.py` | — | 11 | detect_conflicts, bidirectional conflict annotation, triple matching |
+| `tests/test_phase0_snapshot.py` | TestResolveSessionsDir, TestBuildReflectorPrompt, TestOrchestrateStartSessionFile, TestBridgeDetection, TestOnUndo, TestUndoneShortCircuit | 19 | Session dir resolution, reflector prompt SESSION_FILE, Bridge marker detection, on_undo tool, undone state short-circuit |
+| `tests/test_e2e_bridge_integration.py` | TestContextFixE2E, TestBridgeDetectionE2E, TestAsyncBridgeWorkflowE2E, TestMultiStageBridgeE2E | 9 | Bridge↔MCP integration: context fix, Bridge detection, async workflow, multi-stage |
 
 ## 4. Core Package Tests (150 vitest)
 
@@ -128,7 +128,7 @@ cd plugins/aristotle-bridge && bunx vitest run
 ### 5.1 E2E Automated (opencode run)
 
 ```bash
-bash test/e2e/e2e_opencode.sh
+bash tests/e2e/e2e_opencode.sh
 ```
 
 14 assertions driven by `opencode run "message" --format json`. Tests real skill loading and MCP calls.
@@ -155,7 +155,7 @@ One opencode session covers plugin load, async reflect, and undo cleanup. **18 v
 | A4 | Check `.bridge-active` still exists | Marker present | M2-3 |
 | A5 | Check `bridge-workflows.json` | File exists with workflowId | M2-4 |
 | A6 | Wait for idle event or poll status | Status: running → completed | M2-5,6 |
-| A7 | Verify R→C chain — automated (B1) | Plugin drives R→C chain via subprocess. `bash test/e2e/e2e_a7_r2c_chain.sh --project /path/to/project` | M2-7 |
+| A7 | Verify R→C chain — automated (B1) | Plugin drives R→C chain via subprocess. `bash tests/e2e/e2e_a7_r2c_chain.sh --project /path/to/project` | M2-7 |
 | A8 | Send `/aristotle` again to start a new workflow | New workflow appears, status = running | M3-1 |
 | A9 | Cancel running workflow via `.trigger-abort.json` | `checkAbortTrigger()` reads file, cancels all active workflows | M3-2,3 |
 | A10 | Check `aristotle_check` output | Returns running workflows | M3-4 |
@@ -168,7 +168,7 @@ One opencode session covers plugin load, async reflect, and undo cleanup. **18 v
 ### 5.3 B1 Regression Checks
 
 ```bash
-bash test/regression/regression_b1_checks.sh
+bash tests/regression/regression_b1_checks.sh
 ```
 
 64 assertions covering all B1 fixes. Run before every deployment.
@@ -275,14 +275,14 @@ All test suites can run headless:
 
 ```bash
 # Quick smoke test (Python + static)
-bash scripts/test.sh && uv run pytest test/ -q
+bash scripts/test.sh && uv run pytest tests/ -q
 
 # Core + Aristotle packages
 cd packages/core && bunx vitest run
 cd packages/reflection && bunx vitest run
 
 # B1 Regression (run before every deployment)
-bash test/regression/regression_b1_checks.sh
+bash tests/regression/regression_b1_checks.sh
 ```
 
 Expected result: `405 passed` + `103 passed` + `150 passed` + `115 passed` + `162 passed` + `64 passed` = **999 checks, 0 failures**.
