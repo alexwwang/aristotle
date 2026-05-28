@@ -331,7 +331,7 @@ class InterventionCoordinator:
         )
         raise TDDViolationError(events[0], plan, result)
 
-    def _compute_assessment(self) -> tuple:
+    def _compute_assessment(self) -> tuple[str, list[str], dict[str, int]]:
         round_results = self.context.metadata.get("round_results", [])
         if not round_results:
             return "PASS", [], {"P0": 0, "P1": 0, "P2": 0, "P3": 0, "P4": 0}
