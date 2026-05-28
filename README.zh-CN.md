@@ -550,7 +550,7 @@ GEAR 协议操作映射到 Aristotle 的 MCP 工具：`produce` → `write_rule`
 │   ├── regression/
 │   │   └── regression_b1_checks.sh  # 部署验证（64 断言）
 │   └── test_e2e_bridge_integration.py  # Bridge↔MCP 集成测试（9 pytest）
-└── intervention/
+└── intervention/                    # Watchdog Intervention System v0.1.0
     ├── src/                           # 核心干预库
     └── tests/                         # 243 pytest 用例
 ```

@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.5.0] — 2025-05-28 — Watchdog Intervention System (TDD Pipeline v1.4)
+## [1.5.0] — 2025-05-28 — Watchdog Intervention System v0.1.0
 
 > **TDD Pipeline compatibility**: tdd-pipeline ≥ v0.17.0 (8-phase protocol with Phase 6 Pre-Release Testing, Phase 7 System Quality Audit, Phase 8 Functional Acceptance).
 >

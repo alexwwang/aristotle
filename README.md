@@ -547,7 +547,7 @@ The full protocol specification — state machine, frontmatter schema, Δ decisi
 │   ├── _orch_event.py    # orchestrate_on_event tool
 │   └── _orch_review.py   # orchestrate_review_action tool
 │   └── tests/              # MCP server unit tests
-├── intervention/           # Watchdog Intervention System (TDD Pipeline v1.4, 243 tests)
+├── intervention/           # Watchdog Intervention System v0.1.0 (243 tests)
 │   ├── src/
 │   │   ├── intervention_coordinator.py  # Central hub: intervene(), batch, assessment
 │   │   ├── intervention_types.py        # 13 dataclasses + VIOLATION_PRIORITY
