@@ -1,0 +1,17 @@
+services:
+  opencode-aristotle:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: opencode-aristotle:1.5.0
+    container_name: opencode-aristotle
+    stdin_open: true
+    tty: true
+    volumes:
+      - ~/.config/opencode:/root/.config/opencode
+      - ~/.local/share/opencode:/root/.local/share/opencode
+      - ~/workspace:/workspace
+    environment:
+      - ARISTOTLE_REPO_DIR=/root/.config/opencode/aristotle-repo
+      - UV_LINK_MODE=copy
+    working_dir: /workspace

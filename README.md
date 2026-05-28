@@ -119,6 +119,37 @@ Install the Aristotle skill with MCP server from https://github.com/alexwwang/ar
 > ```
 > Then restart OpenCode. The skill will be fetched automatically. You still need to run `uv sync` and add the MCP config separately.
 
+### Option 5: Docker (Linux/macOS with Colima/Docker Desktop)
+
+Run Aristotle in a container with OpenCode pre-installed. All configuration and data are mounted from the host, keeping the container stateless.
+
+**Prerequisites:** Docker + [Colima](https://github.com/abiosoft/colima) (macOS) or Docker Desktop (Linux/Windows)
+
+```bash
+# 1. Start Colima (macOS example)
+colima start --cpu 2 --memory 4 --arch x86_64
+
+# 2. Build image
+docker compose build
+
+# 3. Run container
+docker compose run opencode-aristotle
+```
+
+**Volumes mounted:**
+
+| Host Path | Container Path | Purpose |
+|-----------|----------------|---------|
+| `~/.config/opencode` | `/root/.config/opencode` | OpenCode config, skills, plugins, MCP server |
+| `~/.local/share/opencode` | `/root/.local/share/opencode` | Session data, history, state |
+| `~/workspace` | `/workspace` | Working directory for projects |
+
+**Dockerfile design:**
+- Base image: `ghcr.io/anomalyco/opencode` (Alpine + opencode CLI)
+- Runtime only: Python 3.12 + uv + bun + git
+- **No Aristotle components baked in** — all injected via bind mounts at runtime
+- Entrypoint: `opencode` (TUI mode)
+
 ### MCP Configuration
 
 Add this to your `opencode.json` to enable the MCP server (replace `$HOME` with your actual home path):
@@ -542,6 +573,8 @@ The full protocol specification — state machine, frontmatter schema, Δ decisi
 │       ├── test/          # 8 test files, 162 vitest cases (archived)
 │       ├── testing.en.md  # Bridge-specific test documentation (English)
 │       └── testing.zh.md  # Bridge-specific test documentation (Chinese)
+├── Dockerfile             # Stateless container image (opencode + Python/uv/bun runtime)
+├── docker-compose.yml     # Bind mounts host config/data for stateless execution
 └── test/
     ├── regression_b1_checks.sh  # Deploy verification (64 assertions)
     ├── e2e_opencode.sh          # E2E automation script (14 assertions)

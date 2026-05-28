@@ -1,0 +1,19 @@
+# Build artifacts
+.git
+.venv
+node_modules
+__pycache__
+*.egg-info
+.pytest_cache
+.ruff_cache
+
+# IDE / tool config
+.DS_Store
+.omc
+.opencode
+.sisyphus
+
+# Development dirs (not needed for runtime)
+docs
+design_plan
+tdd-test-project

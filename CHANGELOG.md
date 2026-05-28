@@ -49,6 +49,25 @@ Complete SYNC-mode intervention system for the TDD Pipeline Watchdog. Detects 13
 - **Python**: ≥ 3.10
 - **No breaking changes** to existing MCP tools, GEAR protocol, or Watchdog observer
 
+### Added — Docker Support
+
+Stateless container image for isolated Aristotle execution via Docker Compose.
+
+- **Dockerfile**: Based on `ghcr.io/anomalyco/opencode` (Alpine + opencode CLI), adds Python 3.12 + uv + bun + git runtime. No Aristotle components baked into image.
+- **docker-compose.yml**: Bind mounts host directories for true stateless operation:
+  - `~/.config/opencode` → container config, skills, plugins, MCP server
+  - `~/.local/share/opencode` → session data and history
+  - `~/workspace` → working directory
+- **.dockerignore**: Minimizes build context by excluding `.git`, `.venv`, `node_modules`, test artifacts
+- **README.md**: Added "Option 5: Docker" installation instructions
+
+Usage:
+```bash
+colima start --cpu 2 --memory 4 --arch x86_64
+docker compose build
+docker compose run opencode-aristotle
+```
+
 ### Known Issues
 
 17 KIs documented in `auto-reflection-feature/docs/KnownIssues.md`, all L/I/P severity, zero production risk. Deferred to v2 backlog.
