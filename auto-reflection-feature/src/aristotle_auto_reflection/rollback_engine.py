@@ -32,8 +32,8 @@ class RollbackEngine:
         else:
             all_paths = [event.affected_file_path] if event.affected_file_path else []
 
-        # Multi-file rollback (or single file via affected_file_paths)
-        if len(all_paths) >= 1:
+        # Multi-file rollback when affected_file_paths is populated
+        if all_paths and event.affected_file_paths:
             succeeded = []
             failed = []
             for fp in all_paths:
@@ -71,7 +71,7 @@ class RollbackEngine:
             else:
                 return RollbackResult(True, "all files rolled back", succeeded, None)
 
-        # No file paths — delegate to handler
+        # Single file via affected_file_path — delegate to handler
         return handler(event, context)
 
     def _delete_implementation(self, event: ViolationEvent, context: PipelineContext) -> RollbackResult:
