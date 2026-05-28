@@ -251,8 +251,10 @@ class InterventionCoordinator:
         non_mergeable = [e for e in sorted_events if e.violation_type not in _MERGEABLE_TYPES]
         mergeable = [e for e in sorted_events if e.violation_type in _MERGEABLE_TYPES]
 
-        # Handle non-mergeable first (highest priority)
-        # Mergeable events are deferred — pipeline retry re-triggers detection
+        # Design: only the first non-mergeable event is processed per batch.
+        # Subsequent non-mergeable events are intentionally deferred — the
+        # pipeline retry cycle will re-detect and re-trigger intervention
+        # for remaining items in a subsequent batch pass.
         if non_mergeable:
             self.intervene(non_mergeable[0])
             return
