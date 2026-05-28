@@ -56,7 +56,7 @@ git clone https://github.com/alexwwang/aristotle.git /tmp/aristotle
 cd /tmp/aristotle
 
 # 2. 运行安装脚本（部署 SKILL.md + MCP server + Plugin）
-bash install.sh
+bash scripts/install.sh
 
 # 3. 添加 MCP 配置到 opencode.json
 # 见下方"MCP 配置"部分的 JSON 示例
@@ -100,8 +100,8 @@ curl -sL https://raw.githubusercontent.com/alexwwang/aristotle/main/SKILL.md -o 
 ```
 Install the Aristotle skill with MCP server from https://github.com/alexwwang/aristotle.git:
 1. Clone to /tmp/aristotle
-2. cd into the cloned directory, run `bash install.sh` (macOS/Linux) or `powershell -File install.ps1` (Windows)
-3. Verify: run `bash test.sh` — all assertions must pass
+2. cd into the cloned directory, run `bash scripts/install.sh` (macOS/Linux) or `powershell -File install.ps1` (Windows)
+3. Verify: run `bash scripts/test.sh` — all assertions must pass
 4. Add MCP config to opencode.json: { "mcp": { "aristotle": { "type": "local", "command": ["uv", "run", "--project", "$HOME/.config/opencode/aristotle", "python", "-m", "aristotle_mcp.server"], "enabled": true } } }
 5. Register Plugin: add `"file://$HOME/.config/opencode/aristotle-bridge/index.js"` to the `"plugin"` array in opencode.json
 6. Verify MCP: run `uv run --project $HOME/.config/opencode/aristotle python -c "from aristotle_mcp.server import mcp; print(len(mcp._tool_manager._tools), 'tools loaded')"` — should print "20 tools loaded"
@@ -461,13 +461,13 @@ GEAR 协议操作映射到 Aristotle 的 MCP 工具：`produce` → `write_rule`
 
 | 套件 | 命令 | 数量 |
 |------|------|------|
-| 静态测试 | `bash test.sh` | 103 |
+| 静态测试 | `bash scripts/test.sh` | 103 |
 | 单元/集成测试 (Python) | `uv run pytest test/ -v` | 405 |
 | Core Package (TypeScript) | `cd packages/core && bunx vitest run` | 150 |
 | Aristotle Package (TypeScript) | `cd packages/reflection && bunx vitest run` | 115 |
 | Legacy Bridge（已归档）(TypeScript) | `cd plugins/aristotle-bridge && bunx vitest run` | 162 |
 | E2E 集成测试 | `uv run pytest test/test_e2e_bridge_integration.py -v` | 9 |
-| 回归测试（部署验证） | `bash test/regression_b1_checks.sh` | 64 |
+| 回归测试（部署验证） | `bash test/regression/regression_b1_checks.sh` | 64 |
 
 ### 测试覆盖率历史
 
@@ -498,10 +498,13 @@ GEAR 协议操作映射到 Aristotle 的 MCP 工具：`produce` → `write_rule`
 │   ├── REVIEW.md          # 协调器审核阶段 — DRAFT 审核、规则写入、修订
 │   ├── CHECKER.md         # 审核者协议 — schema + 内容校验（仅确认时加载）
 │   └── LEARN.md           # 协调器学习阶段 — 意图提取、查询构造、结果过滤
-├── install.sh             # 安装脚本（macOS/Linux）
-├── install.ps1           # 安装脚本（Windows）
+├── scripts/
+│   ├── install.sh             # 安装脚本（macOS/Linux）
+│   ├── install.ps1           # 安装脚本（Windows）
+│   ├── test.sh               # 静态测试套件（103 断言）
+│   ├── reset-runtime.sh      # 重置运行时状态
+│   └── uninstall.sh          # 卸载脚本
 ├── pyproject.toml        # MCP server 的 Python 依赖声明
-├── test.sh               # 静态测试套件（103 断言）
 ├── aristotle_mcp/        # MCP server（Git 版本管理 + 工作流编排）
 │   ├── __init__.py
 │   ├── config.py         # 路径、常量、环境变量、RISK_WEIGHTS、AUDIT_THRESHOLDS、SKILL_DIR
@@ -540,8 +543,11 @@ GEAR 协议操作映射到 Aristotle 的 MCP 工具：`produce` → `write_rule`
 │       ├── testing.en.md # Bridge 独立测试文档（英文）
 │       └── testing.zh.md # Bridge 独立测试文档（中文）
 └── test/
-    ├── regression_b1_checks.sh  # 部署验证（64 断言）
-    ├── e2e_opencode.sh          # E2E 自动化脚本（14 断言）
+    ├── e2e/
+    │   ├── e2e_opencode.sh          # E2E 自动化脚本（14 断言）
+    │   └── ...
+    ├── regression/
+    │   └── regression_b1_checks.sh  # 部署验证（64 断言）
     └── test_e2e_bridge_integration.py  # Bridge↔MCP 集成测试（9 pytest）
 ```
 

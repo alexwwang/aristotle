@@ -6,18 +6,18 @@
 
 | Suite | Command | Count | What It Covers |
 |-------|---------|-------|----------------|
-| Static | `bash test.sh` | 103 | File structure, SKILL.md content, hook logic, error pattern detection, progressive disclosure (byte limit) |
+| Static | `bash scripts/test.sh` | 103 | File structure, SKILL.md content, hook logic, error pattern detection, progressive disclosure (byte limit) |
 | Python | `uv run pytest test/ -v` | 405 | MCP core, orchestration & workflows, evolution, frontmatter, git ops, Bridge MCP, review UX |
 | Core Package | `cd packages/core && bunx vitest run` | 150 | 10 modules: logger, config, types, utils, workflow-store, executor, api-probe, session-extractor, plugin registration, plugin config |
 | Aristotle Package | `cd packages/reflection && bunx vitest run` | 115 | 6 modules: config, idle-handler, executor, snapshot-extractor, index/role, tools |
 | Legacy Bridge (archived) | `cd plugins/aristotle-bridge && bunx vitest run` | 162 | 7 modules (old structure): types/utils/api-probe/snapshot-extractor/workflow-store/idle-handler/executor |
-| E2E Automated | `bash test/e2e_opencode.sh` | 14 | Real opencode session: skill load, sessions, learn, reflect (requires LLM) |
-| B1 Regression | `bash test/regression_b1_checks.sh` | 64 | Post-deploy verification for B1 fixes |
+| E2E Automated | `bash test/e2e/e2e_opencode.sh` | 14 | Real opencode session: skill load, sessions, learn, reflect (requires LLM) |
+| B1 Regression | `bash test/regression/regression_b1_checks.sh` | 64 | Post-deploy verification for B1 fixes |
 
 ## 2. Static Tests (103)
 
 ```bash
-bash test.sh
+bash scripts/test.sh
 ```
 
 103 assertions covering:
@@ -128,7 +128,7 @@ cd plugins/aristotle-bridge && bunx vitest run
 ### 5.1 E2E Automated (opencode run)
 
 ```bash
-bash test/e2e_opencode.sh
+bash test/e2e/e2e_opencode.sh
 ```
 
 14 assertions driven by `opencode run "message" --format json`. Tests real skill loading and MCP calls.
@@ -155,7 +155,7 @@ One opencode session covers plugin load, async reflect, and undo cleanup. **18 v
 | A4 | Check `.bridge-active` still exists | Marker present | M2-3 |
 | A5 | Check `bridge-workflows.json` | File exists with workflowId | M2-4 |
 | A6 | Wait for idle event or poll status | Status: running → completed | M2-5,6 |
-| A7 | Verify R→C chain — automated (B1) | Plugin drives R→C chain via subprocess. `bash test/e2e_a7_r2c_chain.sh --project /path/to/project` | M2-7 |
+| A7 | Verify R→C chain — automated (B1) | Plugin drives R→C chain via subprocess. `bash test/e2e/e2e_a7_r2c_chain.sh --project /path/to/project` | M2-7 |
 | A8 | Send `/aristotle` again to start a new workflow | New workflow appears, status = running | M3-1 |
 | A9 | Cancel running workflow via `.trigger-abort.json` | `checkAbortTrigger()` reads file, cancels all active workflows | M3-2,3 |
 | A10 | Check `aristotle_check` output | Returns running workflows | M3-4 |
@@ -168,7 +168,7 @@ One opencode session covers plugin load, async reflect, and undo cleanup. **18 v
 ### 5.3 B1 Regression Checks
 
 ```bash
-bash test/regression_b1_checks.sh
+bash test/regression/regression_b1_checks.sh
 ```
 
 64 assertions covering all B1 fixes. Run before every deployment.
@@ -275,14 +275,14 @@ All test suites can run headless:
 
 ```bash
 # Quick smoke test (Python + static)
-bash test.sh && uv run pytest test/ -q
+bash scripts/test.sh && uv run pytest test/ -q
 
 # Core + Aristotle packages
 cd packages/core && bunx vitest run
 cd packages/reflection && bunx vitest run
 
 # B1 Regression (run before every deployment)
-bash test/regression_b1_checks.sh
+bash test/regression/regression_b1_checks.sh
 ```
 
 Expected result: `405 passed` + `103 passed` + `150 passed` + `115 passed` + `162 passed` + `64 passed` = **999 checks, 0 failures**.

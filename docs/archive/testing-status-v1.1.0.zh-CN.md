@@ -8,8 +8,8 @@
 |------|------|------|------|----------|
 | Python (pytest) | `uv run pytest` | 325 | ✅ 通过 | 2026-04-28 |
 | Bridge 插件 (vitest) | `cd plugins/aristotle-bridge && npx vitest run` | 148 | ✅ 通过 | 2026-04-28 |
-| 静态测试 | `bash test.sh` | 103 | ✅ 通过 | 2026-04-28 |
-| B1 回归检查 | `bash test/regression_b1_checks.sh` | 64 | ✅ 通过 | 2026-04-28 |
+| 静态测试 | `bash scripts/test.sh` | 103 | ✅ 通过 | 2026-04-28 |
+| B1 回归检查 | `bash test/regression/regression_b1_checks.sh` | 64 | ✅ 通过 | 2026-04-28 |
 | 部署 checklist | 12 项验证 | 12 | ✅ 通过 | 2026-04-28 |
 | **合计** | | **640** | **全部通过** | |
 
@@ -23,7 +23,7 @@
 
 ## E2E / 集成测试进度
 
-### E2E 自动化测试 (opencode run) — `bash test/e2e_opencode.sh`
+### E2E 自动化测试 (opencode run) — `bash test/e2e/e2e_opencode.sh`
 
 | 分组 | 断言数 | 结果 | 备注 |
 |------|--------|------|------|
@@ -35,7 +35,7 @@
 | E2E-6: Bridge marker | 2 | ✅ 条件通过 | A8-A13 每轮验证；静态时无 marker（设计如此） |
 | E2E-7: Workflow store | 3 | ✅ 通过 | 磁盘验证：3 workflow，必需字段齐全 |
 
-### B1 R→C 链路 (tmux) — `bash test/e2e_a7_r2c_chain.sh --project /path`
+### B1 R→C 链路 (tmux) — `bash test/e2e/e2e_a7_r2c_chain.sh --project /path`
 
 | 步骤 | 描述 | 状态 | 备注 |
 |------|------|------|------|

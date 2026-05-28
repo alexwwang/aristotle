@@ -18,7 +18,6 @@ Thumbs.db
 design_plan/
 
 # Local tooling (not pushed to remote)
-scripts/dp-save.sh
 
 # Protocol drafts (moved to design_plan/, kept for reference)
 protocol_draft/

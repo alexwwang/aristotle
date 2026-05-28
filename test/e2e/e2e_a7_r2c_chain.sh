@@ -10,8 +10,8 @@
 #   5. C completes → workflow marked done
 #
 # Usage:
-#   bash test/e2e_a7_r2c_chain.sh --project /path/to/project
-#   bash test/e2e_a7_r2c_chain.sh --project /path/to/project --timeout 180
+#   bash test/e2e/e2e_a7_r2c_chain.sh --project /path/to/project
+#   bash test/e2e/e2e_a7_r2c_chain.sh --project /path/to/project --timeout 180
 #
 # Requirements:
 #   - tmux, opencode CLI, sqlite3, python3

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ═══════════════════════════════════════════════════════════════
-# test/regression_b1_checks.sh — Regression checks for B1 fixes
+# test/regression/regression_b1_checks.sh — Regression checks for B1 fixes
 #
 # Every fix in B1 has a corresponding check here.
 # This script should pass BEFORE any deployment.
@@ -9,7 +9,7 @@
 # packages/reflection/ (the new code). Checks that grep old
 # plugins/aristotle-bridge/src/ have been migrated or dissolved.
 #
-# Usage: bash test/regression_b1_checks.sh
+# Usage: bash test/regression/regression_b1_checks.sh
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 

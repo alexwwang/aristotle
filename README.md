@@ -58,7 +58,7 @@ git clone https://github.com/alexwwang/aristotle.git /tmp/aristotle
 cd /tmp/aristotle
 
 # 2. Run the installer (deploys SKILL.md + MCP server + Plugin)
-bash install.sh
+bash scripts/install.sh
 
 # 3. Add MCP config to opencode.json
 # See "MCP Configuration" section below for the JSON snippet
@@ -102,8 +102,8 @@ Copy and paste this prompt into any OpenCode session — it will install Aristot
 ```
 Install the Aristotle skill with MCP server from https://github.com/alexwwang/aristotle.git:
 1. Clone to /tmp/aristotle
-2. cd into the cloned directory, run `bash install.sh` (macOS/Linux) or `powershell -File install.ps1` (Windows)
-3. Verify: run `bash test.sh` — all assertions must pass
+2. cd into the cloned directory, run `bash scripts/install.sh` (macOS/Linux) or `powershell -File install.ps1` (Windows)
+3. Verify: run `bash scripts/test.sh` — all assertions must pass
 4. Add MCP config to opencode.json: { "mcp": { "aristotle": { "type": "local", "command": ["uv", "run", "--project", "$HOME/.config/opencode/aristotle", "python", "-m", "aristotle_mcp.server"], "enabled": true } } }
 5. Register Plugin: add `"file://$HOME/.config/opencode/aristotle-bridge/index.js"` to the `"plugin"` array in opencode.json
 6. Verify MCP: run `uv run --project ~/.config/opencode/aristotle python -c "from aristotle_mcp.server import mcp; print(len(mcp._tool_manager._tools), 'tools loaded')"` — should print "20 tools loaded"
@@ -481,13 +481,13 @@ The full protocol specification — state machine, frontmatter schema, Δ decisi
 
 | Suite | Command | Count |
 |-------|---------|-------|
-| Static | `bash test.sh` | 103 |
+| Static | `bash scripts/test.sh` | 103 |
 | Unit/Integration (Python) | `uv run pytest test/ -v` | 405 |
 | Core Package (TypeScript) | `cd packages/core && bunx vitest run` | 150 |
 | Aristotle Package (TypeScript) | `cd packages/reflection && bunx vitest run` | 115 |
 | Legacy Bridge (archived) (TypeScript) | `cd plugins/aristotle-bridge && bunx vitest run` | 162 |
 | E2E Integration | `uv run pytest test/test_e2e_bridge_integration.py -v` | 9 |
-| Regression (deploy verify) | `bash test/regression_b1_checks.sh` | 64 |
+| Regression (deploy verify) | `bash test/regression/regression_b1_checks.sh` | 64 |
 
 ### Test Coverage History
 
@@ -518,10 +518,13 @@ The full protocol specification — state machine, frontmatter schema, Δ decisi
 │   ├── REVIEW.md          # Coordinator review phase — DRAFT review, rule writing, revision
 │   ├── CHECKER.md         # Checker protocol — schema + content validation (loaded on confirm only)
 │   └── LEARN.md           # Coordinator learn phase — intent extraction, query construction, result filtering
-├── install.sh             # Installer (macOS/Linux)
-├── install.ps1           # Installer (Windows)
+├── scripts/
+│   ├── install.sh             # Installer (macOS/Linux)
+│   ├── install.ps1           # Installer (Windows)
+│   ├── test.sh               # Static test suite (103 assertions)
+│   ├── reset-runtime.sh      # Reset runtime state
+│   └── uninstall.sh          # Uninstall script
 ├── pyproject.toml        # Python dependencies for MCP server
-├── test.sh               # Static test suite (103 assertions)
 ├── aristotle_mcp/        # MCP server (Git-backed rule management + workflow orchestration)
 │   ├── __init__.py
 │   ├── config.py         # Paths, constants, env vars, RISK_WEIGHTS, AUDIT_THRESHOLDS, SKILL_DIR
@@ -576,8 +579,11 @@ The full protocol specification — state machine, frontmatter schema, Δ decisi
 ├── Dockerfile             # Stateless container image (opencode + Python/uv/bun runtime)
 ├── docker-compose.yml     # Bind mounts host config/data for stateless execution
 └── test/
-    ├── regression_b1_checks.sh  # Deploy verification (64 assertions)
-    ├── e2e_opencode.sh          # E2E automation script (14 assertions)
+    ├── e2e/
+    │   ├── e2e_opencode.sh          # E2E automation script (14 assertions)
+    │   └── ...
+    ├── regression/
+    │   └── regression_b1_checks.sh  # Deploy verification (64 assertions)
     └── test_e2e_bridge_integration.py  # Bridge↔MCP integration (9 pytest)
 ```
 

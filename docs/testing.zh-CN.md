@@ -6,18 +6,18 @@
 
 | 套件 | 命令 | 数量 | 覆盖范围 |
 |------|------|------|----------|
-| 静态测试 | `bash test.sh` | 103 | 文件结构、SKILL.md 内容、hook 逻辑、错误模式检测、渐进披露（字节限制） |
+| 静态测试 | `bash scripts/test.sh` | 103 | 文件结构、SKILL.md 内容、hook 逻辑、错误模式检测、渐进披露（字节限制） |
 | Python 测试 | `uv run pytest test/ -v` | 405 | MCP 核心、编排与工作流、进化、frontmatter、git 操作、Bridge MCP、Review UX |
 | Core Package | `cd packages/core && bunx vitest run` | 150 | 10 个模块：logger、config、types、utils、workflow-store、executor、api-probe、session-extractor、plugin registration、plugin config |
 | Aristotle Package | `cd packages/reflection && bunx vitest run` | 115 | 6 个模块：config、idle-handler、executor、snapshot-extractor、index/role、tools |
 | Legacy Bridge（已归档） | `cd plugins/aristotle-bridge && bunx vitest run` | 162 | 7 个模块（旧结构）：types/utils/api-probe/snapshot-extractor/workflow-store/idle-handler/executor |
-| E2E 自动化 | `bash test/e2e_opencode.sh` | 14 | 真实 opencode 会话：skill 加载、sessions、learn、reflect（需 LLM） |
-| B1 回归 | `bash test/regression_b1_checks.sh` | 64 | B1 修复的部署后验证 |
+| E2E 自动化 | `bash test/e2e/e2e_opencode.sh` | 14 | 真实 opencode 会话：skill 加载、sessions、learn、reflect（需 LLM） |
+| B1 回归 | `bash test/regression/regression_b1_checks.sh` | 64 | B1 修复的部署后验证 |
 
 ## 2. 静态测试 (103)
 
 ```bash
-bash test.sh
+bash scripts/test.sh
 ```
 
 103 个断言，覆盖：
@@ -128,7 +128,7 @@ cd plugins/aristotle-bridge && bunx vitest run
 ### 7.1 E2E 自动化测试 (opencode run)
 
 ```bash
-bash test/e2e_opencode.sh
+bash test/e2e/e2e_opencode.sh
 ```
 
 14 个断言，通过 `opencode run "message" --format json` 驱动。测试真实 skill 加载和 MCP 调用。无运行中 LLM 时 9/14 测试 SKIP。
@@ -155,7 +155,7 @@ bash test/e2e_opencode.sh
 | A4 | 检查 `.bridge-active` 仍存在 | Marker 文件在 | M2-3 |
 | A5 | 检查 `bridge-workflows.json` | 文件存在，含 workflowId | M2-4 |
 | A6 | 等待 idle 事件或轮询状态 | 状态 running → completed | M2-5,6 |
-| A7 | 验证 R→C 链路 — 已自动化 (B1) | Plugin 通过子进程驱动 R→C 链路。`bash test/e2e_a7_r2c_chain.sh --project /path/to/project` | M2-7 |
+| A7 | 验证 R→C 链路 — 已自动化 (B1) | Plugin 通过子进程驱动 R→C 链路。`bash test/e2e/e2e_a7_r2c_chain.sh --project /path/to/project` | M2-7 |
 | A8 | 再次发送 `/aristotle` 启动新工作流 | 新工作流出现，status = running | M3-1 |
 | A9 | 通过 `.trigger-abort.json` 文件取消运行中的 workflow | `checkAbortTrigger()` 读取文件，取消所有 active workflow | M3-2,3 |
 | A10 | 检查 `aristotle_check` 输出 | 返回运行中的工作流 | M3-4 |
@@ -168,7 +168,7 @@ bash test/e2e_opencode.sh
 ### 7.3 B1 回归检查
 
 ```bash
-bash test/regression_b1_checks.sh
+bash test/regression/regression_b1_checks.sh
 ```
 
 64 个断言覆盖所有 B1 修复。每次部署前运行。
@@ -274,10 +274,10 @@ bash test/regression_b1_checks.sh
 
 ```bash
 # 快速冒烟测试（Python + 静态）
-bash test.sh && uv run pytest test/ -q
+bash scripts/test.sh && uv run pytest test/ -q
 
 # B1 回归测试（每次部署前必须运行）
-bash test/regression_b1_checks.sh
+bash test/regression/regression_b1_checks.sh
 ```
 
 期望结果：`405 passed` + `103 passed` + `150 passed` + `115 passed` + `162 passed` + `64 passed` = **999 项检查，0 失败**。
