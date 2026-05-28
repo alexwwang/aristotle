@@ -32,8 +32,8 @@ class RollbackEngine:
         else:
             all_paths = [event.affected_file_path] if event.affected_file_path else []
 
-        # Multi-file rollback
-        if len(all_paths) > 1:
+        # Multi-file rollback (or single file via affected_file_paths)
+        if len(all_paths) >= 1:
             succeeded = []
             failed = []
             for fp in all_paths:
@@ -60,11 +60,18 @@ class RollbackEngine:
                     failed_files=failed,
                 )
             elif failed:
-                return RollbackResult(False, "all files failed", [], None)
+                return RollbackResult(
+                    success=False,
+                    action="all files failed",
+                    files_affected=[],
+                    git_hash=None,
+                    partial_failure=False,
+                    failed_files=failed,
+                )
             else:
                 return RollbackResult(True, "all files rolled back", succeeded, None)
 
-        # Single file (or no file) — delegate to handler
+        # No file paths — delegate to handler
         return handler(event, context)
 
     def _delete_implementation(self, event: ViolationEvent, context: PipelineContext) -> RollbackResult:
