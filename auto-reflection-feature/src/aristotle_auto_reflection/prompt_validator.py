@@ -102,7 +102,7 @@ class PromptValidator:
         )
         return ValidationResult(is_valid=len(matches) == 0, matches=matches)
 
-    def _match_compiled(self, text: str, compiled_map: Dict[str, List], lang: str) -> List[PatternMatch]:
+    def _match_compiled(self, text: str, compiled_map: Dict[str, List[re.Pattern[str]]], lang: str) -> List[PatternMatch]:
         """Run pre-compiled regex lists against *text* and collect PatternMatch hits."""
         matches: List[PatternMatch] = []
         for category, cps in compiled_map.items():

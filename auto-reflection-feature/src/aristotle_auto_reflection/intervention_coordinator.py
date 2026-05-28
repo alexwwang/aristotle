@@ -311,7 +311,7 @@ class InterventionCoordinator:
                 assessment_counts,
             )
 
-        # 3. V-8/V-9: single merged ki doc entry
+        # 3. Record all events for assessment tracking (guarded by KI violation presence)
         ki_types = {"MISSING_KI_DOC", "KI_DOC_OUTDATED"}
         ki_events = [e for e in events if e.violation_type in ki_types]
         if ki_events:
