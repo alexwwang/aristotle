@@ -168,8 +168,10 @@ class TestInterventionCoordinator:
     def test_missing_test_no_skeleton_created(self):
         """New coordinator does NOT create test skeleton files."""
         coord = InterventionCoordinator(_make_context())
-        event = _event("MISSING_TEST", "src/new_module.py", phase=5)
+        event = _event("MISSING_TEST", "src/nonexistent_module_xyz.py", phase=5)
         with pytest.raises(TDDViolationError):
             coord.intervene(event)
-        test_path = os.path.join(os.path.dirname(__file__), "test_new_module_test.py")
-        assert not os.path.exists(test_path)
+        skeleton_path = os.path.join(
+            os.path.dirname(__file__), "test_nonexistent_module_xyz_test.py"
+        )
+        assert not os.path.exists(skeleton_path)
