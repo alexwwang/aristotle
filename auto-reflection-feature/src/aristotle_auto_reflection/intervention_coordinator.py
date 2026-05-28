@@ -2,7 +2,7 @@
 
 import logging
 import subprocess
-from typing import List
+from typing import Dict, List, Optional, Tuple
 from aristotle_auto_reflection.intervention_types import (
     InterventionResult,
     InterventionPlan,
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 class TDDViolationError(Exception):
-    def __init__(self, event: ViolationEvent, plan: InterventionPlan, result: InterventionResult = None):
+    def __init__(self, event: ViolationEvent, plan: InterventionPlan, result: Optional[InterventionResult] = None):
         self.event = event
         self.plan = plan
         self.result = result
@@ -288,7 +288,7 @@ class InterventionCoordinator:
             instruction=f"Unknown violation type: {event.violation_type}",
         )
 
-    def _handle_merged(self, events: list) -> None:
+    def _handle_merged(self, events: List[ViolationEvent]) -> None:
         # 1. V-10/V-11: commit first
         commit_types = {"UNCOMMITTED_PHASE", "UNCOMMITTED_REVIEW"}
         for e in events:
@@ -333,7 +333,7 @@ class InterventionCoordinator:
         )
         raise TDDViolationError(events[0], plan, result)
 
-    def _compute_assessment(self) -> tuple[str, list[str], dict[str, int]]:
+    def _compute_assessment(self) -> Tuple[str, List[str], Dict[str, int]]:
         round_results = self.context.metadata.get("round_results", [])
         if not round_results:
             return "PASS", [], {"P0": 0, "P1": 0, "P2": 0, "P3": 0, "P4": 0}

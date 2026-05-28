@@ -3,7 +3,7 @@
 import logging
 import re
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from aristotle_auto_reflection.intervention_types import (
     InterventionPlan,
@@ -44,7 +44,7 @@ class KiDocManager:
         next_phase: int,
         status: str,
         issues: List[str],
-        priority_counts: Optional[dict] = None,
+        priority_counts: Optional[Dict[str, int]] = None,
     ) -> Optional[bool]:
         """Write a phase assessment entry or create the doc if status is empty."""
         if not status:

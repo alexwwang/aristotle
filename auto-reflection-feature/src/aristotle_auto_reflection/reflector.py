@@ -17,7 +17,7 @@ class ReflectionResult:
     error: Optional[str] = None
 
 class AutoReflector:
-    def __init__(self, mcp_available: bool = True):
+    def __init__(self, mcp_available: bool = True) -> None:
         self.mcp_available = mcp_available
 
     def build_reflection_prompt(self, event: ViolationEvent) -> str:
