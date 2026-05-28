@@ -3,7 +3,7 @@
 import logging
 import re
 from typing import Dict, List
-from aristotle_auto_reflection.intervention_types import ValidationResult, PatternMatch
+from aristotle_intervention.intervention_types import ValidationResult, PatternMatch
 
 logger = logging.getLogger(__name__)
 

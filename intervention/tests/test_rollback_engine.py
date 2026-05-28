@@ -5,8 +5,8 @@ from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from aristotle_auto_reflection.rollback_engine import RollbackEngine
-from aristotle_auto_reflection.intervention_types import (
+from aristotle_intervention.rollback_engine import RollbackEngine
+from aristotle_intervention.intervention_types import (
     ViolationEvent, InterventionPlan, RollbackResult, PipelineContext,
 )
 
@@ -49,7 +49,7 @@ class TestRollbackDeleteTracked:
         ctx = pipeline_context_factory()
         with patch.object(rollback_engine, "validate_path", return_value=True), \
              patch.object(rollback_engine, "_is_tracked", return_value=True), \
-             patch("aristotle_auto_reflection.rollback_engine.subprocess.run") as mock_run:
+             patch("aristotle_intervention.rollback_engine.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
             result = rollback_engine.rollback(event, plan, ctx)
         assert result.success is True
@@ -63,8 +63,8 @@ class TestRollbackDeleteUntracked:
         ctx = pipeline_context_factory()
         with patch.object(rollback_engine, "validate_path", return_value=True), \
              patch.object(rollback_engine, "_is_tracked", return_value=False), \
-             patch("aristotle_auto_reflection.rollback_engine.os.path.exists", return_value=True), \
-             patch("aristotle_auto_reflection.rollback_engine.os.remove") as mock_remove:
+             patch("aristotle_intervention.rollback_engine.os.path.exists", return_value=True), \
+             patch("aristotle_intervention.rollback_engine.os.remove") as mock_remove:
             result = rollback_engine.rollback(event, plan, ctx)
         assert result.success is True
         mock_remove.assert_called_once_with("src/module.py")
@@ -87,7 +87,7 @@ class TestRollbackRestoreFromBoundary:
         ctx = pipeline_context_factory(boundary_commit_hash="deadbeef")
         with patch.object(rollback_engine, "validate_path", return_value=True), \
              patch.object(rollback_engine, "_is_tracked", return_value=True), \
-             patch("aristotle_auto_reflection.rollback_engine.subprocess.run") as mock_run:
+             patch("aristotle_intervention.rollback_engine.subprocess.run") as mock_run:
             mock_run.side_effect = [
                 MagicMock(returncode=0),
                 MagicMock(returncode=0, stdout="deadbeef\n"),
@@ -103,7 +103,7 @@ class TestRollbackRestoreFallbackHead:
         ctx = pipeline_context_factory(boundary_commit_hash=None)
         with patch.object(rollback_engine, "validate_path", return_value=True), \
              patch.object(rollback_engine, "_is_tracked", return_value=True), \
-             patch("aristotle_auto_reflection.rollback_engine.subprocess.run") as mock_run:
+             patch("aristotle_intervention.rollback_engine.subprocess.run") as mock_run:
             mock_run.side_effect = [
                 MagicMock(returncode=0),
                 MagicMock(returncode=0, stdout="abc1234\n"),
@@ -119,7 +119,7 @@ class TestRollbackRestoreFallbackHead:
         ctx = pipeline_context_factory(boundary_commit_hash="invalid!ref;rm -rf /")
         with patch.object(rollback_engine, "validate_path", return_value=True), \
              patch.object(rollback_engine, "_is_tracked", return_value=True), \
-             patch("aristotle_auto_reflection.rollback_engine.subprocess.run") as mock_run:
+             patch("aristotle_intervention.rollback_engine.subprocess.run") as mock_run:
             mock_run.side_effect = [
                 MagicMock(returncode=0),
                 MagicMock(returncode=0, stdout="abc1234\n"),
@@ -150,7 +150,7 @@ class TestRollbackRestoreCheckoutFail:
         ctx = pipeline_context_factory()
         with patch.object(rollback_engine, "validate_path", return_value=True), \
              patch.object(rollback_engine, "_is_tracked", return_value=True), \
-             patch("aristotle_auto_reflection.rollback_engine.subprocess.run") as mock_run:
+             patch("aristotle_intervention.rollback_engine.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=1, stderr="checkout failed")
             result = rollback_engine.rollback(event, plan, ctx)
         assert result.success is False
@@ -201,7 +201,7 @@ class TestRollbackNoopRegression:
 
 class TestPathTraversal:
     def test_should_reject_path_traversal_attempt(self, rollback_engine):
-        with patch("aristotle_auto_reflection.rollback_engine.subprocess.run") as mock_run:
+        with patch("aristotle_intervention.rollback_engine.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0, stdout="/repo\n")
             result = rollback_engine.validate_path("../etc/passwd")
         assert result is False
@@ -209,7 +209,7 @@ class TestPathTraversal:
 
 class TestPathAbsoluteOutside:
     def test_should_reject_absolute_path_outside_repo(self, rollback_engine):
-        with patch("aristotle_auto_reflection.rollback_engine.subprocess.run") as mock_run:
+        with patch("aristotle_intervention.rollback_engine.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0, stdout="/repo\n")
             result = rollback_engine.validate_path("/etc/passwd")
         assert result is False
@@ -217,7 +217,7 @@ class TestPathAbsoluteOutside:
 
 class TestPathGitUnavailable:
     def test_should_return_false_when_git_unavailable_for_path_validation(self, rollback_engine):
-        with patch("aristotle_auto_reflection.rollback_engine.subprocess.run") as mock_run:
+        with patch("aristotle_intervention.rollback_engine.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=1)
             result = rollback_engine.validate_path("src/module.py")
         assert result is False
@@ -225,7 +225,7 @@ class TestPathGitUnavailable:
 
 class TestPathLeadingDash:
     def test_should_reject_path_starting_with_dash(self, rollback_engine):
-        with patch("aristotle_auto_reflection.rollback_engine.subprocess.run") as mock_run:
+        with patch("aristotle_intervention.rollback_engine.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0, stdout="/repo\n")
             result = rollback_engine.validate_path("-rf /")
         assert result is False
@@ -233,7 +233,7 @@ class TestPathLeadingDash:
 
 class TestIsTrackedTrue:
     def test_should_return_true_for_tracked_file(self, rollback_engine):
-        with patch("aristotle_auto_reflection.rollback_engine.subprocess.run") as mock_run:
+        with patch("aristotle_intervention.rollback_engine.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0, stdout="src/module.py\n")
             result = rollback_engine._is_tracked("src/module.py")
         assert result is True
@@ -241,7 +241,7 @@ class TestIsTrackedTrue:
 
 class TestIsTrackedFalse:
     def test_should_return_false_for_untracked_file(self, rollback_engine):
-        with patch("aristotle_auto_reflection.rollback_engine.subprocess.run") as mock_run:
+        with patch("aristotle_intervention.rollback_engine.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0, stdout="")
             result = rollback_engine._is_tracked("src/new_file.py")
         assert result is False
@@ -249,7 +249,7 @@ class TestIsTrackedFalse:
 
 class TestIsTrackedGitFail:
     def test_should_return_false_when_git_ls_files_fails(self, rollback_engine):
-        with patch("aristotle_auto_reflection.rollback_engine.subprocess.run") as mock_run:
+        with patch("aristotle_intervention.rollback_engine.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=1)
             result = rollback_engine._is_tracked("src/module.py")
         assert result is False
@@ -262,7 +262,7 @@ class TestGitRmFails:
         ctx = pipeline_context_factory()
         with patch.object(rollback_engine, "validate_path", return_value=True), \
              patch.object(rollback_engine, "_is_tracked", return_value=True), \
-             patch("aristotle_auto_reflection.rollback_engine.subprocess.run") as mock_run:
+             patch("aristotle_intervention.rollback_engine.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=1, stderr="rm failed")
             result = rollback_engine.rollback(event, plan, ctx)
         assert result.success is False
@@ -275,7 +275,7 @@ class TestGitCheckoutFails:
         ctx = pipeline_context_factory()
         with patch.object(rollback_engine, "validate_path", return_value=True), \
              patch.object(rollback_engine, "_is_tracked", return_value=True), \
-             patch("aristotle_auto_reflection.rollback_engine.subprocess.run") as mock_run:
+             patch("aristotle_intervention.rollback_engine.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=1, stderr="checkout failed")
             result = rollback_engine.rollback(event, plan, ctx)
         assert result.success is False
@@ -298,7 +298,7 @@ class TestSingleFileFailure:
         ctx = pipeline_context_factory()
         with patch.object(rollback_engine, "validate_path", return_value=True), \
              patch.object(rollback_engine, "_is_tracked", return_value=True), \
-             patch("aristotle_auto_reflection.rollback_engine.subprocess.run") as mock_run:
+             patch("aristotle_intervention.rollback_engine.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=1, stderr="permission denied")
             result = rollback_engine.rollback(event, plan, ctx)
         assert isinstance(result, RollbackResult)
@@ -312,7 +312,7 @@ class TestFileAlreadyDeleted:
         ctx = pipeline_context_factory()
         with patch.object(rollback_engine, "validate_path", return_value=True), \
              patch.object(rollback_engine, "_is_tracked", return_value=False), \
-             patch("aristotle_auto_reflection.rollback_engine.os.path.exists", return_value=False):
+             patch("aristotle_intervention.rollback_engine.os.path.exists", return_value=False):
             result = rollback_engine.rollback(event, plan, ctx)
         assert result.success is True
         assert "no action needed" in result.action
@@ -320,7 +320,7 @@ class TestFileAlreadyDeleted:
 
 class TestPathValidationRejectLog:
     def test_should_reject_and_log_on_path_validation_failure(self, rollback_engine):
-        with patch("aristotle_auto_reflection.rollback_engine.subprocess.run") as mock_run:
+        with patch("aristotle_intervention.rollback_engine.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0, stdout="/repo\n")
             result = rollback_engine.validate_path("../../etc/shadow")
         assert result is False
@@ -342,7 +342,7 @@ class TestPartialRollbackFailure:
         ctx = pipeline_context_factory()
         with patch.object(rollback_engine, "validate_path", return_value=True), \
              patch.object(rollback_engine, "_is_tracked", return_value=True), \
-             patch("aristotle_auto_reflection.rollback_engine.subprocess.run") as mock_run:
+             patch("aristotle_intervention.rollback_engine.subprocess.run") as mock_run:
             mock_run.side_effect = [
                 MagicMock(returncode=0),
                 MagicMock(returncode=1, stderr="permission denied"),
@@ -366,9 +366,9 @@ class TestMultiFileMixedTracked:
         ctx = pipeline_context_factory()
         with patch.object(rollback_engine, "validate_path", return_value=True), \
              patch.object(rollback_engine, "_is_tracked", side_effect=[True, False]), \
-             patch("aristotle_auto_reflection.rollback_engine.os.path.exists", return_value=True), \
-             patch("aristotle_auto_reflection.rollback_engine.subprocess.run") as mock_run, \
-             patch("aristotle_auto_reflection.rollback_engine.os.remove") as mock_remove:
+             patch("aristotle_intervention.rollback_engine.os.path.exists", return_value=True), \
+             patch("aristotle_intervention.rollback_engine.subprocess.run") as mock_run, \
+             patch("aristotle_intervention.rollback_engine.os.remove") as mock_remove:
             mock_run.return_value = MagicMock(returncode=0)
             result = rollback_engine.rollback(event, plan, ctx)
         assert result.success is True
@@ -409,7 +409,7 @@ class TestFallbackToSingularField:
         ctx = pipeline_context_factory()
         with patch.object(rollback_engine, "validate_path", return_value=True), \
              patch.object(rollback_engine, "_is_tracked", return_value=True), \
-             patch("aristotle_auto_reflection.rollback_engine.subprocess.run") as mock_run:
+             patch("aristotle_intervention.rollback_engine.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
             result = rollback_engine.rollback(event, plan, ctx)
         assert result.success is True
@@ -423,7 +423,7 @@ class TestFallbackDefaultField:
         ctx = pipeline_context_factory()
         with patch.object(rollback_engine, "validate_path", return_value=True), \
              patch.object(rollback_engine, "_is_tracked", return_value=True), \
-             patch("aristotle_auto_reflection.rollback_engine.subprocess.run") as mock_run:
+             patch("aristotle_intervention.rollback_engine.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
             result = rollback_engine.rollback(event, plan, ctx)
         assert result.success is True
@@ -445,7 +445,7 @@ class TestDualFieldPrecedence:
         ctx = pipeline_context_factory()
         with patch.object(rollback_engine, "validate_path", return_value=True), \
              patch.object(rollback_engine, "_is_tracked", return_value=True), \
-             patch("aristotle_auto_reflection.rollback_engine.subprocess.run") as mock_run:
+             patch("aristotle_intervention.rollback_engine.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
             result = rollback_engine.rollback(event, plan, ctx)
         assert result.success is True
@@ -461,7 +461,7 @@ class TestRollbackDispatchFromPhase5:
         plan = InterventionPlan(4, True, True, True, "Rollback to Phase 4")
         with patch.object(rollback_engine, "validate_path", return_value=True), \
              patch.object(rollback_engine, "_is_tracked", return_value=True), \
-             patch("aristotle_auto_reflection.rollback_engine.subprocess.run") as mock_run:
+             patch("aristotle_intervention.rollback_engine.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
             result = rollback_engine.rollback(event, plan, ctx)
         assert result.success is True

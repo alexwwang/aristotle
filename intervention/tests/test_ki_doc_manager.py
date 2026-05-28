@@ -6,8 +6,8 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from aristotle_auto_reflection.ki_doc_manager import KiDocManager
-from aristotle_auto_reflection.intervention_types import (
+from aristotle_intervention.ki_doc_manager import KiDocManager
+from aristotle_intervention.intervention_types import (
     ViolationEvent, InterventionPlan, RollbackResult, PipelineContext,
 )
 

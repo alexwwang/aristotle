@@ -2,7 +2,7 @@
 
 import logging
 import subprocess
-from aristotle_auto_reflection.intervention_types import CommitResult, PipelineContext
+from aristotle_intervention.intervention_types import CommitResult, PipelineContext
 
 logger = logging.getLogger(__name__)
 

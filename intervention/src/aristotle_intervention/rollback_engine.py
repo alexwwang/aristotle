@@ -4,7 +4,7 @@ import logging
 import re
 import subprocess
 import os
-from aristotle_auto_reflection.intervention_types import (
+from aristotle_intervention.intervention_types import (
     ViolationEvent,
     InterventionPlan,
     RollbackResult,

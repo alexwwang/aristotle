@@ -1,8 +1,8 @@
 import pytest
 import sys
 sys.path.insert(0, "/workspace/auto-reflection-feature/src")
-from aristotle_auto_reflection.reflector import AutoReflector
-from aristotle_auto_reflection.watchdog import ViolationEvent
+from aristotle_intervention.reflector import AutoReflector
+from aristotle_intervention.watchdog import ViolationEvent
 
 class TestAutoReflector:
     def test_build_reflection_prompt_contains_violation_type(self):

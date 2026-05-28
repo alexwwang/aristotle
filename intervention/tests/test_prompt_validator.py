@@ -4,8 +4,8 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from aristotle_auto_reflection.prompt_validator import PromptValidator
-from aristotle_auto_reflection.intervention_types import ValidationResult, PatternMatch
+from aristotle_intervention.prompt_validator import PromptValidator
+from aristotle_intervention.intervention_types import ValidationResult, PatternMatch
 
 
 CLEAN_PROMPT = "Review the following code changes for correctness and style. Check for edge cases in error handling."

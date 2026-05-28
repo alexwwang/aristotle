@@ -3,7 +3,7 @@
 import logging
 import subprocess
 from typing import Dict, List, Optional, Tuple
-from aristotle_auto_reflection.intervention_types import (
+from aristotle_intervention.intervention_types import (
     InterventionResult,
     InterventionPlan,
     ViolationEvent,
@@ -11,10 +11,10 @@ from aristotle_auto_reflection.intervention_types import (
     VIOLATION_PRIORITY,
     BEHAVIORAL_VIOLATIONS,
 )
-from aristotle_auto_reflection.prompt_validator import PromptValidator
-from aristotle_auto_reflection.rollback_engine import RollbackEngine
-from aristotle_auto_reflection.ki_doc_manager import KiDocManager
-from aristotle_auto_reflection.commit_guard import CommitGuard
+from aristotle_intervention.prompt_validator import PromptValidator
+from aristotle_intervention.rollback_engine import RollbackEngine
+from aristotle_intervention.ki_doc_manager import KiDocManager
+from aristotle_intervention.commit_guard import CommitGuard
 
 logger = logging.getLogger(__name__)
 

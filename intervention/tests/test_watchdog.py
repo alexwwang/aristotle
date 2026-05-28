@@ -5,9 +5,9 @@ import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from aristotle_auto_reflection.watchdog import ViolationFilter
-from aristotle_auto_reflection.intervention_types import ViolationEvent, PipelineContext
-from aristotle_auto_reflection.intervention_coordinator import (
+from aristotle_intervention.watchdog import ViolationFilter
+from aristotle_intervention.intervention_types import ViolationEvent, PipelineContext
+from aristotle_intervention.intervention_coordinator import (
     InterventionCoordinator,
     TDDViolationError,
 )

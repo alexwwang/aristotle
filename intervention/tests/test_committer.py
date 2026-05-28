@@ -2,7 +2,7 @@
 import pytest
 import sys
 sys.path.insert(0, "/workspace/auto-reflection-feature/src")
-from aristotle_auto_reflection.committer import AutoCommitter
+from aristotle_intervention.committer import AutoCommitter
 
 class TestAutoCommitter:
     def test_validate_schema_valid(self):

@@ -1,6 +1,6 @@
 """Violation filter for TDD pipeline behavioral violations."""
 from typing import Optional
-from aristotle_auto_reflection.intervention_types import ViolationEvent, BEHAVIORAL_VIOLATIONS
+from aristotle_intervention.intervention_types import ViolationEvent, BEHAVIORAL_VIOLATIONS
 
 TDD_PHASES = {4, 5}
 VALID_OPERATIONS = {"create", "modify", "delete"}

@@ -7,8 +7,8 @@ from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from aristotle_auto_reflection.intervention_coordinator import InterventionCoordinator, TDDViolationError
-from aristotle_auto_reflection.intervention_types import ViolationEvent, PipelineContext
+from aristotle_intervention.intervention_coordinator import InterventionCoordinator, TDDViolationError
+from aristotle_intervention.intervention_types import ViolationEvent, PipelineContext
 
 
 @pytest.fixture
@@ -151,7 +151,7 @@ class TestE2EGracefulDegradation:
         os.chdir(str(repo))
         try:
             coord = InterventionCoordinator(integration_context)
-            with patch("aristotle_auto_reflection.rollback_engine.subprocess.run") as mock_run, \
+            with patch("aristotle_intervention.rollback_engine.subprocess.run") as mock_run, \
                  patch.object(coord.commit_guard, "ensure_committed") as mock_cg:
                 mock_cg.return_value = MagicMock(success=True)
                 mock_run.side_effect = [
