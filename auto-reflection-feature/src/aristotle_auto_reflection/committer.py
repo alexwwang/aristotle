@@ -24,7 +24,7 @@ class AutoCommitter:
             elif not (0.0 <= confidence <= 1.0):
                 errors.append("confidence must be between 0.0 and 1.0")
         
-        error_summary = frontmatter.get("error_summary", "")
+        error_summary = frontmatter.get("error_summary") or ""
         if len(error_summary) > _MAX_ERROR_SUMMARY_LENGTH:
             errors.append(f"error_summary exceeds {_MAX_ERROR_SUMMARY_LENGTH} characters")
         
