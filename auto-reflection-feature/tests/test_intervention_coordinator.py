@@ -341,15 +341,12 @@ class TestBatchProcessing:
         called_event = mock_intervene.call_args[0][0]
         assert called_event.violation_type == "SKIP_RED_PHASE"
 
-    def test_should_record_deferred_mergeable_events_when_non_mergeable_exists(self, coordinator):
+    def test_should_not_record_mergeable_prematurely_when_non_mergeable_exists(self, coordinator):
         events = [_event("SKIP_RED_PHASE", "src/mod.py", 4), _event("UNCOMMITTED_PHASE", phase=3)]
         with patch.object(coordinator, "intervene"):
             with patch.object(coordinator, "ki_doc") as mock_ki:
                 coordinator.intervene_batch(events)
-        mock_ki.record_merge.assert_called_once()
-        recorded_events = mock_ki.record_merge.call_args[0][0]
-        assert len(recorded_events) == 1
-        assert recorded_events[0].violation_type == "UNCOMMITTED_PHASE"
+        mock_ki.record_merge.assert_not_called()
 
     def test_not_record_deferred_when_no_mergeable_events(self, coordinator):
         events = [_event("SKIP_RED_PHASE", "src/mod.py", 4), _event("MODIFIED_TEST", "tests/b.py", 5)]
