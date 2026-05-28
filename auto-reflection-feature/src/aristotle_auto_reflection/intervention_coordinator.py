@@ -254,8 +254,6 @@ class InterventionCoordinator:
         # Handle non-mergeable first (highest priority)
         # Mergeable events are deferred — pipeline retry re-triggers detection
         if non_mergeable:
-            if mergeable:
-                self.ki_doc.record_merge(mergeable, self.context)
             self.intervene(non_mergeable[0])
             return
 

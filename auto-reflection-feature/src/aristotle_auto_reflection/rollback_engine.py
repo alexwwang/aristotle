@@ -100,7 +100,7 @@ class RollbackEngine:
 
     def validate_path(self, filepath: str) -> bool:
         """Check that a file path is within the git repo root and not malicious."""
-        if filepath.startswith("-"):
+        if not filepath or filepath.startswith("-"):
             return False
         r = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True)
         if r.returncode != 0:
