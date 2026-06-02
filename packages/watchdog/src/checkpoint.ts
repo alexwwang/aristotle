@@ -402,10 +402,23 @@ export class CheckpointHandler {
         })
         return JSON.stringify({
           ok: false,
-          violation: `Ralph Loop exceeded maximum rounds (${MAX_RALPH_ROUNDS}). Pipeline run terminated.`,
+          violation: `Ralph Loop reached maximum rounds (${MAX_RALPH_ROUNDS}). Pipeline run terminated.`,
           guidance: `The Ralph Loop reached ${currentState.ralph.round} rounds (limit: ${MAX_RALPH_ROUNDS}). Start a fresh pipeline.`,
-        })
+        } satisfies CheckpointViolation)
       }
+    }
+
+    // ── 9c. TEST_RUN_REQUESTED for business code phase (Phase 2, AC-1) ──
+    if (event === 'phase_complete' && activeRun && currentState?.currentPhase === BUSINESS_CODE_PHASE) {
+      this.store.appendAudit(projectId, activeRun.runId, {
+        timestamp: now,
+        runId: activeRun.runId,
+        projectId,
+        sessionId,
+        event: 'TEST_RUN_REQUESTED',
+        phase: currentState.currentPhase,
+        decision: 'PASS',
+      })
     }
 
     // ── 10a. Phase 1 violation gate (§3.1 AC-8) ──────────────────────────
@@ -505,19 +518,6 @@ export class CheckpointHandler {
       auditEntry.round = payload.round as number
     }
     this.store.appendAudit(projectId, runId, auditEntry)
-
-    // ── 11c. TEST_RUN_REQUESTED for business code phase (Phase 2, AC-1) ──
-    if (event === 'phase_complete' && newState.currentPhase === BUSINESS_CODE_PHASE) {
-      this.store.appendAudit(projectId, runId, {
-        timestamp: now,
-        runId,
-        projectId,
-        sessionId,
-        event: 'TEST_RUN_REQUESTED',
-        phase: newState.currentPhase,
-        decision: 'PASS',
-      })
-    }
 
     // ── 12. phase_complete(final) → clearActiveRun + archiveRun ──────
     // Tech Solution §D.2 Change 2: effectiveMax = maxPhase ?? totalPhases

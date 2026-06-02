@@ -619,7 +619,31 @@ describe('RALPH_ROUNDS_EXCEEDED safety net (AC-6)', () => {
     expect(exceededCall).toBeDefined()
   })
 
-  // E-02: ralph.round=19 → no RALPH_ROUNDS_EXCEEDED
+  // E-01b: RALPH_ROUNDS_EXCEEDED audit entry has correct field values
+  it('TC-TG-E01b: RALPH_ROUNDS_EXCEEDED audit entry fields are correct', async () => {
+    setupFinalPhasePipeline(mockStore, 5, { round: 20, consecutiveZero: 0, termination: null })
+
+    await handler.handle(
+      'phase_complete',
+      JSON.stringify({ phase: 5 }),
+      CONTEXT,
+    )
+
+    const auditCalls = mockStore.appendAudit.mock.calls
+    const exceededCall = auditCalls.find(
+      (call: any[]) => call[2]?.event === 'RALPH_ROUNDS_EXCEEDED',
+    )
+    expect(exceededCall).toBeDefined()
+    const entry = exceededCall![2]
+    expect(entry.event).toBe('RALPH_ROUNDS_EXCEEDED')
+    expect(entry.decision).toBe('WARN')
+    expect(entry.severity).toBe('warn')
+    expect(entry.phase).toBe(5)
+    expect(entry.runId).toBe('run-001')
+    expect(entry.projectId).toBe(PROJECT_ID)
+    expect(entry.sessionId).toBe(SESSION_ID)
+    expect(entry.violation).toContain('20')
+  })
   it('TC-TG-E02: round=19 does NOT write RALPH_ROUNDS_EXCEEDED', async () => {
     setupFinalPhasePipeline(mockStore, 5, { round: 19, consecutiveZero: 0, termination: null })
 
@@ -696,7 +720,7 @@ describe('RALPH_ROUNDS_EXCEEDED safety net (AC-6)', () => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 // TDD Red: source types not yet updated for Phase 2 — skip until implementation
-describe.skip('AuditLogEntry Phase 2 event types', () => {
+describe('AuditLogEntry Phase 2 event types', () => {
   it('TC-TG-F01: AuditLogEntry accepts TEST_RUN_REQUESTED in event field', () => {
     const entry = {
       timestamp: NOW,
