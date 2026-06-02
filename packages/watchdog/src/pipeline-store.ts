@@ -473,8 +473,11 @@ export class PipelineStore {
     const allEntries: AuditEntryWithSource[] = []
     const resolvedMap = new Map<string, string>()
 
-    for (const source of [prefix, ...this.rotatedKeys(prefix)]) {
+    for (let i = -1; i <= 10; i++) {
+      const source = i === -1 ? prefix : `${prefix}.${i}`
       const logs = this.stateStore.readLogSafe<AuditEntryWithSource>(source)
+      if (i >= 1 && logs.length === 0) break
+      if (i >= 1) this.indexedRotatedKeys.add(source)
       for (const entry of logs) {
         if ((entry as Record<string, unknown>)._resolve) {
           resolvedMap.set(
@@ -503,15 +506,4 @@ export class PipelineStore {
     }
   }
 
-  private rotatedKeys(prefix: string): string[] {
-    const keys: string[] = []
-    for (let i = 1; i <= 10; i++) {
-      const rotKey = `${prefix}.${i}`
-      const rotLogs = this.stateStore.readLogSafe<AuditEntryWithSource>(rotKey)
-      if (rotLogs.length === 0) break
-      keys.push(rotKey)
-      this.indexedRotatedKeys.add(rotKey)
-    }
-    return keys
-  }
 }
