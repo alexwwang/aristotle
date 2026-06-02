@@ -100,7 +100,7 @@ export class Observer {
         decision: 'WARN',
         violation: `Prohibited patterns in reviewer prompt: ${patterns}`,
       }
-      await this.store.appendAudit(state.projectId, state.runId, auditEntry)
+      this.store.appendAudit(state.projectId, state.runId, auditEntry)
 
       await this.store.appendObservation(state.projectId, state.runId, {
         timestamp: new Date().toISOString(),
@@ -149,7 +149,7 @@ export class Observer {
 
       // ADR-012: auto-resolve runs OUTSIDE Promise.race
       try {
-        this.autoResolve(tool, args, state, sessionID)
+        this.autoResolve(tool, args, output, state, sessionID)
       } catch (e) {
         this.logger?.warn('Observer auto-resolve failed (suppressed): %s', String(e))
       }
@@ -163,6 +163,7 @@ export class Observer {
           this._handleObservations(tool, args, output, sessionID, callID, state),
           timeoutPromise,
         ])
+        this.resolveTimeoutsIfAny(state, sessionID)
       } catch (e) {
         if (e instanceof ObserverTimeoutError) {
           this._timedOut = true
@@ -202,28 +203,44 @@ export class Observer {
     }
   }
 
-  private autoResolve(tool: string, args: unknown, state: PipelineState, sessionID: string): void {
+  private autoResolve(tool: string, args: unknown, output: unknown, state: PipelineState, sessionID: string): void {
     if (!this.store.getUnresolvedViolations || !this.store.resolveViolations) return
     const { projectId, runId } = state
     const arArgs = args as Record<string, unknown>
 
     if (tool === 'Bash' && typeof arArgs.command === 'string') {
       const cmd = normalizeCommand(arArgs.command as string)
-      this.resolveMatching(projectId, runId, state, sessionID,
-        { tool: 'Bash', commandPattern: cmd },
-        v => v.command === cmd, { tool: 'Bash', command: cmd })
+      if (typeof output === 'string' && extractExitCode(output) === 0) {
+        this.resolveMatching(projectId, runId, state, sessionID,
+          { tool: 'Bash', commandPattern: cmd },
+          v => v.command === cmd, { tool: 'Bash', command: cmd })
+      }
     }
 
     if (tool === 'Write' && typeof arArgs.filePath === 'string') {
       const fp = arArgs.filePath as string
-      this.resolveMatching(projectId, runId, state, sessionID,
-        { tool: 'Write', filePath: fp },
-        v => v.filePath === fp, { tool: 'Write', filePath: fp })
+      const content = (typeof arArgs.content === 'string' ? arArgs.content : typeof output === 'string' ? output : '') as string
+      if (content && this.isSyntaxOk(fp, content)) {
+        this.resolveMatching(projectId, runId, state, sessionID,
+          { tool: 'Write', filePath: fp },
+          v => v.filePath === fp, { tool: 'Write', filePath: fp })
+      }
     }
+  }
 
+  private resolveTimeoutsIfAny(state: PipelineState, sessionID: string): void {
+    if (!this.store.getUnresolvedViolations || !this.store.resolveViolations) return
+    const { projectId, runId } = state
     const hadTimeouts = this.resolveMatching(projectId, runId, state, sessionID,
       { event: 'OBSERVER_TIMEOUT' }, v => v.event === 'OBSERVER_TIMEOUT', {})
     if (hadTimeouts) state.observerTimeoutCount = 0
+  }
+
+  private isSyntaxOk(filePath: string, content: string): boolean {
+    if (!content.trim()) return true
+    if (filePath.endsWith('.json')) return quickSyntaxCheck(content).ok
+    if (filePath.endsWith('.yaml') || filePath.endsWith('.yml')) return yamlSyntaxCheck(content).ok
+    return true
   }
 
   private resolveMatching(

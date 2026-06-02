@@ -436,7 +436,9 @@ export class CheckpointHandler {
     if (event === 'phase_complete') {
       const gateStore = this.store as Phase1Store
       if (typeof gateStore.resolveViolations === 'function' && typeof gateStore.getUnresolvedViolations === 'function') {
-        const allRemaining = gateStore.getUnresolvedViolations(projectId, runId)
+        const blockRemaining = gateStore.getUnresolvedViolations(projectId, runId, 'block')
+        const warnRemaining = gateStore.getUnresolvedViolations(projectId, runId, 'warn')
+        const allRemaining = [...blockRemaining, ...warnRemaining]
         gateStore.resolveViolations(projectId, runId, allRemaining.map(v => v.timestamp))
       }
 

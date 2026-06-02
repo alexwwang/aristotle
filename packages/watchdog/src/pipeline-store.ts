@@ -383,22 +383,41 @@ export class PipelineStore {
     this.validatePathComponents(projectId, runId)
     if (timestamps.length === 0) return
 
-    const tsSet = new Set(timestamps)
-    const idxKey = `${projectId}/${runId}`
+    // Append-only store: persist resolution via _resolve marker entries
     const auditKey = this.auditKey(projectId, runId)
-    const logs = this.stateStore.readLogSafe<AuditEntryWithSource>(auditKey)
-
-    let modified = false
-    for (const entry of logs) {
-      if (tsSet.has(entry.timestamp) && !entry.resolved) {
-        entry.resolved = true
-        entry.resolvedAt = new Date().toISOString()
-        modified = true
-      }
+    const now = new Date().toISOString()
+    for (const ts of timestamps) {
+      this.stateStore.appendLog(auditKey, {
+        _resolve: ts,
+        _resolvedAt: now,
+        timestamp: now,
+        runId,
+        projectId,
+        event: '_RESOLVE_MARKER',
+        phase: 0,
+        decision: 'PASS',
+        sessionId: '',
+      })
     }
 
-    if (modified) {
-      this.buildIndex(projectId, runId)
+    // Update in-memory index directly (avoids full rebuild)
+    this.applyResolutionsToIndex(projectId, runId, new Set(timestamps), now)
+  }
+
+  /** Apply resolution markers to in-memory index entries. */
+  private applyResolutionsToIndex(
+    projectId: string, runId: string, tsSet: Set<string>, resolvedAt: string,
+  ): void {
+    const idxKey = `${projectId}/${runId}`
+    const severityMap = this.violationIndex.get(idxKey)
+    if (!severityMap) return
+    for (const entries of severityMap.values()) {
+      for (const entry of entries) {
+        if (tsSet.has(entry.timestamp) && !entry.resolved) {
+          entry.resolved = true
+          entry.resolvedAt = resolvedAt
+        }
+      }
     }
   }
 
@@ -450,19 +469,50 @@ export class PipelineStore {
 
     const prefix = this.auditKey(projectId, runId)
 
-    const logs = this.stateStore.readLogSafe<AuditEntryWithSource>(prefix)
-    for (const entry of logs) {
-      this.indexEntry(projectId, runId, prefix, entry)
+    // Pass 1: collect all logs + extract resolution markers
+    const allEntries: AuditEntryWithSource[] = []
+    const resolvedMap = new Map<string, string>()
+    const sourceKeys: AuditEntryWithSource[] = []
+
+    for (const source of [prefix, ...this.rotatedKeys(prefix)]) {
+      const logs = this.stateStore.readLogSafe<AuditEntryWithSource>(source)
+      for (const entry of logs) {
+        if ((entry as Record<string, unknown>)._resolve) {
+          resolvedMap.set(
+            (entry as Record<string, unknown>)._resolve as string,
+            (entry as Record<string, unknown>)._resolvedAt as string ?? new Date().toISOString(),
+          )
+        } else {
+          entry._sourceKey = source
+          allEntries.push(entry)
+        }
+      }
     }
 
+    // Pass 2: apply resolutions then index
+    if (resolvedMap.size > 0) {
+      for (const entry of allEntries) {
+        if (resolvedMap.has(entry.timestamp) && !entry.resolved) {
+          entry.resolved = true
+          entry.resolvedAt = resolvedMap.get(entry.timestamp)
+        }
+      }
+    }
+
+    for (const entry of allEntries) {
+      this.indexEntry(projectId, runId, entry._sourceKey!, entry)
+    }
+  }
+
+  private rotatedKeys(prefix: string): string[] {
+    const keys: string[] = []
     for (let i = 1; i <= 10; i++) {
       const rotKey = `${prefix}.${i}`
       const rotLogs = this.stateStore.readLogSafe<AuditEntryWithSource>(rotKey)
       if (rotLogs.length === 0) break
-      for (const entry of rotLogs) {
-        this.indexEntry(projectId, runId, rotKey, entry)
-      }
+      keys.push(rotKey)
       this.indexedRotatedKeys.add(rotKey)
     }
+    return keys
   }
 }
