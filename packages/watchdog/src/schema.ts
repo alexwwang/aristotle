@@ -47,6 +47,13 @@ export interface PipelineState {
   /** Owning session ID. Mandatory for Phase 2+ pipelines (enforced by CheckpointHandler).
    *  Absent for Phase 1 legacy states — use `hasOwner()` guard before accessing. */
   ownerSessionId?: string
+
+  /** Phase 1: Observer timeout degradation counter. ADR-009: ≥3 triggers warn mode. */
+  observerTimeoutCount?: number
+  /** Phase 1: total audit entries for this run. ADR-011: checked at checkpoint for FIFO. */
+  auditEntryCount?: number
+  /** Phase 1: set by appendAudit when count exceeds MAX_AUDIT_ENTRIES. */
+  evictionNeeded?: boolean
 }
 
 /** Phase 2+ pipeline state with guaranteed ownerSessionId. */
@@ -186,10 +193,22 @@ export interface AuditLogEntry {
   projectId: string
   sessionId: string
   event: CheckpointEvent | 'INTERCEPT' | 'PROMPT_INJECTION_DETECTED'
+    | 'OBSERVER_TIMEOUT' | 'OBSERVER_TIMEOUT_DEGRADED'
+    | 'COMMAND_FAILED' | 'SYNTAX_ERROR_POST_WRITE' | 'FILE_TOO_LARGE_FOR_CHECK'
+    | 'RESOLVE_SKIPPED_TOO_MANY'
   phase: number
   round?: number
   decision: 'PASS' | 'BLOCK' | 'WARN'
   violation?: string
+
+  // Phase 1: Observer-specific fields (ADR-001: only Observer entries carry severity)
+  severity?: 'block' | 'warn'           // Observer entry severity — gate checks block level
+  tool?: string                          // 'Bash' | 'Write' — auto-resolve filter dimension
+  filePath?: string                      // Write tool target — auto-resolve filter dimension
+  command?: string                       // Bash normalized command — auto-resolve filter dimension
+  resolved?: boolean                     // true after resolveViolations or auto-resolve
+  resolvedAt?: string                    // ISO 8601 — set when resolved=true
+  evicted?: boolean                      // true when FIFO eviction marks before removal
 }
 
 // ── Phase 2: Observation types ─────────────────────────────────────────

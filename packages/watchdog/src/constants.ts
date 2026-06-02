@@ -27,3 +27,12 @@ export const MAX_FINDING_DESCRIPTION_LENGTH = 2000
 
 /** Max length of a downgrade_reason string in characters. */
 export const MAX_DOWNGRADE_REASON_LENGTH = 1000
+
+/** Observer timeout budget per handle() call (ms). ADR-005: sync operations only. */
+export const OBSERVER_TIMEOUT_MS = 20
+
+/** Consecutive timeout count before severity degradation. ADR-009: ≥3 triggers warn mode. */
+export const TIMEOUT_DEGRADE_THRESHOLD = 3
+
+/** Max audit log entries before FIFO eviction triggers. ADR-011: eviction at checkpoint, not append. */
+export const MAX_AUDIT_ENTRIES = 5000

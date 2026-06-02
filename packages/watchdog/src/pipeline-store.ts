@@ -11,8 +11,23 @@ import type {
   ProjectIndex,
   RalphLoopState,
 } from './schema.js';
+import { MAX_AUDIT_ENTRIES } from './constants.js';
+
+/** Filter options for getUnresolvedViolations */
+export interface ViolationFilter {
+  tool?: string
+  filePath?: string
+  event?: string
+  commandPattern?: string
+}
+
+type AuditEntryWithSource = AuditLogEntry & Record<string, unknown> & { _sourceKey?: string }
 
 export class PipelineStore {
+  /** In-memory index: key = `${projectId}/${runId}`, value = Map of severity → entries */
+  private violationIndex = new Map<string, Map<string, AuditEntryWithSource[]>>()
+  /** Tracks rotated keys already indexed — avoids re-scanning on every query */
+  private indexedRotatedKeys = new Set<string>()
   constructor(
     private stateStore: StateStore,
     private logger: Logger,
@@ -200,7 +215,9 @@ export class PipelineStore {
 
   appendAudit(projectId: string, runId: string, entry: AuditLogEntry): void {
     this.validatePathComponents(projectId, runId)
-    this.stateStore.appendLog(this.auditKey(projectId, runId), entry);
+    const key = this.auditKey(projectId, runId)
+    this.stateStore.appendLog(key, entry);
+    this.indexEntry(projectId, runId, key, entry as AuditEntryWithSource)
   }
 
   // ------------------------------------------------------------------
@@ -302,5 +319,150 @@ export class PipelineStore {
       if (filter.round !== undefined && e.round !== filter.round) return false
       return true
     })
+  }
+
+  // ------------------------------------------------------------------
+  // Phase 1: Violation query & resolve
+  // ------------------------------------------------------------------
+
+  getUnresolvedViolations(
+    projectId: string,
+    runId: string,
+    severity: string,
+    filter?: ViolationFilter,
+  ): AuditEntryWithSource[] {
+    this.validatePathComponents(projectId, runId)
+    const idxKey = `${projectId}/${runId}`
+
+    if (!this.violationIndex.has(idxKey)) {
+      this.buildIndex(projectId, runId)
+    }
+
+    const prefix = this.auditKey(projectId, runId)
+    for (let i = 1; i <= 10; i++) {
+      const rotKey = `${prefix}.${i}`
+      if (this.indexedRotatedKeys.has(rotKey)) continue
+      const rotLogs = this.stateStore.readLogSafe<AuditEntryWithSource>(rotKey)
+      if (rotLogs.length === 0) break
+      for (const entry of rotLogs) {
+        this.indexEntry(projectId, runId, rotKey, entry)
+      }
+      this.indexedRotatedKeys.add(rotKey)
+    }
+
+    const severityMap = this.violationIndex.get(idxKey)
+    if (!severityMap) return []
+
+    let entries = severityMap.get(severity) ?? []
+
+    // Filter out resolved and evicted
+    entries = entries.filter(e => !e.resolved && !e.evicted)
+
+    if (!filter) return entries.map(e => ({ ...e }))
+
+    return entries.filter(e => {
+      if (filter.tool !== undefined && e.tool !== filter.tool) return false
+      if (filter.filePath !== undefined && e.filePath !== filter.filePath) return false
+      if (filter.event !== undefined && e.event !== filter.event) return false
+      if (filter.commandPattern !== undefined) {
+        const cmd = e.command as string | undefined
+        if (!cmd) return false
+        // Use startsWith for prefix matching, exact match, or glob via picomatch
+        const pat = filter.commandPattern
+        if (pat.endsWith('*')) {
+          if (!cmd.startsWith(pat.slice(0, -1))) return false
+        } else if (cmd !== pat) {
+          return false
+        }
+      }
+      return true
+    }).map(e => ({ ...e }))
+  }
+
+  resolveViolations(projectId: string, runId: string, timestamps: string[]): void {
+    this.validatePathComponents(projectId, runId)
+    if (timestamps.length === 0) return
+
+    const tsSet = new Set(timestamps)
+    const idxKey = `${projectId}/${runId}`
+    const auditKey = this.auditKey(projectId, runId)
+    const logs = this.stateStore.readLogSafe<AuditEntryWithSource>(auditKey)
+
+    let modified = false
+    for (const entry of logs) {
+      if (tsSet.has(entry.timestamp) && !entry.resolved) {
+        entry.resolved = true
+        entry.resolvedAt = new Date().toISOString()
+        modified = true
+      }
+    }
+
+    if (modified) {
+      this.buildIndex(projectId, runId)
+    }
+  }
+
+  checkpointEviction(projectId: string, runId: string): void {
+    this.validatePathComponents(projectId, runId)
+    const auditKey = this.auditKey(projectId, runId)
+    const logs = this.stateStore.readLogSafe<AuditEntryWithSource>(auditKey)
+
+    if (logs.length <= MAX_AUDIT_ENTRIES) return
+
+    const excess = logs.length - MAX_AUDIT_ENTRIES
+    logs.splice(0, excess)
+
+    this.buildIndex(projectId, runId)
+  }
+
+  // ------------------------------------------------------------------
+  // Private: index management
+  // ------------------------------------------------------------------
+
+  private indexEntry(projectId: string, runId: string, sourceKey: string, entry: AuditEntryWithSource): void {
+    const idxKey = `${projectId}/${runId}`
+    let severity = entry.severity
+    const decision = entry.decision
+    // Index under explicit severity; also index under decision-derived severity if different
+    const derivedFromDecision = decision === 'BLOCK' ? 'block' : decision === 'WARN' ? 'warn' : undefined
+    const severities = new Set<string>()
+    if (severity) severities.add(severity)
+    if (derivedFromDecision) severities.add(derivedFromDecision)
+    if (severities.size === 0) return
+
+    if (!this.violationIndex.has(idxKey)) {
+      this.violationIndex.set(idxKey, new Map())
+    }
+    const severityMap = this.violationIndex.get(idxKey)!
+
+    entry._sourceKey = sourceKey
+    for (const sev of severities) {
+      if (!severityMap.has(sev)) {
+        severityMap.set(sev, [])
+      }
+      severityMap.get(sev)!.push(entry)
+    }
+  }
+
+  private buildIndex(projectId: string, runId: string): void {
+    const idxKey = `${projectId}/${runId}`
+    this.violationIndex.delete(idxKey)
+
+    const prefix = this.auditKey(projectId, runId)
+
+    const logs = this.stateStore.readLogSafe<AuditEntryWithSource>(prefix)
+    for (const entry of logs) {
+      this.indexEntry(projectId, runId, prefix, entry)
+    }
+
+    for (let i = 1; i <= 10; i++) {
+      const rotKey = `${prefix}.${i}`
+      const rotLogs = this.stateStore.readLogSafe<AuditEntryWithSource>(rotKey)
+      if (rotLogs.length === 0) break
+      for (const entry of rotLogs) {
+        this.indexEntry(projectId, runId, rotKey, entry)
+      }
+      this.indexedRotatedKeys.add(rotKey)
+    }
   }
 }

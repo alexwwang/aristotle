@@ -1519,7 +1519,7 @@ describe('Phase 2.1 GPAV — ralph_terminate with autoValidated', () => {
     }
   })
 
-  it('TC-G-20: gate_pass with zero C/H/M/L in last record', () => {
+  it('TC-G-20: gate_pass with zero C/H/M in last record', () => {
     const state = makeRalphState({}, {
       round: 5,
       autoValidated: true,
@@ -1941,7 +1941,7 @@ describe('Phase 2.1 GPAV — full pipeline flow (M-2)', () => {
     }), state)
     expect(state.ralph!.roundRecords).toHaveLength(2)
 
-    // Rounds 3-5: zero findings each (C=H=M=L=0)
+    // Rounds 3-5: zero findings each (C=H=M=0, L excluded)
     for (let r = 3; r <= 5; r++) {
       state = applyTransition('ralph_round_finding', basePayload({
         phase: 1, round: r,
@@ -1984,7 +1984,7 @@ describe('Phase 2.1 GPAV — full pipeline flow (M-2)', () => {
       }), state)
     }
 
-    // Rounds 3-4: zero (C=H=M=L=0, only I findings)
+    // Rounds 3-4: zero (C=H=M=0, only I findings)
     for (let r = 3; r <= 4; r++) {
       state = applyTransition('ralph_round_finding', basePayload({
         phase: 1, round: r,
@@ -2030,7 +2030,7 @@ describe('Phase 2.1 GPAV — full pipeline flow (M-2)', () => {
     }), state)
     expect(state.ralph!.roundRecords).toHaveLength(2)
 
-    // Rounds 3-5: zero findings (C=H=M=L=0) — only I-level informational
+    // Rounds 3-5: zero findings (C=H=M=0) — only I-level informational
     for (let r = 3; r <= 5; r++) {
       state = applyTransition('ralph_round_finding', basePayload({
         phase: 1, round: r,

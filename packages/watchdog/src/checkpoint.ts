@@ -16,6 +16,11 @@
 import { randomUUID } from 'node:crypto'
 import type { PipelineStore } from './pipeline-store.js'
 
+type Phase1Store = PipelineStore & {
+  getUnresolvedViolations?: (projectId: string, runId: string, severity?: string, filter?: Record<string, unknown>) => Array<{ violation: string; severity: string; resolved: boolean; timestamp: string }>
+  resolveViolations?: (projectId: string, runId: string, timestamps: string[]) => void
+}
+
 /**
  * Normalize severity strings from TDD protocol notation to wire format.
  * Maps: M₁→M, M₂→P (Unicode subscripts) and M1→M, M2→P (ASCII fallback).
@@ -328,6 +333,40 @@ export class CheckpointHandler {
       }
     }
 
+    // ── 10a. Phase 1 violation gate (§3.1 AC-8) ──────────────────────────
+    //    For phase_complete events, check unresolved block violations BEFORE
+    //    applyTransition. Fail-closed: if getUnresolvedViolations throws, block.
+    if (event === 'phase_complete' && activeRun) {
+      const gateStore = this.store as Phase1Store
+
+      if (typeof gateStore.getUnresolvedViolations === 'function') {
+        try {
+          const blockViolations = gateStore.getUnresolvedViolations(projectId, activeRun.runId, 'block')
+          if (blockViolations.length > 0) {
+            const descriptions = blockViolations.map(v => v.violation)
+            this.store.appendAudit(projectId, activeRun.runId, {
+              timestamp: now, runId: activeRun.runId, projectId, sessionId,
+              event, phase: currentState?.currentPhase ?? 0,
+              decision: 'BLOCK',
+              violation: `Violation gate: ${blockViolations.length} unresolved block violation(s)`,
+            })
+            return JSON.stringify({
+              ok: false,
+              violation: `Violation gate: ${blockViolations.length} unresolved block violation(s) must be fixed before phase can complete.`,
+              violations: descriptions,
+              guidance: `Fix the following violations before completing this phase: ${descriptions.join('; ')}`,
+            })
+          }
+        } catch {
+          return JSON.stringify({
+            ok: false,
+            violation: 'Violation gate: unable to check unresolved violations (storage error). Fail-closed: phase completion blocked.',
+            guidance: 'The violation storage is temporarily unavailable. Retry or investigate the storage issue.',
+          })
+        }
+      }
+    }
+
     // ── 11. Apply transition (M3: defensive try/catch) ─────────────────
     let newState: PipelineState
     try {
@@ -395,6 +434,12 @@ export class CheckpointHandler {
     // ── 12. phase_complete(final) → clearActiveRun + archiveRun ──────
     // Tech Solution §D.2 Change 2: effectiveMax = maxPhase ?? totalPhases
     if (event === 'phase_complete') {
+      const gateStore = this.store as Phase1Store
+      if (typeof gateStore.resolveViolations === 'function' && typeof gateStore.getUnresolvedViolations === 'function') {
+        const allRemaining = gateStore.getUnresolvedViolations(projectId, runId)
+        gateStore.resolveViolations(projectId, runId, allRemaining.map(v => v.timestamp))
+      }
+
       const effectiveMax = newState.maxPhase ?? newState.totalPhases
       if (payload.phase === effectiveMax) {
         this.store.archiveRun(projectId, runId)
