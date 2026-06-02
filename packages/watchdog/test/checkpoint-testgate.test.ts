@@ -494,6 +494,9 @@ describe('TEST_RUN_COMPLETE validation (AC-4)', () => {
       (call: any[]) => call[2]?.event === 'TEST_RUN_COMPLETE',
     )
     expect(testRunCompleteCall).toBeDefined()
+    expect((testRunCompleteCall![2] as any).severity).toBe('warn')
+    expect((testRunCompleteCall![2] as any).pass).toBe(3)
+    expect((testRunCompleteCall![2] as any).fail).toBe(2)
   })
 
   // D-13: with error_summary → audit entry has error_summary

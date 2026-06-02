@@ -210,6 +210,7 @@ export class Observer {
           if (!s) return
           const timeoutCount = (s.observerTimeoutCount ?? 0) + 1
           s.observerTimeoutCount = timeoutCount
+          this.store.writeState(s.projectId, s.runId, s)
           const isDegraded = timeoutCount >= TIMEOUT_DEGRADE_THRESHOLD
 
           this.store.appendAudit(s.projectId, s.runId, {
@@ -272,7 +273,10 @@ export class Observer {
     const { projectId, runId } = state
     const hadTimeouts = this.resolveMatching(projectId, runId, state, sessionID,
       { event: 'OBSERVER_TIMEOUT' }, v => v.event === 'OBSERVER_TIMEOUT', {})
-    if (hadTimeouts) state.observerTimeoutCount = 0
+    if (hadTimeouts) {
+      state.observerTimeoutCount = 0
+      this.store.writeState(projectId, runId, state)
+    }
   }
 
   private isSyntaxOk(filePath: string, content: string): boolean {

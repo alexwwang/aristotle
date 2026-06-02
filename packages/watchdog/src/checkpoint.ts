@@ -104,7 +104,10 @@ export class CheckpointHandler {
       } satisfies CheckpointViolation)
     }
 
-    // ── 1a. TEST_RUN_COMPLETE — audit-only event (Phase 2, AC-4) ─────────
+      // ── 1a. TEST_RUN_COMPLETE — audit-only event (Phase 2, AC-4) ─────────
+    // Note (F-01): Checkpoint-domain audit entries intentionally omit severity when
+    // the event is informational (no violation). Only Observer-domain entries always
+    // set severity. Consumers should treat missing severity as "no issue" (informational).
     if (event === 'TEST_RUN_COMPLETE') {
       const testResult = payload.test_result as Record<string, unknown> | undefined
       if (!testResult || typeof testResult !== 'object') {
@@ -156,7 +159,7 @@ export class CheckpointHandler {
         fail,
         error_summary: (testResult.error_summary as string) ?? '',
       })
-      return JSON.stringify({ ok: true })
+      return JSON.stringify({ ok: true, state: summarizeState(trState) } satisfies CheckpointOk)
     }
 
     // ── 2. Find active run ────────────────────────────────────────────
@@ -357,6 +360,30 @@ export class CheckpointHandler {
       }
     }
 
+    // ── 9b2. RALPH_ROUNDS safety net on ralph_round_complete (F-26) ─────
+    if (event === 'ralph_round_complete' && activeRun && currentState?.ralph) {
+      const round = payload.round as number
+      if (round >= MAX_RALPH_ROUNDS) {
+        this.store.appendAudit(projectId, activeRun.runId, {
+          timestamp: now,
+          runId: activeRun.runId,
+          projectId,
+          sessionId,
+          event: 'RALPH_ROUNDS_EXCEEDED',
+          phase: currentState.currentPhase,
+          round,
+          decision: 'WARN',
+          severity: 'warn',
+          violation: `Ralph Loop reached maximum rounds limit (${MAX_RALPH_ROUNDS}) on round_complete`,
+        })
+        return JSON.stringify({
+          ok: false,
+          violation: `Ralph Loop reached maximum rounds (${MAX_RALPH_ROUNDS}). Pipeline run terminated.`,
+          guidance: `The Ralph Loop reached ${round} rounds (limit: ${MAX_RALPH_ROUNDS}). Start a fresh pipeline.`,
+        } satisfies CheckpointViolation)
+      }
+    }
+
     // ── 10. AC-2 enforcement on ralph_round_complete (Phase 2) ────────
     if (event === 'ralph_round_complete' && activeRun && this.observer) {
       const round = payload.round as number
@@ -517,6 +544,7 @@ export class CheckpointHandler {
       decision: 'PASS',
     }
     if (articulationViolated) {
+      auditEntry.severity = 'warn'
       auditEntry.violation = `Articulation incomplete: ${articulationResult?.missingDimension ?? 'unknown'} missing.`
     }
     if (payload.round !== undefined) {

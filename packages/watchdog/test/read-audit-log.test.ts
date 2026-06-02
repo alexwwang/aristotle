@@ -12,6 +12,13 @@ import type { Logger } from '@opencode-ai/core/logger'
 import type { AuditLogEntry } from '../src/schema.js'
 import { createWatchdogTools } from '../src/tools.js'
 
+// F-04: mock computeProjectId so test worktree '/tmp/test' maps to 'proj-1'
+vi.mock('../src/project-id.js', () => ({
+  computeProjectId: vi.fn((worktree: string) =>
+    worktree === '/tmp/test' ? 'proj-1' : `mock-${worktree}`,
+  ),
+}))
+
 // ------------------------------------------------------------------
 // Helpers
 // ------------------------------------------------------------------

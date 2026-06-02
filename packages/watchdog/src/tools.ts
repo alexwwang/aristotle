@@ -8,6 +8,7 @@ import { z } from 'zod'
 import type { ToolDefinition } from '@opencode-ai/core/plugin/registration'
 import type { CheckpointHandler } from './checkpoint.js'
 import type { PipelineStore } from './pipeline-store.js'
+import { computeProjectId } from './project-id.js'
 
 export interface CreateWatchdogToolsDeps {
   checkpointHandler: CheckpointHandler
@@ -68,6 +69,12 @@ export function createWatchdogTools(deps: CreateWatchdogToolsDeps): Record<strin
         const worktree = context?.worktree ?? context?.directory ?? ''
         if (!worktree) {
           return JSON.stringify({ ok: false, error: 'Cannot determine project root' })
+        }
+        // F-04: Derive projectId from worktree and enforce matching — prevents
+        // cross-project audit log access from arbitrary LLM-supplied IDs.
+        const computedProjectId = computeProjectId(worktree)
+        if (args.projectId !== computedProjectId) {
+          return JSON.stringify({ ok: false, error: `projectId mismatch: tool caller must use the project's own ID (${computedProjectId})` })
         }
         const entries = pipelineStore.readAuditLog(args.projectId, args.runId, args.filter)
         return JSON.stringify({ ok: true, entries })
