@@ -32,17 +32,56 @@ export class Observer {
   private logger?: Logger
   private ruleConfigLoader?: RuleConfigLoader
   private _timedOut = false
+  private degraded = false
 
   private degradedRounds = new Map<string, Set<number>>()
   private degradedRuns = new Set<string>()
   private handlerFailedPipelines = new Set<string>()
 
-  constructor(cache: PipelineStateCache, sessionBuffer: SessionBuffer, store: PipelineStore, logger?: Logger, ruleConfigLoader?: RuleConfigLoader) {
+  constructor(
+    cache: PipelineStateCache,
+    sessionBuffer: SessionBuffer,
+    store: PipelineStore,
+    logger?: Logger,
+    ruleConfigLoader?: RuleConfigLoader,
+    initContext?: { registerTool?: (name: string, handler: (...args: any[]) => any) => Promise<void> | void },
+  ) {
     this.cache = cache
     this.sessionBuffer = sessionBuffer
     this.store = store
     this.logger = logger
     this.ruleConfigLoader = ruleConfigLoader
+
+    if (initContext?.registerTool) {
+      try {
+        initContext.registerTool('read_audit_log', () => {})
+      } catch (e) {
+        if (e instanceof TypeError || (e instanceof Error && e.name === 'NotImplementedError')) {
+          this.degraded = true
+          const state = this.cache.get()
+          if (state) {
+            const runId = this.store.getActiveRun(state.projectId)?.runId ?? '__no_active_run__'
+            this.store.appendAudit(state.projectId, runId, {
+              timestamp: new Date().toISOString(),
+              runId, projectId: state.projectId, sessionId: '',
+              event: 'DEGRADATION_MODE_ACTIVATED',
+              phase: 0,
+              decision: 'WARN',
+              severity: 'warn',
+              violation: 'Plugin API does not support tool registration; degraded to file-path mode',
+            })
+          } else {
+            this.logger?.warn('Observer: tool registration failed, no active state for degradation audit')
+          }
+        } else {
+          throw e
+        }
+      }
+    }
+  }
+
+  isInitDegraded(): boolean {
+    return this.degraded
   }
 
   isDegraded(projectId: string, runId: string, round?: number): boolean {
@@ -178,7 +217,7 @@ export class Observer {
             runId: s.runId, projectId: s.projectId, sessionId: sessionID,
             event: 'OBSERVER_TIMEOUT', phase: s.currentPhase,
             decision: isDegraded ? 'WARN' : 'BLOCK',
-            severity: isDegraded ? 'warn' : 'block',
+            severity: this.effectiveSeverity(isDegraded ? 'warn' : 'block'),
             violation: `Observer handle() timeout (>${OBSERVER_TIMEOUT_MS}ms)`,
           })
 
@@ -265,6 +304,10 @@ export class Observer {
     return false
   }
 
+  private effectiveSeverity(raw: 'block' | 'warn'): 'block' | 'warn' {
+    return this.degraded ? 'warn' : raw
+  }
+
   private async _handleObservations(
     tool: string,
     args: unknown,
@@ -282,22 +325,23 @@ export class Observer {
       const normalizedCmd = normalizeCommand(a.command as string)
       if (typeof output !== 'string') return
       const exitCode = extractExitCode(output)
-      if (exitCode !== 0) {
-        const config = this.ruleConfigLoader?.load('COMMAND_RESULT_CHECK') ?? { enabled: true, severity: 'block' as const, ignoreExitCodes: [], ignoreCommands: [] }
-        if (config.enabled && !config.ignoreExitCodes?.includes(exitCode)
-            && !config.ignoreCommands?.some(pat => matchPattern(normalizedCmd, pat))) {
-          if (this._timedOut) return
-          this.store.appendAudit(projectId, runId, {
-            timestamp: new Date().toISOString(),
-            runId, projectId, sessionId: sessionID,
-            event: 'COMMAND_FAILED', phase,
-            decision: config.severity === 'block' ? 'BLOCK' : 'WARN',
-            severity: config.severity,
-            violation: `Command exit code ${exitCode}: ${normalizedCmd}`,
-            command: normalizedCmd, tool: 'Bash', resolved: false,
-          })
+        if (exitCode !== 0) {
+          const config = this.ruleConfigLoader?.load('COMMAND_RESULT_CHECK') ?? { enabled: true, severity: 'block' as const, ignoreExitCodes: [], ignoreCommands: [] }
+          if (config.enabled && !config.ignoreExitCodes?.includes(exitCode)
+              && !config.ignoreCommands?.some(pat => matchPattern(normalizedCmd, pat))) {
+            if (this._timedOut) return
+            const sev = this.effectiveSeverity(config.severity)
+            this.store.appendAudit(projectId, runId, {
+              timestamp: new Date().toISOString(),
+              runId, projectId, sessionId: sessionID,
+              event: 'COMMAND_FAILED', phase,
+              decision: sev === 'block' ? 'BLOCK' : 'WARN',
+              severity: sev,
+              violation: `Command exit code ${exitCode}: ${normalizedCmd}`,
+              command: normalizedCmd, tool: 'Bash', resolved: false,
+            })
+          }
         }
-      }
     } else if (tool === 'Write') {
       if (typeof a.filePath !== 'string') return
       const filePath = a.filePath as string
@@ -330,11 +374,12 @@ export class Observer {
         const result = quickSyntaxCheck(content)
         if (!result.ok) {
           if (this._timedOut) return
+          const sev = this.effectiveSeverity('block')
           this.store.appendAudit(projectId, runId, {
             timestamp: new Date().toISOString(),
             runId, projectId, sessionId: sessionID,
             event: 'SYNTAX_ERROR_POST_WRITE', phase,
-            decision: 'BLOCK', severity: 'block',
+            decision: sev === 'block' ? 'BLOCK' : 'WARN', severity: sev,
             violation: `JSON syntax error: ${result.error}`,
             tool: 'Write', filePath, resolved: false,
           })
@@ -345,11 +390,12 @@ export class Observer {
         const result = yamlSyntaxCheck(content)
         if (!result.ok) {
           if (this._timedOut) return
+          const sev = this.effectiveSeverity('block')
           this.store.appendAudit(projectId, runId, {
             timestamp: new Date().toISOString(),
             runId, projectId, sessionId: sessionID,
             event: 'SYNTAX_ERROR_POST_WRITE', phase,
-            decision: 'BLOCK', severity: 'block',
+            decision: sev === 'block' ? 'BLOCK' : 'WARN', severity: sev,
             violation: `YAML syntax error: ${result.error ?? 'unknown'}`,
             tool: 'Write', filePath, resolved: false,
           })

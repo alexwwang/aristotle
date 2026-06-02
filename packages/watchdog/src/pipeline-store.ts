@@ -220,6 +220,26 @@ export class PipelineStore {
     this.indexEntry(projectId, runId, key, entry as AuditEntryWithSource)
   }
 
+  readAuditLog(
+    projectId: string,
+    runId: string,
+    filter?: { event?: string; severity?: string; resolved?: boolean; limit?: number },
+  ): AuditLogEntry[] {
+    this.validatePathComponents(projectId, runId)
+    const key = this.auditKey(projectId, runId)
+    let entries = this.stateStore.readLogSafe<AuditLogEntry>(key)
+    if (filter?.event !== undefined) entries = entries.filter(e => e.event === filter.event)
+    if (filter?.severity !== undefined) entries = entries.filter(e => e.severity === filter.severity)
+    if (filter?.resolved !== undefined) entries = entries.filter(e => e.resolved === filter.resolved)
+    entries.sort((a, b) => {
+      const ts = b.timestamp.localeCompare(a.timestamp)
+      if (ts !== 0) return ts
+      return (b.event ?? '').localeCompare(a.event ?? '')
+    })
+    if (filter?.limit !== undefined && filter.limit >= 0) entries = entries.slice(0, filter.limit)
+    return entries
+  }
+
   // ------------------------------------------------------------------
   // Archive
   // ------------------------------------------------------------------

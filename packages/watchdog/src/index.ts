@@ -88,6 +88,8 @@ export async function createWatchdogRole(ctx: any): Promise<RoleRegistration | n
     store,
     logger,
   )
+  // initContext not wired here — Phase 4 will provide ctx.registerTool from OpenCode plugin API.
+  // Until then, degradation detection tests use createPhase1Observer with explicit initContext.
   const observer = new Observer(cache, sessionBuffer, store, logger)
 
   // 8. Create checkpoint handler (wires loopConfig + cache + observer)
@@ -118,7 +120,7 @@ export async function createWatchdogRole(ctx: any): Promise<RoleRegistration | n
   }
 
   // 10. Create tools
-  const tools = createWatchdogTools({ checkpointHandler })
+  const tools = createWatchdogTools({ checkpointHandler, pipelineStore: store })
 
   // 11. Return RoleRegistration with hooks
   return {

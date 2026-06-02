@@ -142,6 +142,7 @@ export class CheckpointHandler {
           guidance: 'Cannot submit test results without an active run.',
         })
       }
+      const trSeverity: 'warn' | undefined = (pass + fail === 0 || fail > 0) ? 'warn' : undefined
       this.store.appendAudit(trRun.projectId, trRun.runId, {
         timestamp: now,
         runId: trRun.runId,
@@ -150,6 +151,7 @@ export class CheckpointHandler {
         event: 'TEST_RUN_COMPLETE',
         phase: trState.currentPhase,
         decision: 'PASS',
+        severity: trSeverity,
         pass,
         fail,
         error_summary: (testResult.error_summary as string) ?? '',
@@ -387,6 +389,8 @@ export class CheckpointHandler {
     }
 
     // ── 9b. RALPH_ROUNDS safety net (Phase 2, AC-6) ───────────────────────
+    // Order: must fire before §9c (TEST_RUN_REQUESTED) and §10a (violation gate).
+    // Early return prevents downstream audit entries and gate checks.
     if (event === 'phase_complete' && activeRun && currentState?.ralph) {
       if (currentState.ralph.round >= MAX_RALPH_ROUNDS) {
         this.store.appendAudit(projectId, activeRun.runId, {
@@ -418,6 +422,7 @@ export class CheckpointHandler {
         event: 'TEST_RUN_REQUESTED',
         phase: currentState.currentPhase,
         decision: 'PASS',
+        severity: 'warn',
       })
     }
 

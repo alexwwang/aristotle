@@ -222,6 +222,28 @@ describe('TEST_RUN_REQUESTED (AC-1)', () => {
     expect(entry.phase).toBe(5)
     expect(entry.sessionId).toBe(SESSION_ID)
   })
+
+  // C-05: TEST_RUN_REQUESTED fires even when violation gate would block (ordering: §9c before §10a)
+  it('TC-TG-C05: TEST_RUN_REQUESTED fires before violation gate check', async () => {
+    setupFinalPhasePipeline(mockStore, 5)
+    // Add unresolved violations — the gate will block, but TEST_RUN_REQUESTED should still fire
+    mockStore.getUnresolvedViolations.mockReturnValue([{
+      violation: 'test violation', severity: 'block', resolved: false,
+    }])
+
+    await handler.handle(
+      'phase_complete',
+      JSON.stringify({ phase: 5 }),
+      CONTEXT,
+    )
+
+    const auditCalls = mockStore.appendAudit.mock.calls
+    const testRunRequestedCall = auditCalls.find(
+      (call: any[]) => call[2]?.event === 'TEST_RUN_REQUESTED',
+    )
+    // TEST_RUN_REQUESTED must be written even when violations block phase completion
+    expect(testRunRequestedCall).toBeDefined()
+  })
 })
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -577,6 +599,42 @@ describe('TEST_RUN_COMPLETE validation (AC-4)', () => {
 
     expect(mockStore.writeState.mock.calls.length).toBe(writesBefore)
   })
+
+  // D-19: pass=0 + fail=0 → audit entry has severity='warn' (suspected config error)
+  it('TC-TG-D19: pass=0 fail=0 writes warn-level audit (suspected config error)', async () => {
+    setupTestRunComplete()
+
+    await handler.handle(
+      testRunCompleteEvent,
+      JSON.stringify({ test_result: { pass: 0, fail: 0 } }),
+      CONTEXT,
+    )
+
+    const auditCalls = mockStore.appendAudit.mock.calls
+    const testRunCompleteCall = auditCalls.find(
+      (call: any[]) => call[2]?.event === 'TEST_RUN_COMPLETE',
+    )
+    expect(testRunCompleteCall).toBeDefined()
+    const entry = testRunCompleteCall![2] as any
+    expect(entry.severity).toBe('warn')
+  })
+
+  // D-20: fail is string → error
+  it('TC-TG-D20: fail=string returns error', async () => {
+    setupTestRunComplete()
+
+    const result = await handler.handle(
+      testRunCompleteEvent,
+      JSON.stringify({ test_result: { pass: 0, fail: '2' } }),
+      CONTEXT,
+    )
+
+    const parsed = JSON.parse(result)
+    expect(parsed.ok).toBe(false)
+    if (!parsed.ok) {
+      expect(parsed.violation).toBeTruthy()
+    }
+  })
 })
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -722,7 +780,7 @@ describe('RALPH_ROUNDS_EXCEEDED safety net (AC-6)', () => {
 // TDD Red: source types not yet updated for Phase 2 — skip until implementation
 describe('AuditLogEntry Phase 2 event types', () => {
   it('TC-TG-F01: AuditLogEntry accepts TEST_RUN_REQUESTED in event field', () => {
-    const entry = {
+    const entry: AuditLogEntry = {
       timestamp: NOW,
       runId: 'run-001',
       projectId: 'proj-001',
@@ -730,12 +788,12 @@ describe('AuditLogEntry Phase 2 event types', () => {
       event: 'TEST_RUN_REQUESTED',
       phase: 5,
       decision: 'PASS',
-    } as unknown as AuditLogEntry
+    }
     expect(entry.event).toBe('TEST_RUN_REQUESTED')
   })
 
   it('TC-TG-F02: AuditLogEntry accepts TEST_RUN_COMPLETE in event field', () => {
-    const entry = {
+    const entry: AuditLogEntry = {
       timestamp: NOW,
       runId: 'run-001',
       projectId: 'proj-001',
@@ -743,12 +801,12 @@ describe('AuditLogEntry Phase 2 event types', () => {
       event: 'TEST_RUN_COMPLETE',
       phase: 5,
       decision: 'PASS',
-    } as unknown as AuditLogEntry
+    }
     expect(entry.event).toBe('TEST_RUN_COMPLETE')
   })
 
   it('TC-TG-F03: AuditLogEntry accepts RALPH_ROUNDS_EXCEEDED in event field', () => {
-    const entry = {
+    const entry: AuditLogEntry = {
       timestamp: NOW,
       runId: 'run-001',
       projectId: 'proj-001',
@@ -756,12 +814,12 @@ describe('AuditLogEntry Phase 2 event types', () => {
       event: 'RALPH_ROUNDS_EXCEEDED',
       phase: 5,
       decision: 'BLOCK',
-    } as unknown as AuditLogEntry
+    }
     expect(entry.event).toBe('RALPH_ROUNDS_EXCEEDED')
   })
 
   it('TC-TG-F04: AuditLogEntry accepts DEGRADATION_MODE_ACTIVATED in event field', () => {
-    const entry = {
+    const entry: AuditLogEntry = {
       timestamp: NOW,
       runId: 'run-001',
       projectId: 'proj-001',
@@ -769,12 +827,12 @@ describe('AuditLogEntry Phase 2 event types', () => {
       event: 'DEGRADATION_MODE_ACTIVATED',
       phase: 5,
       decision: 'WARN',
-    } as unknown as AuditLogEntry
+    }
     expect(entry.event).toBe('DEGRADATION_MODE_ACTIVATED')
   })
 
   it('TC-TG-F05: AuditLogEntry accepts pass, fail, error_summary fields', () => {
-    const entry = {
+    const entry: AuditLogEntry = {
       timestamp: NOW,
       runId: 'run-001',
       projectId: 'proj-001',
@@ -785,9 +843,9 @@ describe('AuditLogEntry Phase 2 event types', () => {
       pass: 5,
       fail: 0,
       error_summary: 'all good',
-    } as unknown as AuditLogEntry
-    expect((entry as any).pass).toBe(5)
-    expect((entry as any).fail).toBe(0)
-    expect((entry as any).error_summary).toBe('all good')
+    }
+    expect(entry.pass).toBe(5)
+    expect(entry.fail).toBe(0)
+    expect(entry.error_summary).toBe('all good')
   })
 })

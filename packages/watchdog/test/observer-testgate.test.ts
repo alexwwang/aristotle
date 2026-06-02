@@ -66,9 +66,10 @@ function createPhase1Observer(
   cache: any,
   sessionBuffer: any,
   ruleLoader?: any,
+  initContext?: { registerTool?: (name: string, handler: (...args: any[]) => any) => void },
 ): Observer {
   const Ctor = Observer as any
-  return new Ctor(cache, sessionBuffer, store, undefined, ruleLoader) as Observer
+  return new Ctor(cache, sessionBuffer, store, undefined, ruleLoader, initContext) as Observer
 }
 
 function createPhase1Store() {
@@ -122,61 +123,97 @@ describe('Observer Phase 2 Test Gate', () => {
       expect(observer.isDegraded('proj-test', 'run-test')).toBe(false)
     })
 
-    // ── A-02: init with tool registration failure → isDegraded returns true ──
-    it.skip('A-02: init with tool registration failure → isDegraded returns true', () => {
-      // TDD Red: Observer init-time degradation not implemented yet
-      // Phase 2 design: constructor wraps registerTool in try/catch
-      // On TypeError, sets this.degraded = true and writes DEGRADATION_MODE_ACTIVATED audit
-      const observer2 = createPhase1Observer(store, cache, sessionBuffer, ruleLoader)
-      // TODO: trigger init failure — Phase 2 constructor will accept plugin registration callback
-      // e.g. new Observer(cache, sessionBuffer, store, undefined, ruleLoader, { registerTool: () => { throw new TypeError('registerTool failed') } })
-      expect(observer2.isDegraded('proj-test', 'run-test')).toBe(true)
+    // ── A-02: init with tool registration failure → isInitDegraded returns true ──
+    it('A-02: init with tool registration failure → isInitDegraded returns true', () => {
+      const observer2 = createPhase1Observer(store, cache, sessionBuffer, ruleLoader, {
+        registerTool: () => { throw new TypeError('registerTool failed') }
+      })
+      expect(observer2.isInitDegraded()).toBe(true)
     })
 
     // ── A-03: degradation writes DEGRADATION_MODE_ACTIVATED audit entry ──
-    it.skip('A-03: degradation writes DEGRADATION_MODE_ACTIVATED audit entry', () => {
-      // TDD Red: DEGRADATION_MODE_ACTIVATED event not in AuditLogEntry event union yet
-      // When constructor catches TypeError from registerTool:
-      //   this.degraded = true
-      //   store.appendAudit(projectId, runId, { event: 'DEGRADATION_MODE_ACTIVATED', ... })
-      // This test verifies appendAudit was called with the correct event.
-      // TODO: Create observer via Phase 2 constructor that triggers registration failure
-      // expect(store.appendAudit).toHaveBeenCalledWith(
-      //   'proj-test', 'run-test',
-      //   expect.objectContaining({ event: 'DEGRADATION_MODE_ACTIVATED' }),
-      // )
+    it('A-03: degradation writes DEGRADATION_MODE_ACTIVATED audit entry', () => {
+      const store3 = createPhase1Store()
+      store3.getActiveRun.mockReturnValue({ runId: 'run-test', projectId: 'proj-test', startedAt: '2026-01-01T00:00:00.000Z' })
+      const cache3 = createMockCache({ getReturn: makeActiveState({ projectId: 'proj-test' }) })
+      const sessionBuffer3 = createMockSessionBuffer()
+      createPhase1Observer(store3, cache3, sessionBuffer3, ruleLoader, {
+        registerTool: () => { throw new TypeError('registerTool failed') }
+      })
+      expect(store3.appendAudit).toHaveBeenCalledWith(
+        'proj-test', 'run-test',
+        expect.objectContaining({
+          event: 'DEGRADATION_MODE_ACTIVATED',
+          sessionId: '',
+          phase: 0,
+          decision: 'WARN',
+          severity: 'warn',
+        }),
+      )
     })
 
     // ── A-04: when degraded, Observer handle() does not block ──
-    it.skip('A-04: when degraded, Observer handle() downgrades severity to warn', async () => {
-      // TDD Red: degraded mode severity downgrade not implemented yet
-      // Phase 2 design: when isDegraded() returns true, handle() changes
-      // severity from 'block' to 'warn' for all Observer-generated audit entries.
-      // This means violations are logged but never block the pipeline.
+    it('A-04: when degraded, Observer handle() downgrades severity to warn', async () => {
       cache.get.mockReturnValue(makeActiveState())
-      // TODO: Set observer to degraded state first
+      ;(observer as any).degraded = true
       await observer.handle('Bash', { command: 'npm test' }, bashOutput(1), 'sess-1', 'call-a04')
-      // expect(store.appendAudit).toHaveBeenCalledWith(
-      //   'proj-test', 'run-test',
-      //   expect.objectContaining({ event: 'COMMAND_FAILED', severity: 'warn' }),
-      // )
+      expect(store.appendAudit).toHaveBeenCalledWith(
+        'proj-test', 'run-test',
+        expect.objectContaining({ event: 'COMMAND_FAILED', severity: 'warn', decision: 'WARN' }),
+      )
     })
 
     // ── A-05: non-API errors (RangeError) propagate upward ──
-    it.skip('A-05: non-API errors (RangeError) propagate upward during init', () => {
-      // TDD Red: error filtering in constructor not implemented yet
-      // Phase 2 design: only TypeError from registerTool triggers degradation.
-      // RangeError, SyntaxError, etc. should propagate upward (not caught).
-      // TODO: test that new Observer(...) throws when RangeError occurs in init
+    it('A-05: non-API errors (RangeError) propagate upward during init', () => {
+      expect(() => createPhase1Observer(store, cache, sessionBuffer, ruleLoader, {
+        registerTool: () => { throw new RangeError('bad') }
+      })).toThrow(RangeError)
     })
 
     // ── A-06: null state during init degradation → console.warn only ──
-    it.skip('A-06: null state during init degradation → no audit entry (console.warn only)', () => {
-      // TDD Red: null-state degradation path not implemented yet
-      // Phase 2 design: if cache.get() returns null at init time when
-      // degradation would be set, the audit entry cannot be written
-      // (no projectId/runId). Only console.warn is emitted.
-      // TODO: verify no appendAudit call when state is null during init failure
+    it('A-06: null state during init degradation → no audit entry (console.warn only)', () => {
+      const store6 = createPhase1Store()
+      const cache6 = createMockCache()
+      cache6.get.mockReturnValue(null)
+      const sessionBuffer6 = createMockSessionBuffer()
+      const observer6 = createPhase1Observer(store6, cache6, sessionBuffer6, ruleLoader, {
+        registerTool: () => { throw new TypeError('registerTool failed') }
+      })
+      expect(observer6.isInitDegraded()).toBe(true)
+      expect(store6.appendAudit).not.toHaveBeenCalled()
+    })
+
+    // ── A-07: NotImplementedError also triggers degradation ──
+    it('A-07: NotImplementedError triggers degradation (same catch path)', () => {
+      const store7 = createPhase1Store()
+      store7.getActiveRun.mockReturnValue({ runId: 'run-7', projectId: 'proj-7', startedAt: '2026-01-01T00:00:00.000Z' })
+      const cache7 = createMockCache({ getReturn: makeActiveState({ projectId: 'proj-7', runId: 'run-7' }) })
+      const sessionBuffer7 = createMockSessionBuffer()
+      const notImplError = new Error('not implemented') as Error & { name: 'NotImplementedError' }
+      notImplError.name = 'NotImplementedError'
+      const observer7 = createPhase1Observer(store7, cache7, sessionBuffer7, ruleLoader, {
+        registerTool: () => { throw notImplError }
+      })
+      expect(observer7.isInitDegraded()).toBe(true)
+      expect(store7.appendAudit).toHaveBeenCalledWith(
+        'proj-7', 'run-7',
+        expect.objectContaining({ event: 'DEGRADATION_MODE_ACTIVATED' }),
+      )
+    })
+
+    it('A-08: degradation audit uses sentinel runId when no active run', () => {
+      const store8 = createPhase1Store()
+      store8.getActiveRun.mockReturnValue(null)
+      const cache8 = createMockCache({ getReturn: makeActiveState({ projectId: 'proj-8' }) })
+      const sessionBuffer8 = createMockSessionBuffer()
+      createPhase1Observer(store8, cache8, sessionBuffer8, ruleLoader, {
+        registerTool: () => { throw new TypeError('registerTool failed') }
+      })
+      expect(store8.appendAudit).toHaveBeenCalledTimes(1)
+      expect(store8.appendAudit).toHaveBeenCalledWith(
+        'proj-8', '__no_active_run__',
+        expect.objectContaining({ event: 'DEGRADATION_MODE_ACTIVATED' }),
+      )
     })
   })
 
@@ -185,42 +222,37 @@ describe('Observer Phase 2 Test Gate', () => {
   // ═══════════════════════════════════════════════════════════════════════════
   describe('Group B: AuditLogEntry type extensions', () => {
     // ── B-01: AuditLogEntry accepts 'DEGRADATION_MODE_ACTIVATED' in event field ──
-    it.skip('B-01: AuditLogEntry accepts DEGRADATION_MODE_ACTIVATED event', () => {
-      // TDD Red: 'DEGRADATION_MODE_ACTIVATED' not in AuditLogEntry event union yet
-      // Once added to schema.ts, this test verifies the type accepts it:
-      // const entry: AuditLogEntry = {
-      //   timestamp: new Date().toISOString(),
-      //   runId: 'run-test',
-      //   projectId: 'proj-test',
-      //   sessionId: 'sess-1',
-      //   event: 'DEGRADATION_MODE_ACTIVATED',
-      //   phase: 1,
-      //   decision: 'WARN',
-      //   violation: 'Observer tool registration failed during init',
-      // }
-      // expect(entry.event).toBe('DEGRADATION_MODE_ACTIVATED')
+    it('B-01: AuditLogEntry accepts DEGRADATION_MODE_ACTIVATED event', () => {
+      const entry: AuditLogEntry = {
+        timestamp: new Date().toISOString(),
+        runId: 'run-test',
+        projectId: 'proj-test',
+        sessionId: 'sess-1',
+        event: 'DEGRADATION_MODE_ACTIVATED',
+        phase: 1,
+        decision: 'WARN',
+        violation: 'Observer tool registration failed during init',
+      }
+      expect(entry.event).toBe('DEGRADATION_MODE_ACTIVATED')
     })
 
     // ── B-02: AuditLogEntry accepts pass/fail/error_summary fields ──
-    it.skip('B-02: AuditLogEntry accepts pass/fail/error_summary fields', () => {
-      // TDD Red: pass, fail, error_summary fields not in AuditLogEntry interface yet
-      // Phase 2 design: test gate results carry pass/fail counts and error summary.
-      // Once added to schema.ts:
-      // const entry: AuditLogEntry = {
-      //   timestamp: new Date().toISOString(),
-      //   runId: 'run-test',
-      //   projectId: 'proj-test',
-      //   sessionId: 'sess-1',
-      //   event: 'OBSERVER_TIMEOUT',
-      //   phase: 1,
-      //   decision: 'WARN',
-      //   pass: 8,
-      //   fail: 2,
-      //   error_summary: '2 timeout violations in observer handle()',
-      // }
-      // expect(entry.pass).toBe(8)
-      // expect(entry.fail).toBe(2)
-      // expect(entry.error_summary).toBe('2 timeout violations in observer handle()')
+    it('B-02: AuditLogEntry accepts pass/fail/error_summary fields', () => {
+      const entry: AuditLogEntry = {
+        timestamp: new Date().toISOString(),
+        runId: 'run-test',
+        projectId: 'proj-test',
+        sessionId: 'sess-1',
+        event: 'OBSERVER_TIMEOUT',
+        phase: 1,
+        decision: 'WARN',
+        pass: 8,
+        fail: 2,
+        error_summary: '2 timeout violations',
+      }
+      expect(entry.pass).toBe(8)
+      expect(entry.fail).toBe(2)
+      expect(entry.error_summary).toBe('2 timeout violations')
     })
   })
 

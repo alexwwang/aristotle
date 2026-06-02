@@ -7,13 +7,15 @@
 import { z } from 'zod'
 import type { ToolDefinition } from '@opencode-ai/core/plugin/registration'
 import type { CheckpointHandler } from './checkpoint.js'
+import type { PipelineStore } from './pipeline-store.js'
 
 export interface CreateWatchdogToolsDeps {
   checkpointHandler: CheckpointHandler
+  pipelineStore: PipelineStore
 }
 
 export function createWatchdogTools(deps: CreateWatchdogToolsDeps): Record<string, ToolDefinition> {
-  const { checkpointHandler } = deps
+  const { checkpointHandler, pipelineStore } = deps
 
   return {
     tdd_checkpoint: {
@@ -48,6 +50,27 @@ export function createWatchdogTools(deps: CreateWatchdogToolsDeps): Record<strin
           args.payload ?? '{}',
           { worktree, sessionID },
         )
+      },
+    },
+    read_audit_log: {
+      description: 'Read audit log entries for a pipeline run. Returns entries sorted by timestamp descending (newest first).',
+      args: {
+        projectId: z.string().describe('Project ID'),
+        runId: z.string().describe('Run ID'),
+        filter: z.object({
+          event: z.string().optional(),
+          severity: z.string().optional(),
+          resolved: z.boolean().optional(),
+          limit: z.number().int().min(0).optional(),
+        }).optional().describe('Optional filters for audit log entries'),
+      },
+      execute: async (args: any, context: any) => {
+        const worktree = context?.worktree ?? context?.directory ?? ''
+        if (!worktree) {
+          return JSON.stringify({ ok: false, error: 'Cannot determine project root' })
+        }
+        const entries = pipelineStore.readAuditLog(args.projectId, args.runId, args.filter)
+        return JSON.stringify({ ok: true, entries })
       },
     },
   }

@@ -45,6 +45,7 @@ function createMockStore() {
     }),
     archiveRun: vi.fn(),
     getProjectIds: vi.fn(() => []),
+    readAuditLog: vi.fn(() => []),
     // Test helpers
     _setActiveRun(projectId: string, run: ActiveRun) { activeRuns.set(projectId, run) },
     _setState(projectId: string, runId: string, state: PipelineState) {
@@ -595,7 +596,7 @@ describe('CheckpointHandler', () => {
 
   describe('createWatchdogTools (M4 smoke test)', () => {
     it('creates tdd_checkpoint tool that returns violation for empty worktree context', async () => {
-      const tools = createWatchdogTools({ checkpointHandler: handler as any })
+      const tools = createWatchdogTools({ checkpointHandler: handler as any, pipelineStore: mockStore as any })
       const tool = tools.tdd_checkpoint
 
       // Empty context — no worktree/directory → defensive guard returns violation
@@ -609,7 +610,7 @@ describe('CheckpointHandler', () => {
     })
 
     it('creates tdd_checkpoint tool that delegates to handler for valid context', async () => {
-      const tools = createWatchdogTools({ checkpointHandler: handler as any })
+      const tools = createWatchdogTools({ checkpointHandler: handler as any, pipelineStore: mockStore as any })
       const tool = tools.tdd_checkpoint
 
       const result = await tool.execute!(

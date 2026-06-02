@@ -3,9 +3,10 @@ import { createWatchdogTools } from '../src/tools.js'
 
 // Mock handler — tools.ts only needs the shape, not real behavior
 const mockHandler: any = { handle: (() => Promise.resolve('{}')), articulationFailures: new Map(), store: null, staleThresholdMs: 0, getFailureCount: () => 0 }
+const mockPipelineStore: any = { readAuditLog: () => [] }
 
 describe('tools.ts: ralph_round_finding registration', () => {
-  const tools = createWatchdogTools({ checkpointHandler: mockHandler })
+  const tools = createWatchdogTools({ checkpointHandler: mockHandler, pipelineStore: mockPipelineStore })
   const checkpointTool = tools.tdd_checkpoint
 
   it('should accept ralph_round_finding in event enum', () => {
