@@ -339,15 +339,15 @@ export class PipelineStore {
     }
 
     const prefix = this.auditKey(projectId, runId)
+    let needsRebuild = false
     for (let i = 1; i <= 10; i++) {
       const rotKey = `${prefix}.${i}`
       if (this.indexedRotatedKeys.has(rotKey)) continue
-      const rotLogs = this.stateStore.readLogSafe<AuditEntryWithSource>(rotKey)
-      if (rotLogs.length === 0) break
-      for (const entry of rotLogs) {
-        this.indexEntry(projectId, runId, rotKey, entry)
-      }
-      this.indexedRotatedKeys.add(rotKey)
+      needsRebuild = true
+      break
+    }
+    if (needsRebuild) {
+      this.buildIndex(projectId, runId)
     }
 
     const severityMap = this.violationIndex.get(idxKey)
@@ -468,6 +468,9 @@ export class PipelineStore {
     this.violationIndex.delete(idxKey)
 
     const prefix = this.auditKey(projectId, runId)
+    for (let i = 1; i <= 10; i++) {
+      this.indexedRotatedKeys.delete(`${prefix}.${i}`)
+    }
 
     // Pass 1: collect all logs + extract resolution markers
     const allEntries: AuditEntryWithSource[] = []
