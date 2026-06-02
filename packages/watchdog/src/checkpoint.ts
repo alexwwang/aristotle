@@ -57,7 +57,7 @@ import { validateTransition, applyTransition, NO_ACTIVE_RUN } from './transition
 import { OBS_TYPE_REVIEWER_SPAWNED } from './schema.js'
 import { computeProjectId } from './project-id.js'
 import { validateArticulation } from './articulation.js'
-import { ARTICULATION_MAX_FAILURES } from './constants.js'
+import { ARTICULATION_MAX_FAILURES, MAX_RALPH_ROUNDS, BUSINESS_CODE_PHASE } from './constants.js'
 import type { PipelineStateCache } from './state-cache.js'
 import type { Observer } from './observer.js'
 import type { Logger } from '@opencode-ai/core/logger'
@@ -81,7 +81,7 @@ export class CheckpointHandler {
    * StateStore async migration. Internal operations are currently sync.
    */
   async handle(
-    event: CheckpointEvent,
+    event: CheckpointEvent | 'TEST_RUN_COMPLETE',
     payloadJson: string,
     context: { worktree: string; sessionID: string },
   ): Promise<string> {
@@ -102,6 +102,59 @@ export class CheckpointHandler {
         violation: 'Invalid JSON payload',
         guidance: 'The payload must be a valid JSON object.',
       } satisfies CheckpointViolation)
+    }
+
+    // ── 1a. TEST_RUN_COMPLETE — audit-only event (Phase 2, AC-4) ─────────
+    if (event === 'TEST_RUN_COMPLETE') {
+      const testResult = payload.test_result as Record<string, unknown> | undefined
+      if (!testResult || typeof testResult !== 'object') {
+        return JSON.stringify({
+          ok: false,
+          violation: 'test_result is required when event=TEST_RUN_COMPLETE',
+          guidance: 'Provide test_result with pass, fail, and optional error_summary fields.',
+        })
+      }
+      const pass = testResult.pass
+      const fail = testResult.fail
+      if (typeof pass !== 'number' || typeof fail !== 'number' ||
+          !Number.isInteger(pass) || !Number.isInteger(fail) ||
+          !Number.isFinite(pass) || !Number.isFinite(fail) ||
+          pass < 0 || fail < 0) {
+        return JSON.stringify({
+          ok: false,
+          violation: 'test_result.pass and test_result.fail must be non-negative integers',
+          guidance: 'Both pass and fail must be non-negative finite integers.',
+        })
+      }
+      const trState = this.cache?.get()
+      if (!trState) {
+        return JSON.stringify({
+          ok: false,
+          violation: 'No active pipeline state',
+          guidance: 'Cannot submit test results without an active pipeline.',
+        })
+      }
+      const trRun = this.store.getActiveRun(trState.projectId)
+      if (!trRun) {
+        return JSON.stringify({
+          ok: false,
+          violation: 'No active run',
+          guidance: 'Cannot submit test results without an active run.',
+        })
+      }
+      this.store.appendAudit(trRun.projectId, trRun.runId, {
+        timestamp: now,
+        runId: trRun.runId,
+        projectId: trRun.projectId,
+        sessionId,
+        event: 'TEST_RUN_COMPLETE',
+        phase: trState.currentPhase,
+        decision: 'PASS',
+        pass,
+        fail,
+        error_summary: (testResult.error_summary as string) ?? '',
+      })
+      return JSON.stringify({ ok: true })
     }
 
     // ── 2. Find active run ────────────────────────────────────────────
@@ -333,6 +386,28 @@ export class CheckpointHandler {
       }
     }
 
+    // ── 9b. RALPH_ROUNDS safety net (Phase 2, AC-6) ───────────────────────
+    if (event === 'phase_complete' && activeRun && currentState?.ralph) {
+      if (currentState.ralph.round >= MAX_RALPH_ROUNDS) {
+        this.store.appendAudit(projectId, activeRun.runId, {
+          timestamp: now,
+          runId: activeRun.runId,
+          projectId,
+          sessionId,
+          event: 'RALPH_ROUNDS_EXCEEDED',
+          phase: currentState.currentPhase,
+          decision: 'WARN',
+          severity: 'warn',
+          violation: `Ralph Loop reached maximum rounds limit (${MAX_RALPH_ROUNDS})`,
+        })
+        return JSON.stringify({
+          ok: false,
+          violation: `Ralph Loop exceeded maximum rounds (${MAX_RALPH_ROUNDS}). Pipeline run terminated.`,
+          guidance: `The Ralph Loop reached ${currentState.ralph.round} rounds (limit: ${MAX_RALPH_ROUNDS}). Start a fresh pipeline.`,
+        })
+      }
+    }
+
     // ── 10a. Phase 1 violation gate (§3.1 AC-8) ──────────────────────────
     //    For phase_complete events, check unresolved block violations BEFORE
     //    applyTransition. Fail-closed: if getUnresolvedViolations throws, block.
@@ -430,6 +505,19 @@ export class CheckpointHandler {
       auditEntry.round = payload.round as number
     }
     this.store.appendAudit(projectId, runId, auditEntry)
+
+    // ── 11c. TEST_RUN_REQUESTED for business code phase (Phase 2, AC-1) ──
+    if (event === 'phase_complete' && newState.currentPhase === BUSINESS_CODE_PHASE) {
+      this.store.appendAudit(projectId, runId, {
+        timestamp: now,
+        runId,
+        projectId,
+        sessionId,
+        event: 'TEST_RUN_REQUESTED',
+        phase: newState.currentPhase,
+        decision: 'PASS',
+      })
+    }
 
     // ── 12. phase_complete(final) → clearActiveRun + archiveRun ──────
     // Tech Solution §D.2 Change 2: effectiveMax = maxPhase ?? totalPhases

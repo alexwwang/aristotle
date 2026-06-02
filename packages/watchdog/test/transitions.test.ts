@@ -1593,12 +1593,12 @@ describe('Phase 2.1 GPAV — ralph_terminate with autoValidated', () => {
 
   it('TC-G-23: max_rounds with GPAV checks C+H+M>0', () => {
     const state = makeRalphState({}, {
-      round: 10,
+      round: MAX_RALPH_ROUNDS,
       autoValidated: true,
-      tallyHistory: Array.from({ length: 10 }, (_, i) => ({
+      tallyHistory: Array.from({ length: MAX_RALPH_ROUNDS }, (_, i) => ({
         round: i + 1, C: 0, H: 0, M: 1, P: 0, L: 0, I: 0, timestamp: NOW,
       })),
-      roundRecords: Array.from({ length: 10 }, (_, i) => ({
+      roundRecords: Array.from({ length: MAX_RALPH_ROUNDS }, (_, i) => ({
         round: i + 1, counts: { C: 0, H: 0, M: 1, P: 0, L: 0, I: 0 }, submittedAt: NOW,
       })),
     })
@@ -1610,12 +1610,12 @@ describe('Phase 2.1 GPAV — ralph_terminate with autoValidated', () => {
 
   it('TC-G-24: max_rounds rejected when all zero in GPAV mode', () => {
     const state = makeRalphState({}, {
-      round: 10,
+      round: MAX_RALPH_ROUNDS,
       autoValidated: true,
-      tallyHistory: Array.from({ length: 10 }, (_, i) => ({
+      tallyHistory: Array.from({ length: MAX_RALPH_ROUNDS }, (_, i) => ({
         round: i + 1, C: 0, H: 0, M: 0, P: 0, L: 0, I: 0, timestamp: NOW,
       })),
-      roundRecords: Array.from({ length: 10 }, (_, i) => ({
+      roundRecords: Array.from({ length: MAX_RALPH_ROUNDS }, (_, i) => ({
         round: i + 1, counts: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 0 }, submittedAt: NOW,
       })),
     })
@@ -1760,10 +1760,10 @@ describe('Phase 2.1 GPAV — migration', () => {
       autoValidated: true,
       tallyHistory: Array.from({ length: MAX_RALPH_ROUNDS }, (_, i) => ({
         round: i + 1,
-        C: i === 9 ? 1 : 0, H: 0, M: 0, P: 0, L: 0, I: 0,
+        C: i === MAX_RALPH_ROUNDS - 1 ? 1 : 0, H: 0, M: 0, P: 0, L: 0, I: 0,
         timestamp: NOW,
       })),
-      roundRecords: [{ round: 11, counts: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 1  }, submittedAt: NOW }],
+      roundRecords: [{ round: MAX_RALPH_ROUNDS + 1, counts: { C: 0, H: 0, M: 0, P: 0, L: 0, I: 1  }, submittedAt: NOW }],
     })
     const result = validateTransition('ralph_terminate', basePayload({
       phase: 1, termination: 'max_rounds',

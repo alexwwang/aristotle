@@ -196,6 +196,7 @@ export interface AuditLogEntry {
     | 'OBSERVER_TIMEOUT' | 'OBSERVER_TIMEOUT_DEGRADED'
     | 'COMMAND_FAILED' | 'SYNTAX_ERROR_POST_WRITE' | 'FILE_TOO_LARGE_FOR_CHECK'
     | 'RESOLVE_SKIPPED_TOO_MANY'
+    | 'TEST_RUN_REQUESTED' | 'TEST_RUN_COMPLETE' | 'RALPH_ROUNDS_EXCEEDED' | 'DEGRADATION_MODE_ACTIVATED'
   phase: number
   round?: number
   decision: 'PASS' | 'BLOCK' | 'WARN'
@@ -209,6 +210,9 @@ export interface AuditLogEntry {
   resolved?: boolean                     // true after resolveViolations or auto-resolve
   resolvedAt?: string                    // ISO 8601 — set when resolved=true
   evicted?: boolean                      // true when FIFO eviction marks before removal
+  pass?: number
+  fail?: number
+  error_summary?: string
 }
 
 // ── Phase 2: Observation types ─────────────────────────────────────────
