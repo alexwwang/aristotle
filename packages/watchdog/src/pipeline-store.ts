@@ -472,7 +472,6 @@ export class PipelineStore {
     // Pass 1: collect all logs + extract resolution markers
     const allEntries: AuditEntryWithSource[] = []
     const resolvedMap = new Map<string, string>()
-    const sourceKeys: AuditEntryWithSource[] = []
 
     for (const source of [prefix, ...this.rotatedKeys(prefix)]) {
       const logs = this.stateStore.readLogSafe<AuditEntryWithSource>(source)
