@@ -615,7 +615,7 @@ class TestPreRollbackCommit:
 
     def test_should_handle_git_add_failure_gracefully_before_rollback(self, coordinator):
         event = _event("SKIP_RED_PHASE", "src/mod.py", 4)
-        with patch("aristotle_intervention.intervention_coordinator.subprocess.run") as mock_run, \
+        with patch("intervention_coordinator.subprocess.run") as mock_run, \
              patch.object(coordinator, "commit_guard") as mock_cg, \
              patch.object(coordinator, "rollback_engine") as mock_re, \
              patch.object(coordinator, "ki_doc"):
@@ -627,7 +627,7 @@ class TestPreRollbackCommit:
 
     def test_should_stage_untracked_file_before_rollback(self, coordinator):
         event = _event("SKIP_RED_PHASE", "src/new_untracked.py", 4)
-        with patch("aristotle_intervention.intervention_coordinator.subprocess.run") as mock_run, \
+        with patch("intervention_coordinator.subprocess.run") as mock_run, \
              patch.object(coordinator, "commit_guard") as mock_cg, \
              patch.object(coordinator, "rollback_engine") as mock_re, \
              patch.object(coordinator, "ki_doc"):
@@ -646,7 +646,7 @@ class TestPreRollbackCommit:
             {"phase": 4},
             affected_file_paths=["src/main.py", "src/helper.py", "tests/test_main.py"],
         )
-        with patch("aristotle_intervention.intervention_coordinator.subprocess.run") as mock_run, \
+        with patch("intervention_coordinator.subprocess.run") as mock_run, \
              patch.object(coordinator, "commit_guard") as mock_cg, \
              patch.object(coordinator, "rollback_engine") as mock_re, \
              patch.object(coordinator, "ki_doc"):

@@ -151,7 +151,7 @@ class TestE2EGracefulDegradation:
         os.chdir(str(repo))
         try:
             coord = InterventionCoordinator(integration_context)
-            with patch("aristotle_intervention.rollback_engine.subprocess.run") as mock_run, \
+            with patch("rollback_engine.subprocess.run") as mock_run, \
                  patch.object(coord.commit_guard, "ensure_committed") as mock_cg:
                 mock_cg.return_value = MagicMock(success=True)
                 mock_run.side_effect = [

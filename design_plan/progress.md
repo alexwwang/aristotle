@@ -1,7 +1,7 @@
 # QA 质量保障方案 — 项目进度记录
 
-**更新时间**: 2026-06-02 21:30（Asia/Shanghai）
-**状态**: ✅ Phase 2 全部完成 — Holistic Review + Ralph Review Loop 均关闭（含 KI 违规记录）
+**更新时间**: 2026-06-04 (Asia/Shanghai)
+**状态**: Phase 2 watchdog 包完成 ✅ | intervention 包 41 tests fail (pre-existing import break) | progress 校准完成
 
 ---
 
@@ -12,15 +12,18 @@
       ↓
 [Phase 1 Observer 增强] ✅ 完成 (TDD Red→Green→Review Loop 6轮收敛)
       ↓
-[Phase 2 Test Gate] ✅ 全部完成
-  ├─ 子任务 1: CheckpointHandler 扩展 ✅ Review Loop 2轮关闭
-  ├─ 子任务 2: 降级模式 (observer.ts) ✅ Review Loop 2轮关闭
-  ├─ 子任务 4: read_audit_log MCP ✅ Review Loop 2轮关闭
-  └─ 子任务 5: RALPH_ROUNDS_EXCEEDED 安全网 ✅ Review Loop 2轮关闭
-   Holistic Review: Round 1 (3H/5M/3L) → Round 2 (0H/0M/3L) ✅ 关闭
-   Ralph Review Loop: R1(4M)→fix→R2(3M)→fix→R3(0CHM)→R4(0CHM) ✅ gate_proceed=YES
-   ⚠️ KI 维护违规：4 轮未按轮次更新 KI，未执行 3 轮优先级评估（已记录）
-  ⚠️ AC-2/AC-3 (集成测试) 需系统级测试覆盖
+[Phase 2 Test Gate] ✅ watchdog 包全部完成
+   ├─ 子任务 1: CheckpointHandler 扩展 ✅ Review Loop 2轮关闭
+   ├─ 子任务 2: 降级模式 (observer.ts) ✅ Review Loop 2轮关闭
+   ├─ 子任务 4: read_audit_log MCP ✅ Review Loop 合规重跑通过 (R2独立Precision+R3+R4串行, prompt无round number)
+   └─ 子任务 5: RALPH_ROUNDS_EXCEEDED 安全网 ✅ Review Loop 2轮关闭
+    Holistic Review: R1(4M)→fix→R2(3M)→fix→R3(0CHM)→R4(0CHM) ✅ gate_proceed=YES
+    ⚠️ KI 维护违规：4 轮未按轮次更新 KI，未执行 3 轮优先级评估（已记录）
+   ⚠️ AC-2/AC-3 (集成测试) 需系统级测试覆盖
+      ↓
+[intervention 包] ✅ Phase 4/5 已实现 (243 tests, 202 pass / 41 fail)
+   ⚠️ 41 fail: ModuleNotFoundError 'aristotle_intervention' — 包重命名后 import 未更新
+   涉及: test_commit_guard (13), test_rollback_engine (21), test_intervention_coordinator (3), test_intervention_integration (1), test_prompt_validator (3)
 ```
 
 ---
@@ -253,22 +256,39 @@
 
 ## 4. 当前应做事项
 
-**当前阶段**: Phase 2 watchdog 包内实现全部完成 ✅
+**当前阶段**: Phase 2 watchdog 包 ✅ 完成 | intervention 包 Phase 4/5 已实现但有 41 个 import 失败
 
-### 完成步骤:
+### 完成步骤 (watchdog):
 1. ~~Phase 2 TDD Red (checkpoint-testgate + observer-testgate)~~ ✅
 2. ~~Phase 2 TDD Green (子任务 1+5)~~ ✅ Review 通过
 3. ~~子任务 2: 实现 observer.ts 降级模式~~ ✅ Review 通过 (2轮)
-4. ~~子任务 4: 实现 read_audit_log MCP~~ ✅ Review 通过 (2轮)
+4. ~~子任务 4: 实现 read_audit_log MCP~~ ✅ Review 合规重跑通过
 
-### 下一步:
-1. **Phase 4 (RED)** — 按测试计划编写~170个测试代码（待用户批准）
-2. **Phase 4 (GREEN)** — 编写业务代码
-3. **Phase 4 Ralph Review Loop** — 业务代码审核
+### 完成步骤 (intervention):
+5. ~~Phase 4 TDD RED~~ ✅ 243 tests (6 files)
+6. ~~Phase 5 TDD GREEN~~ ✅ 202/243 pass
 
-### 当前测试状态
-- **30 test files**, **683 tests passing**, **0 skipped**, **0 failed**
-- `tsc --noEmit` clean
+### 待修复:
+1. **intervention 包 41 个 import 失败** — `aristotle_intervention` → `intervention` 重命名后 import 路径未更新
+   - `test_commit_guard.py`: 13 fail
+   - `test_rollback_engine.py`: 21 fail
+   - `test_intervention_coordinator.py`: 3 fail
+   - `test_intervention_integration.py`: 1 fail
+   - `test_prompt_validator.py`: 3 fail (推测，需确认)
+2. **watchdog 包 7 个 zod KI** — zod v4 + vitest incompatibility (pre-existing, 非回归)
+
+### 当前测试状态 (实际，非声称)
+**packages/watchdog** (TypeScript):
+- 31 test files, 683 pass, 7 fail (zod KI), `tsc --noEmit` clean
+
+**intervention** (Python):
+- 11 test files, 202 pass, 41 fail (import break)
+
+### 合规纠正记录 (2026-06-04)
+- 子任务 4 Review Loop 重跑原因: R2 缺少独立 Precision Oracle (三 agent 分离违规)
+- 重跑结果: R2(独立Precision→1M)→R3(0CHM)→R4(0CHM) gate_proceed=YES
+- 额外纠正: R3/R4 prompt 去 round number (prompt contamination 违规)
+- 额外纠正: R4 串行于 R3 之后 (不得并行发 reviewer)
 
 ### ✅ Phase 2 Business Code — Ralph Review Loop (Holistic)
 
