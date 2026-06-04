@@ -3,29 +3,22 @@ import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync, unlinkSyn
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createAristotleRole } from '../src/index.js';
-import { WorkflowStore } from '@opencode-ai/core/store/workflow-store';
-import { AristotleExecutor } from '../src/executor.js';
-import { IdleEventHandler } from '../src/idle-handler.js';
-import { resolveConfig } from '../src/config.js';
+
+const { refs, mockResolveConfig } = vi.hoisted(() => {
+  const refs: any = {};
+  const mockResolveConfig = vi.fn();
+  return { refs, mockResolveConfig };
+});
 
 vi.mock('@opencode-ai/core/store/workflow-store', () => ({
-  WorkflowStore: vi.fn(function() {}),
+  WorkflowStore: vi.fn(),
 }));
 
-vi.mock('../src/executor.js', () => ({
-  AristotleExecutor: vi.fn(function() {}),
-}));
-
-vi.mock('../src/idle-handler.js', () => ({
-  IdleEventHandler: vi.fn(function() {}),
-}));
-
-vi.mock('../src/reflection/snapshot-extractor.js', () => ({
-  SnapshotExtractor: vi.fn(function() {}),
-}));
-
-vi.mock('../src/config.js', () => ({
-  resolveConfig: vi.fn(),
+vi.mock('@opencode-ai/core/config', () => ({
+  createConfigResolver: () => ({
+    resolve: () => mockResolveConfig(),
+    clearCache: () => {},
+  }),
 }));
 
 vi.mock('node:fs', async () => {
@@ -99,10 +92,10 @@ describe('createAristotleRole', () => {
       handle: vi.fn().mockResolvedValue(undefined),
     };
 
-    vi.mocked(WorkflowStore).mockImplementation(function() { return mockStore; });
-    vi.mocked(AristotleExecutor).mockImplementation(function() { return mockExecutor; });
-    vi.mocked(IdleEventHandler).mockImplementation(function() { return mockIdleHandler; });
-    vi.mocked(resolveConfig).mockReturnValue({
+    refs.store = mockStore;
+    refs.executor = mockExecutor;
+    refs.handler = mockIdleHandler;
+    mockResolveConfig.mockReturnValue({
       mcp_dir: '/tmp/test-mcp',
       sessions_dir: tempDir,
     });
@@ -119,6 +112,14 @@ describe('createAristotleRole', () => {
     };
   });
 
+  async function createSut() {
+    return createAristotleRole(ctx, {
+      store: mockStore,
+      executor: mockExecutor as any,
+      idleHandler: mockIdleHandler as any,
+    });
+  }
+
   afterEach(() => {
     rmSync(tempDir, { recursive: true, force: true });
     process.removeAllListeners('exit');
@@ -130,13 +131,13 @@ describe('createAristotleRole', () => {
   it('should_return_null_when_promptAsync_unavailable', async () => {
     ctx.client.session.promptAsync = undefined;
 
-    const result = await createAristotleRole(ctx);
+    const result = await createSut();
 
     expect(result).toBeNull();
   });
 
   it('should_return_RoleRegistration_with_tools_and_onIdle', async () => {
-    const result = await createAristotleRole(ctx);
+    const result = await createSut();
 
     expect(result).not.toBeNull();
     expect(result).toHaveProperty('tools');
@@ -144,7 +145,7 @@ describe('createAristotleRole', () => {
   });
 
   it('should_have_three_tools', async () => {
-    const result = await createAristotleRole(ctx);
+    const result = await createSut();
 
     expect(Object.keys(result!.tools!)).toHaveLength(3);
     expect(result!.tools!).toHaveProperty('aristotle_fire_o');
@@ -156,7 +157,7 @@ describe('createAristotleRole', () => {
   });
 
   it('should_call_idleHandler_handle_via_onIdle', async () => {
-    const result = await createAristotleRole(ctx);
+    const result = await createSut();
 
     await result!.onIdle!('session-abc', ctx.client);
 
@@ -165,7 +166,7 @@ describe('createAristotleRole', () => {
   });
 
   it('should_create_bridge_active_marker_on_startup', async () => {
-    await createAristotleRole(ctx);
+    await createSut();
 
     const markerPath = join(tempDir, '.bridge-active');
     expect(existsSync(markerPath)).toBe(true);
@@ -183,7 +184,7 @@ describe('createAristotleRole', () => {
     const stale = JSON.stringify({ pid: 99999, startedAt: 1 });
     writeFileSync(markerPath, stale);
 
-    await createAristotleRole(ctx);
+    await createSut();
 
     const content = readFileSync(markerPath, 'utf-8');
     const parsed = JSON.parse(content);
@@ -192,7 +193,7 @@ describe('createAristotleRole', () => {
   });
 
   it('should_remove_marker_on_exit', async () => {
-    await createAristotleRole(ctx);
+    await createSut();
 
     const markerPath = join(tempDir, '.bridge-active');
     expect(existsSync(markerPath)).toBe(true);
@@ -203,7 +204,7 @@ describe('createAristotleRole', () => {
   });
 
   it('should_remove_marker_on_SIGTERM', async () => {
-    await createAristotleRole(ctx);
+    await createSut();
 
     const markerPath = join(tempDir, '.bridge-active');
     expect(existsSync(markerPath)).toBe(true);
@@ -214,7 +215,7 @@ describe('createAristotleRole', () => {
   });
 
   it('should_remove_marker_on_SIGINT', async () => {
-    await createAristotleRole(ctx);
+    await createSut();
 
     const markerPath = join(tempDir, '.bridge-active');
     expect(existsSync(markerPath)).toBe(true);
@@ -225,7 +226,7 @@ describe('createAristotleRole', () => {
   });
 
   it('should_remove_marker_on_SIGHUP', async () => {
-    await createAristotleRole(ctx);
+    await createSut();
 
     const markerPath = join(tempDir, '.bridge-active');
     expect(existsSync(markerPath)).toBe(true);
@@ -239,7 +240,7 @@ describe('createAristotleRole', () => {
     const customDir = mkdtempSync(join(tmpdir(), 'aristotle-custom-'));
     ctx.config.aristotleBridge.sessionsDir = customDir;
 
-    await createAristotleRole(ctx);
+    await createSut();
 
     expect(mkdirSync).toHaveBeenCalledWith(customDir, { recursive: true });
 
@@ -247,7 +248,7 @@ describe('createAristotleRole', () => {
   });
 
   it('should_call_reconcileOnStartup_on_store', async () => {
-    await createAristotleRole(ctx);
+    await createSut();
 
     expect(mockStore.reconcileOnStartup).toHaveBeenCalledTimes(1);
     expect(mockStore.reconcileOnStartup).toHaveBeenCalledWith(ctx.client);
@@ -257,7 +258,7 @@ describe('createAristotleRole', () => {
     const active = { active: [{ workflow_id: 'wf-1', status: 'running', started_at: 1000 }] };
     mockStore.getActive.mockReturnValue(active);
 
-    const result = await createAristotleRole(ctx);
+    const result = await createSut();
     const toolResult = await result!.tools!.aristotle_check.execute({}, {});
 
     expect(mockStore.getActive).toHaveBeenCalledTimes(1);
@@ -268,7 +269,7 @@ describe('createAristotleRole', () => {
     const retrieved = { status: 'completed', result: 'done' };
     mockStore.retrieve.mockReturnValue(retrieved);
 
-    const result = await createAristotleRole(ctx);
+    const result = await createSut();
     const toolResult = await result!.tools!.aristotle_check.execute({ workflow_id: 'x' }, {});
 
     expect(mockStore.retrieve).toHaveBeenCalledTimes(1);
@@ -281,7 +282,7 @@ describe('createAristotleRole', () => {
     mockStore.findByWorkflowId.mockReturnValue({ status: 'running', sessionId: 's1' });
     ctx.client.session.abort = mockAbort;
 
-    const result = await createAristotleRole(ctx);
+    const result = await createSut();
     const toolResult = await result!.tools!.aristotle_abort.execute({ workflow_id: 'wf-1' }, {});
 
     expect(mockAbort).toHaveBeenCalledWith({ path: { id: 's1' } });
@@ -293,7 +294,7 @@ describe('createAristotleRole', () => {
   it('should_return_cancelled_for_already_cancelled_workflow', async () => {
     mockStore.findByWorkflowId.mockReturnValue({ status: 'cancelled', sessionId: 's1' });
 
-    const result = await createAristotleRole(ctx);
+    const result = await createSut();
     const toolResult = await result!.tools!.aristotle_abort.execute({ workflow_id: 'wf-1' }, {});
 
     expect(JSON.parse(toolResult)).toEqual({ status: 'cancelled', workflow_id: 'wf-1' });
@@ -303,7 +304,7 @@ describe('createAristotleRole', () => {
   it('should_return_current_status_for_completed_workflow', async () => {
     mockStore.findByWorkflowId.mockReturnValue({ status: 'completed', sessionId: 's1' });
 
-    const result = await createAristotleRole(ctx);
+    const result = await createSut();
     const toolResult = await result!.tools!.aristotle_abort.execute({ workflow_id: 'wf-1' }, {});
 
     expect(JSON.parse(toolResult)).toEqual({ status: 'completed', workflow_id: 'wf-1' });
@@ -313,7 +314,7 @@ describe('createAristotleRole', () => {
   it('should_return_current_status_for_error_workflow', async () => {
     mockStore.findByWorkflowId.mockReturnValue({ status: 'error', sessionId: 's1' });
 
-    const result = await createAristotleRole(ctx);
+    const result = await createSut();
     const toolResult = await result!.tools!.aristotle_abort.execute({ workflow_id: 'wf-1' }, {});
 
     expect(JSON.parse(toolResult)).toEqual({ status: 'error', workflow_id: 'wf-1' });
@@ -323,7 +324,7 @@ describe('createAristotleRole', () => {
   it('should_return_current_status_for_undone_workflow', async () => {
     mockStore.findByWorkflowId.mockReturnValue({ status: 'undone', sessionId: 's1' });
 
-    const result = await createAristotleRole(ctx);
+    const result = await createSut();
     const toolResult = await result!.tools!.aristotle_abort.execute({ workflow_id: 'wf-1' }, {});
 
     expect(JSON.parse(toolResult)).toEqual({ status: 'undone', workflow_id: 'wf-1' });
@@ -333,7 +334,7 @@ describe('createAristotleRole', () => {
   it('should_return_error_for_unknown_workflow_id', async () => {
     mockStore.findByWorkflowId.mockReturnValue(undefined);
 
-    const result = await createAristotleRole(ctx);
+    const result = await createSut();
     const toolResult = await result!.tools!.aristotle_abort.execute({ workflow_id: 'unknown' }, {});
 
     expect(JSON.parse(toolResult)).toEqual({ error: 'Workflow not found' });
@@ -345,7 +346,7 @@ describe('createAristotleRole', () => {
     mockStore.findByWorkflowId.mockReturnValue({ status: 'running', sessionId: 's1' });
     ctx.client.session.abort = mockAbort;
 
-    const result = await createAristotleRole(ctx);
+    const result = await createSut();
     const toolResult = await result!.tools!.aristotle_abort.execute({ workflow_id: 'wf-1' }, {});
 
     expect(mockStore.cancel).toHaveBeenCalledTimes(1);
@@ -356,8 +357,8 @@ describe('createAristotleRole', () => {
   it('should_default_target_session_id_to_tool_context_sessionID_when_empty', async () => {
     const toolContext = { sessionID: 'tool-ctx-session-1', messageID: 'm1', agent: 'primary' };
 
-    const result = await createAristotleRole(ctx);
-    await result!.tools!.aristotle_fire_o.execute({
+    const result = await createSut();
+    const toolResult = await result!.tools!.aristotle_fire_o.execute({
       workflow_id: 'wf_a1b2c3d4e5f67890',
       o_prompt: 'p',
     }, toolContext);
@@ -374,7 +375,7 @@ describe('createAristotleRole', () => {
   it('should_use_explicit_target_session_id_when_provided', async () => {
     const toolContext = { sessionID: 'tool-ctx-session-1', messageID: 'm1', agent: 'primary' };
 
-    const result = await createAristotleRole(ctx);
+    const result = await createSut();
     await result!.tools!.aristotle_fire_o.execute({
       workflow_id: 'wf_b2c3d4e5f67890a1',
       o_prompt: 'p',

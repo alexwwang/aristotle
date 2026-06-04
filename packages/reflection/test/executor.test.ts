@@ -1,31 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AristotleExecutor } from '../src/executor.js';
-import { SnapshotExtractor } from '../src/reflection/snapshot-extractor.js';
-import { AsyncTaskExecutor } from '@opencode-ai/core/executor';
 
-// Hoisted mock functions (shared across all mock instances)
-const mocks = vi.hoisted(() => ({
-  coreLaunch: vi.fn(),
-  snapshotExists: vi.fn(),
-  snapshotExtract: vi.fn(),
-  snapshotPath: vi.fn(),
-}));
+const { mocks, MockAsyncTaskExecutor } = vi.hoisted(() => {
+  const coreLaunch = vi.fn();
+  const snapshotExists = vi.fn();
+  const snapshotExtract = vi.fn();
+  const snapshotPath = vi.fn();
+  const mocks = { coreLaunch, snapshotExists, snapshotExtract, snapshotPath };
+  function MockAsyncTaskExecutor(this: any) { this.launch = coreLaunch; }
+  return { mocks, MockAsyncTaskExecutor };
+});
 
-// Mock core AsyncTaskExecutor — replace the class so `new AsyncTaskExecutor(client)`
-// returns an object whose `launch` method is our hoisted mock.
 vi.mock('@opencode-ai/core/executor', () => ({
-  AsyncTaskExecutor: function (this: any) {
-    this.launch = mocks.coreLaunch;
-  },
-}));
-
-// Mock local SnapshotExtractor — same pattern.
-vi.mock('../src/reflection/snapshot-extractor.js', () => ({
-  SnapshotExtractor: function (this: any) {
-    this.snapshotExists = mocks.snapshotExists;
-    this.extract = mocks.snapshotExtract;
-    this.snapshotPath = mocks.snapshotPath;
-  },
+  AsyncTaskExecutor: MockAsyncTaskExecutor,
 }));
 
 describe('AristotleExecutor', () => {
@@ -59,7 +46,7 @@ describe('AristotleExecutor', () => {
     executor = new AristotleExecutor(
       mockClient,
       mockStore,
-      new SnapshotExtractor(),
+      { snapshotExists: mocks.snapshotExists, extract: mocks.snapshotExtract, snapshotPath: mocks.snapshotPath } as any,
     );
   });
 

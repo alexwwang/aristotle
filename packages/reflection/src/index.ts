@@ -9,7 +9,14 @@ import { IdleEventHandler } from './idle-handler.js';
 import { createAristotleTools } from './tools.js';
 import { resolveConfig } from './config.js';
 
-export async function createAristotleRole(ctx: any): Promise<RoleRegistration | null> {
+export interface CreateAristotleRoleDeps {
+  store?: WorkflowStore;
+  executor?: AristotleExecutor;
+  idleHandler?: IdleEventHandler;
+  snapshotExtractor?: SnapshotExtractor;
+}
+
+export async function createAristotleRole(ctx: any, deps?: CreateAristotleRoleDeps): Promise<RoleRegistration | null> {
   // 1. API probe — if promptAsync is unavailable, return null
   if (typeof ctx?.client?.session?.promptAsync !== 'function') {
     return null;
@@ -45,12 +52,12 @@ export async function createAristotleRole(ctx: any): Promise<RoleRegistration | 
 
   // 4. Create components
   const instanceId = `${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
-  const store = new WorkflowStore(sessionsDir, instanceId);
+  const store = deps?.store ?? new WorkflowStore(sessionsDir, instanceId);
   await store.reconcileOnStartup(ctx.client);
 
-  const snapshotExtractor = new SnapshotExtractor(sessionsDir);
-  const executor = new AristotleExecutor(ctx.client, store, snapshotExtractor);
-  const idleHandler = new IdleEventHandler(ctx.client, store, executor, { sessionsDir, mcpDir: config.mcp_dir });
+  const snapshotExtractor = deps?.snapshotExtractor ?? new SnapshotExtractor(sessionsDir);
+  const executor = deps?.executor ?? new AristotleExecutor(ctx.client, store, snapshotExtractor);
+  const idleHandler = deps?.idleHandler ?? new IdleEventHandler(ctx.client, store, executor, { sessionsDir, mcpDir: config.mcp_dir });
 
   // 5. Create tools
   const tools = createAristotleTools({
