@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 from pathlib import Path
 
@@ -31,6 +32,23 @@ from aristotle_mcp._utils import (
     _unique_filename,
     _rejected_dir_for,
 )
+
+
+def _write_guard_audit(event: str, detail: str, **extra) -> None:
+    """Write a lightweight guard audit entry to .aristotle/audit.jsonl."""
+    try:
+        from aristotle_mcp._audit_log import append_audit_entry
+        append_audit_entry({
+            "tool": f"commit_guard:{event}",
+            "runId": extra.pop("run_id", "guard"),
+            "result": extra.pop("result", "success"),
+            "params": {
+                "detail": detail,
+                **extra,
+            },
+        })
+    except Exception:
+        pass
 
 
 def get_audit_decision(file_path: str) -> dict:
@@ -359,30 +377,83 @@ def stage_rule(file_path: str) -> dict:
     return {"success": True, "message": f"Rule staged: {path}"}
 
 
-def commit_rule(file_path: str, message: str | None = None) -> dict:
-    """Verify a rule and commit it to Git.
+def _validate_rule_schema(metadata: dict) -> str | None:
+    if not metadata.get("category"):
+        return "Missing required field: category"
+    confidence = metadata.get("confidence")
+    if confidence is None or not isinstance(confidence, (int, float)):
+        return f"Invalid confidence: {confidence!r}. Must be numeric 0.0-1.0"
+    if isinstance(confidence, bool):
+        return f"Invalid confidence: {confidence!r}. Must be numeric 0.0-1.0"
+    if confidence < 0.0 or confidence > 1.0:
+        return f"Invalid confidence: {confidence}. Must be between 0.0 and 1.0"
+    error_summary = metadata.get("error_summary")
+    if error_summary is not None and len(str(error_summary)) > 200:
+        return f"error_summary too long ({len(str(error_summary))} chars, max 200)"
+    return None
 
-    Updates status to "verified", sets verified_at timestamp and verified_by to "auto".
-    Then performs git add and commit.
 
-    Args:
-        file_path: Path to the rule file (relative to repo root or absolute)
-        message: Custom commit message (default: "rule: verify {rule_id}")
+def commit_rule(file_path: str, message: str | None = None, skip_guard: bool = False, enable_guard: bool = False) -> dict:
+    repo_path = resolve_repo_dir()
+    ci_forced = os.environ.get("ARISTOTLE_CI") == "true"
+    # Guard requires explicit enable_guard=True; CI enforcement also requires enable_guard opt-in
+    guard_active = (enable_guard and not skip_guard) or (ci_forced and enable_guard)
 
-    Returns dict with success, message, commit_hash.
-    """
     path, err = _safe_resolve(file_path)
     if err:
         return {**err, "commit_hash": None}
     if not path.exists():
+        _write_guard_audit("GUARD_BLOCK", f"File not found: {file_path}", result="error")
         return {
             "success": False,
             "message": f"File not found: {path}",
             "commit_hash": None,
         }
 
-    data = load_rule_file(path)
-    metadata = data["metadata"]
+    if guard_active:
+        try:
+            data = load_rule_file(path)
+        except Exception:
+            _write_guard_audit("GUARD_BLOCK", "Malformed frontmatter", file=str(path), result="error")
+            return {
+                "success": False,
+                "message": "Failed to parse rule file: malformed frontmatter",
+                "commit_hash": None,
+            }
+
+        metadata = data.get("metadata")
+        if metadata is None:
+            _write_guard_audit("GUARD_BLOCK", "No frontmatter found", file=str(path), result="error")
+            return {
+                "success": False,
+                "message": "No frontmatter found in rule file",
+                "commit_hash": None,
+            }
+
+        status = metadata.get("status")
+        if status != "staging":
+            _write_guard_audit("GUARD_BLOCK", f"Status is '{status}', expected 'staging'", file=str(path), result="error")
+            return {
+                "success": False,
+                "message": f"Rule status is '{status}', must be 'staging' to commit",
+                "commit_hash": None,
+            }
+
+        schema_error = _validate_rule_schema(metadata)
+        if schema_error:
+            _write_guard_audit("GUARD_BLOCK", schema_error, file=str(path), result="error")
+            return {
+                "success": False,
+                "message": schema_error,
+                "commit_hash": None,
+            }
+
+        _write_guard_audit("GUARD_PASS", "Validation passed", file=str(path), result="success")
+    else:
+        data = load_rule_file(path)
+        metadata = data.get("metadata", {})
+        _write_guard_audit("GUARD_BYPASSED", "skip_guard=True, CI not enforced", file=str(path), skip_guard=True)
+
     metadata["status"] = "verified"
     metadata["verified_at"] = _now_iso()
     metadata["verified_by"] = "auto"
@@ -395,7 +466,6 @@ def commit_rule(file_path: str, message: str | None = None) -> dict:
             "commit_hash": None,
         }
 
-    repo_path = resolve_repo_dir()
     try:
         rel_path = str(path.relative_to(repo_path))
     except ValueError:
@@ -405,7 +475,6 @@ def commit_rule(file_path: str, message: str | None = None) -> dict:
     commit_msg = message or f"rule: verify {rule_id}"
     commit_result = git_add_and_commit(repo_path, rel_path, commit_msg)
 
-    # Conflict detection and bidirectional annotation
     conflicts = detect_conflicts(file_path)
     if conflicts:
         fm = read_frontmatter_raw(path) or {}
@@ -417,11 +486,9 @@ def commit_rule(file_path: str, message: str | None = None) -> dict:
             write_rule_file(path, metadata, data["content"])
 
             for conflict_id in conflicts:
-                # Search by rule_id precisely, then filter exact match
                 existing = list_rules(keyword=conflict_id, limit=10)
                 for er in existing.get("rules", []):
                     er_meta = er.get("metadata", {})
-                    # Only update the rule whose id exactly matches conflict_id
                     if er_meta.get("id") != conflict_id:
                         continue
                     er_path = Path(er.get("path", ""))
@@ -441,7 +508,7 @@ def commit_rule(file_path: str, message: str | None = None) -> dict:
                         cw.append(new_id)
                         er_meta["conflicts_with"] = json.dumps(cw)
                         write_rule_file(er_path, er_meta, er_data["content"])
-                    break  # Found and updated the exact rule
+                    break
 
     return {
         "success": commit_result["success"],

@@ -1,5 +1,17 @@
 """MCP server test configuration. Inherits tmp_repo from parent conftest."""
 
+from __future__ import annotations
+
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def tmp_repo(tmp_path, monkeypatch):
+    """Redirect ARISTOTLE_REPO_DIR to a temp dir for every test."""
+    monkeypatch.setenv("ARISTOTLE_REPO_DIR", str(tmp_path))
+    return tmp_path
+
+
 try:
     from aristotle_mcp import server as _server
 

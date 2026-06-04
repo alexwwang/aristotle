@@ -230,7 +230,10 @@ export class PipelineStore {
     let entries = this.stateStore.readLogSafe<AuditLogEntry>(key)
     if (filter?.event !== undefined) entries = entries.filter(e => e.event === filter.event)
     if (filter?.severity !== undefined) entries = entries.filter(e => e.severity === filter.severity)
-    if (filter?.resolved !== undefined) entries = entries.filter(e => e.resolved === filter.resolved)
+    if (filter?.resolved !== undefined) {
+      // undefined resolved === semantically unresolved (never set)
+      entries = entries.filter(e => filter!.resolved! ? e.resolved === true : e.resolved !== true)
+    }
     entries.sort((a, b) => {
       const ts = b.timestamp.localeCompare(a.timestamp)
       if (ts !== 0) return ts

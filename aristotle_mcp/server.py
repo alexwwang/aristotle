@@ -12,6 +12,8 @@ from aristotle_mcp._orch_start import register_orch_start_tools
 from aristotle_mcp._orch_event import register_orch_event_tools
 from aristotle_mcp._orch_review import register_orch_review_tools
 from aristotle_mcp._tools_undo import register_undo_tools
+from aristotle_mcp._tools_rollback import register_rollback_tools
+from aristotle_mcp._tools_ki_doc import register_ki_doc_tools
 
 # Re-export all public symbols for backward compatibility (used by tests)
 from aristotle_mcp._utils import (  # noqa: F401
@@ -40,6 +42,15 @@ from aristotle_mcp._tools_reflection import (  # noqa: F401
     persist_draft,
     create_reflection_record,
     complete_reflection_record,
+)
+from aristotle_mcp._tools_rollback import (  # noqa: F401
+    create_rollback_point,
+    rollback_to_checkpoint,
+    cleanup_rollback_stashes,
+)
+from aristotle_mcp._tools_ki_doc import (  # noqa: F401
+    write_ki_doc,
+    read_ki_docs,
 )
 from aristotle_mcp._orch_start import orchestrate_start  # noqa: F401
 from aristotle_mcp._orch_event import orchestrate_on_event  # noqa: F401
@@ -72,6 +83,7 @@ from aristotle_mcp._orch_parsers import (  # noqa: F401
 
 # Re-export config symbols used by tests via _server.X access
 from aristotle_mcp.config import resolve_repo_dir  # noqa: F401
+from aristotle_mcp import types  # noqa: F401
 
 mcp = FastMCP("aristotle-mcp")
 
@@ -83,6 +95,8 @@ register_orch_start_tools(mcp)
 register_orch_event_tools(mcp)
 register_orch_review_tools(mcp)
 register_undo_tools(mcp)
+register_rollback_tools(mcp)
+register_ki_doc_tools(mcp)
 
 
 if __name__ == "__main__":

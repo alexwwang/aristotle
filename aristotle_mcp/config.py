@@ -60,6 +60,7 @@ GITIGNORE_CONTENT = """\
 *.signal
 .interaction/
 .workflows/
+.aristotle/audit.jsonl
 """
 
 REPO_DIR_STRUCTURE: tuple[str, ...] = (

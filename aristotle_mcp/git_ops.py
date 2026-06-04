@@ -4,6 +4,8 @@ import os
 import subprocess
 from pathlib import Path
 
+from aristotle_mcp.config import resolve_repo_dir  # noqa: F401 — re-export for backward compat
+
 
 def _run(repo_path: Path, args: list[str], env_extra: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()

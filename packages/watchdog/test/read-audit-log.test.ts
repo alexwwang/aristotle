@@ -253,6 +253,32 @@ describe('PipelineStore.readAuditLog', () => {
     expect(warnEntries).toHaveLength(2)
     expect(warnEntries.every(e => e.severity === 'warn')).toBe(true)
   })
+
+  it('F-03: resolved=false matches entries with undefined resolved', () => {
+    const entries = [
+      makeEntry({ timestamp: '2026-01-01T00:00:01.000Z' }),
+      makeEntry({ resolved: false, timestamp: '2026-01-01T00:00:02.000Z' }),
+      makeEntry({ resolved: true, timestamp: '2026-01-01T00:00:03.000Z' }),
+    ]
+    populateEntries(entries)
+    const result = store.readAuditLog('proj-1', 'run-001', { resolved: false })
+    expect(result).toHaveLength(2)
+    expect(result.every(e => e.resolved !== true)).toBe(true)
+  })
+
+  it('F-01: sort uses event as tiebreaker for same-timestamp entries', () => {
+    const entries = [
+      makeEntry({ event: 'COMMAND_FAILED', timestamp: '2026-01-01T00:00:01.000Z' }),
+      makeEntry({ event: 'INTERCEPT', timestamp: '2026-01-01T00:00:01.000Z' }),
+      makeEntry({ event: 'SYNTAX_ERROR_POST_WRITE', timestamp: '2026-01-01T00:00:01.000Z' }),
+    ]
+    populateEntries(entries)
+    const result = store.readAuditLog('proj-1', 'run-001')
+    expect(result).toHaveLength(3)
+    expect(result[0].event).toBe('SYNTAX_ERROR_POST_WRITE')
+    expect(result[1].event).toBe('INTERCEPT')
+    expect(result[2].event).toBe('COMMAND_FAILED')
+  })
 })
 
 // ------------------------------------------------------------------
@@ -310,5 +336,20 @@ describe('read_audit_log tool', () => {
       event: 'INTERCEPT',
       limit: 10,
     })
+  })
+
+  it('F-06: returns ok:false when projectId does not match worktree', async () => {
+    const mockHandler: any = { handle: () => Promise.resolve('{}') }
+    const mockStore: any = { readAuditLog: vi.fn(() => []) }
+    const tools = createWatchdogTools({ checkpointHandler: mockHandler, pipelineStore: mockStore })
+
+    const result = await tools.read_audit_log.execute!(
+      { projectId: 'wrong-id', runId: 'run-001' },
+      { worktree: '/tmp/test' },
+    )
+    const parsed = JSON.parse(result as string)
+    expect(parsed.ok).toBe(false)
+    expect(parsed.error).toContain('projectId mismatch')
+    expect(mockStore.readAuditLog).not.toHaveBeenCalled()
   })
 })
