@@ -1,11 +1,9 @@
 import os
-import sys
 import pytest
 import subprocess
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from intervention_coordinator import InterventionCoordinator, TDDViolationError
 from intervention_types import ViolationEvent, PipelineContext

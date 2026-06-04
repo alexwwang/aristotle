@@ -65,6 +65,7 @@ import type { LoopConfigResult } from './loop-config.js'
 
 export class CheckpointHandler {
   private articulationFailures = new Map<number, number>()
+  private readonly _applyTransition: typeof applyTransition
 
   constructor(
     private store: PipelineStore,
@@ -73,7 +74,10 @@ export class CheckpointHandler {
     private cache?: PipelineStateCache,
     private observer?: Observer,
     private logger?: Logger,
-  ) {}
+    transitionFn?: typeof applyTransition,
+  ) {
+    this._applyTransition = transitionFn ?? applyTransition
+  }
 
   /**
    * Process a checkpoint event. async for framework contract
@@ -490,7 +494,7 @@ export class CheckpointHandler {
     // ── 11. Apply transition (M3: defensive try/catch) ─────────────────
     let newState: PipelineState
     try {
-      newState = applyTransition(event, payload, currentState)
+      newState = this._applyTransition(event, payload, currentState)
     } catch (err) {
       this.logger?.error('applyTransition threw for event %s: %s', event, String(err))
       return JSON.stringify({

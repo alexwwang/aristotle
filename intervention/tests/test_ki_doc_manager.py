@@ -1,10 +1,8 @@
 import os
-import sys
 import pytest
 from unittest.mock import patch, MagicMock
 from pathlib import Path
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from ki_doc_manager import KiDocManager
 from intervention_types import (

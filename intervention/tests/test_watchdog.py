@@ -1,9 +1,7 @@
 """Tests for watchdog module and intervention coordinator."""
 import pytest
-import sys
 import os
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from watchdog import ViolationFilter
 from intervention_types import ViolationEvent, PipelineContext

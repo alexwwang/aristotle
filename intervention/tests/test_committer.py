@@ -1,7 +1,6 @@
 """Tests for committer module."""
 import pytest
 import sys
-sys.path.insert(0, "/workspace/auto-reflection-feature/src")
 from committer import AutoCommitter
 
 class TestAutoCommitter:

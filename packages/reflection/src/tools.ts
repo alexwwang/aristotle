@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 import type { ToolDefinition } from '@opencode-ai/core/plugin/registration';
 import type { WorkflowStore } from '@opencode-ai/core/store/workflow-store';
 

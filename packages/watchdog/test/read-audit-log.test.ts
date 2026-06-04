@@ -11,13 +11,10 @@ import type { StateStore } from '@opencode-ai/core/store/state-store'
 import type { Logger } from '@opencode-ai/core/logger'
 import type { AuditLogEntry } from '../src/schema.js'
 import { createWatchdogTools } from '../src/tools.js'
+import { computeProjectId } from '../src/project-id.js'
 
-// F-04: mock computeProjectId so test worktree '/tmp/test' maps to 'proj-1'
-vi.mock('../src/project-id.js', () => ({
-  computeProjectId: vi.fn((worktree: string) =>
-    worktree === '/tmp/test' ? 'proj-1' : `mock-${worktree}`,
-  ),
-}))
+const TEST_WORKTREE = '/tmp/test'
+const TEST_PROJECT_ID = computeProjectId(TEST_WORKTREE)
 
 // ------------------------------------------------------------------
 // Helpers
@@ -314,13 +311,13 @@ describe('read_audit_log tool', () => {
     const tools = createWatchdogTools({ checkpointHandler: mockHandler, pipelineStore: mockStore })
 
     const result = await tools.read_audit_log.execute!(
-      { projectId: 'proj-1', runId: 'run-001' },
-      { worktree: '/tmp/test' },
+      { projectId: TEST_PROJECT_ID, runId: 'run-001' },
+      { worktree: TEST_WORKTREE },
     )
     const parsed = JSON.parse(result as string)
     expect(parsed.ok).toBe(true)
     expect(parsed.entries).toHaveLength(1)
-    expect(mockStore.readAuditLog).toHaveBeenCalledWith('proj-1', 'run-001', undefined)
+    expect(mockStore.readAuditLog).toHaveBeenCalledWith(TEST_PROJECT_ID, 'run-001', undefined)
   })
 
   it('passes filter object to readAuditLog', async () => {
@@ -329,10 +326,10 @@ describe('read_audit_log tool', () => {
     const tools = createWatchdogTools({ checkpointHandler: mockHandler, pipelineStore: mockStore })
 
     await tools.read_audit_log.execute!(
-      { projectId: 'proj-1', runId: 'run-001', filter: { event: 'INTERCEPT', limit: 10 } },
-      { worktree: '/tmp/test' },
+      { projectId: TEST_PROJECT_ID, runId: 'run-001', filter: { event: 'INTERCEPT', limit: 10 } },
+      { worktree: TEST_WORKTREE },
     )
-    expect(mockStore.readAuditLog).toHaveBeenCalledWith('proj-1', 'run-001', {
+    expect(mockStore.readAuditLog).toHaveBeenCalledWith(TEST_PROJECT_ID, 'run-001', {
       event: 'INTERCEPT',
       limit: 10,
     })

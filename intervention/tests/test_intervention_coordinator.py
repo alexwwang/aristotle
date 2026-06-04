@@ -1,10 +1,8 @@
 import os
-import sys
 import pytest
 import time
 from unittest.mock import patch, MagicMock
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from intervention_coordinator import InterventionCoordinator, TDDViolationError
 from intervention_types import (
@@ -668,7 +666,7 @@ class TestPreRollbackCommit:
         with patch.object(coordinator, "commit_guard") as mock_cg, \
              patch.object(coordinator, "rollback_engine") as mock_re, \
              patch.object(coordinator, "ki_doc"), \
-             patch("subprocess.run") as mock_run:
+             patch("intervention_coordinator.subprocess.run") as mock_run:
             mock_cg.ensure_committed.return_value = MagicMock(success=True)
             mock_re.validate_path.return_value = True
             mock_re.rollback.return_value = RollbackResult(True, "ok")
@@ -683,7 +681,7 @@ class TestPreRollbackCommit:
         with patch.object(coordinator, "commit_guard") as mock_cg, \
              patch.object(coordinator, "rollback_engine") as mock_re, \
              patch.object(coordinator, "ki_doc"), \
-             patch("subprocess.run") as mock_run:
+             patch("intervention_coordinator.subprocess.run") as mock_run:
             mock_cg.ensure_committed.return_value = MagicMock(success=True)
             mock_re.validate_path.return_value = False
             mock_re.rollback.return_value = RollbackResult(True, "ok")

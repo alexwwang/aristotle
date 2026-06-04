@@ -1013,27 +1013,16 @@ describe('CheckpointHandler Phase 2', () => {
       expect(result.ok).toBe(true)
     })
 
-    // ── TC-I-14: ownerSessionId pre-write assertion fires on loss ───────────
+     // ── TC-I-14: ownerSessionId pre-write assertion fires on loss ───────────
     it('TC-I-14: ownerSessionId pre-write assertion fires on loss', async () => {
-      // TDD Red: This test should fail until pre-write assertion is implemented in checkpoint.ts
-
-      vi.resetModules()
-      vi.doMock('../src/transitions.js', async () => {
-        const actual = await vi.importActual('../src/transitions.js')
-        return {
-          ...actual,
-          applyTransition: vi.fn((event, payload, state) => {
-            const result = (actual as any).applyTransition(event, payload, state)
-            // Simulate a bug: drop ownerSessionId from the transition result
-            if (event !== 'pipeline_start' && state && (state as any).ownerSessionId) {
-              delete (result as any).ownerSessionId
-            }
-            return result
-          }),
+      const buggyApplyTransition = (event: any, payload: any, state: any) => {
+        const result = applyTransition(event, payload, state)
+        // Simulate a bug: drop ownerSessionId from the transition result
+        if (event !== 'pipeline_start' && state && state.ownerSessionId) {
+          delete (result as any).ownerSessionId
         }
-      })
-
-      const { CheckpointHandler: MockedHandler } = await import('../src/checkpoint.js')
+        return result
+      }
 
       const localStore = createMockStore()
       const localCache = createMockCache()
@@ -1047,7 +1036,7 @@ describe('CheckpointHandler Phase 2', () => {
       localStore.readState.mockImplementation((pid: string, rid: string) => states.get(`${pid}/${rid}`) ?? null)
       localStore.writeState.mockImplementation((pid: string, rid: string, state: any) => states.set(`${pid}/${rid}`, state))
 
-      const localHandler = new MockedHandler(localStore as any, STALE_THRESHOLD_MS, undefined, localCache as any, localObserver as any)
+      const localHandler = new CheckpointHandler(localStore as any, STALE_THRESHOLD_MS, undefined, localCache as any, localObserver as any, undefined, buggyApplyTransition)
 
       // Owner creates pipeline
       const ownerCtx = { worktree: WORKTREE, sessionID: 'sess-owner' }
@@ -1071,7 +1060,7 @@ describe('CheckpointHandler Phase 2', () => {
       // Clear writeState calls from setup
       localStore.writeState.mockClear()
 
-      // Call phase_enter — the mocked applyTransition will drop ownerSessionId
+      // Call phase_enter — the buggy transition will drop ownerSessionId
       await expect(localHandler.handle(
         'phase_enter',
         JSON.stringify({ phase: 2 }),

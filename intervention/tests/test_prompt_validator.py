@@ -1,8 +1,6 @@
 import os
-import sys
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from prompt_validator import PromptValidator
 from intervention_types import ValidationResult, PatternMatch

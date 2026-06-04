@@ -1,6 +1,5 @@
 import pytest
 import sys
-sys.path.insert(0, "/workspace/auto-reflection-feature/src")
 from reflector import AutoReflector
 from watchdog import ViolationEvent
 

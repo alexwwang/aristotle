@@ -4,7 +4,7 @@
  * Follows the same pattern as packages/reflection/src/tools.ts.
  * Defines the `tdd_checkpoint` tool that the LLM calls during tdd-pipeline execution.
  */
-import { z } from 'zod'
+import * as z from 'zod'
 import type { ToolDefinition } from '@opencode-ai/core/plugin/registration'
 import type { CheckpointHandler } from './checkpoint.js'
 import type { PipelineStore } from './pipeline-store.js'
