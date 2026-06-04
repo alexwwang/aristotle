@@ -1,5 +1,4 @@
 import pytest
-import sys
 from rule_generator import RuleGenerator
 from watchdog import ViolationEvent
 

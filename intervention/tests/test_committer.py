@@ -1,6 +1,5 @@
 """Tests for committer module."""
 import pytest
-import sys
 from committer import AutoCommitter
 
 class TestAutoCommitter:

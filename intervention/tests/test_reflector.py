@@ -1,5 +1,4 @@
 import pytest
-import sys
 from reflector import AutoReflector
 from watchdog import ViolationEvent
 
