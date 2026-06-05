@@ -60,7 +60,7 @@
 | Git 回滚安全 | 仅计 `aristotle-rollback:` 前缀 stash；stash 失败阻止 rollback；untracked >100MB 返回警告；warning≥5 告警，hard≥10 阻止 |
 | PipelineState 一致性 | rollback_to_checkpoint 返回 pipeline_reset_required=true → Watchdog 自动调用 tdd_checkpoint('pipeline_reset')；fallback：MCP handler 直接触发；最终兜底：下次 pipeline_start 重置 |
 | 双审计日志 | aristotle_mcp 写 `.aristotle/audit.jsonl`（McpAuditEntry），Watchdog 写现有审计日志，通过 runId 关联。append-only JSONL，4KB/行限，500 字符截断，init_repo 时加 .gitignore |
-| commit_rule 行为变更 | 合并后增加守卫检查：staging 状态 + frontmatter schema 校验。skip_guard 参数可绕过（CI 环境 ARISTOTLE_CI=true 时禁用 skip_guard） |
+| commit_rule 行为变更 | 合并后增加守卫检查：staging 状态 + frontmatter schema 校验。守卫为 opt-in（需 enable_guard=True），skip_guard 可绕过（CI 环境 ARISTOTLE_CI=true 时需同时 enable_guard=True） |
 | RollbackEngine 简化 | 不保留 _delete_implementation/_restore_test violation-specific 策略，仅通用 git reset --hard |
 
 ## 验收标准
