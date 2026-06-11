@@ -38,14 +38,14 @@
 
 | # | Priority | AC | Test Type | Test File | Test Name | Description |
 |---|----------|----|-----------|-----------|-----------|-------------|
-| 1 | Core | AC-1 | Integration | test_integration.py | `should_perform_full_lifecycle_e2e_flow` | create_rollback_point → write_ki_doc → commit_rule with guard → rollback_to_checkpoint (verify pipeline_reset_required=true) → cleanup_rollback_stashes |
+| 1 | Core | AC-1 | Integration | test_integration.py | `should_perform_full_lifecycle_e2e_flow` | create_rollback_point → write_ki_doc (entry_type='intervention') → commit_rule with guard (enable_guard=True) → rollback_to_checkpoint (verify pipeline_reset_required=true) → cleanup_rollback_stashes |
 | 2 | Core | AC-2 | Integration | test_integration.py | `should_verify_existing_test_suite_passes_post_migration` | Run pytest on existing test suite after merge; all tests pass (AC-2 execution gate) |
 | 3 | Core | AC-1 | Unit | test_integration.py | `should_import_all_5_new_tools_successfully` | All new tools import without errors |
-| 4 | Core | AC-1 | Unit | test_integration.py | `should_import_migrated_type_definitions` | All types from deleted intervention_types.py importable from new locations: ViolationEvent, RollbackResult, PipelineContext, InterventionRecord, PhaseState (from aristotle_mcp._tools_rollback or aristotle_mcp._tools_ki_doc). **Complete type list**: Phase 4 implementation MUST read `intervention/src/intervention_types.py` exports and verify 1:1 coverage. The 5 types listed are the minimum known set; additional types discovered during Phase 4 must be added to this test. |
+| 4 | Core | AC-1 | Unit | test_integration.py | `should_import_migrated_type_definitions` | All types from deleted intervention_types.py importable from new locations. **Complete type list** (from `intervention_types.__all__`): ViolationEvent, InterventionPlan, RollbackResult, CommitResult, PatternMatch, ValidationResult, TestResult, PipelineContext, InterventionResult (9 dataclasses) + BEHAVIORAL_VIOLATIONS, VIOLATION_PRIORITY (2 constants) = 11 total exports. |
 | 5 | Core | AC-3 | Integration | test_integration.py | `should_verify_intervention_directory_deleted` | intervention/ directory does not exist |
 | 6 | Core | AC-3 | Integration | test_integration.py | `should_fail_to_import_deleted_intervention_modules` | Importing deleted modules raises ImportError |
 | 7 | Core | AC-3 | Integration | test_integration.py | `should_verify_all_10_deleted_files_absent` | All 10 intervention files deleted from file system |
-| 8 | Core | AC-4 | Integration | test_integration.py | `should_assert_mcp_tool_count_equals_27` | assert count equals 27 (22 existing aristotle_* + 5 new) |
+| 8 | Core | AC-4 | Integration | test_integration.py | `should_assert_mcp_tool_count_equals_27` | Assert Python MCP server tool count equals 25 (20 existing + 5 new). Full runtime tool count (including TS Plugin) = 27. Test #8 asserts against `mcp._tool_manager._tools` for Python MCP server count. |
 | 9 | Core | AC-4 | Integration | test_integration.py | `should_register_tools_after_init_repo` | All 27 tools available after init_repo (22 existing + 5 new) |
 | 10 | Core | AC-5 | Unit | test_integration.py | `should_execute_tools_without_prior_session_state` | Fresh repo execution works without pre-existing state |
 | 11 | Core | AC-5 | Unit | test_integration.py | `should_verify_no_session_state_dependency_in_tools` | Tools don't store session_id across calls. Stateless verification per tool: create_rollback_point (no session state), rollback_to_checkpoint (reads from git stash, no session state), cleanup_rollback_stashes (reads stash list, no session state), write_ki_doc (writes to filesystem, no session state), read_ki_docs (reads from filesystem, no session state) |
@@ -99,35 +99,37 @@
 - **AC-2 execution gate**: AC-2 is an execution gate — Phase 3 test plan treats it as a dependency, not a test target. The integration test #2 validates the gate passes.
 - **Preserved modules for AC-8 verification**: RollbackEngine (validate_path), KiDocManager (record_intervention, ensure_assessment, ensure_updated, record_merge), CommitGuard (ensure_committed → inline in commit_rule), AutoCommitter (validate_schema → inline in commit_rule). Interface docs = public docstrings on all public methods. Verify via: [m.__doc__ is not None for m in preserved_module_public_methods].
   - **Note**: CommitGuard and AutoCommitter inline references are for context only; actual classes are defined in commit-guard.md module.
-- **27 tool names** (22 existing aristotle_* + 5 new): Concrete tool names from aristotle_mcp tool registration:
-  1. aristotle_abort
-  2. aristotle_check
-  3. aristotle_check_sync_status
-  4. aristotle_commit_rule
-  5. aristotle_complete_reflection_record
-  6. aristotle_create_reflection_record
-  7. aristotle_detect_conflicts
-  8. aristotle_fire_o
-  9. aristotle_get_audit_decision
-  10. aristotle_init_repo_tool
-  11. aristotle_list_rules
-  12. aristotle_on_undo
-  13. aristotle_orchestrate_on_event
-  14. aristotle_orchestrate_review_action
-  15. aristotle_orchestrate_start
-  16. aristotle_persist_draft
-  17. aristotle_read_rules
-  18. aristotle_reject_rule
-  19. aristotle_restore_rule
-  20. aristotle_stage_rule
-  21. aristotle_sync_rules
-  22. aristotle_write_rule
-  23. create_rollback_point
-  24. rollback_to_checkpoint
-  25. cleanup_rollback_stashes
-  26. write_ki_doc
-  27. read_ki_docs
-  (Note: actual count will be verified during Phase 4 execution)
+- **27 tool names** (25 Python MCP + 2 TS Plugin reflected in runtime): Concrete tool names from runtime tool registry:
+  - **Python MCP server** (25 tools: 20 existing + 5 new):
+   1. aristotle_check_sync_status
+   2. aristotle_commit_rule
+   3. aristotle_complete_reflection_record
+   4. aristotle_create_reflection_record
+   5. aristotle_detect_conflicts
+   6. aristotle_get_audit_decision
+   7. aristotle_init_repo_tool
+   8. aristotle_list_rules
+   9. aristotle_on_undo
+   10. aristotle_orchestrate_on_event
+   11. aristotle_orchestrate_review_action
+   12. aristotle_orchestrate_start
+   13. aristotle_persist_draft
+   14. aristotle_read_rules
+   15. aristotle_reject_rule
+   16. aristotle_report_feedback
+   17. aristotle_restore_rule
+   18. aristotle_stage_rule
+   19. aristotle_sync_rules
+   20. aristotle_write_rule
+   21. create_rollback_point
+   22. rollback_to_checkpoint
+   23. cleanup_rollback_stashes
+   24. write_ki_doc
+   25. read_ki_docs
+  - **TypeScript Plugin** (2 additional tools in runtime, NOT in Python MCP server):
+   26. aristotle_abort
+   27. aristotle_fire_o
+  - **Note**: aristotle_check is also a TS Plugin tool but was decomposed into aristotle_check_sync_status + other checks. The runtime 27 count includes all tools visible to the agent (25 Python + 2 TS). Test #8 should assert against `mcp._tool_manager._tools` count of 25 for the Python MCP server; the full 27 count is verified by the runtime integration test.
 - **Bilingual forbidden patterns for AC-6**: English patterns: ["total N issues so far", "Round N of M", "all issues resolved", "you may stop"]. Chinese patterns: ["累计N个问题", "第N轮", "已全部修复", "可提前结束"].
   - **Note**: These patterns are representative, not exhaustive. Additional patterns may be discovered during Phase 4 implementation.
 - **Import verification**: Import tests (#3, #4) implicitly verify callability through behavior tests (#16, #17). Successful import + functional test execution confirms both importability and callability.

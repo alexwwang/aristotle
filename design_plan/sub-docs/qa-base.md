@@ -197,7 +197,7 @@ CheckpointEvent 联合类型（含 Phase 1/4 扩展）：
 // ⚠️ 审计条目数量：resolve_timeout 产生两条审计条目——(1) 标准审计条目（event='resolve_timeout', decision='PASS'）由 CheckpointHandler L393 模式自动写入，(2) TIMEOUT_RESOLVED 由 I/O 层显式写入。两条条目共存，前者记录事件发生，后者记录语义恢复。force_resolve_violation 同理（标准条目 + FORCE_RESOLVED）。若需抑制标准条目，CheckpointHandler 需特殊处理跳过 L393 appendAudit。
     - `force_resolve_violation` applyTransition：action（纯状态变更）= 无 PipelineState 字段变更。I/O 操作（resolveViolations 标记指定类型 block 级违规为 resolved + 记录 force_resolved_reason）在 CheckpointHandler.handle() 中执行。
   - ⚠️ ownerSessionId 为 optional 字段 (schema.ts L49 `string | undefined`)。若 ownerSessionId 为 undefined（pipeline run 无 owner），force_resolve_violation 被拒绝。确保 pipeline_start 时始终设置 ownerSessionId。
-- **Phase 4 CheckpointEvent 扩展（类型占位）**：`pipeline_reset` — 用于回滚后重置 PipelineState。payload 需含 `checkpoint_hash: string`（必填）；precondition：state 存在；action：重置 PipelineState（phase→0, phaseStatus→idle, round→0, observerTimeoutCount→0, auditEntryCount→0）。详见 §3.4.1。
+- **Phase 4 CheckpointEvent 扩展（类型占位）**：`pipeline_reset` — 用于回滚后重置 PipelineState。payload 需含 `checkpoint_hash: string`（必填）；precondition：state 存在；action：重置 PipelineState（phase→1, phaseStatus→idle, round→0, observerTimeoutCount→0, auditEntryCount→0）。注：phase→1 而非 phase→0，因为 phase=0 是 pre-init 哨兵值。详见 §3.4.1。
 
 ##### CheckpointGateResult
 

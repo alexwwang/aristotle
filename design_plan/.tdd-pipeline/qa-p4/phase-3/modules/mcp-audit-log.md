@@ -32,7 +32,7 @@
 | # | Priority | AC | Test Type | Test File | Test Name | Description |
 |---|----------|----|-----------|-----------|-----------|-------------|
 | 1 | Core | AC-9 | Unit | test_mcp_audit_log.py | `should_append_entry_to_jsonl` | Valid entry appended, readable as JSON |
-| 2 | Core | AC-9 | Unit | test_mcp_audit_log.py | `should_enforce_4kb_line_limit` | Entry >4KB truncated with flag |
+| 2 | Core | AC-9 | Unit | test_mcp_audit_log.py | `should_enforce_4kb_line_limit` | Entry >4KB truncated with flag. **Post-condition**: verify actual output line in audit.jsonl is ≤4096 bytes after truncation (len(line.encode('utf-8')) <= 4096). |
 | 3 | Core | AC-9 | Unit | test_mcp_audit_log.py | `should_truncate_error_field_at_500_chars` | `error` field capped at 500 chars. Note: ERROR_SUMMARY_TRUNCATION constant applies to the McpAuditEntry `error` field (§3.0.7 schema field name). The constant name and spec text ("error_summary 截断") use legacy naming from pre-merge frontmatter; the actual schema field is `error`. This naming is preserved for backward compatibility and documented here to prevent confusion. |
 | 4 | Core | AC-9 | Integration | test_mcp_audit_log.py | `should_add_audit_jsonl_to_gitignore_on_init` | init_repo creates .gitignore entry |
 | 5 | Core | AC-9 | Unit | test_mcp_audit_log.py | `should_validate_mcp_audit_entry_fields` | Required fields (timestamp, tool, params, result, runId) always present and typed. Optional fields (error, truncated) present when applicable. |

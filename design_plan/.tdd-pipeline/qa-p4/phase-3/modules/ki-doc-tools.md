@@ -28,6 +28,7 @@
 | # | Peripheral Functional Point | Source | Test Cases |
 |---|----------------------------|--------|------------|
 | 1 | Default header `# Review Records` | _DEFAULT_HEADER | header present on new doc |
+| 2 | Path validation (`_validate_ki_path`) | Security | path traversal (`..`) rejected, absolute path outside repo rejected, symlinks escaping repo rejected. **Covered by tests #27-29** |
 
 ## Requirements Coverage Matrix (Phase 1 → Tests)
 
@@ -41,28 +42,33 @@
 | 4.1 | Core | AC-1 | Unit | test_mcp_ki_doc.py | `should_return_empty_list_for_nonexistent_ki_doc` | read_ki_docs on nonexistent file returns empty list (no error) |
 | 5 | Core | AC-1 | Unit | test_mcp_ki_doc.py | `should_read_ki_docs_with_filter` | read_ki_docs filters by type/phase. Tests single-field filters AND multi-field AND-combination (e.g., `{type: 'intervention', phase: 4}`) |
 | 5.1 | Core | AC-1 | Unit | test_mcp_ki_doc.py | `should_filter_ki_docs_by_since_timestamp` | Filter `{since: '2026-06-02T12:00:00+08:00'}` excludes entries before timestamp, includes entries at/after |
+| 5.2 | Core | AC-1 | Unit | test_mcp_ki_doc.py | `should_filter_ki_docs_by_violation_type` | Filter `{violation_type: 'SKIP_RED_PHASE'}` returns only matching intervention entries. Also test AND-combination including violation_type (e.g., `{type: 'intervention', violation_type: 'SKIP_RED_PHASE'}`). |
 | 6 | Core | AC-1 | Unit | test_mcp_ki_doc.py | `should_check_freshness` | read_ki_docs returns freshness status via ensure_updated logic. Tests both fresh (True) and stale (False) outcomes. **Freshness threshold**: KI_FRESHNESS_THRESHOLD = 24 hours (86400 seconds). A doc is stale when `(now - newest_timestamp) > KI_FRESHNESS_THRESHOLD`. |
 | 6.1 | Core | AC-1 | Unit | test_mcp_ki_doc.py | `should_return_stale_when_doc_is_old` | Existing doc with parseable timestamp older than KI_FRESHNESS_THRESHOLD (24h) → ensure_updated returns False |
+| 6.2 | Core | AC-1 | Unit | test_mcp_ki_doc.py | `should_return_stale_at_exact_freshness_threshold` | Doc with timestamp exactly KI_FRESHNESS_THRESHOLD (86400s) seconds old → `{"fresh": False}`. Implementation uses strict `<`, so `age == threshold` is stale (not fresh). |
 | 7 | Core | AC-8 | Unit | test_mcp_ki_doc.py | `should_create_doc_with_header_if_missing` | Auto-creates file with # Review Records header |
 | 8 | Core | AC-1 | Unit | test_mcp_ki_doc.py | `should_create_parent_directory_if_missing` | mkdir -p on write |
 | 9 | Core | AC-1 | Unit | test_mcp_ki_doc.py | `should_return_success_on_write` | write_ki_doc returns success dict |
-| 10 | Core | AC-1 | Unit | test_mcp_ki_doc.py | `should_return_none_on_io_error` | IOError during write returns {"success": false, "error": "I/O error: ..."} |
+| 10 | Core | AC-1 | Unit | test_mcp_ki_doc.py | `should_return_error_dict_on_io_error` | IOError during write returns {"success": false, "error": "I/O error: ..."}. **Note**: existing test file has name `test_should_return_none_on_io_error` — should be renamed to match plan. |
 | 11 | Core | AC-1 | Unit | test_mcp_ki_doc.py | `should_parse_newest_timestamp` | _parse_newest_timestamp extracts latest ISO timestamp |
 | 12 | Core | AC-1 | Unit | test_mcp_ki_doc.py | `should_treat_nonexistent_doc_as_fresh` | ensure_updated returns True for missing file. Note: This is by design—no prior assessment data means no staleness concern, treated as fresh. A missing file during assessment is a valid "no prior data" state and does NOT mask errors. |
 | 13 | Core | AC-1 | Integration | test_mcp_ki_doc.py | `should_round_trip_write_and_read` | Write entry → read back → content matches |
 | 14 | Core | AC-1 | Unit | test_mcp_ki_doc.py | `should_include_rollback_info_in_intervention` | rollback_result fields in entry |
 | 15 | Core | AC-1 | Unit | test_mcp_ki_doc.py | `should_include_forbidden_patterns_in_intervention` | validation_result matches in entry |
-| 16 | Core | AC-9 | Unit | test_mcp_ki_doc.py | `should_write_audit_entry_on_ki_doc_write` | write_ki_doc writes McpAuditEntry |
-| 17 | Core | AC-9 | Unit | test_mcp_ki_doc.py | `should_write_audit_entry_on_ki_doc_read` | read_ki_docs writes McpAuditEntry |
+| 16 | Core | AC-9 | Unit | test_mcp_ki_doc.py | `should_write_audit_entry_on_ki_doc_write` | write_ki_doc writes McpAuditEntry. **Schema**: assert entry fields per §3.0.7 — timestamp valid ISO 8601, tool=='write_ki_doc', result=='success', runId present (string), params present (dict). |
+| 17 | Core | AC-9 | Unit | test_mcp_ki_doc.py | `should_write_audit_entry_on_ki_doc_read` | read_ki_docs writes McpAuditEntry. **Schema**: assert entry fields per §3.0.7 — timestamp valid ISO 8601, tool=='read_ki_docs', result=='success', runId present (string), params present (dict). **Note**: `freshness_check=True` path returns early and does NOT write audit entry — test #17 asserts on normal read path only. |
 | 18 | Core | AC-1 | Unit | test_mcp_ki_doc.py | `should_handle_empty_events_list_in_merge_entry` | write_ki_doc with empty ViolationEvents list produces valid entry |
-| 19 | Medium | AC-1 | Unit | test_mcp_ki_doc.py | `should_reject_invalid_entry_type` | write_ki_doc with entry_type='invalid_type' returns validation error, only intervention/assessment/merge accepted |
+| 19 | Medium | AC-1 | Unit | test_mcp_ki_doc.py | `should_reject_invalid_entry_type` | write_ki_doc with entry_type='invalid_type' raises ValueError (implementation raises, tests use pytest.raises) — only intervention/assessment/merge accepted |
 | 20 | Medium | AC-1 | Unit | test_mcp_ki_doc.py | `should_treat_malformed_doc_as_fresh` | When file exists but has no parseable timestamps, ensure_updated returns True (treat as fresh/unknown state) |
 | 21 | Medium | AC-1 | Unit | test_mcp_ki_doc.py | `should_handle_large_violation_list_in_merge_entry` | Verify performance and correctness with 100+ ViolationEvents |
 | 22 | Medium | AC-1 | Unit | test_mcp_ki_doc.py | `should_handle_non_utf8_content_gracefully` | Verify read_ki_docs returns appropriate error for non-decodable content |
 | 23 | Medium | AC-1 | Unit | test_mcp_ki_doc.py | `should_return_empty_list_when_filter_matches_no_entries` | Filter with no matching entries returns empty list without errors |
-| 24 | Medium | AC-1 | Unit | test_mcp_ki_doc.py | `should_reject_entry_with_missing_required_fields` | Validates and rejects malformed entries with missing required fields |
-| 25 | Medium | AC-1 | Unit | test_mcp_ki_doc.py | `should_append_to_corrupted_file` | Attempting to append to a file with corrupted existing content returns `{success: false, error: "corrupted file: unable to parse existing content"}` without modifying the file |
-| 26 | Medium | AC-1 | Unit | test_mcp_ki_doc.py | `should_handle_non_utf8_encodable_content` | write_ki_doc with content containing surrogate characters raises encoding error gracefully |
+| 24 | Medium | AC-1 | Unit | test_mcp_ki_doc.py | `should_reject_entry_with_missing_required_fields` | Validates and rejects malformed entries with missing required fields — raises ValueError (implementation raises, tests use pytest.raises) |
+| 25 | Medium | AC-1 | Unit | test_mcp_ki_doc.py | `should_gracefully_handle_corrupted_file` | write_ki_doc to file with corrupted existing content uses graceful fallback: decodes with `errors="replace"`, prepends KI_HEADER if missing, then appends entry. Returns `{success: true}`. Implementation never rejects — corrupted bytes are replaced, not rejected. |
+| 26 | Medium | AC-1 | Unit | test_mcp_ki_doc.py | `should_handle_non_utf8_encodable_content` | write_ki_doc with content containing surrogate characters: implementation silently replaces non-encodable characters (errors="replace") and returns {success: True} |
+| 27 | Core | AC-1 | Unit | test_mcp_ki_doc.py | `should_reject_path_traversal_in_ki_doc_path` | write_ki_doc and read_ki_docs with ki_doc_path containing `..` traversal returns security error |
+| 28 | Core | AC-1 | Unit | test_mcp_ki_doc.py | `should_reject_absolute_path_outside_repo` | ki_doc_path pointing outside repo directory returns security error |
+| 29 | Core | AC-1 | Unit | test_mcp_ki_doc.py | `should_reject_symlink_escape_in_ki_doc_path` | ki_doc_path with symlink pointing outside repo returns security error |
 
 ## Design Coverage Matrix (Phase 2 → Tests)
 

@@ -54,7 +54,7 @@ change: "Initial QA-P4 Phase 3 Test Plan — index.md"
 | STASH_HARD_LIMIT | 10 | rollback-tools |
 | STASH_CLEANUP_KEEP | 3 | rollback-tools |
 | UNTRACKED_FILES_THRESHOLD | 100MB | rollback-tools |
-| MCP_TOOL_COUNT_POST_MERGE | 27 | integration | Post-merge count: 22 existing + 5 new. Note: Phase 1 spec §3.0.8 originally specified MCP_TOOL_COUNT_POST_MERGE=25 as a pre-implementation estimate. Updated to 27 after implementation verification. **Spec reconciliation needed**: 01-interfaces.md §3.0.8 should update MCP_TOOL_COUNT_CURRENT=22 and MCP_TOOL_COUNT_POST_MERGE=27 during Phase 4. |
+| MCP_TOOL_COUNT_POST_MERGE | 27 | integration | Post-merge count: 25 Python MCP tools (20 existing + 5 new) + 2 TypeScript Plugin tools (aristotle_abort, aristotle_fire_o). Note: Phase 1 spec §3.0.8 originally specified MCP_TOOL_COUNT_POST_MERGE=25 as a pre-implementation estimate. Updated to 27 after implementation verification to include all runtime tools. **Spec updated**: 01-interfaces.md §3.0.8 now reads MCP_TOOL_COUNT_POST_MERGE=27. |
 
 **Note**: P3 constants (SCHEMA_VERSION_TARGET, SEV_ORDER, VALID_SEVERITIES) are out of scope for Phase 4 test plan — they are tested in Phase 3 test suite.
 

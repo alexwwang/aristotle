@@ -591,7 +591,7 @@ phase: 0,       // ⚠️ 哨兵值说明：phase=0 表示 pipeline 未启动（
 
 ### [KI-141] `performance` | [05-phase4-merge.md] §3.4 L1383
 
-**⚠️ `pipeline_reset` CheckpointEvent 前向引用**：`pipeline_reset` 为 Phase 4 新增的 CheckpointEvent，用于回滚后重置 PipelineState（phase→0, phaseStatus→idle, round→0, observerTimeoutCount→0, auditEntryCount→0）。具体 payload 和 transition 逻辑在 Phase 4 实现时定义。当前文档在 CheckpointEvent 扩展列表中以 blockquote 注释「Phase 4」标注占位。
+**⚠️ `pipeline_reset` CheckpointEvent 前向引用**：`pipeline_reset` 为 Phase 4 新增的 CheckpointEvent，用于回滚后重置 PipelineState（phase→1, phaseStatus→idle, round→0, observerTimeoutCount→0, auditEntryCount→0）。注：phase→1 而非 phase→0，因为 TDD pipeline phase 编号从 1 开始（phase=0 是 pre-init 哨兵值）。具体 payload 和 transition 逻辑在 Phase 4 实现时定义。当前文档在 CheckpointEvent 扩展列表中以 blockquote 注释「Phase 4」标注占位。
 
 ### [KI-142] `limitation` | [05-phase4-merge.md] §3.4 L1413
 
@@ -756,3 +756,57 @@ Line 363: `if (typeof content !== 'string' || !content) return` — the ternary 
 `appendObservation` (L301-311) appends without size check. Audit logs have `MAX_AUDIT_ENTRIES=5000` (unused, see KI-168) but observation logs have no equivalent. Practical impact: ~300 entries per ralph loop run (20 rounds × ~5 Task calls × ~3 observations). Archived on `archiveRun`, so unbounded growth requires a stuck/never-completing pipeline.
 
 **3-round evaluation (R4)**: No upgrade needed. Archived on completion, practical limit bounded.
+
+---
+
+## §3.4 — Phase 4 Test Plan Review (Phase 3 Review Loop)
+
+*Added: 2026-06-11*
+
+### [KI-171] `limitation` | [mcp-audit-log] `.aristotle/` exists as file, not directory
+
+**Severity**: M | **Deferred to**: Phase 4 implementation
+
+If `.aristotle/` exists as a regular file (not directory), `append_audit_entry` will fail when trying to `mkdir(parents=True)`. Not covered in test plan. Suggested test: `should_reject_when_aristotle_is_file_not_directory`.
+
+### [KI-172] `limitation` | [mcp-audit-log] JSONL file grows unbounded
+
+**Severity**: L | **Deferred to**: Future phase
+
+No rotation mechanism or size cap for `.aristotle/audit.jsonl`. If file size becomes a concern, add `MAX_AUDIT_JSONL_FILE_SIZE` constant and rotation logic.
+
+### [KI-173] `limitation` | [rollback-tools] Concurrent stash cleanup race
+
+**Severity**: L | **Status**: Accepted (single-agent, ADR-007)
+
+Two simultaneous `cleanup_rollback_stashes(keep=3)` calls could race between listing and dropping stashes. Single-agent per ADR-007 makes this extremely unlikely. If multi-agent support added, append-during-read atomicity must be addressed.
+
+### [KI-174] `limitation` | [ki-doc-tools] KI doc unbounded file growth
+
+**Severity**: L | **Deferred to**: Future phase
+
+KI doc is append-only with no entry cap or rotation. A 1000-entry merge followed by 500 interventions creates a very large file. No test for performance degradation at scale.
+
+### [KI-175] `limitation` | [ki-doc-tools] BOM-prefixed KI doc header detection
+
+**Severity**: L | **Deferred to**: Phase 4 implementation
+
+BOM-prefixed file (`\xef\xbb\xbf`) at start would break `content.startswith("# Review Records")` header check. Suggested test: write file with UTF-8 BOM, then `read_ki_docs`.
+
+### [KI-176] `limitation` | [commit-guard] Git index.lock conflict
+
+**Severity**: L | **Deferred to**: Phase 4 implementation
+
+If git is locked by another process, `commit_rule` does `git add && commit` — no test for `fatal: Unable to create '.git/index.lock'`. Suggested test: create `.git/index.lock`, then call `commit_rule`.
+
+### [KI-177] `limitation` | [integration] Stale `.bridge-active` PID
+
+**Severity**: L | **Deferred to**: Phase 4 implementation
+
+If `.bridge-active` marker exists with a PID that no longer exists (crashed previous session), `use_bridge` still returns True. Suggested test: write `.bridge-active` with dead PID, then call `orchestrate_start("reflect")`.
+
+### [KI-178] `bug` | [rollback-tools] Warning threshold operator uses `>` instead of `>=`
+
+**Severity**: M | **Deferred to**: Phase 4 implementation
+
+`_tools_rollback.py` L209 uses `if new_count > STASH_WARNING_THRESHOLD` (strictly greater than 5), meaning warning fires at count 6+, not 5. PRD spec (05-phase4-merge.md L60) says "warning≥5 告警". Test plan correctly matches PRD (≥5). Fix: change operator from `>` to `>=` on L209.

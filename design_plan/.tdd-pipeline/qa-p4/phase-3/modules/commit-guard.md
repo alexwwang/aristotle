@@ -6,11 +6,12 @@
 
 | # | Core Scenario | Source (AC) | Derived Functional Points | Test Cases |
 |---|--------------|-------------|--------------------------|------------|
-| 1 | Guard blocks non-staging rule from commit | AC-7 | Status check before commit | guard blocks pending/verified/rejected, passes staging |
-| 2 | Guard validates frontmatter schema | AC-7 | AutoCommitter.validate_schema inlined | category required, confidence 0.0-1.0, error_summary ≤200 chars |
-| 3 | Guard passes valid staging rule | AC-7 | Guard success path | valid staging rule commits successfully |
-| 4 | skip_guard parameter bypasses guard | AC-7 | skip_guard=True skips checks | skip_guard allows commit of non-staging or invalid schema |
-| 5 | ARISTOTLE_CI env var disables skip_guard | AC-7 | CI enforcement | skip_guard=True ignored when ARISTOTLE_CI=true |
+| 1 | Guard blocks non-staging rule from commit | AC-7 | Status check before commit | guard blocks pending/verified/rejected, passes staging. **Precondition: enable_guard=True** |
+| 2 | Guard validates frontmatter schema | AC-7 | AutoCommitter.validate_schema inlined | category required, confidence 0.0-1.0, error_summary ≤200 chars. **Precondition: enable_guard=True** |
+| 3 | Guard passes valid staging rule | AC-7 | Guard success path | valid staging rule commits successfully. **Precondition: enable_guard=True** |
+| 4 | skip_guard parameter bypasses guard | AC-7 | skip_guard=True skips checks | skip_guard allows commit of non-staging or invalid schema (when enable_guard=True) |
+| 5 | ARISTOTLE_CI env var disables skip_guard | AC-7 | CI enforcement | skip_guard=True ignored when ARISTOTLE_CI=true (requires enable_guard=True) |
+| 6 | Guard is opt-in via enable_guard | AC-7 | enable_guard=False (default) | guard inactive by default; non-staging rules commit without guard checks |
 
 ### Key Functional Points (from Phase 2 — priority: key)
 
@@ -25,6 +26,7 @@
 | 7 | CI env override logic | AC-7 spec | ARISTOTLE_CI=true forces guard even with skip_guard=True |
 | 8 | Backward compatibility | AC-7 spec | commit_rule without skip_guard parameter works as before |
 | 9 | Confidence boundary values | AutoCommitter.validate_schema | 0.0 and 1.0 pass, -0.1 and 1.1 fail |
+| 10 | Enable guard opt-in | AC-7 spec (PRD L63) | enable_guard=False (default) disables guard; enable_guard=True activates guard. PRD: "守卫为 opt-in（需 enable_guard=True）" |
 
 ### Peripheral Functional Points
 
@@ -56,10 +58,14 @@
 | 17 | Medium | AC-7 | Unit | test_commit_guard.py | `should_block_verified_rule_from_commit` | Specifically test verified status |
 | 18 | Medium | AC-7 | Unit | test_commit_guard.py | `should_block_rejected_rule_from_commit` | Specifically test rejected status |
 | 19 | Core | AC-7 | Unit | test_commit_guard.py | `should_work_without_skip_guard_parameter` | Backward compatibility: commit_rule works without skip_guard |
-| 20 | Core | AC-7 | Integration | test_commit_guard.py | `should_write_audit_log_entry_on_guard_block` | Guard block writes McpAuditEntry |
+| 20 | Core | AC-7 | Integration | test_commit_guard.py | `should_write_audit_log_entry_on_guard_block` | Guard block writes McpAuditEntry. **Schema**: assert entry fields per §3.0.7 — timestamp valid ISO 8601, tool=='commit_rule', result=='error', error field contains guard block reason (≤500 chars), params present (dict with file_path), runId present. |
+| 20.1 | Core | AC-7 | Unit | test_commit_guard.py | `should_allow_commit_when_enable_guard_false` | enable_guard=False (default): non-staging rule commits without guard checks — backward compatibility |
+| 20.2 | Core | AC-7 | Unit | test_commit_guard.py | `should_allow_commit_when_enable_guard_not_passed` | Omitting enable_guard parameter (defaults to False): non-staging rule commits — backward compatibility |
+| 20.3 | Core | AC-9 | Unit | test_commit_guard.py | `should_write_guard_bypassed_audit_on_default_path` | commit_rule with default params (enable_guard=False, no skip_guard) writes McpAuditEntry with result='success' and params containing enable_guard=False. Every non-guarded commit produces a standard success audit entry in .aristotle/audit.jsonl. No special audit event type — uses standard McpAuditEntry schema per §3.0.7. |
+| 20.4 | Core | AC-7 | Unit | test_commit_guard.py | `should_not_enforce_ci_when_enable_guard_false` | ARISTOTLE_CI=true + enable_guard=False: guard NOT enforced, non-staging rule commits successfully. PRD "需同时" means both ARISTOTLE_CI=true AND enable_guard=True are required. CI=true alone cannot activate guard when enable_guard is False. |
 | 21 | Core | AC-7 | Unit | test_commit_guard.py | `should_accept_error_summary_at_exact_200_chars` | error_summary of exactly 200 chars passes validation |
 | 22 | Core | AC-9 | Integration | test_commit_guard.py | `should_write_audit_entry_on_guard_pass` | Successful guard pass and commit writes McpAuditEntry with result="success" |
-| 23 | Medium | AC-7 | Unit | test_commit_guard.py | `should_report_first_validation_failure_when_multiple_issues` | Verify error message identifies first failed check when both status and schema are invalid. Note: Exploratory test - behavior not explicitly specified in current ACs, to be confirmed during Phase 4 implementation. |
+| 23 | Medium | AC-7 | Unit | test_commit_guard.py | `should_report_first_validation_failure_when_multiple_issues` | Verify error message identifies first failed check when both status and schema are invalid. Behavior is deterministic: status check runs first (L434), then schema check (L442) — status error always reported first. |
 | 24 | Medium | AC-7 | Unit | test_commit_guard.py | `should_block_commit_on_already_verified_rule` | commit_rule called on file with status='verified' is rejected — guard blocks non-staging files |
 | 25 | Medium | AC-7 | Unit | test_commit_guard.py | `should_accept_integer_confidence_from_yaml` | YAML `confidence: 1` (int) is accepted as valid — type coercion from int to float is handled gracefully |
 | 26 | Medium | AC-7 | Unit | test_commit_guard.py | `should_reject_confidence_none` | YAML `confidence:` (no value, parses as None in Python) returns validation error — non-numeric |
@@ -91,6 +97,9 @@
 | 11 | Key | Confidence boundaries | Constraint | Unit | test_commit_guard.py | `should_accept_confidence_boundary_one` | 1.0 is valid boundary |
 | 12 | High | Status variants | Constraint | Unit | test_commit_guard.py | `should_block_verified_rule_from_commit` | Verify verified status blocks commit |
 | 13 | High | Status variants | Constraint | Unit | test_commit_guard.py | `should_block_rejected_rule_from_commit` | Verify rejected status blocks commit |
+| 14 | Key | Enable guard opt-in | Interface | Unit | test_commit_guard.py | `should_allow_commit_when_enable_guard_false` | enable_guard=False (default) disables guard |
+| 15 | Key | Enable guard opt-in | Interface | Unit | test_commit_guard.py | `should_allow_commit_when_enable_guard_not_passed` | Omitting enable_guard defaults to False |
+| 16 | Key | CI + enable_guard combination | Constraint | Unit | test_commit_guard.py | `should_not_enforce_ci_when_enable_guard_false` | ARISTOTLE_CI=true alone cannot activate guard when enable_guard=False |
 
 ## Edge Cases & Error Paths
 
@@ -131,7 +140,7 @@
 
 ---
 
-**Note: error_summary (commit guard) has 200-char limit per commit-guard schema; McpAuditEntry.error field has 500-char limit per §3.0.7. These are separate fields with separate limits.**
+**Note: error_summary (commit guard) has 200-char limit per commit-guard schema; McpAuditEntry.error field has 500-char limit per §3.0.7. These are separate fields with separate limits. The 200-char limit is an implementation-derived constant from AutoCommitter.validate_schema (intervention/src/committer.py), not defined in the Phase 4 spec documents. Consider adding to §3.0.8 during spec reconciliation.**
 
 ## Dependencies Between Tests
 

@@ -41,7 +41,7 @@
 | 1 | Core | AC-10 | Unit | test_pipeline_reset.py | `should_reset_state_via_layer1_watchdog` | rollback_to_checkpoint returns true, Observer calls tdd_checkpoint |
 | 2 | Core | AC-10 | Unit | test_pipeline_reset.py | `should_clear_observer_timeout_count` | observerTimeoutCount reset to 0 after reset |
 | 3 | Core | AC-10 | Unit | test_pipeline_reset.py | `should_clear_audit_entry_count` | auditEntryCount reset to 0 after reset |
-| 4 | Core | AC-10 | Unit | test_pipeline_reset.py | `should_reset_phase_to_1` | PipelineState phase reset to 1 after reset. **Phase numbering**: phase=1 is the "pipeline_start completed, ready for first execution" state. Phase 0 would be pre-init. The pipeline uses 1-indexed phases where 1 = first operational phase. |
+| 4 | Core | AC-10 | Unit | test_pipeline_reset.py | `should_reset_phase_to_1` | PipelineState phase reset to 1 after reset. **Source of truth**: TDD pipeline phase 编号从 1 开始（known-issues.md §3.2: "phase=0 表示 pipeline 未启动，TDD pipeline phase 编号从 1 开始"）。pipeline_reset 重置到 phase=1（第一个可操作阶段），NOT phase=0（pre-init 哨兵值）。与 §3.0.3a "回退到 phase 1" 一致。 |
 | 5 | Core | AC-10 | Unit | test_pipeline_reset.py | `should_reset_eviction_needed_flag` | After pipeline_reset, evictionNeeded is explicitly set to false regardless of prior state |
 | 6 | Core | AC-10 | Unit | test_pipeline_reset.py | `should_trigger_layer2_when_watchdog_down` | MCP handler directly triggers when Watchdog not running |
 | 7 | Core | AC-10 | Unit | test_pipeline_reset.py | `should_trigger_layer3_on_next_pipeline_start` | pipeline_start resets state as final fallback |
@@ -53,9 +53,9 @@
 | 12 | Core | AC-10 | Unit | test_pipeline_reset.py | `should_be_idempotent_on_multiple_resolve_timeout_calls` | Repeated calls safe, no duplicate operations |
 | 13 | Core | AC-10 | Unit | test_pipeline_reset.py | `should_handle_concurrent_reset_requests_safely` | Multiple simultaneous resets handled correctly |
 | 14 | Core | AC-10 | Unit | test_pipeline_reset.py | `should_be_noop_when_state_already_reset` | Reset when already reset has no effect |
-| 15 | Core | AC-9 | Unit | test_pipeline_reset.py | `should_write_audit_entry_on_pipeline_reset` | pipeline_reset writes McpAuditEntry with tool="pipeline_reset" |
-| 16 | Core | AC-9 | Unit | test_pipeline_reset.py | `should_write_audit_entry_on_force_resolve_violation` | force_resolve_violation writes McpAuditEntry |
-| 17 | Core | AC-9 | Unit | test_pipeline_reset.py | `should_write_audit_entry_on_resolve_timeout` | resolve_timeout auto-correction writes McpAuditEntry with tool="resolve_timeout" |
+| 15 | Core | AC-9 | Unit | test_pipeline_reset.py | `should_write_audit_entry_on_pipeline_reset` | pipeline_reset writes McpAuditEntry. **Schema**: assert entry fields per §3.0.7 — timestamp valid ISO 8601, tool=='pipeline_reset', result=='success', runId present (string), params present (dict). |
+| 16 | Core | AC-9 | Unit | test_pipeline_reset.py | `should_write_audit_entry_on_force_resolve_violation` | force_resolve_violation writes McpAuditEntry. **Schema**: assert entry fields per §3.0.7 — timestamp valid ISO 8601, tool=='force_resolve_violation', result=='success', runId present (string), params present (dict with violation timestamp). |
+| 17 | Core | AC-9 | Unit | test_pipeline_reset.py | `should_write_audit_entry_on_resolve_timeout` | resolve_timeout auto-correction writes McpAuditEntry. **Schema**: assert entry fields per §3.0.7 — timestamp valid ISO 8601, tool=='resolve_timeout', result=='success', runId present (string), params present (dict). |
 | 18 | High | AC-10 | Integration | test_pipeline_reset.py | `should_handle_gracefully_when_all_fallback_layers_fail` | System state consistent when Layer 1, 2, and 3 all fail. Returns partial results with error flags for failed layers, does not raise exception |
 | 19 | Medium | AC-10 | Unit | test_pipeline_reset.py | `should_not_correct_when_audit_does_not_show_resolved` | Guard condition prevents false positive correction |
 | 20 | Medium | AC-10 | Unit | test_pipeline_reset.py | `should_reset_partially_dirty_state` | Reset works when some counters dirty but phase is already 1 |
@@ -64,6 +64,7 @@
 | 23 | High | AC-10 | Integration | test_pipeline_reset.py | `should_trigger_layer3_integration_reset` | Layer 3 path integration test |
 | 24 | Medium | AC-10 | Unit | test_pipeline_reset.py | `should_handle_tdd_checkpoint_callback_failure` | tdd_checkpoint callback failure handled gracefully and error logged |
 | 25 | Core | AC-10 | Unit | test_pipeline_reset.py | `should_handle_watchdog_error_response` | When Watchdog Observer is running but returns error, fallback chain proceeds to Layer 2 |
+| 26 | Medium | AC-10 | Unit | test_pipeline_reset.py | `should_not_reset_phasestatus_or_round_fields` | Python-side pipeline_reset does NOT reset phaseStatus or round fields — these are managed by the TypeScript Watchdog state machine. Test verifies these fields retain their pre-reset values after pipeline_reset. Only §3.0.3 fields (observerTimeoutCount, auditEntryCount, evictionNeeded, phase) are reset. |
 
 ## Design Coverage Matrix (Phase 2 → Tests)
 
@@ -103,6 +104,7 @@
 - **Dirty state**: `{"observerTimeoutCount": 5, "auditEntryCount": 100, "evictionNeeded": true, "phase": 3}`
 - **Partially dirty state**: `{"observerTimeoutCount": 0, "auditEntryCount": 5, "evictionNeeded": true, "phase": 1}`
 - **Clean state**: `{"observerTimeoutCount": 0, "auditEntryCount": 0, "evictionNeeded": false, "phase": 1}`
+- **Field alignment**: Fixtures match PipelineState schema (§3.0.3): observerTimeoutCount, auditEntryCount, evictionNeeded, phase. The `phaseStatus` and `round` fields are part of the broader pipeline state but are NOT explicitly listed in the §3.0.3 PipelineState table — they belong to the TDD pipeline state machine managed by the Watchdog (TypeScript side). The Python-side pipeline_reset only resets the fields defined in §3.0.3. Test #4.1 below explicitly verifies these fields are NOT reset during Python-side pipeline_reset.
 - **Violation timestamp**: ISO 8601 string for force_resolve_violation
 - **Run ID**: Valid run ID for audit log correlation
 

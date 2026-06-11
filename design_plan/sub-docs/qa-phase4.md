@@ -53,7 +53,7 @@
 
 **Fallback 策略**：若 Watchdog 未运行（纯 MCP 调用 / CI 环境），rollback_to_checkpoint 的 tool 实现（aristotle_mcp/server.py 中对应 handler）应在 rollback 完成后直接调用 tdd_checkpoint(event='pipeline_reset')。实现路径：MCP handler 检测 pipeline_reset_required=true 后，在 MCP 侧直接触发 reset，而非依赖 Watchdog 下次 handle()。若 MCP 侧也不支持（无 Watchdog + 无 MCP handler），则接受 PipelineState 暂时不一致——下次 pipeline_start 时状态会重新初始化。此为已知限制。
 
-**⚠️ `pipeline_reset` CheckpointEvent 前向引用**：`pipeline_reset` 为 Phase 4 新增的 CheckpointEvent，用于回滚后重置 PipelineState（phase→0, phaseStatus→idle, round→0, observerTimeoutCount→0, auditEntryCount→0）。具体 payload 和 transition 逻辑在 Phase 4 实现时定义。当前文档在 CheckpointEvent 扩展列表中以 blockquote 注释「Phase 4」标注占位。
+**⚠️ `pipeline_reset` CheckpointEvent 前向引用**：`pipeline_reset` 为 Phase 4 新增的 CheckpointEvent，用于回滚后重置 PipelineState（phase→1, phaseStatus→idle, round→0, observerTimeoutCount→0, auditEntryCount→0）。注：phase→1 而非 phase→0，因为 TDD pipeline phase 编号从 1 开始（phase=0 是 pre-init 哨兵值，见 known-issues.md §3.2 "phase=0 表示 pipeline 未启动"）。具体 payload 和 transition 逻辑在 Phase 4 实现时定义。当前文档在 CheckpointEvent 扩展列表中以 blockquote 注释「Phase 4」标注占位。
 
 **RollbackEngine 简化影响分析**（F-20 修正）：当前 RollbackEngine 有两类 violation-specific 回滚策略：
 - `SKIP_RED_PHASE → _delete_implementation`：删除实现文件（不恢复测试）

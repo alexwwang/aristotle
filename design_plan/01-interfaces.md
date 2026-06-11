@@ -234,8 +234,8 @@ Fallback 链（pipeline_reset）：Watchdog Observer 检测 → 若 Watchdog 未
 | BUSINESS_CODE_PHASE | — | 5 | P2 | 业务代码阶段号 |
 | TEST_EVIDENCE_SLA_S | — | 30-90 | P2 | 测试证据检出时效 |
 | AUDIT_RETENTION_DAYS | — | 7 | P2+ | 审计日志归档保留天数 |
-| MCP_TOOL_COUNT_CURRENT | 20 | 20 | — | 当前 MCP 工具数 |
-| MCP_TOOL_COUNT_POST_MERGE | — | 25 | P4 | 合并后 MCP 工具数 |
+| MCP_TOOL_COUNT_CURRENT | 22 | 22 | — | 当前 MCP 工具数（Phase 4 实现后更新） |
+| MCP_TOOL_COUNT_POST_MERGE | — | 27 | P4 | 合并后 MCP 工具数（22 existing + 5 new。注：原始 spec 估计为 25，实现后实际为 27） |
 | MCP_NEW_TOOLS_P4 | — | 5 | P4 | Phase 4 新增工具数 |
 | MCP_AUDIT_JSONL_LINE_LIMIT | — | 4KB | P4 | 审计 JSONL 行大小限制 |
 | ERROR_SUMMARY_TRUNCATION | — | 500 chars | P4 | error_summary 截断长度 |
@@ -246,5 +246,6 @@ Fallback 链（pipeline_reset）：Watchdog Observer 检测 → 若 Watchdog 未
 | SCHEMA_VERSION_TARGET | — | 5 | P3 | Schema 目标版本 |
 | SEV_ORDER | — | S>B>A>H>M>L>P>I | P3 | Severity 优先级排序 |
 | VALID_SEVERITIES | — | C,H,M,P,L,I,S,B,A | P3 | 合法 severity 集合 |
+| KI_FRESHNESS_THRESHOLD | — | 86400 (24h) | P4 | KI doc freshness check threshold in seconds |
 
 > 完整伪代码 → [ref/interfaces-pseudocode.md](./ref/interfaces-pseudocode.md)
