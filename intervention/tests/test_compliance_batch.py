@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from compliance import ViolationEvent, ViolationType, VIOLATION_PRIORITY
+from compliance import ViolationEvent, VIOLATION_PRIORITY
 from compliance_batch import intervene_batch, handle_merged, handle_compliance
 from intervention_types import PipelineContext
 

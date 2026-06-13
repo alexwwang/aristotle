@@ -93,7 +93,6 @@ def test_violation_signature_matching_detects_stale_ki_doc(ki_mgr, ki_doc_path):
 
 # C-52
 def test_should_use_ki_doc_update_commit_message_format(ki_mgr):
-    event = _make_violation(ViolationType.UNCOMMITTED_PHASE)
     result = ki_mgr.ensure_updated()
     assert isinstance(result, bool)
 
@@ -108,7 +107,10 @@ def test_should_use_empty_string_signature_when_files_array_is_empty(ki_mgr):
 # C-58
 def test_should_identify_ki_doc_as_up_to_date_when_ki_has_more_signatures_than_violations(ki_mgr, ki_doc_path):
     Path(ki_doc_path).parent.mkdir(parents=True, exist_ok=True)
-    Path(ki_doc_path).write_text("# Review Records\n\n")
+    Path(ki_doc_path).write_text(
+        "# Review Records\n\n"
+        "## UNCOMMITTED_PHASE:a.py\n## UNCOMMITTED_PHASE:b.py\n## UNCOMMITTED_PHASE:c.py\n"
+    )
     current = [
         _make_violation(ViolationType.UNCOMMITTED_PHASE, files=["a.py"]),
         _make_violation(ViolationType.UNCOMMITTED_PHASE, files=["b.py"]),

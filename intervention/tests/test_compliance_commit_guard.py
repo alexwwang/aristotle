@@ -104,7 +104,7 @@ def test_build_message_formats_review_commit_message(guard):
 # C-34
 def test_build_message_fallback_to_legacy_format(guard):
     msg = guard._build_message(phase=4, run_id="")
-    assert "PHASE-4" in msg
+    assert msg == "PHASE-4 auto-commit"
 
 
 # C-46
