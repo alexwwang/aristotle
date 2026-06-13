@@ -6,6 +6,7 @@ from compliance import (
     _handle_compliance,
     _handle_merged,
     CommitGuard,
+    CommitResult,
     InterventionCoordinator,
     InterventionResult,
     ViolationEvent,
@@ -176,7 +177,8 @@ def test_post_batch_commit_failed_set_on_ki_doc_commit_failure():
 def test_counter_shared_between_auto_commit_and_post_batch_ki_doc_commit():
     guard = CommitGuard(project_root="/tmp/test_repo")
     guard._commit_failures["INT-abc123:4"] = 2
-    guard.ensure_committed(phase=4, run_id="INT-abc123")
+    result = guard.ensure_committed(phase=4, run_id="INT-abc123")
+    assert isinstance(result, CommitResult)
     assert guard._commit_failures.get("INT-abc123:4", 0) >= 3
 
 

@@ -132,8 +132,10 @@ def test_p_severity_excluded_from_priority_counts_and_unrectified_total():
     violations = [
         _make_violation(ViolationType.SKIP_RED_PHASE, rectified=False),
         _make_violation(ViolationType.SKIP_REVIEW, rectified=False),
+        _make_violation(ViolationType.SKIP_REVIEW, rectified=False, severity_override="P0"),
     ]
     result = compute_assessment_from_violations(violations, phase=4)
+    assert result.priority_counts == {"P1": 1, "P2": 1, "P3": 0, "P4": 0, "P5": 0}
     assert result.unrectified_total == 2
     assert result.assessment_result == "FAIL"
 

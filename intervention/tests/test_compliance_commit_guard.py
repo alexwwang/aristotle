@@ -73,6 +73,8 @@ def test_failure_counter_resets_on_clean_tree(repo_root, guard):
     subprocess.run(["git", "add", "."], cwd=repo_root, check=True, capture_output=True)
     subprocess.run(["git", "commit", "-m", "init"], cwd=repo_root, check=True, capture_output=True)
     result = guard.ensure_committed(phase=4, run_id="INT-abc123")
+    assert isinstance(result, CommitResult)
+    assert result.success is True
     assert guard._commit_failures.get("INT-abc123:4", 0) == 0
 
 

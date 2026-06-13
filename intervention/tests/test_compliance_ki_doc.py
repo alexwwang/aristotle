@@ -54,6 +54,7 @@ def test_ensure_updated_appends_entry_when_doc_exists(ki_doc_path, ki_mgr):
 # C-11
 def test_ki_update_skips_record_intervention_for_empty_events(ki_mgr, ki_doc_path):
     ki_mgr.ensure_updated()
+    ki_mgr.record_intervention([])
     ki_mgr.ensure_assessment(phase=4, result="PASS")
     assert Path(ki_doc_path).exists()
 
@@ -78,10 +79,13 @@ def test_ensure_updated_retries_once_on_failure(ki_mgr):
 def test_ki_doc_best_effort_when_record_intervention_fails(ki_mgr, ki_doc_path):
     Path(ki_doc_path).parent.mkdir(parents=True, exist_ok=True)
     Path(ki_doc_path).write_text("# Review Records\n\n")
+    content_before = Path(ki_doc_path).read_text()
     ki_mgr.record_intervention(events=None)
     ki_mgr.ensure_assessment(phase=4, result="PASS")
-    content = Path(ki_doc_path).read_text()
-    assert "Review Records" in content
+    content_after = Path(ki_doc_path).read_text()
+    assert "Review Records" in content_after
+    assert "PASS" in content_after or "assessment" in content_after.lower()
+    assert content_after != content_before
 
 
 # C-49
