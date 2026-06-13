@@ -44,6 +44,7 @@ class TestRegressionCounter:
         for _ in range(5):
             counter.increment("run-001")
         result = counter.regression_counter_cleanup("run-001")
+        assert isinstance(result, dict)
         assert counter.get_count("run-001") == 0
         assert counter.get_cumulative_count("run-001") == 0
         result2 = counter.regression_counter_cleanup("run-never-existed")
