@@ -49,6 +49,7 @@ change: "Initial QA-P4 Phase 3 Test Plan — index.md"
 |----------|-------|---------|
 | MCP_AUDIT_JSONL_LINE_LIMIT | 4KB | mcp-audit-log |
 | ERROR_SUMMARY_TRUNCATION | 500 chars | mcp-audit-log (applies to McpAuditEntry.error field per §3.0.7, legacy name references frontmatter error_summary field). **Measured in Unicode code points (characters), not bytes.** |
+| ERROR_SUMMARY_SCHEMA_MAX | 200 chars | commit-guard (frontmatter error_summary field max length in AutoCommitter.validate_schema). Distinct from ERROR_SUMMARY_TRUNCATION: this is the schema validation limit, not the audit log truncation limit. |
 | KI_FRESHNESS_THRESHOLD | 24h (86400s) | ki-doc-tools (ensure_updated freshness check) |
 | STASH_WARNING_THRESHOLD | 5 | rollback-tools |
 | STASH_HARD_LIMIT | 10 | rollback-tools |
@@ -70,7 +71,7 @@ change: "Initial QA-P4 Phase 3 Test Plan — index.md"
 {rollback-tools: [mcp-audit-log],      # rollback ops write audit entries
  commit-guard:  [mcp-audit-log],       # guard check writes audit entries
  ki-doc-tools:  [mcp-audit-log],       # KI writes write audit entries
- pipeline-reset: [rollback-tools],     # uses rollback_to_checkpoint return value
+ pipeline-reset: [rollback-tools, mcp-audit-log],  # uses rollback_to_checkpoint return value; audit tests #15-17 write McpAuditEntry
  integration:   [rollback-tools, ki-doc-tools, commit-guard, mcp-audit-log, pipeline-reset]}
 ```
 
@@ -84,6 +85,14 @@ change: "Initial QA-P4 Phase 3 Test Plan — index.md"
 6. `integration` (depends on all)
 
 **Failure propagation**: Individual module test failures are reported independently. Cross-module propagation is not implemented in Phase 4 — each module's test suite runs independently.
+
+### Phase 4 Prerequisites (Blocking)
+
+Tests that require code fixes before implementation. These must be resolved in Phase 4 business code before the corresponding test can pass.
+
+| KI | Module | Test # | Description | Required Fix |
+|----|--------|--------|-------------|-------------|
+| KI-178 | rollback-tools | #8 `should_warn_at_stash_threshold_warning` | Warning threshold uses `>` instead of `>=` | Change `_tools_rollback.py` L209 operator from `>` to `>=` |
 
 ## Module Summaries
 
@@ -104,7 +113,7 @@ Enhances existing `commit_rule()` with staging status check + schema validation 
 Tests the 3-layer fallback chain for pipeline_reset: (1) Watchdog Observer detects rollback_to_checkpoint return → auto-calls tdd_checkpoint('pipeline_reset'), (2) if Watchdog not running → MCP handler directly triggers, (3) if both fail → next pipeline_start resets. Tests: fallback chain order, state reset correctness.
 
 ### integration
-End-to-end: tool count = 27 (22 existing + 5 new), intervention/ directory deleted, functional equivalence (all original tests pass), import verification, no session state dependency.
+End-to-end: tool count = 27 (25 Python MCP + 2 TS Plugin), intervention/ directory deleted, functional equivalence (all original tests pass), import verification, no session state dependency.
 
 ## Cross-Cutting Concerns
 

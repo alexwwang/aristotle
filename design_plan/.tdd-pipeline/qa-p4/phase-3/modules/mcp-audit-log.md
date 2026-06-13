@@ -45,9 +45,12 @@
 | 12 | Core | AC-9 | Unit | test_mcp_audit_log.py | `should_populate_error_field_on_error_result` | result='error' populates error field with description |
 | 13 | Core | AC-9 | Unit | test_mcp_audit_log.py | `should_reject_invalid_result_value` | result only accepts 'success' or 'error' |
 | 14 | Core | AC-9 | Unit | test_mcp_audit_log.py | `should_handle_none_params_gracefully` | None params dict returns graceful error, not crash |
+| 14.1 | Core | AC-9 | Unit | test_mcp_audit_log.py | `should_reject_non_dict_params_type` | Non-dict params values (string, int, list) return validation error {success: false, error: "params must be dict"}, not crash. Parameterized: ["string", 123, [1,2,3]] |
 | 15 | Core | AC-9 | Unit | test_mcp_audit_log.py | `should_reject_entry_without_runid` | Entry with runId=None/missing is rejected with validation error |
 | 16 | Core | AC-9 | Unit | test_mcp_audit_log.py | `should_reject_entry_with_empty_tool_name` | Entry with tool='' or tool=None is rejected |
 | 17 | Core | AC-9 | Unit | test_mcp_audit_log.py | `should_handle_4kb_boundary_cases` | Parameterized: 4095-byte (pass), 4096-byte (pass), 4097-byte (truncated). Boundary values tested via parameterized fixture: [4095, 4096, 4097] bytes |
+| 17.1 | Core | AC-9 | Unit | test_mcp_audit_log.py | `should_handle_combined_error_field_and_line_truncation` | Entry with >500-char error field AND total serialized size >4KB: verify error field truncated to 500 chars first, then total line truncated to ≤4096 bytes with truncated=true flag set. Tests interaction between field-level and line-level truncation applied sequentially. |
+| 17.2 | Core | AC-9 | Unit | test_mcp_audit_log.py | `should_handle_multi_byte_char_at_4kb_boundary` | Multi-byte UTF-8 character positioned so its byte sequence would be split at the exact 4KB boundary. Verify truncation produces valid UTF-8 (no partial multi-byte sequences). Construct entry where a 3-byte UTF-8 char (e.g. '你') occupies bytes 4094–4096, then pad to 4097+ bytes to trigger truncation. Post-condition: `line.encode('utf-8')` succeeds without UnicodeDecodeError and `len(line.encode('utf-8')) <= 4096`. Complements test #17 (ASCII-only boundary) and test #9 (multi-byte in error field only). |
 | 18 | Core | AC-9 | Unit | test_mcp_audit_log.py | `should_not_duplicate_gitignore_entry_on_repeated_init` | Calling init_repo twice does not duplicate .gitignore entry |
 | 19 | Core | AC-9 | Unit | test_mcp_audit_log.py | `should_allow_error_result_without_error_field` | result='error' with error=None/empty is accepted (spec says error is optional `string?`) |
 | 20 | Core | AC-9 | Unit | test_mcp_audit_log.py | `should_read_existing_audit_entries` | Read audit.jsonl and return parsed entries with correct field values, in write order (chronological) |
@@ -55,6 +58,8 @@
 | 20.1 | Core | AC-9 | Unit | test_mcp_audit_log.py | `should_return_empty_list_for_empty_audit_file` | audit.jsonl exists but contains 0 entries — returns empty list without error |
 | 21 | Medium | AC-9 | Unit | test_mcp_audit_log.py | `should_handle_corrupted_jsonl_gracefully` | Opening audit.jsonl with malformed JSON lines skips bad entries, logs warning, and processes valid entries |
 | 22 | Medium | AC-9 | Unit | test_mcp_audit_log.py | `should_validate_audit_entry_content_values` | Verify tool name, params, result, and timestamp contain expected values (not just structure) |
+| 22.1 | Medium | AC-9 | Unit | test_mcp_audit_log.py | `should_handle_aristotle_dir_exists_as_file` | When `.aristotle/` exists as a regular file (not directory), write operations return clear error `{success: false, error: "Not a directory"}` without crash. Uses `tmp_path / ".aristotle"` fixture pre-created as a file. |
+| 23 | Medium | AC-9 | Unit | test_mcp_audit_log.py | `should_handle_io_error_gracefully` | I/O error during JSONL append (e.g., permission denied on audit.jsonl) returns graceful failure `{success: false, error: "..."}` without crash or data corruption. Uses `monkeypatch` to raise `PermissionError` on file open. Closes KI-179 gap (Edge Cases lines 79, 82). |
 
 ## Design Coverage Matrix (Phase 2 → Tests)
 
@@ -72,21 +77,21 @@
 - [x] max_values — exactly 4KB line, exactly 500 chars. 4KB boundary: 4095-byte entry (just under), 4096-byte entry (exact limit), 4097-byte entry (just over)
 - [ ] concurrent_access — N/A for Phase 4 (single-agent, ADR-007)
 - [x] timeouts — N/A (synchronous write, ADR-005)
-- [x] network_failures — file I/O error on write (permission denied)
-- [x] invalid_state_transitions — write to non-existent directory
-- [x] serialization_boundary — multi-byte char truncation at 500 chars
-- [x] error_handler_correctness — I/O error returns graceful failure, not crash
+- [x] network_failures — file I/O error on write (permission denied) — tested by #23 (`should_handle_io_error_gracefully`). Closes KI-179.
+- [x] invalid_state_transitions — write to non-existent directory — tested by #10 (should_create_directory_if_missing)
+- [x] serialization_boundary — multi-byte char truncation at 500 chars — tested by #9 (should_handle_multi_byte_chars_in_truncation)
+- [x] error_handler_correctness — I/O error returns graceful failure, not crash — tested by #23 (`should_handle_io_error_gracefully`). Closes KI-179.
 - [x] implicit_contract — append-only means no delete/update operations
 - [ ] resource_leak — N/A (single file handle per write)
-- [x] cascading_failure — write failure doesn't corrupt existing entries
+- [x] cascading_failure — append-only semantics guarantee no overwrite of existing entries on write failure — tested by #6 (`should_append_in_append_mode`, sequential appends preserve prior entries) and #12 (error path populates error field but doesn't corrupt existing file). **Note**: This covers logical isolation (append-only = no corruption). Physical I/O isolation (partial write on disk) is not explicitly tested; Phase 4 implementation should verify append mode's atomic write guarantees on the target platform.
 - [ ] performance_logic — N/A (single-line append)
 
-**Note: Edge case where .aristotle/ exists as a file (not directory) — should detect this and return clear error or handle gracefully. Not covered in Phase 4 tests.**
+**Note: Edge case where .aristotle/ exists as a file (not directory) — tested by #22.1 (should_handle_aristotle_dir_exists_as_file).**
 
 ## Known Limitations
 
 - JSONL file grows unbounded in Phase 4. No rotation mechanism. If file size becomes a concern, add MAX_AUDIT_JSONL_FILE_SIZE constant and rotation logic in a future phase.
-- `.aristotle/` path collision: if `.aristotle/` exists as a regular file (not directory), write operations will fail. Not tested in Phase 4. Expected behavior: return clear error message (e.g., "Not a directory"). Tracked as open edge case for future implementation.
+- `.aristotle/` path collision: if `.aristotle/` exists as a regular file (not directory), write operations will fail. Tested by #22.1. Expected behavior: return clear error message (e.g., "Not a directory").
 
 ## Test Data
 

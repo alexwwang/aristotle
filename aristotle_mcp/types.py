@@ -1,18 +1,14 @@
-"""Migrated type definitions for the Aristotle MCP server.
-
-These dataclasses were originally defined in the intervention/ package
-and have been migrated here as part of the Phase 4 merge.
 """
-from __future__ import annotations
-
+Phase 4 stub — type definitions.
+Business code isolated to _phase5_ref/types.py for TDD Red phase.
+Types are dataclass definitions — kept in full since they contain no business logic.
+"""
 from dataclasses import dataclass, field
 from typing import Any
 
 
 @dataclass
 class ViolationEvent:
-    """Represents a TDD pipeline violation detected by the watchdog."""
-
     violation_type: str
     timestamp: str
     file: str = ""
@@ -22,8 +18,6 @@ class ViolationEvent:
 
 @dataclass
 class RollbackResult:
-    """Result of a git-based rollback operation."""
-
     success: bool
     stash_ref: str = ""
     pipeline_reset_required: bool = False
@@ -32,8 +26,6 @@ class RollbackResult:
 
 @dataclass
 class PipelineContext:
-    """Context for the current TDD pipeline run."""
-
     phase: int = 1
     run_id: str = ""
     observer_timeout_count: int = 0
@@ -43,8 +35,6 @@ class PipelineContext:
 
 @dataclass
 class InterventionRecord:
-    """Record of a watchdog intervention action."""
-
     violation: ViolationEvent
     action_taken: str = ""
     timestamp: str = ""

@@ -23,7 +23,7 @@
 |---|---------------------|--------|------------|
 | 1 | git stash with prefix | _tools_rollback.create_rollback_point | stash message contains prefix |
 | 2 | git stash apply | _tools_rollback.rollback_to_checkpoint | correct stash applied by name |
-| 3 | validate_path | RollbackEngine.validate_path | path traversal blocked, relative path ok. Note: validate_path applies to path parameters in general, not to stash-name-based rollback operations. |
+| 3 | validate_path | RollbackEngine.validate_path | path traversal blocked, relative path ok. Note: validate_path applies to path parameters in general, not to stash-name-based rollback operations. Stash operations (create_rollback_point, rollback_to_checkpoint, cleanup_rollback_stashes) use stash references, not filesystem paths, and are exempt from validate_path by design. |
 | 4 | pipeline_reset_required flag | §3.0.3a | flag true on successful rollback |
 | 5 | Untracked files warning | UNTRACKED_FILES_THRESHOLD | >100 MiB (100 × 1024 × 1024 = 104,857,600 bytes) returns warning dict |
 | 6 | Stash count thresholds | STASH_WARNING/HARD_LIMIT | warning at 5, block at 10 |
@@ -46,7 +46,7 @@
 | 5 | Core | AC-10 | Unit | test_mcp_rollback.py | `should_return_pipeline_reset_required_on_rollback` | Flag set to true |
 | 6 | Core | AC-1 | Unit | test_mcp_rollback.py | `should_cleanup_oldest_stashes` | cleanup_rollback_stashes keeps N most recent |
 | 7 | Core | AC-1 | Unit | test_mcp_rollback.py | `should_only_manage_prefixed_stashes` | Non-prefixed stashes never touched |
-| 8 | Core | AC-1 | Unit | test_mcp_rollback.py | `should_warn_at_stash_threshold_warning` | warning returned when stash count ≥ 5 |
+| 8 | Core | AC-1 | Unit | test_mcp_rollback.py | `should_warn_at_stash_threshold_warning` | warning returned when stash count ≥ 5. **⚠️ Prerequisite: KI-178 fix required** — change `>` to `>=` on `_tools_rollback.py` L209 before this test will pass. Current implementation fires warning at stash count ≥ 6 (off-by-one); test expects ≥ 5 per PRD spec. |
 | 9 | Core | AC-1 | Unit | test_mcp_rollback.py | `should_block_at_stash_hard_limit` | create blocked when stash count ≥ 10 |
 | 10 | Core | Constraint | Unit | test_mcp_rollback.py | `should_warn_on_large_untracked_files` | Warning when untracked > 100 MiB (100 × 1024 × 1024 bytes = 104,857,600 bytes) AND rollback still proceeds successfully |
 | 11 | High | Constraint | Integration | test_mcp_rollback.py | `should_proceed_with_rollback_after_untracked_warning` | Verify rollback executes after warning about large untracked files |
@@ -54,10 +54,11 @@
 | 13 | Core | AC-1 | Unit | test_mcp_rollback.py | `should_accept_valid_relative_path` | validate_path allows valid relative paths |
 | 14 | Core | AC-1 | Unit | test_mcp_rollback.py | `should_accept_absolute_path_within_repo` | validate_path allows absolute paths within repo |
 | 15 | Core | AC-1 | Unit | test_mcp_rollback.py | `should_reject_symlink_escape` | validate_path rejects symlinks pointing outside repo |
-| 16 | Core | AC-1 | Unit | test_mcp_rollback.py | `should_fail_gracefully_on_stash_create_error` | git stash failure returns error |
-| 17 | High | AC-1 | Unit | test_mcp_rollback.py | `should_handle_stash_with_no_changes` | Returns success/no-op when working tree is clean (no stash created). **Note**: `git stash` returns error on clean tree; implementation catches this and returns synthetic success `{success: true, message: "no changes to stash"}`. |
+| 16 | Core | AC-1 | Unit | test_mcp_rollback.py | `should_fail_gracefully_on_stash_create_error` | git stash failure returns error. **Negative audit assertion**: verify NO McpAuditEntry is written to audit.jsonl on stash create failure (only successful operations produce audit entries per §3.0.7). **Design rationale for audit asymmetry**: `create_rollback_point` is idempotent — if stash creation fails, no state change occurred, so no audit trail is needed. This differs from `rollback_to_checkpoint` (test #18.1) and other tools that DO write audit entries on failure, because those tools attempt an observable state change (apply stash, commit file, write doc) that fails mid-operation. The "no audit on create failure" pattern is intentional and consistent with the "only audit real operations" principle. |
+| 17 | High | AC-1 | Unit | test_mcp_rollback.py | `should_handle_stash_with_no_changes` | Returns success/no-op when working tree is clean (no stash created). **Note**: `git stash` returns error on clean tree; implementation catches this and returns synthetic success `{success: true, message: "no changes to stash"}`. **Audit assertion**: verify NO McpAuditEntry is written for the no-op path (no actual stash operation performed, consistent with test #16 pattern of only auditing real operations). |
 | 17.1 | Medium | AC-1 | Unit | test_mcp_rollback.py | `should_reject_empty_checkpoint_name` | create_rollback_point with name="" returns validation error |
 | 18 | Core | AC-1 | Unit | test_mcp_rollback.py | `should_fail_gracefully_on_stash_apply_error` | git stash apply failure returns error |
+| 18.1 | Core | AC-9 | Unit | test_mcp_rollback.py | `should_write_audit_entry_on_stash_apply_error` | Failed stash apply writes McpAuditEntry with result='error' and error field containing the apply failure message. Verify audit.jsonl entry exists after error path. |
 | 19 | Core | AC-1 | Unit | test_mcp_rollback.py | `should_handle_empty_stash_list_on_cleanup` | cleanup with no stashes succeeds |
 | 20 | Medium | AC-1 | Unit | test_mcp_rollback.py | `should_succeed_when_keep_count_exceeds_available_stashes` | Verify no error when keep > available |
 | 20.1 | Medium | AC-1 | Unit | test_mcp_rollback.py | `should_reject_negative_or_non_integer_keep` | cleanup_rollback_stashes with keep=-1, keep=1.5, or keep="three" returns validation error |
@@ -74,10 +75,17 @@
 | 27.3 | Core | AC-9 | Unit | test_mcp_rollback.py | `should_default_run_id_when_empty` | create_rollback_point with run_id="" writes McpAuditEntry with runId="" (empty string default) |
 | 28 | Medium | AC-1 | Unit | test_mcp_rollback.py | `should_handle_special_characters_in_checkpoint_name` | Verify names with spaces, unicode, shell-unsafe characters. **Security**: All subprocess.run calls MUST use list-form args (never shell=True) to prevent command injection via checkpoint names. Test with: `'test;echo pwned'`, `'test$(whoami)'`, `'test`id`'`. |
 | 29 | Medium | AC-1 | Unit | test_mcp_rollback.py | `should_handle_duplicate_checkpoint_name` | Creating two checkpoints with same name: implementation creates a second stash entry (push-only, no prior drop). Both stashes with same name coexist in stash list. `_find_stash_index_for_checkpoint` finds the first match (newest, since stash@{0} is newest). Test expects `dup_count == 2`. **Note**: Last-write-wins behavior is achieved by stash ordering (newest found first), not by explicit drop-before-push. |
+| 29.1 | Medium | AC-1 | Unit | test_mcp_rollback.py | `should_rollback_to_newest_when_duplicate_checkpoint_names` | When two stashes with same checkpoint name exist, rollback_to_checkpoint applies the newest one (stash@{0} order). Verify the restored state matches the second (newer) checkpoint, not the first. |
+| 8.1 | Core | AC-1 | Unit | test_mcp_rollback.py | `should_not_warn_at_stash_count_four` | stash count = 4 (one below STASH_WARNING_THRESHOLD of 5) → no warning returned |
+| 9.1 | Core | AC-1 | Unit | test_mcp_rollback.py | `should_not_block_at_stash_count_nine` | stash count = 9 (one below STASH_HARD_LIMIT of 10) → creation proceeds normally, not blocked |
 | 30 | Medium | AC-1 | Integration | test_mcp_rollback.py | `should_handle_guard_block_then_rollback_interaction` | When CommitGuard blocks a commit, rollback_to_checkpoint should work correctly |
 | 31 | Medium | AC-1 | Unit | test_mcp_rollback.py | `should_handle_externally_removed_stash` | Stash referenced by name no longer exists in git stash list — returns clear error |
 | 32 | Medium | AC-1 | Unit | test_mcp_rollback.py | `should_succeed_stash_apply_with_modified_working_directory` | Modified (non-conflicting) files in working tree don't prevent stash apply |
 | 33 | Core | AC-1 | Unit | test_mcp_rollback.py | `should_delete_all_stashes_when_keep_zero` | cleanup_rollback_stashes(keep=0) removes all prefixed stashes |
+| 33.1 | Core | AC-10 | Unit | test_mcp_rollback.py | `should_return_pipeline_reset_required_false_on_normal_rollback` | rollback_to_checkpoint for a checkpoint created WITHOUT pipeline state changes returns `pipeline_reset_required=false`. Verifies the normal (non-reset) rollback path. Distinct from test #5 (tests `pipeline_reset_required=true`). **Precondition**: checkpoint created when PipelineState is at default/clean values (no active run, phase=0 or 1). On rollback, since no pipeline state was captured in the stash, `pipeline_reset_required=false`. Complement of test #5 where the checkpoint is created during an active pipeline run with dirty state. |
+| 33.2 | Medium | AC-1 | Unit | test_mcp_rollback.py | `should_preserve_staging_state_on_stash_apply` | Stash apply with staged (git-add'd) files preserves staging state after restore. Distinct from test #32 (modified/unstaged files) — verifies `git stash apply` restores both staged and unstaged changes correctly. Precondition: staged file with content A, working dir modified to content B. After stash apply of stash with content C, staging area has C (not A or B). |
+| 33.3 | Core | AC-1 | Unit | test_mcp_rollback.py | `should_reject_non_prefixed_stash_for_rollback` | rollback_to_checkpoint with a non-aristotle-rollback prefixed stash name returns error `{success: false, error: "invalid checkpoint name"}`. Security boundary: only prefixed stashes are valid rollback targets. Test with names like `"regular-stash"`, `"stash@{0}"`, `"aristotle-other:checkpoint"`. |
+| 33.4 | Medium | AC-9 | Unit | test_mcp_rollback.py | `should_complete_rollback_when_audit_write_fails` | rollback_to_checkpoint successfully restores state even when McpAuditEntry write to audit.jsonl fails (e.g., permission denied). Returns `{success: true, pipeline_reset_required: ..., warning: "audit write failed"}`. Follows pipeline-reset.md test #28 pattern — operational continuity over audit completeness. |
 
 ## Design Coverage Matrix (Phase 2 → Tests)
 
@@ -87,9 +95,9 @@
 | 2 | Key | RollbackEngine.validate_path | Component | Unit | `should_validate_path_blocks_traversal` | Path safety |
 | 3 | Key | STASH_WARNING_THRESHOLD | Constant | Unit | `should_warn_at_stash_threshold_warning` | Count ≥ 5 |
 | 4 | Key | STASH_HARD_LIMIT | Constant | Unit | `should_block_at_stash_hard_limit` | Count ≥ 10 |
-| 5 | Key | UNTRACKED_FILES_THRESHOLD | Constant | Unit | `should_warn_on_large_untracked_files` | > 100MB |
+| 5 | Key | UNTRACKED_FILES_THRESHOLD | Constant | Unit | `should_warn_on_large_untracked_files` | > 100MB. **Clarification**: 100 MiB (100 × 1024 × 1024 = 104,857,600 bytes), NOT 100 MB (100,000,000 bytes). Implementation uses binary (MiB) interpretation. |
 | 6 | Key | STASH_CLEANUP_KEEP | Constant | Unit | `should_cleanup_oldest_stashes` | Keep 3 |
-| 7 | Key | pipeline_reset_required | Interface field | Unit | `should_return_pipeline_reset_required_on_rollback` | Flag in return dict |
+| 7 | Key | pipeline_reset_required | Interface field | Unit | `should_return_pipeline_reset_required_on_rollback` | Flag in return dict. **Flag semantics**: `true` when checkpoint was created during an active pipeline run with dirty PipelineState; `false` when no pipeline state was active at checkpoint creation time (clean/default state). Determined by PipelineState state at checkpoint creation, not by rollback operation itself. |
 
 ## Edge Cases & Error Paths
 
@@ -126,8 +134,14 @@
 
 - None. Stash name format confirmed: `aristotle-rollback:checkpoint-<name>` where `<name>` is user-provided. Implementation adds `checkpoint-` sub-prefix (source: `_tools_rollback.py` L62, L151). Matches spec (05-phase4-merge.md L60, qa-phase4.md L41).
 
+## Known Limitations
+
+- **Audit asymmetry for cleanup_rollback_stashes failure path**: `rollback_to_checkpoint` has a failure-audit test (#18.1: `should_write_audit_entry_on_stash_apply_error`), but `cleanup_rollback_stashes` has no equivalent failure-audit test. Success-audit is covered by #27. This asymmetry exists because cleanup is a pruning operation with no observable state change on failure (stashes remain), whereas rollback applies a state change that fails mid-operation. Cleanup failure audit is tracked in KI-182. Phase 4 should add `should_write_audit_entry_on_cleanup_failure` or document as accepted asymmetry.
+
 ---
 
 **Note: Per 05-phase4-merge.md line 22, "git reset --hard" is mentioned as the generic rollback mechanism. The implementation uses stash-based operations (create_rollback_point/rollback_to_checkpoint) exclusively — `git stash apply` restores state (NOT `git stash pop` and NOT `git reset --hard`). `git stash apply` preserves the stash entry on failure; `git stash pop` drops it unconditionally. This is a design clarification: rollback_to_checkpoint = `git stash apply` + conditional `git stash drop` on success. No git reset --hard tests are needed.**
 
 **Traceability note for RollbackEngine "2 generic handlers"**: The Phase 1 spec (05-phase4-merge.md line 22) references "2 个通用处理器". Handler 1 = `validate_path()` (tested in tests #12-15). Handler 2 = generic rollback mechanism, now implemented as stash-based `create_rollback_point`/`rollback_to_checkpoint` lifecycle (tested in tests #1-4, #22). Both handlers have complete test coverage.
+
+**Migration Risk Note**: The PRD states RollbackEngine is simplified (no violation-specific strategies). Phase 3 tests verify the simplified stash-based interface. If Phase 4 implementation removes internal fields referenced by migration code (e.g., violation-specific handler dispatch tables), existing tests that assert on those fields will break. Mitigation: Phase 4 migration should grep for `RollbackEngine` field references and update/remove assertions before deleting implementation fields. Tests #12-15 (validate_path) and #1-4 (stash lifecycle) are migration-safe; only internal implementation tests (if any) referencing removed fields need review.

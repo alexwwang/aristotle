@@ -2,14 +2,15 @@
 
 **Source version**: quality-assurance-implementation-plan.md v1.46
 **Reference format**: `[module_file] §section Loriginal_line`
-**Total issues**: 160
+**Total issues**: 165
 
 ## Summary by Severity
-- **limitation**: 115
+- **limitation**: 120
 - **performance**: 27
 - **migration**: 10
 - **constraint**: 4
 - **breaking-change**: 3
+- **bug**: 1
 - **decision**: 1
 
 ## Summary by Module
@@ -810,3 +811,49 @@ If `.bridge-active` marker exists with a PID that no longer exists (crashed prev
 **Severity**: M | **Deferred to**: Phase 4 implementation
 
 `_tools_rollback.py` L209 uses `if new_count > STASH_WARNING_THRESHOLD` (strictly greater than 5), meaning warning fires at count 6+, not 5. PRD spec (05-phase4-merge.md L60) says "warning≥5 告警". Test plan correctly matches PRD (≥5). Fix: change operator from `>` to `>=` on L209.
+
+---
+
+## QA-P4 Phase 3 Test Plan — Deferred Coverage Gaps
+
+### [KI-179] `limitation` | [mcp-audit-log] I/O error handling not covered by dedicated test
+
+**Severity**: H | **Deferred to**: Phase 4 implementation
+
+I/O errors during audit.jsonl append (partial write, disk full, permission denied) are not covered by a dedicated test. Nearest coverage is test #12 (`should_populate_error_field_on_error_result`) which tests error population but not I/O exception handling. Documented in mcp-audit-log.md Edge Cases (lines 76, 79) as explicit gap. Phase 4 should add `should_handle_io_error_gracefully` test.
+
+### [KI-180] `limitation` | [ki-doc-tools] truncated=true path for audit writes not tested
+
+**Severity**: H | **Deferred to**: Phase 4 implementation
+
+A write_ki_doc call producing content exceeding MCP_AUDIT_JSONL_LINE_LIMIT (4KB) would set truncated=true — this path is not tested. Documented in ki-doc-tools.md test #16 gap note. Phase 4 should add `should_set_truncated_true_when_audit_entry_exceeds_4kb` test.
+
+### [KI-181] `limitation` | [rollback-tools] Audit field completeness assertion style deferred
+
+**Severity**: M | **Deferred to**: Phase 4 implementation
+
+Tests #23-24 include schema assertions (§3.0.7 fields) in descriptions but field-level completeness isn't explicitly enumerated in checklist-style assertion. Phase 4 implementation should use parameterized field-check assertions for audit entries to ensure no field is accidentally omitted.
+
+### [KI-182] `limitation` | [rollback-tools] Cleanup audit entry partial failure not tested
+
+**Severity**: M | **Deferred to**: Phase 4 implementation
+
+No test for cleanup_rollback_stashes succeeding but audit entry write failing (partial-failure scenario). Test #27 verifies cleanup audit on success but not the reverse. Phase 4 should add test for cleanup success with audit write failure.
+
+### [KI-183] `limitation` | [mcp-audit-log + rollback-tools] Fault injection for filesystem operations not tested
+
+**Severity**: M | **Deferred to**: Phase 4 implementation
+
+No fault injection tests for filesystem operations (disk full, permission denied). Both mcp-audit-log.md and rollback-tools.md acknowledge this gap. Phase 4 should add fault injection tests or document as accepted limitation per ADR-007 (single-agent, low contention).
+
+### [KI-184] `information` | [mcp-audit-log] cascading_failure edge case clarified
+
+**Severity**: L | **Status**: Clarified (R6′ Eval-Fix)
+
+The cascading_failure edge case was marked [x] citing tests #6 and #12. R6′ review clarified these tests cover logical isolation (append-only semantics + error path doesn't touch file) but not physical write-failure isolation (partial write on disk). The edge case description has been updated to accurately reflect what's tested. Physical I/O isolation is an append-mode guarantee provided by the OS; no explicit test needed beyond test #23 (I/O error handling).
+
+### [KI-185] `limitation` | [rollback-tools] cleanup_rollback_stashes has no failure-audit test
+
+**Severity**: M | **Deferred to**: Phase 4 implementation
+
+`cleanup_rollback_stashes` has success-audit test (#27) but no failure-audit test. This is asymmetric with `rollback_to_checkpoint` which has both (#24 success + #18.1 failure). Rationale: cleanup is a pruning operation with no observable state change on failure, but Phase 4 should add `should_write_audit_entry_on_cleanup_failure` for audit completeness. See also KI-182 (partial failure scenario). Documented in rollback-tools.md Known Limitations.

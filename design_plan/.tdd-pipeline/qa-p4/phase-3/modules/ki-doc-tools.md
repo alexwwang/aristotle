@@ -50,25 +50,33 @@
 | 8 | Core | AC-1 | Unit | test_mcp_ki_doc.py | `should_create_parent_directory_if_missing` | mkdir -p on write |
 | 9 | Core | AC-1 | Unit | test_mcp_ki_doc.py | `should_return_success_on_write` | write_ki_doc returns success dict |
 | 10 | Core | AC-1 | Unit | test_mcp_ki_doc.py | `should_return_error_dict_on_io_error` | IOError during write returns {"success": false, "error": "I/O error: ..."}. **Note**: existing test file has name `test_should_return_none_on_io_error` — should be renamed to match plan. |
+| 10.1 | Core | AC-9 | Unit | test_mcp_ki_doc.py | `should_write_audit_entry_on_io_error_path` | IOError during write_ki_doc still writes McpAuditEntry with result='error' and error field containing the I/O error message. Verify audit.jsonl entry exists after error path. |
 | 11 | Core | AC-1 | Unit | test_mcp_ki_doc.py | `should_parse_newest_timestamp` | _parse_newest_timestamp extracts latest ISO timestamp |
-| 12 | Core | AC-1 | Unit | test_mcp_ki_doc.py | `should_treat_nonexistent_doc_as_fresh` | ensure_updated returns True for missing file. Note: This is by design—no prior assessment data means no staleness concern, treated as fresh. A missing file during assessment is a valid "no prior data" state and does NOT mask errors. |
-| 13 | Core | AC-1 | Integration | test_mcp_ki_doc.py | `should_round_trip_write_and_read` | Write entry → read back → content matches |
+| 12 | Core | AC-1 | Unit | test_mcp_ki_doc.py | `should_treat_nonexistent_doc_as_fresh` | ensure_updated returns True for missing file. **[Design Decision]** §3.0.8 doesn't specify behavior for missing files — "missing file = fresh" is an implementation decision, not a spec requirement. This is by design—no prior assessment data means no staleness concern, treated as fresh. A missing file during assessment is a valid "no prior data" state and does NOT mask errors. |
+| 13 | Core | AC-1 | Integration | test_mcp_ki_doc.py | `should_round_trip_write_and_read` | Write entry → read back → content matches. **Must test all 3 entry_types**: intervention, assessment, merge. Each entry_type has different required fields and format — round-trip must be verified independently for each type. |
 | 14 | Core | AC-1 | Unit | test_mcp_ki_doc.py | `should_include_rollback_info_in_intervention` | rollback_result fields in entry |
 | 15 | Core | AC-1 | Unit | test_mcp_ki_doc.py | `should_include_forbidden_patterns_in_intervention` | validation_result matches in entry |
-| 16 | Core | AC-9 | Unit | test_mcp_ki_doc.py | `should_write_audit_entry_on_ki_doc_write` | write_ki_doc writes McpAuditEntry. **Schema**: assert entry fields per §3.0.7 — timestamp valid ISO 8601, tool=='write_ki_doc', result=='success', runId present (string), params present (dict). |
-| 17 | Core | AC-9 | Unit | test_mcp_ki_doc.py | `should_write_audit_entry_on_ki_doc_read` | read_ki_docs writes McpAuditEntry. **Schema**: assert entry fields per §3.0.7 — timestamp valid ISO 8601, tool=='read_ki_docs', result=='success', runId present (string), params present (dict). **Note**: `freshness_check=True` path returns early and does NOT write audit entry — test #17 asserts on normal read path only. |
+| 16 | Core | AC-9 | Unit | test_mcp_ki_doc.py | `should_write_audit_entry_on_ki_doc_write` | write_ki_doc writes McpAuditEntry. **Schema**: assert entry fields per §3.0.7 — timestamp valid ISO 8601, tool=='write_ki_doc', result=='success', runId present (string), params present (dict). **Also assert**: `truncated` field is present (boolean, expected false for normal writes per §3.0.7). **Gap note**: This test covers normal-size entries (truncated=false). A write_ki_doc call producing content exceeding MCP_AUDIT_JSONL_LINE_LIMIT (4KB) would set truncated=true — this path is not tested here. Consider adding a dedicated test `should_set_truncated_true_when_audit_entry_exceeds_4kb` in Phase 4 to cover the truncation=true path for ki-doc audit writes. |
+| 17 | Core | AC-9 | Unit | test_mcp_ki_doc.py | `should_write_audit_entry_on_ki_doc_read` | read_ki_docs writes McpAuditEntry. **Schema**: assert entry fields per §3.0.7 — timestamp valid ISO 8601, tool=='read_ki_docs', result=='success', runId present (string), params present (dict). **Also assert**: `truncated` field is present (boolean, expected false for normal reads per §3.0.7). **Note**: `freshness_check=True` path returns early and does NOT write audit entry — test #17 asserts on normal read path only. **Gap note**: Same truncation gap as test #16 — read operations are unlikely to exceed 4KB but if they do, the truncated=true path is untested. |
+| 17.1 | Core | AC-9 | Unit | test_mcp_ki_doc.py | `should_not_write_audit_entry_on_freshness_check_path` | read_ki_docs with `freshness_check=True` returns `{"fresh": True/False}` and does NOT write any McpAuditEntry to audit.jsonl. Verify audit.jsonl has no entries for this call. |
+| 6.3 | Core | AC-1 | Unit | test_mcp_ki_doc.py | `should_return_fresh_at_one_second_below_threshold` | Doc with timestamp age=86399s (one second below KI_FRESHNESS_THRESHOLD of 86400s) → `{"fresh": True}`. Confirms implementation uses strict `<` comparison: `age < threshold` is fresh. |
 | 18 | Core | AC-1 | Unit | test_mcp_ki_doc.py | `should_handle_empty_events_list_in_merge_entry` | write_ki_doc with empty ViolationEvents list produces valid entry |
 | 19 | Medium | AC-1 | Unit | test_mcp_ki_doc.py | `should_reject_invalid_entry_type` | write_ki_doc with entry_type='invalid_type' raises ValueError (implementation raises, tests use pytest.raises) — only intervention/assessment/merge accepted |
 | 20 | Medium | AC-1 | Unit | test_mcp_ki_doc.py | `should_treat_malformed_doc_as_fresh` | When file exists but has no parseable timestamps, ensure_updated returns True (treat as fresh/unknown state) |
 | 21 | Medium | AC-1 | Unit | test_mcp_ki_doc.py | `should_handle_large_violation_list_in_merge_entry` | Verify performance and correctness with 100+ ViolationEvents |
 | 22 | Medium | AC-1 | Unit | test_mcp_ki_doc.py | `should_handle_non_utf8_content_gracefully` | Verify read_ki_docs returns appropriate error for non-decodable content |
 | 23 | Medium | AC-1 | Unit | test_mcp_ki_doc.py | `should_return_empty_list_when_filter_matches_no_entries` | Filter with no matching entries returns empty list without errors |
-| 24 | Medium | AC-1 | Unit | test_mcp_ki_doc.py | `should_reject_entry_with_missing_required_fields` | Validates and rejects malformed entries with missing required fields — raises ValueError (implementation raises, tests use pytest.raises) |
+| 24 | Medium | AC-1 | Unit | test_mcp_ki_doc.py | `should_reject_entry_with_missing_required_fields` | Validates and rejects malformed entries with missing required fields per entry_type: intervention (violation, timestamp, file, phase), assessment (phase, next_phase, status), merge (violations, phase, requirement) — raises ValueError with specific field name in error message. |
+| 24.1 | Medium | AC-1 | Unit | test_mcp_ki_doc.py | `should_accept_entry_with_optional_fields_omitted` | Entries with only required fields (no optional fields like context for intervention) are accepted without error. Verifies the boundary: required fields missing → error, optional fields missing → success. Parameterized across all 3 entry types. |
 | 25 | Medium | AC-1 | Unit | test_mcp_ki_doc.py | `should_gracefully_handle_corrupted_file` | write_ki_doc to file with corrupted existing content uses graceful fallback: decodes with `errors="replace"`, prepends KI_HEADER if missing, then appends entry. Returns `{success: true}`. Implementation never rejects — corrupted bytes are replaced, not rejected. |
 | 26 | Medium | AC-1 | Unit | test_mcp_ki_doc.py | `should_handle_non_utf8_encodable_content` | write_ki_doc with content containing surrogate characters: implementation silently replaces non-encodable characters (errors="replace") and returns {success: True} |
 | 27 | Core | AC-1 | Unit | test_mcp_ki_doc.py | `should_reject_path_traversal_in_ki_doc_path` | write_ki_doc and read_ki_docs with ki_doc_path containing `..` traversal returns security error |
 | 28 | Core | AC-1 | Unit | test_mcp_ki_doc.py | `should_reject_absolute_path_outside_repo` | ki_doc_path pointing outside repo directory returns security error |
 | 29 | Core | AC-1 | Unit | test_mcp_ki_doc.py | `should_reject_symlink_escape_in_ki_doc_path` | ki_doc_path with symlink pointing outside repo returns security error |
+| 30 | Core | AC-1 | Unit | test_mcp_ki_doc.py | `should_reject_null_ki_doc_path` | write_ki_doc and read_ki_docs with ki_doc_path=None returns validation error. Validates null_inputs edge case. |
+| 31 | Core | AC-1 | Unit | test_mcp_ki_doc.py | `should_reject_case_variant_entry_type` | entry_type='Intervention'/'INTERVENTION' raises ValueError — only lowercase 'intervention'/'assessment'/'merge' accepted per test #19. |
+| 31.1 | Core | AC-1 | Unit | test_mcp_ki_doc.py | `should_reject_empty_string_ki_doc_path` | write_ki_doc and read_ki_docs with ki_doc_path="" returns validation error `{success: false, error: "ki_doc_path required"}`. Complements test #30 (null path) — empty string is a distinct validation failure. |
+| 31.2 | Medium | AC-1 | Unit | test_mcp_ki_doc.py | `should_silently_ignore_unrecognized_filter_keys` | read_ki_docs with filter `{type: 'intervention', unknown_key: 'value'}` returns results as if unknown_key was not present (silently ignored). Document expected behavior: unrecognized filter keys are silently ignored, not errored. |
 
 ## Design Coverage Matrix (Phase 2 → Tests)
 
@@ -80,6 +88,7 @@
 | 4 | Key | KiDocManager.record_merge | Method | Unit | `should_write_merge_entry` | Events list + context |
 | 5 | Key | _parse_newest_timestamp | Internal | Unit | `should_parse_newest_timestamp` | Regex on file content |
 | 6 | Key | _append helper | Internal | Unit | `should_create_doc_with_header_if_missing` | Auto-create behavior |
+| 7 | Key | _validate_ki_path | Security Helper | Unit | `should_reject_path_traversal_in_ki_doc_path` | Path traversal protection (covers tests #27-29) |
 
 ## Edge Cases & Error Paths
 
@@ -91,7 +100,7 @@
 - [x] network_failures — I/O error on write (permission denied)
 - [x] invalid_state_transitions — write to read-only file
 - [x] serialization_boundary — special characters in violation_type, file paths with spaces
-- [x] error_handler_correctness — IOError caught, logged, returns None/false
+- [x] error_handler_correctness — IOError caught, logged, returns {success: false, error: "I/O error: ..."} (matches test #10 specification)
 - [x] implicit_contract — append-only (never overwrite existing content)
 - [ ] resource_leak — N/A
 - [ ] cascading_failure — N/A (single operation)
