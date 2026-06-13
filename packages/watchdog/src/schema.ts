@@ -10,6 +10,12 @@ export type CheckpointEvent =
   | 'user_approval'
   | 'phase_complete'
   | 'why_articulation'
+  | 'pipeline_suspend'       // Phase 3: pipeline nesting
+  | 'pipeline_resume'        // Phase 3: pipeline nesting
+  | 'pipeline_pause'         // Phase 3: pipeline nesting
+  | 'pipeline_unpause'       // Phase 3: pipeline nesting
+  | 'd2_complete'            // Phase 3: pipeline nesting
+  | 'phase_fail'             // Phase 3: pipeline nesting
 
 import type { LoopType, PhaseLoopMap } from './loop-config.js'
 
@@ -54,6 +60,19 @@ export interface PipelineState {
   auditEntryCount?: number
   /** Phase 1: set by appendAudit when count exceeds MAX_AUDIT_ENTRIES. */
   evictionNeeded?: boolean
+
+  // Phase 3: pipeline nesting fields
+  depth?: number
+  parentRunId?: string
+  parentPipelineProjectId?: string
+  childPipelineRunId?: string
+  suspendedReason?: string
+  suspendedAt?: string
+  suspendedPhase?: number
+  prePauseStatus?: PhaseStatus
+  preSuspendStatus?: PhaseStatus
+  pending_pause?: PendingPause | null
+  child_pause_timer_started_at?: string
 }
 
 /** Phase 2+ pipeline state with guaranteed ownerSessionId. */
@@ -66,7 +85,7 @@ export function hasOwner(state: PipelineState | null): state is OwnedPipelineSta
   return state !== null && typeof state.ownerSessionId === 'string' && state.ownerSessionId.length > 0
 }
 
-export type PhaseStatus = 'idle' | 'active' | 'ralph_loop' | 'awaiting_approval' | 'complete'
+export type PhaseStatus = 'idle' | 'active' | 'ralph_loop' | 'awaiting_approval' | 'complete' | 'suspended' | 'paused' | 'failed' | 'cancelled'
 
 export interface PhaseRecord {
   phase: number
@@ -235,3 +254,45 @@ export type ArticulationDimension = 'what_it_protects' | 'key_risks' | 'why_appr
 export const OBS_TYPE_REVIEWER_SPAWNED = '_reviewer_spawned' as const
 export const OBS_TYPE_OBSERVER_DEGRADED = '_observer_degraded' as const
 export const OBS_TYPE_PROMPT_INJECTION = '_prompt_injection' as const
+
+// Phase 3: pipeline nesting types
+
+export interface PendingPause {
+  reason: string
+  violation_type: string
+  files: string[]
+}
+
+export interface SuspendedPipeline {
+  runId: string
+  suspendedAt: string
+  suspendedPhase: number
+  depth: number
+  childDepth?: number
+  parentRunId?: string
+  parentPipelineProjectId?: string
+  parentRegressionHistory?: unknown[]
+  suspendedReason: string
+  childRunId?: string
+  quarantineSuccess?: boolean | undefined
+}
+
+export interface SuspendedStack {
+  entries: SuspendedPipeline[]
+}
+
+export interface ReviewerTakeoverState {
+  t1SessionId: string
+  t2SessionId: string
+  resultFile: string
+  cleanupToken: string
+  spawnPhase: string
+}
+
+export interface ChildFailureContext {
+  childRunId: string
+  failurePhase: number
+  failureReason: string
+  quarantinedFiles: string[]
+  violationTypes: string[]
+}

@@ -42,3 +42,7 @@ export const TIMEOUT_DEGRADE_THRESHOLD = 3
 
 /** Max audit log entries before FIFO eviction triggers. ADR-011: eviction at checkpoint, not append. */
 export const MAX_AUDIT_ENTRIES = 5000
+
+export const MAX_DEPTH = 10
+export const PAUSE_TIMEOUT_MS = 30 * 60 * 1000
+export const CROSS_PROJECT_RESOLUTION_TIMEOUT_MS = 10 * 1000

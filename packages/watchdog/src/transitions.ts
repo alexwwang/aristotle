@@ -1177,3 +1177,11 @@ export function applyTransition(
     }
   }
 }
+
+// Phase 3: pipeline nesting transition validation
+export function validateNestingTransition(
+  fromStatus: string,
+  toStatus: string,
+): ValidationResult {
+  throw new Error('Not implemented: validateNestingTransition')
+}

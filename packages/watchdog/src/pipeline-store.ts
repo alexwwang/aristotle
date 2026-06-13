@@ -10,8 +10,12 @@ import type {
   PipelineState,
   ProjectIndex,
   RalphLoopState,
+  SuspendedPipeline,
+  SuspendedStack,
+  ChildFailureContext,
+  ReviewerTakeoverState,
 } from './schema.js';
-import { MAX_AUDIT_ENTRIES } from './constants.js';
+import { MAX_AUDIT_ENTRIES, MAX_DEPTH } from './constants.js';
 
 /** Filter options for getUnresolvedViolations */
 export interface ViolationFilter {
@@ -530,6 +534,66 @@ export class PipelineStore {
     for (const entry of allEntries) {
       this.indexEntry(projectId, runId, entry._sourceKey!, entry)
     }
+  }
+
+  // ------------------------------------------------------------------
+  // Phase 3: Pipeline nesting stubs
+  // ------------------------------------------------------------------
+
+  getSuspendedStack(projectId: string): SuspendedStack {
+    throw new Error('Not implemented: getSuspendedStack')
+  }
+
+  pushSuspended(projectId: string, entry: SuspendedPipeline): void {
+    throw new Error('Not implemented: pushSuspended')
+  }
+
+  popSuspended(projectId: string): SuspendedPipeline | undefined {
+    throw new Error('Not implemented: popSuspended')
+  }
+
+  canSuspend(projectId: string): boolean {
+    throw new Error('Not implemented: canSuspend')
+  }
+
+  suspendActive(projectId: string, reason: string): SuspendedPipeline {
+    throw new Error('Not implemented: suspendActive')
+  }
+
+  resumeSuspended(projectId: string, childRunId: string): PipelineState {
+    throw new Error('Not implemented: resumeSuspended')
+  }
+
+  detectOrphanedSuspend(projectId: string): SuspendedPipeline | null {
+    throw new Error('Not implemented: detectOrphanedSuspend')
+  }
+
+  setChildRunId(projectId: string, parentRunId: string, childRunId: string): void {
+    throw new Error('Not implemented: setChildRunId')
+  }
+
+  pauseActive(projectId: string): void {
+    throw new Error('Not implemented: pauseActive')
+  }
+
+  resumeFromPause(projectId: string): PipelineState {
+    throw new Error('Not implemented: resumeFromPause')
+  }
+
+  formatSuspendMessage(phase: number, reason: string): string {
+    throw new Error('Not implemented: formatSuspendMessage')
+  }
+
+  formatResumeMessage(childStatus: string, depth: number): string {
+    throw new Error('Not implemented: formatResumeMessage')
+  }
+
+  formatChildFailureMessage(context: ChildFailureContext, phase: number, depth: number): string {
+    throw new Error('Not implemented: formatChildFailureMessage')
+  }
+
+  formatOrphanedRecoveryNotification(phase: number, depth: number): string {
+    throw new Error('Not implemented: formatOrphanedRecoveryNotification')
   }
 
 }
