@@ -110,7 +110,7 @@ describe('Reviewer Cleanup', () => {
     const token = generateCleanupToken()
     const state = makeRalphState()
     const valid = validateCleanupToken(state, token)
-    expect(typeof valid).toBe('boolean')
+    expect(valid).toBe(false)
   })
 
   // RT-032b
@@ -131,7 +131,7 @@ describe('Reviewer Cleanup', () => {
   it('should_defer_cleanup_if_cleanup_token_mismatch', () => {
     const state = makeRalphState()
     const valid = validateCleanupToken(state, 'wrong-token')
-    expect(typeof valid).toBe('boolean')
+    expect(valid).toBe(false)
   })
 
   // RT-032e
@@ -161,7 +161,7 @@ describe('Reviewer Cleanup', () => {
     const state = makeRalphState()
     const valid1 = validateCleanupToken(state, token)
     const valid2 = validateCleanupToken(state, 'different-token')
-    expect(typeof valid1).toBe('boolean')
-    expect(typeof valid2).toBe('boolean')
+    expect(valid1).toBe(false)
+    expect(valid2).toBe(false)
   })
 })

@@ -13,7 +13,9 @@ describe('Dual-Pass Orchestration', () => {
   // RT-042c-1
   it('should_assemble_review_scope_from_target_files_and_direct_imports', () => {
     const result = assembleReviewScope(['src/auth.ts', 'src/user.ts'], ['src/types.ts'])
-    expect(result.in_scope).toBeDefined()
+    expect(result.in_scope).toContain('src/auth.ts')
+    expect(result.in_scope).toContain('src/user.ts')
+    expect(result.in_scope).toContain('src/types.ts')
   })
 
   // RT-042c-2
@@ -24,20 +26,27 @@ describe('Dual-Pass Orchestration', () => {
 
   // RT-042c-3
   it('should_parse_line_only_location_format', () => {
-    const result = parseLocationMap([':42'])
-    expect(result).toBeDefined()
+    const result = parseLocationMap([':42']) as Array<{ line: number; endLine: number }>
+    expect(result).toHaveLength(1)
+    expect(result[0].line).toBe(42)
+    expect(result[0].endLine).toBe(42)
   })
 
   // RT-042c-4
   it('should_parse_line_column_location_format', () => {
-    const result = parseLocationMap([':42:7'])
-    expect(result).toBeDefined()
+    const result = parseLocationMap([':42:7']) as Array<{ line: number; column: number; endLine: number }>
+    expect(result).toHaveLength(1)
+    expect(result[0].line).toBe(42)
+    expect(result[0].column).toBe(7)
+    expect(result[0].endLine).toBe(42)
   })
 
   // RT-042c-5
   it('should_parse_line_range_location_format', () => {
-    const result = parseLocationMap([':42-58'])
-    expect(result).toBeDefined()
+    const result = parseLocationMap([':42-58']) as Array<{ line: number; endLine: number }>
+    expect(result).toHaveLength(1)
+    expect(result[0].line).toBe(42)
+    expect(result[0].endLine).toBe(58)
   })
 
   // RT-042c-6
@@ -90,11 +99,15 @@ describe('Dual-Pass Orchestration', () => {
     expect(result).toBeDefined()
   })
 
-  // RT-043e
+  // RT-043e — emit 4 GPAVEvents (one per pass_step); verify no throw
   it('should_emit_4_gpav_events_one_per_pass_step', () => {
-    const event: GPAVEvent = { pass_step: 1, round: 1, dualPassAttempt: 1, timestamp: new Date().toISOString() }
-    orchestrator.emitGPAVEvent(event)
-    expect(true).toBe(true)
+    const baseEvent = { round: 1, dualPassAttempt: 1, timestamp: new Date().toISOString() }
+    expect(() => {
+      orchestrator.emitGPAVEvent({ ...baseEvent, pass_step: 1 } as GPAVEvent)
+      orchestrator.emitGPAVEvent({ ...baseEvent, pass_step: 2 } as GPAVEvent)
+      orchestrator.emitGPAVEvent({ ...baseEvent, pass_step: 3 } as GPAVEvent)
+      orchestrator.emitGPAVEvent({ ...baseEvent, pass_step: 4 } as GPAVEvent)
+    }).not.toThrow()
   })
 
   // RT-043f
@@ -119,39 +132,54 @@ describe('Dual-Pass Orchestration', () => {
     expect(result).toBeDefined()
   })
 
-  // RT-058b-1
+  // RT-058b-1 — ADOPT without fix → auto-REJECT
   it('should_auto_reject_adopt_without_fix_code_or_fix_suggestion', () => {
     const decisions = [{ finding_id: 'F-01', decision: 'ADOPT', rationale: 'Valid' }]
-    const result = enforceT10Contract(decisions)
-    expect(result).toBeDefined()
+    const result = enforceT10Contract(decisions) as Array<{ finding_id: string; decision: string; rationale: string }>
+    expect(result).toHaveLength(1)
+    expect(result[0].decision).toBe('REJECT')
+    expect(result[0].rationale).toContain('auto-rejected')
   })
 
-  // RT-058b-2
+  // RT-058b-2 — timeout ADOPT exempted from fix requirement
   it('should_exempt_timeout_adopt_from_fix_requirement', () => {
     const decisions = [{ finding_id: 'F-01', decision: 'ADOPT', rationale: 'Valid' }]
-    const result = enforceT10Contract(decisions, true)
-    expect(result).toBeDefined()
+    const result = enforceT10Contract(decisions, true) as Array<{ finding_id: string; decision: string }>
+    expect(result).toHaveLength(1)
+    expect(result[0].decision).toBe('ADOPT')
   })
 
-  // RT-058b-3
+  // RT-058b-3 — DEFER on C/H/M → auto-REJECT
   it('should_reject_defer_for_chm_severity_findings', () => {
     const decisions = [{ finding_id: 'F-01', decision: 'DEFER', rationale: 'Later', severity: 'C' }]
-    const result = enforceT10Contract(decisions)
-    expect(result).toBeDefined()
+    const result = enforceT10Contract(decisions) as Array<{ finding_id: string; decision: string }>
+    expect(result).toHaveLength(1)
+    expect(result[0].decision).toBe('REJECT')
   })
 
-  // RT-058b-4
+  // RT-058b-3b — DEFER on P/L/I → accepted (spec: "DEFER on P/L/I → accepted")
+  it('should_accept_defer_for_pli_severity_findings', () => {
+    const decisions = [{ finding_id: 'F-01', decision: 'DEFER', rationale: 'Phase 5', severity: 'P', defer_target: 'Phase 5' }]
+    const result = enforceT10Contract(decisions) as Array<{ finding_id: string; decision: string }>
+    expect(result).toHaveLength(1)
+    expect(result[0].decision).toBe('DEFER')
+  })
+
+  // RT-058b-4 — MODIFY with fix_code → accepted
   it('should_accept_modify_with_fix_code', () => {
     const decisions = [{ finding_id: 'F-01', decision: 'MODIFY', rationale: 'Fix', fix_code: 'const x = 1' }]
-    const result = enforceT10Contract(decisions)
-    expect(result).toBeDefined()
+    const result = enforceT10Contract(decisions) as Array<{ finding_id: string; decision: string }>
+    expect(result).toHaveLength(1)
+    expect(result[0].decision).toBe('MODIFY')
   })
 
-  // RT-058b-5
+  // RT-058b-5 — MODIFY without fix → auto-REJECT
   it('should_auto_reject_modify_without_fix_code_or_fix_suggestion', () => {
     const decisions = [{ finding_id: 'F-01', decision: 'MODIFY', rationale: 'Needs fix' }]
-    const result = enforceT10Contract(decisions)
-    expect(result).toBeDefined()
+    const result = enforceT10Contract(decisions) as Array<{ finding_id: string; decision: string; rationale: string }>
+    expect(result).toHaveLength(1)
+    expect(result[0].decision).toBe('REJECT')
+    expect(result[0].rationale).toContain('MODIFY')
   })
 
   // RT-087d

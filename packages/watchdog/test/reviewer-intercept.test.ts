@@ -75,8 +75,10 @@ describe('ReviewerInterceptRule', () => {
     // RT-006
     it('should_not_intercept_t1_or_t2_subagent_calls', () => {
       const state = makeRalphState()
-      const result = rule.evaluate('Task', { subagent_type: 'oracle', prompt: 'Review', description: 'Review' }, state, 'ses-t1-001')
-      expect(result.blocked).toBe(false)
+      const resultT1 = rule.evaluate('Task', { subagent_type: 'oracle', prompt: 'Review', description: 'Review' }, state, 'ses-t1-001')
+      expect(resultT1.blocked).toBe(false)
+      const resultT2 = rule.evaluate('Task', { subagent_type: 'oracle', prompt: 'Review', description: 'Review' }, state, 'ses-t2-001')
+      expect(resultT2.blocked).toBe(false)
     })
   })
 
@@ -103,6 +105,7 @@ describe('ReviewerInterceptRule', () => {
       const state = makeRalphState({}, { round: 3 })
       const result = rule.evaluate('Task', { subagent_type: 'oracle', prompt: 'Review', description: 'Review' }, state, 'ses-main-001')
       expect(result.state_mutated).toBe(true)
+      expect(result.redirectDirective).toContain('round=4')
     })
 
     // RT-008c

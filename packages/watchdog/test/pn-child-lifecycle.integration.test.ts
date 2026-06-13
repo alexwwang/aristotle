@@ -1,6 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { makeState } from './helpers.js'
-import type { ChildFailureContext, PipelineState, PendingPause } from '../src/schema.js'
 
 describe('child lifecycle integration - pipeline nesting', () => {
   beforeEach(() => {

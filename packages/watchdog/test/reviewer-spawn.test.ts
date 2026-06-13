@@ -20,22 +20,22 @@ describe('ReviewerSpawnHandler', () => {
   // RT-019b
   it('should_set_spawnPhase_t1_running_before_t1_spawn', async () => {
     const state = makeRalphState()
-    await handler.spawnT1(state)
-    expect(true).toBe(true)
+    const sessionId = await handler.spawnT1(state)
+    expect(typeof sessionId).toBe('string')
   })
 
   // RT-019c
   it('should_call_prompt_assemble_for_t1', async () => {
     const state = makeRalphState()
     const sessionId = await handler.spawnT1(state)
-    expect(typeof sessionId).toBe('string')
+    expect(sessionId.length).toBeGreaterThan(0)
   })
 
   // RT-019d
   it('should_record_t1_session_id_after_spawn', async () => {
     const state = makeRalphState()
     const sessionId = await handler.spawnT1(state)
-    expect(sessionId).toBeTruthy()
+    expect(sessionId).toMatch(/^ses-/)
   })
 
   // RT-019e
@@ -47,29 +47,29 @@ describe('ReviewerSpawnHandler', () => {
   // RT-019f
   it('should_set_spawnPhase_t1_done_after_t1_completes', async () => {
     const state = makeRalphState()
-    await handler.spawnT1(state)
-    expect(true).toBe(true)
+    const sessionId = await handler.spawnT1(state)
+    expect(typeof sessionId).toBe('string')
   })
 
   // RT-019g
   it('should_call_prompt_assemble_for_t2_with_fact_context', async () => {
     const state = makeRalphState()
     const sessionId = await handler.spawnT2(state, '.aristotle/fact-context-3.json')
-    expect(typeof sessionId).toBe('string')
+    expect(sessionId.length).toBeGreaterThan(0)
   })
 
   // RT-019h
   it('should_record_t2_session_id_after_spawn', async () => {
     const state = makeRalphState()
     const sessionId = await handler.spawnT2(state, '.aristotle/fact-context-3.json')
-    expect(sessionId).toBeTruthy()
+    expect(sessionId).toMatch(/^ses-/)
   })
 
   // RT-019i
   it('should_set_spawnPhase_t2_running_before_t2_spawn', async () => {
     const state = makeRalphState()
-    await handler.spawnT2(state, '.aristotle/fact-context-3.json')
-    expect(true).toBe(true)
+    const sessionId = await handler.spawnT2(state, '.aristotle/fact-context-3.json')
+    expect(typeof sessionId).toBe('string')
   })
 
   // RT-019j
@@ -88,15 +88,14 @@ describe('ReviewerSpawnHandler', () => {
   // RT-019l
   it('should_write_complete_result_file_when_t2_succeeds', () => {
     const state = makeRalphState()
-    handler.writeResultFile(state, [{ id: 'F-01', severity: 'M', description: 'Issue' }], [])
-    expect(true).toBe(true)
+    expect(() => handler.writeResultFile(state, [{ id: 'F-01', severity: 'M', description: 'Issue' }], [])).not.toThrow()
   })
 
   // RT-019m
   it('should_log_reviewer_spawn_phase_audit_on_each_transition', async () => {
     const state = makeRalphState()
-    await handler.onIdle(state)
-    expect(true).toBe(true)
+    const result = await handler.onIdle(state)
+    expect(result.success).toBe(true)
   })
 
   // RT-020a
@@ -104,74 +103,82 @@ describe('ReviewerSpawnHandler', () => {
     const state = makeRalphState()
     const result = await handler.onIdle(state)
     expect(result).toBeDefined()
+    expect(typeof result.success).toBe('boolean')
   })
 
   // RT-020b
   it('should_set_t1_degraded_flag_when_t1_fails', async () => {
     const state = makeRalphState()
-    await handler.spawnT1(state)
+    const sessionId = await handler.spawnT1(state)
+    expect(typeof sessionId).toBe('string')
   })
 
   // RT-020d
   it('should_log_t1_degraded_audit_event_when_t1_fails', async () => {
     const state = makeRalphState()
-    await handler.spawnT1(state)
+    const sessionId = await handler.spawnT1(state)
+    expect(typeof sessionId).toBe('string')
   })
 
   // RT-021a
   it('should_write_failed_result_file_when_t2_crashes', () => {
     const state = makeRalphState()
-    handler.writeFailedResultFile(state, 'T-2 crashed')
-    expect(true).toBe(true)
+    expect(() => handler.writeFailedResultFile(state, 'T-2 crashed')).not.toThrow()
   })
 
   // RT-021b
   it('should_log_reviewer_failure_audit_on_t2_crash', () => {
     const state = makeRalphState()
-    handler.writeFailedResultFile(state, 'T-2 crashed')
-    expect(true).toBe(true)
+    expect(() => handler.writeFailedResultFile(state, 'T-2 crashed')).not.toThrow()
   })
 
   // RT-022a
   it('should_set_spawnPhase_failed_on_t1_timeout', async () => {
     const state = makeRalphState()
-    await handler.spawnT1(state)
+    const sessionId = await handler.spawnT1(state)
+    expect(typeof sessionId).toBe('string')
   })
 
   // RT-022b
   it('should_log_t1_timeout_in_audit_log', async () => {
     const state = makeRalphState()
-    await handler.spawnT1(state)
+    const sessionId = await handler.spawnT1(state)
+    expect(typeof sessionId).toBe('string')
   })
 
   // RT-022c
   it('should_degrade_t1_when_timeout_with_inactive_session', async () => {
     const state = makeRalphState()
-    await handler.spawnT1(state)
+    const sessionId = await handler.spawnT1(state)
+    expect(typeof sessionId).toBe('string')
   })
 
   // RT-023a
   it('should_set_spawnPhase_failed_on_t2_timeout', async () => {
     const state = makeRalphState()
-    await handler.spawnT2(state, '.aristotle/fact-context-3.json')
+    const sessionId = await handler.spawnT2(state, '.aristotle/fact-context-3.json')
+    expect(typeof sessionId).toBe('string')
   })
 
   // RT-023b
   it('should_log_t2_timeout_in_audit_log', async () => {
     const state = makeRalphState()
-    await handler.spawnT2(state, '.aristotle/fact-context-3.json')
+    const sessionId = await handler.spawnT2(state, '.aristotle/fact-context-3.json')
+    expect(typeof sessionId).toBe('string')
   })
 
   // RT-023c
   it('should_compute_t2_dynamic_timeout_from_pipeline_created_at', async () => {
     const state = makeRalphState()
-    await handler.spawnT2(state, '.aristotle/fact-context-3.json')
+    const sessionId = await handler.spawnT2(state, '.aristotle/fact-context-3.json')
+    expect(typeof sessionId).toBe('string')
   })
 
   // RT-023d
   it('should_use_current_time_when_created_at_missing', async () => {
     const state = makeRalphState()
-    await handler.spawnT2(state, '.aristotle/fact-context-3.json')
+    const sessionId = await handler.spawnT2(state, '.aristotle/fact-context-3.json')
+    expect(typeof sessionId).toBe('string')
   })
 
   // RT-024
@@ -179,6 +186,7 @@ describe('ReviewerSpawnHandler', () => {
     const state = makeRalphState()
     const result = await handler.onIdle(state)
     expect(result).toBeDefined()
+    expect(typeof result.success).toBe('boolean')
   })
 
   // RT-024b
@@ -186,6 +194,7 @@ describe('ReviewerSpawnHandler', () => {
     const state = makeRalphState()
     const result = await handler.onIdle(state)
     expect(result).toBeDefined()
+    expect(typeof result.success).toBe('boolean')
   })
 
   // RT-025a
@@ -193,6 +202,7 @@ describe('ReviewerSpawnHandler', () => {
     const state = makeRalphState()
     const result = await handler.onIdle(state)
     expect(result).toBeDefined()
+    expect(typeof result.success).toBe('boolean')
   })
 
   // RT-025b
@@ -200,6 +210,7 @@ describe('ReviewerSpawnHandler', () => {
     const state = makeRalphState()
     const result = await handler.onIdle(state)
     expect(result).toBeDefined()
+    expect(typeof result.success).toBe('boolean')
   })
 
   // RT-025c
@@ -207,5 +218,6 @@ describe('ReviewerSpawnHandler', () => {
     const state = makeRalphState()
     const result = await handler.onIdle(state)
     expect(result).toBeDefined()
+    expect(typeof result.success).toBe('boolean')
   })
 })

@@ -7,6 +7,7 @@ import {
   isDualPassPhaseValid,
   validateDualPassTransition,
 } from '../src/dual-pass-supervision.js'
+import { setDualPassMode } from '../src/reviewer-state.js'
 import type { DualPassPhase } from '../src/reviewer-intercept.js'
 
 describe('Dual-Pass Supervision', () => {
@@ -66,14 +67,15 @@ describe('Dual-Pass Supervision', () => {
 
   // RT-064a
   it('should_reject_dual_pass_mode_mutation_after_creation', () => {
-    const result = validateDualPassTransition('d2_running', 'pending', true)
-    expect(result).toBe(false)
+    const state: { dualPassMode?: boolean } = { dualPassMode: true }
+    expect(() => setDualPassMode(state, false)).toThrow('dualPassMode is immutable after takeover creation')
   })
 
   // RT-064b
   it('should_set_dual_pass_mode_once_at_takeover_creation', () => {
-    const valid = isDualPassPhaseValid('recall_running')
-    expect(valid).toBe(true)
+    const state: { dualPassMode?: boolean } = {}
+    setDualPassMode(state, true)
+    expect(state.dualPassMode).toBe(true)
   })
 
   // RT-065a
@@ -94,8 +96,8 @@ describe('Dual-Pass Supervision', () => {
     expect(count).toBe(2)
   })
 
-  // RT-065b-reset
-  it('should_reset_d2_timeout_cycle_count_on_successful_d2_completion', () => {
+  // RT-065b-reset — spec requires resetD2TimeoutCycleCount (Phase 5); tests increment until then
+  it('should_increment_d2_timeout_cycle_count_from_zero', () => {
     const count = incrementD2TimeoutCycleCount({ d2TimeoutCycleCount: 0 })
     expect(count).toBe(1)
   })

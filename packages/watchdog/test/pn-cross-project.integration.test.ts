@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { makeState } from './helpers.js'
 import { MAX_DEPTH } from '../src/constants.js'
 
 describe('cross-project integration - pipeline nesting', () => {

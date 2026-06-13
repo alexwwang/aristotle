@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { CheckpointHandler } from '../src/checkpoint.js'
-import { formatPhaseStatus, PAUSE_TIMEOUT_MS } from '../src/pause-timeout-enforcer.js'
+import { formatPhaseStatus } from '../src/pause-timeout-enforcer.js'
+import { STALE_THRESHOLD_MS } from '../src/constants.js'
 import { createMockStore, makeState } from './helpers.js'
 
 
@@ -9,7 +10,7 @@ function createHandler(storeOverrides: Record<string, any> = {}) {
   Object.assign(store, storeOverrides)
   const handler = new CheckpointHandler(
     store as any,
-    PAUSE_TIMEOUT_MS,
+    STALE_THRESHOLD_MS,
     undefined,
     undefined,
     undefined,
@@ -60,6 +61,8 @@ describe('CheckpointHandler - pipeline nesting', () => {
   // #57
   it('should validate event payload before routing', async () => {
     const { handler, store } = createHandler()
+    const state = makeState({ currentPhase: 5, phaseStatus: 'ralph_loop' as any })
+    store.readState.mockReturnValue(state)
     store.getActiveRun.mockReturnValue({ runId: 'run-123', projectId: 'proj-1' })
     const result = await handler.handle(
       'pipeline_suspend' as any,
@@ -68,6 +71,9 @@ describe('CheckpointHandler - pipeline nesting', () => {
     )
     const parsed = JSON.parse(result)
     expect(parsed.ok).toBe(false)
+    // Spec #57: rejection must be about missing 'reason' field in payload,
+    // NOT about unknown event or corrupted state.
+    expect(parsed.violation).toMatch(/reason|payload/i)
   })
 
   // #58
@@ -186,6 +192,7 @@ describe('CheckpointHandler - pipeline nesting', () => {
     )
     const parsed = JSON.parse(result)
     expect(parsed.ok).toBe(false)
+    expect(parsed.violation).toMatch(/awaiting.approval/i)
   })
 
   // #124
@@ -203,10 +210,34 @@ describe('CheckpointHandler - pipeline nesting', () => {
     expect(parsed.ok).toBe(true)
   })
 
+  // #143
+  it('should check terminal status before suspended stack when starting pipeline', async () => {
+    const { handler, store } = createHandler()
+    const state = makeState({ phaseStatus: 'complete' as any })
+    store.readState.mockReturnValue(state)
+    store.getActiveRun.mockReturnValue({ runId: 'run-123', projectId: 'proj-1' })
+    store.getSuspendedStack = vi.fn().mockReturnValue({
+      entries: [{
+        runId: 'old-run', suspendedAt: '2026-01-01T00:00:00Z', suspendedPhase: 3,
+        depth: 0, suspendedReason: 'test_modification', childRunId: 'old-child',
+        quarantineSuccess: undefined, parentRegressionHistory: [],
+      }],
+    })
+    const result = await handler.handle(
+      'pipeline_start',
+      JSON.stringify({ description: 'fresh pipeline' }),
+      { worktree: '/tmp/test', sessionID: 'ses-1' },
+    )
+    const parsed = JSON.parse(result)
+    expect(parsed.ok).toBe(true)
+  })
+
   // #141
   it('should create fresh regression counter at 0 on normal pipeline start', async () => {
     const { handler, store } = createHandler()
-    store.getActiveRun.mockReturnValue(null)
+    const state = makeState({ phaseStatus: 'complete' as any })
+    store.readState.mockReturnValue(state)
+    store.getActiveRun.mockReturnValue({ runId: 'run-old', projectId: 'proj-1' })
     const result = await handler.handle(
       'pipeline_start',
       JSON.stringify({ description: 'fresh pipeline' }),
@@ -218,21 +249,31 @@ describe('CheckpointHandler - pipeline nesting', () => {
   })
 
   // #145
-  it('should route pipeline_pause event to pauseActive', async () => {
+  it('should route pipeline_pause and pipeline_unpause events', async () => {
     const { handler, store } = createHandler()
     const state = makeState({ currentPhase: 5, phaseStatus: 'ralph_loop' as any })
     store.readState.mockReturnValue(state)
     store.getActiveRun.mockReturnValue({ runId: 'run-123', projectId: 'proj-1' })
     store.pauseActive = vi.fn()
+    store.resumeFromPause = vi.fn()
 
-    const result = await handler.handle(
+    const pauseResult = await handler.handle(
       'pipeline_pause' as any,
       JSON.stringify({ reason: 'manual_pause' }),
       { worktree: '/tmp/test', sessionID: 'ses-1' },
     )
-    const parsed = JSON.parse(result)
-    expect(parsed.ok).toBe(true)
+    const pauseParsed = JSON.parse(pauseResult)
+    expect(pauseParsed.ok).toBe(true)
     expect(store.pauseActive).toHaveBeenCalledWith('proj-1')
+
+    const unpauseResult = await handler.handle(
+      'pipeline_unpause' as any,
+      JSON.stringify({}),
+      { worktree: '/tmp/test', sessionID: 'ses-1' },
+    )
+    const unpauseParsed = JSON.parse(unpauseResult)
+    expect(unpauseParsed.ok).toBe(true)
+    expect(store.resumeFromPause).toHaveBeenCalledWith('proj-1')
   })
 
   // #153
@@ -249,6 +290,7 @@ describe('CheckpointHandler - pipeline nesting', () => {
     )
     const parsed = JSON.parse(result)
     expect(parsed.ok).toBe(false)
+    expect(parsed.violation).toMatch(/reason|payload/i)
   })
 
   // #155

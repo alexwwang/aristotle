@@ -27,43 +27,38 @@ describe('Dual-Pass Integration', () => {
   it('should_degrade_recall_failed_to_pipeline_state', () => {
     const result = runDualPass(config, findings)
     const recallEvent = result.events.find(e => e.pass_step === 1)
-    if (recallEvent?.degradation) {
-      expect(recallEvent.degradation).toBeDefined()
-    }
+    expect(recallEvent).toBeDefined()
+    expect(recallEvent?.degradation).toBeDefined()
   })
 
   // TC-DP-003
   it('should_degrade_fact_gather_failed_to_main_agent', () => {
     const result = runDualPass(config, findings)
     const fgEvent = result.events.find(e => e.pass_step === 2)
-    if (fgEvent?.degradation) {
-      expect(fgEvent.degradation).toContain('main-agent')
-    }
+    expect(fgEvent).toBeDefined()
+    expect(fgEvent?.degradation).toContain('main-agent')
   })
 
   // TC-DP-004
   it('should_degrade_precision_failed_to_recall_only', () => {
     const result = runDualPass(config, findings)
     const precisionEvent = result.events.find(e => e.pass_step === 3)
-    if (precisionEvent?.degradation) {
-      expect(precisionEvent.degradation).toContain('recall_only')
-    }
+    expect(precisionEvent).toBeDefined()
+    expect(precisionEvent?.degradation).toContain('recall_only')
   })
 
   // TC-DP-005
   it('should_degrade_eval_fix_failed_to_confirmed_findings', () => {
     const result = runDualPass(config, findings)
     const evalEvent = result.events.find(e => e.pass_step === 4)
-    if (evalEvent?.degradation) {
-      expect(evalEvent.degradation).toContain('confirmed_findings')
-    }
+    expect(evalEvent).toBeDefined()
+    expect(evalEvent?.degradation).toContain('confirmed_findings')
   })
 
   // TC-DP-006
   it('should_propagate_originating_reason_in_cascade_skip', () => {
     const result = runDualPass(config, findings)
-    if (result.originatingReason) {
-      expect(result.originatingReason.length).toBeGreaterThan(0)
-    }
+    expect(result.originatingReason).toBeDefined()
+    expect(result.originatingReason.length).toBeGreaterThan(0)
   })
 })

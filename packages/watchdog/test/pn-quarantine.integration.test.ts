@@ -1,20 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { makeState } from './helpers.js'
-import type { SuspendedPipeline, SuspendedStack } from '../src/schema.js'
-
-function makeSuspendedPipeline(overrides?: Partial<SuspendedPipeline>): SuspendedPipeline {
-  return {
-    runId: 'run-123',
-    suspendedAt: '2026-06-06T12:00:00Z',
-    suspendedPhase: 5,
-    depth: 0,
-    suspendedReason: 'test_modification',
-    childRunId: undefined,
-    quarantineSuccess: undefined,
-    parentRegressionHistory: [],
-    ...overrides,
-  }
-}
 
 describe('quarantine integration - pipeline nesting', () => {
   beforeEach(() => {

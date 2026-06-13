@@ -28,22 +28,25 @@ describe('Dual-Pass Batch', () => {
   // RT-051a
   it('should_merge_batch_verdicts_with_reject_override', () => {
     const batches = [[{ id: 'F-01', verdict: 'REJECT' }], [{ id: 'F-01', verdict: 'CONFIRM' }]]
-    const merged = mergeBatchVerdicts(batches)
-    expect(merged).toBeDefined()
+    const merged = mergeBatchVerdicts(batches) as Array<{ id: string; verdict: string }>
+    expect(merged).toHaveLength(1)
+    expect(merged[0].verdict).toBe('REJECT')
   })
 
   // RT-051b
   it('should_merge_batch_verdicts_with_downgrade_precedence', () => {
     const batches = [[{ id: 'F-01', verdict: 'DOWNGRADE' }], [{ id: 'F-01', verdict: 'CONFIRM' }]]
-    const merged = mergeBatchVerdicts(batches)
-    expect(merged).toBeDefined()
+    const merged = mergeBatchVerdicts(batches) as Array<{ id: string; verdict: string }>
+    expect(merged).toHaveLength(1)
+    expect(merged[0].verdict).toBe('DOWNGRADE')
   })
 
   // RT-051c
   it('should_preserve_same_verdict_on_merge', () => {
     const batches = [[{ id: 'F-01', verdict: 'CONFIRM' }], [{ id: 'F-01', verdict: 'CONFIRM' }]]
-    const merged = mergeBatchVerdicts(batches)
-    expect(merged).toBeDefined()
+    const merged = mergeBatchVerdicts(batches) as Array<{ id: string; verdict: string }>
+    expect(merged).toHaveLength(1)
+    expect(merged[0].verdict).toBe('CONFIRM')
   })
 
   // RT-052a

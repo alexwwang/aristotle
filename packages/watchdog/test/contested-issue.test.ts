@@ -108,15 +108,30 @@ describe('ContestedIssue', () => {
   })
 
   // RT-057b
+  // Per spec RT-057: "Acceptance round does NOT increment dispute_rounds counter".
+  // The accept path removes the issue (RT-057a) without bumping the counter.
+  // Calling incrementDisputeRounds here would contradict RT-057b-cross below
+  // (which proves incrementDisputeRounds DOES increment 0→1→2).
+  // Verify accept path (removeContestedIssue) preserves dispute_rounds of remaining issues.
   it('should_not_increment_dispute_rounds_on_accept', () => {
-    const result = incrementDisputeRounds({ ...baseIssue, dispute_rounds: 2 })
-    expect(result.dispute_rounds).toBe(2)
+    const issues = [
+      { ...baseIssue, issue_id: 'M-1', dispute_rounds: 2 },
+      { ...baseIssue, issue_id: 'M-2', dispute_rounds: 1 },
+    ]
+    const remaining = removeContestedIssue(issues, 'M-1')
+    // Accepted issue removed; surviving issue's dispute_rounds unchanged
+    expect(remaining).toHaveLength(1)
+    expect(remaining[0].dispute_rounds).toBe(1)
   })
 
   // RT-057c
+  // Per spec: "No evidence entry appended to EscalationDossier.evidence for the acceptance round".
+  // Accept removes the issue; no dossier is built for accepted issues, so no evidence appended.
   it('should_not_append_evidence_on_accept', () => {
-    const dossier = buildEscalationDossier({ ...baseIssue, rationale_history: ['Original'] }, 'Agent', 'Reject')
-    expect(dossier.evidence.length).toBe(1)
+    const issues = [{ ...baseIssue, issue_id: 'M-1', rationale_history: ['Original'] }]
+    const remaining = removeContestedIssue(issues, 'M-1')
+    // Accepted issue removed entirely — no escalation dossier built, no evidence appended
+    expect(remaining).toHaveLength(0)
   })
 
   // RT-057b-cross

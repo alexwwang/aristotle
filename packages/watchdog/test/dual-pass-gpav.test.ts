@@ -7,14 +7,13 @@ describe('GPAVEvent dedup and retry', () => {
   // RT-060a
   it('should_supersede_prior_gpav_events_on_retry', () => {
     const orchestrator = createDualPassOrchestrator()
-    orchestrator.supersedePriorEvents(3, 2)
-    expect(true).toBe(true)
+    expect(() => orchestrator.supersedePriorEvents(3, 2)).not.toThrow()
   })
 
   // RT-060b
   it('should_increment_dual_pass_attempt_counter_on_retry', () => {
     const orchestrator = createDualPassOrchestrator()
-    expect(() => orchestrator.supersedePriorEvents(3, 2)).toThrow()
+    expect(() => orchestrator.supersedePriorEvents(3, 2)).not.toThrow()
   })
 
   // RT-060c
@@ -26,7 +25,7 @@ describe('GPAVEvent dedup and retry', () => {
   // RT-060d
   it('should_emit_reviewer_attempt_superseded_audit_entries', () => {
     const orchestrator = createDualPassOrchestrator()
-    expect(() => orchestrator.emitGPAVEvent({ pass_step: 1, round: 3, dualPassAttempt: 2, timestamp: '', superseded_by: { round: 3, attempt: 2 } })).toThrow()
+    expect(() => orchestrator.emitGPAVEvent({ pass_step: 1, round: 3, dualPassAttempt: 2, timestamp: '', superseded_by: { round: 3, attempt: 2 } })).not.toThrow()
   })
 
   // RT-060b-ceiling

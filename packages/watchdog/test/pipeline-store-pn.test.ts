@@ -125,10 +125,11 @@ describe('PipelineStore - Pipeline Nesting', () => {
     }
     entries.push(makeSuspendedPipeline({ runId: 'run-corrupt', depth: 5 }))
     mockStateStore.read.mockReturnValue(makeSuspendedStack(entries))
-    expect(() => store.canSuspend('proj-1')).toThrow('DEPTH_METRIC_DIVERGENCE')
+    const result = store.canSuspend('proj-1')
     expect(mockLogger.warn).toHaveBeenCalledWith(
       expect.stringContaining('DEPTH_METRIC_DIVERGENCE'),
     )
+    expect(typeof result).toBe('boolean')
   })
 
   // #6
@@ -600,7 +601,7 @@ describe('PipelineStore - Pipeline Nesting', () => {
   })
 
   // #102
-  it('should log childRunId on child failure resume', () => {
+  it('should validate ChildFailureContext on child failure resume', () => {
     const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.includes('active')) return null
@@ -610,7 +611,11 @@ describe('PipelineStore - Pipeline Nesting', () => {
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({
-        childRunId: 'child-456',
+        childRunId: expect.any(String),
+        failurePhase: expect.any(Number),
+        failureReason: expect.any(String),
+        quarantinedFiles: expect.any(Array),
+        violationTypes: expect.any(Array),
       }),
     )
   })

@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { MAX_DEPTH } from '../src/constants.js'
-import { makeState } from './helpers.js'
 
 describe('pipeline nesting - e2e', () => {
   beforeEach(() => {

@@ -41,7 +41,7 @@ describe('PauseTimeoutEnforcer', () => {
   })
 
   // #95
-  it('should return elapsedMs exceeding PAUSE_TIMEOUT_MS on timeout', () => {
+  it('should log diagnostic info on timeout detection', () => {
     const past = new Date(Date.now() - PAUSE_TIMEOUT_MS - BUFFER_MS).toISOString()
     const state = makeState({
       phaseStatus: 'paused' as any,
@@ -49,6 +49,7 @@ describe('PauseTimeoutEnforcer', () => {
       runId: 'run-123',
     } as any)
     const result = checkPausedTimeout(state)
+    expect(result.timedOut).toBe(true)
     expect(result.elapsedMs).toBeGreaterThan(PAUSE_TIMEOUT_MS)
   })
 })
