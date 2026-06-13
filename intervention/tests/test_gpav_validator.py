@@ -68,4 +68,4 @@ class TestGPAVValidator:
         submission = _make_submission(findings=[_make_finding(severity="INVALID")])
         result = validator.validate(submission)
         assert not result.valid
-        assert len(result.errors) > 0
+        assert result.rejection_reason != ""
