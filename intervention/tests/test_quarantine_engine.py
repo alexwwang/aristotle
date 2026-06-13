@@ -145,10 +145,21 @@ def test_should_quarantine_single_untracked_file(engine, untracked_file):
 
 # === Q-004: Quarantine batch mixed file states ===
 
-def test_should_quarantine_batch_mixed_file_states(engine, repo_root, clean_file, dirty_file, untracked_file):
-    """Q-004: Batch of 3 files: clean, dirty tracked, untracked."""
+def test_should_quarantine_batch_mixed_file_states(engine, repo_root, clean_file, untracked_file):
+    """Q-004: Batch of 3 files: clean, dirty tracked, untracked.
+
+    Note: dirty_file fixture returns the same path as clean_file, so we create
+    a second distinct dirty tracked file inline to keep 3 unique entries.
+    """
+    dirty2_path = "src/dirty2.ts"
+    dirty2_full = Path(repo_root) / dirty2_path
+    dirty2_full.parent.mkdir(parents=True, exist_ok=True)
+    dirty2_full.write_text("export const dirty2 = true;\n")
+    subprocess.run(["git", "add", "."], cwd=repo_root, check=True)
+    subprocess.run(["git", "commit", "-m", "add dirty2"], cwd=repo_root, check=True)
+    dirty2_full.write_text("export const dirty2 = false;\n")
     result = engine.move_to_quarantine(
-        files=[clean_file, dirty_file, untracked_file],
+        files=[clean_file, dirty2_path, untracked_file],
         run_id="run-004", phase=4,
         violation_type="SKIP_RED_PHASE", boundary_commit="HEAD",
     )
@@ -844,15 +855,29 @@ def test_should_find_correct_metadata_through_hash_collision_suffixes(engine, re
 # === Q-059: Handle broken hash collision suffix sequence ===
 
 def test_should_handle_broken_hash_collision_suffix_sequence(engine, repo_root, clean_file):
-    """Q-059: -2 deleted, -3 exists; restore finds correct match."""
+    """Q-059: -2 deleted, -3 exists; restore finds correct match.
+
+    Suffix files are created manually (not via double-quarantine) because the
+    engine's collision logic is not yet implemented in TDD Red Phase.
+    """
     engine.move_to_quarantine(
         files=[clean_file], run_id="run-059", phase=4,
         violation_type="SKIP_RED_PHASE",
     )
     quarantine_dir = Path(repo_root) / "local-assets" / ".violation-quarantine" / "run-059" / "phase4"
-    for f in list(quarantine_dir.glob("metadata-*-2.json")):
-        f.unlink()
-    # Re-add file for restore
+    base_hash = hashlib.sha256(clean_file.encode()).hexdigest()[:8]
+    stub_meta = {
+        "original_path": clean_file,
+        "quarantine_path": "",
+        "violation_type": "SKIP_RED_PHASE",
+        "run_id": "run-059",
+        "phase": 4,
+        "timestamp": "",
+        "boundary_commit": "",
+    }
+    (quarantine_dir / f"metadata-{base_hash}-2.json").write_text(json.dumps(stub_meta))
+    (quarantine_dir / f"metadata-{base_hash}-3.json").write_text(json.dumps(stub_meta))
+    (quarantine_dir / f"metadata-{base_hash}-2.json").unlink()
     full = Path(repo_root) / clean_file
     full.parent.mkdir(parents=True, exist_ok=True)
     full.write_text("restored")
