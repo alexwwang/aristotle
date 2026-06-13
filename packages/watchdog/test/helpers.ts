@@ -32,7 +32,7 @@ export function makeLegacyState(overrides: Record<string, any> & { version: numb
     phases: {},
     ralph: null,
     testEvidenceConfirmed: false,
-    lastCheckpointAt: NOW,
+    lastCheckpointAt: FRESH_NOW,
     ...rest,
   } as PipelineState
 }
@@ -50,7 +50,7 @@ export function makeState(overrides: Partial<PipelineState> = {}): PipelineState
     phases: {},
     ralph: null,
     testEvidenceConfirmed: false,
-    lastCheckpointAt: NOW,
+    lastCheckpointAt: FRESH_NOW,
     ...overrides,
   }
 }
