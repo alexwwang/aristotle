@@ -70,4 +70,5 @@ class TestRegressionCounter:
         assert counter.get_cumulative_count("run-001") == 9
         assert counter.get_count("run-001") == 4
         remap_state = counter.get_remap_state("run-001")
-        assert isinstance(remap_state, dict)
+        assert remap_state.get('pattern') == 'repeated_violation'
+        assert remap_state.get('cycle') >= 1
