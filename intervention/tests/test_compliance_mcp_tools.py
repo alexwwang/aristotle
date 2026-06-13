@@ -1,5 +1,4 @@
 """Compliance MCP assess tool tests — TDD Phase 4 Red."""
-import pytest
 from datetime import datetime
 
 from compliance import (

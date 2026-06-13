@@ -1,5 +1,4 @@
 """Compliance check integration tests — TDD Phase 4 Red."""
-import pytest
 from datetime import datetime
 
 from compliance import (
@@ -188,9 +187,12 @@ def test_batch_violations_processed_in_priority_order():
         _make_violation(ViolationType.KI_DOC_OUTDATED),
         _make_violation(ViolationType.UNCOMMITTED_PHASE),
     ]
-    result = _handle_merged(events, context=_make_context())
+    _handle_merged(events, context=_make_context())
     processed_types = [e.violation_type for e in events if e.rectified]
     assert processed_types == sorted(processed_types, key=lambda t: VIOLATION_PRIORITY.get(t, 'P5'))
+
+
+# C-XX (deferred — contradicts C-21/C-22 setup)
 def test_assessment_result_determines_intervention_action():
     ctx = _make_context()
     result = compliance_check(phase=4, context=ctx)

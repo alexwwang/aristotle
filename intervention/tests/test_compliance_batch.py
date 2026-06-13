@@ -1,14 +1,18 @@
+from datetime import datetime
+
+from compliance import ViolationEvent, ViolationType, VIOLATION_PRIORITY
 from compliance_batch import intervene_batch, handle_merged, handle_compliance
-from intervention_types import PipelineContext, ViolationEvent
+from intervention_types import PipelineContext
 
 
 def _make_event(vtype, files=None, phase=4, run_id="run-001"):
     return ViolationEvent(
         violation_type=vtype,
-        affected_file_path=(files[0] if files else ""),
-        timestamp="2026-06-12T10:00:00Z",
+        phase=phase,
+        severity=VIOLATION_PRIORITY.get(vtype, "P4"),
+        timestamp=datetime.now().isoformat(),
         context={"phase": phase, "run_id": run_id},
-        affected_file_paths=files or [],
+        files=files if files is not None else [],
     )
 
 

@@ -43,10 +43,12 @@ def test_ensure_updated_creates_ki_doc_when_missing(ki_mgr, ki_doc_path):
 def test_ensure_updated_appends_entry_when_doc_exists(ki_doc_path, ki_mgr):
     Path(ki_doc_path).parent.mkdir(parents=True, exist_ok=True)
     Path(ki_doc_path).write_text("# Review Records\n\n")
+    content_before = Path(ki_doc_path).read_text()
     events = [_make_violation(ViolationType.UNCOMMITTED_PHASE)]
     ki_mgr.record_intervention(events)
     ki_mgr.ensure_updated()
-    assert Path(ki_doc_path).read_text() != ""
+    content_after = Path(ki_doc_path).read_text()
+    assert len(content_after) > len(content_before)
 
 
 # C-11
@@ -66,8 +68,10 @@ def test_ensure_updated_handles_creation_failure_gracefully(ki_mgr):
 # C-47
 def test_ensure_updated_retries_once_on_failure(ki_mgr):
     ki_mgr.ki_doc_path = "/nonexistent/deep/path/ki.md"
-    result = ki_mgr.ensure_updated()
-    assert result is None
+    result_first = ki_mgr.ensure_updated()
+    result_second = ki_mgr.ensure_updated()
+    assert result_first is None
+    assert result_second is None
 
 
 # C-48
@@ -76,7 +80,8 @@ def test_ki_doc_best_effort_when_record_intervention_fails(ki_mgr, ki_doc_path):
     Path(ki_doc_path).write_text("# Review Records\n\n")
     ki_mgr.record_intervention(events=None)
     ki_mgr.ensure_assessment(phase=4, result="PASS")
-    assert Path(ki_doc_path).exists()
+    content = Path(ki_doc_path).read_text()
+    assert "Review Records" in content
 
 
 # C-49
@@ -108,8 +113,8 @@ def test_should_identify_ki_doc_as_up_to_date_when_ki_has_more_signatures_than_v
         _make_violation(ViolationType.UNCOMMITTED_PHASE, files=["a.py"]),
         _make_violation(ViolationType.UNCOMMITTED_PHASE, files=["b.py"]),
     ]
-    ki_mgr.check_staleness(current)
-    assert len(current) >= 0
+    staleness = ki_mgr.check_staleness(current)
+    assert not staleness
 
 
 # C-61
