@@ -809,12 +809,13 @@ def test_should_increment_suffix_until_available_filename_found(engine, repo_roo
     full.write_text("more content")
     subprocess.run(["git", "add", "."], cwd=repo_root, check=True)
     subprocess.run(["git", "commit", "-m", "re-add2"], cwd=repo_root, check=True)
-    engine.move_to_quarantine(
+    result2 = engine.move_to_quarantine(
         files=[clean_file], run_id="run-057", phase=4,
         violation_type="SKIP_RED_PHASE",
     )
+    assert result2.success is True
     metadata_files = list(quarantine_dir.glob("metadata-*.json"))
-    assert len(metadata_files) >= 4
+    assert len(metadata_files) >= 5
 
 
 # === Q-058: Find correct metadata through hash collision suffixes ===
@@ -1432,7 +1433,8 @@ def test_should_read_metadata_only_without_loading_file_contents(engine, repo_ro
         # Should not open the quarantined file itself (only metadata JSON)
         opened_paths = [call.args[0] for call in mock_open.call_args_list]
         for p in opened_paths:
-            if isinstance(p, str) and not p.endswith(".json"):
+            p_str = str(p)
+            if not p_str.endswith(".json"):
                 assert False, f"Unexpected file open: {p}"
     assert isinstance(records, list)
 
