@@ -71,6 +71,7 @@ export interface PipelineState {
   suspendedPhase?: number
   prePauseStatus?: PhaseStatus
   preSuspendStatus?: PhaseStatus
+  pausedAt?: string
   pending_pause?: PendingPause | null
   child_pause_timer_started_at?: string
 }
