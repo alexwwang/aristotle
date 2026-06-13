@@ -3,12 +3,11 @@ import pytest
 import subprocess
 import json
 import os
-import shutil
 import hashlib
 import logging
 from pathlib import Path
 from datetime import datetime
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from quarantine_engine import (
     QuarantineEngine,
@@ -270,8 +269,17 @@ def test_should_list_across_multiple_phase_subdirectories(engine, repo_root, cle
         files=[clean_file], run_id="run-012", phase=3,
         violation_type="SKIP_RED_PHASE",
     )
+    full = Path(repo_root) / clean_file
+    full.parent.mkdir(parents=True, exist_ok=True)
+    full.write_text("export const auth = true;\n")
+    subprocess.run(["git", "add", "."], cwd=repo_root, check=True)
+    subprocess.run(["git", "commit", "-m", "re-add-012"], cwd=repo_root, check=True)
+    engine.move_to_quarantine(
+        files=[clean_file], run_id="run-012", phase=4,
+        violation_type="SKIP_RED_PHASE",
+    )
     records = engine.list_quarantine(run_id="run-012")
-    assert len(records) >= 1
+    assert len(records) >= 2
 
 
 # === Q-013: Restore file to original path ===
@@ -554,6 +562,9 @@ def test_should_not_delete_original_when_copy_to_quarantine_fails(engine, repo_r
         violation_type="SKIP_RED_PHASE",
     )
     assert original.exists()
+    assert original.read_text() == content_before
+    assert isinstance(result, QuarantineResult)
+    assert len(result.failed_files) >= 1
 
 
 # === Q-041: Add to failed_files on copy failure with reason ===
@@ -611,11 +622,13 @@ def test_should_restage_file_when_move_fails_after_git_rm_cached(engine, repo_ro
 
 def test_should_leave_file_tracked_when_move_fails_after_git_rm_cached(engine, repo_root, clean_file, mock_shutil_move_failure):
     """Q-045: After re-staging, file remains in git index."""
+    content_before = (Path(repo_root) / clean_file).read_text()
     engine.move_to_quarantine(
         files=[clean_file], run_id="run-045", phase=4,
         violation_type="SKIP_RED_PHASE",
     )
     assert (Path(repo_root) / clean_file).exists()
+    assert (Path(repo_root) / clean_file).read_text() == content_before
     tracked = subprocess.run(
         ["git", "ls-files", clean_file], cwd=repo_root,
         capture_output=True, text=True,
@@ -670,18 +683,20 @@ def test_should_log_warning_with_stderr_on_commit_failure(engine, clean_file, mo
             files=[clean_file], run_id="run-049", phase=4,
             violation_type="SKIP_RED_PHASE",
         )
-    assert any("git" in record.message.lower() or "stderr" in record.message.lower() for record in caplog.records)
+    assert any("stderr" in r.message.lower() for r in caplog.records)
 
 
 # === Q-050: quarantine_success=False on integration commit failure (FM-10) ===
 
-def test_should_set_quarantine_success_false_on_integration_commit_failure_fm10(engine, clean_file, mock_subprocess_run_failure):
+def test_should_set_quarantine_success_false_on_integration_commit_failure_fm10(engine, clean_file, mock_subprocess_run_failure, caplog):
     """Q-050: quarantine_success=False when commit fails in integration context."""
-    result = engine.move_to_quarantine(
-        files=[clean_file], run_id="run-050", phase=4,
-        violation_type="SKIP_RED_PHASE",
-    )
+    with caplog.at_level(logging.WARNING):
+        result = engine.move_to_quarantine(
+            files=[clean_file], run_id="run-050", phase=4,
+            violation_type="SKIP_RED_PHASE",
+        )
     assert result.quarantine_success is False
+    assert any("commit" in r.message.lower() or "stderr" in r.message.lower() for r in caplog.records)
 
 
 # === Q-051: Raise FileExistsError when original path occupied ===
@@ -738,6 +753,7 @@ def test_should_skip_corrupted_metadata_during_list(engine, repo_root, clean_fil
     bad_meta.write_text("{invalid json")
     records = engine.list_quarantine(run_id="run-054")
     assert isinstance(records, list)
+    assert len(records) >= 1
 
 
 # === Q-055: Raise ValueError when restore metadata corrupted ===
@@ -864,7 +880,7 @@ def test_should_warn_when_hash_collisions_exceed_100(engine, repo_root, clean_fi
     with caplog.at_level(logging.WARNING):
         records = engine.list_quarantine(run_id="run-060")
     assert isinstance(records, list)
-    assert any("collision" in record.message.lower() or "suffix" in record.message.lower() for record in caplog.records)
+    assert any("collision" in r.message.lower() for r in caplog.records)
 
 
 # === Q-061: Append timestamp suffix when quarantine path occupied ===
@@ -910,7 +926,8 @@ def test_should_add_to_failed_files_when_timestamp_suffix_collides_within_same_s
         violation_type="SKIP_RED_PHASE",
     )
     assert isinstance(result, QuarantineResult)
-    assert result.quarantine_success is False or len(result.failed_files) >= 1
+    assert result.quarantine_success is False
+    assert len(result.failed_files) >= 1
 
 
 # === Q-063: Resolve quarantine path conflict across runs ===
@@ -981,9 +998,9 @@ def test_should_store_empty_string_boundary_commit_when_rev_parse_fails_in_nonem
     assert isinstance(result, QuarantineResult)
     quarantine_dir = Path(repo_root) / "local-assets" / ".violation-quarantine" / "run-065b" / "phase4"
     meta_files = list(quarantine_dir.glob("metadata-*.json"))
-    if meta_files:
-        meta = json.loads(meta_files[0].read_text())
-        assert meta.get("boundary_commit") == ""
+    assert meta_files, "Expected at least one metadata file"
+    meta = json.loads(meta_files[0].read_text())
+    assert meta.get("boundary_commit") == ""
 
 
 # === Q-066: Store full SHA never ref in metadata ===
@@ -1164,14 +1181,19 @@ def test_should_warn_when_quarantine_dir_exceeds_soft_size_limit(engine, repo_ro
             files=["nonexistent.py"], run_id="run-073b", phase=4,
             violation_type="SKIP_RED_PHASE",
         )
-    assert any("size" in record.message.lower() or "limit" in record.message.lower() for record in caplog.records)
+    assert any("soft" in r.message.lower() and "limit" in r.message.lower() for r in caplog.records)
 
 
 # === Q-074: Abort git command on per-command timeout ===
 
 def test_should_abort_git_command_on_per_command_timeout(engine, repo_root, clean_file):
     """Q-074: >10s -> terminate subprocess, add to failed_files."""
-    with patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="git", timeout=0.001)):
+    original_run = subprocess.run
+    def selective_timeout(*args, **kwargs):
+        if args and len(args[0]) > 1 and args[0][0] == "git" and "commit" in args[0]:
+            raise subprocess.TimeoutExpired(cmd="git commit", timeout=0.001)
+        return original_run(*args, **kwargs)
+    with patch("subprocess.run", side_effect=selective_timeout):
         result = engine.move_to_quarantine(
             files=[clean_file], run_id="run-074", phase=4,
             violation_type="SKIP_RED_PHASE",
@@ -1184,12 +1206,18 @@ def test_should_abort_git_command_on_per_command_timeout(engine, repo_root, clea
 
 def test_should_return_partial_result_on_aggregate_timeout_exceeded(engine, repo_root, clean_file):
     """Q-075: >60s total -> partial result, quarantine_success=False."""
-    with patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="git", timeout=0.001)):
+    original_run = subprocess.run
+    def selective_timeout(*args, **kwargs):
+        if args and len(args[0]) > 1 and args[0][0] == "git" and "commit" in args[0]:
+            raise subprocess.TimeoutExpired(cmd="git commit", timeout=0.001)
+        return original_run(*args, **kwargs)
+    with patch("subprocess.run", side_effect=selective_timeout):
         result = engine.move_to_quarantine(
             files=[clean_file], run_id="run-075", phase=4,
             violation_type="SKIP_RED_PHASE",
         )
     assert isinstance(result, QuarantineResult)
+    assert result.quarantine_success is False
     assert len(result.failed_files) >= 1
 
 
@@ -1290,14 +1318,19 @@ def test_should_round_trip_metadata_with_unicode_and_special_chars(engine, repo_
 def test_should_not_leave_partial_json_on_metadata_write_failure(engine, repo_root, clean_file):
     """Q-089: JSON write fails mid-way; no partial metadata file remains."""
     quarantine_dir = Path(repo_root) / "local-assets" / ".violation-quarantine" / "run-089" / "phase4"
-    quarantine_dir.mkdir(parents=True, exist_ok=True)
-    with patch("pathlib.Path.write_text", side_effect=OSError("disk full")):
-        engine.move_to_quarantine(
+    original_write_text = Path.write_text
+    def selective_write_text(self, data, *args, **kwargs):
+        if "metadata-" in self.name and ".violation-quarantine" in str(self):
+            raise OSError("disk full")
+        return original_write_text(self, data, *args, **kwargs)
+    with patch("pathlib.Path.write_text", selective_write_text):
+        result = engine.move_to_quarantine(
             files=[clean_file], run_id="run-089", phase=4,
             violation_type="SKIP_RED_PHASE",
         )
-    partial_files = list(quarantine_dir.glob("metadata-*.json"))
-    # Either no files or only complete files
+    assert isinstance(result, QuarantineResult)
+    assert len(result.failed_files) >= 1 or result.quarantine_success is False
+    partial_files = list(quarantine_dir.glob("metadata-*.json")) if quarantine_dir.exists() else []
     for f in partial_files:
         try:
             json.loads(f.read_text())
@@ -1331,10 +1364,12 @@ def test_should_close_file_handles_after_copy_failure(engine, repo_root, dirty_f
         raise OSError("Permission denied")
 
     with patch("shutil.copy2", side_effect=fail_copy):
-        engine.move_to_quarantine(
+        result = engine.move_to_quarantine(
             files=[dirty_file], run_id="run-091", phase=4,
             violation_type="SKIP_RED_PHASE",
         )
+    assert isinstance(result, QuarantineResult)
+    assert len(result.failed_files) >= 1
     if quarantine_dir.exists():
         assert len(list(quarantine_dir.iterdir())) == 0
 
@@ -1419,7 +1454,7 @@ def test_should_resolve_boundary_commit_in_detached_head_state(repo_root, clean_
 
 # === Q-096: Return reverse-orphan entries in list quarantine ===
 
-def test_should_return_reverse_orphan_entries_in_list_quarantine(engine, repo_root, clean_file):
+def test_should_return_reverse_orphan_entries_in_list_quarantine(engine, repo_root, clean_file, caplog):
     """Q-096: Physical file with no metadata; reported with warning."""
     engine.move_to_quarantine(
         files=[clean_file], run_id="run-096", phase=4,
@@ -1428,9 +1463,10 @@ def test_should_return_reverse_orphan_entries_in_list_quarantine(engine, repo_ro
     quarantine_dir = Path(repo_root) / "local-assets" / ".violation-quarantine" / "run-096" / "phase4"
     # Create orphan physical file (no metadata)
     (quarantine_dir / "orphan_file.py").write_text("# orphan")
-    records = engine.list_quarantine(run_id="run-096")
+    with caplog.at_level(logging.WARNING):
+        records = engine.list_quarantine(run_id="run-096")
     assert isinstance(records, list)
-    assert len(records) >= 1
+    assert len(records) >= 2
 
 
 # === Q-097: Return orphaned metadata entries in list quarantine ===
@@ -1449,11 +1485,12 @@ def test_should_return_orphaned_metadata_entries_in_list_quarantine(engine, repo
     records = engine.list_quarantine(run_id="run-097")
     assert isinstance(records, list)
     assert len(records) >= 1
+    assert records[0].original_path == clean_file
 
 
 # === Q-098: Include _list_warnings field when IO errors during listing ===
 
-def test_should_include_list_warnings_field_when_io_errors_during_listing(engine, repo_root, clean_file):
+def test_should_include_list_warnings_field_when_io_errors_during_listing(engine, repo_root, clean_file, caplog):
     """Q-098: IO errors during listing populate _list_warnings field."""
     engine.move_to_quarantine(
         files=[clean_file], run_id="run-098", phase=4,
@@ -1463,10 +1500,14 @@ def test_should_include_list_warnings_field_when_io_errors_during_listing(engine
     import os as _os
     for f in quarantine_dir.glob("metadata-*.json"):
         _os.chmod(f, 0o000)
-    records = engine.list_quarantine(run_id="run-098")
-    assert isinstance(records, list)
-    for f in quarantine_dir.glob("metadata-*.json"):
-        _os.chmod(f, 0o644)
+    try:
+        with caplog.at_level(logging.WARNING):
+            records = engine.list_quarantine(run_id="run-098")
+        assert isinstance(records, list)
+        assert len(records) >= 0
+    finally:
+        for f in quarantine_dir.glob("metadata-*.json"):
+            _os.chmod(f, 0o644)
 
 
 # === Q-099: Restore file from highest phase number ===
@@ -1490,6 +1531,8 @@ def test_should_restore_file_from_highest_phase_number(engine, repo_root, clean_
     result = engine.restore(clean_file, run_id="run-099")
     assert result is not None
     assert result.success is True
+    restored = (Path(repo_root) / clean_file).read_text()
+    assert "phase4" in restored
 
 
 # === Q-100: Return same result on duplicate restore call ===
@@ -1505,6 +1548,7 @@ def test_should_return_same_result_on_duplicate_restore_call(engine, clean_file)
     assert result1 is not None
     assert result2 is not None
     assert result1.success == result2.success
+    assert result1.new_path == result2.new_path
 
 
 # === Q-101: Warn when restored file differs from boundary_commit content ===
@@ -1522,7 +1566,7 @@ def test_should_warn_when_restored_file_differs_from_boundary_commit_content(eng
     with caplog.at_level(logging.WARNING):
         result = engine.restore(clean_file, run_id="run-101")
     assert result is not None
-    assert any("differ" in record.message.lower() or "content" in record.message.lower() for record in caplog.records)
+    assert any("differ" in r.message.lower() for r in caplog.records)
 
 
 # === Q-109: Warn when restored file did not exist at boundary_commit ===
@@ -1537,7 +1581,7 @@ def test_should_warn_when_restored_file_did_not_exist_at_boundary_commit(engine,
         result = engine.restore(clean_file, run_id="run-109")
     assert result is not None
     assert result.success is True
-    assert any("differ" in record.message.lower() or "content" in record.message.lower() or "not exist" in record.message.lower() for record in caplog.records)
+    assert any("not exist" in r.message.lower() or "new file" in r.message.lower() for r in caplog.records)
 
 
 # === Q-102: Not write metadata for failed files in batch ===
@@ -1596,22 +1640,49 @@ def test_should_detect_orphan_physical_files_during_reconcile_cross_scan(engine,
 
 # === Q-106: Accept batch of exactly MAX_FILES_PER_QUARANTINE ===
 
-def test_should_accept_batch_of_exactly_max_files_per_quarantine(engine):
+def test_should_accept_batch_of_exactly_max_files_per_quarantine(engine, repo_root):
     """Q-106: Exactly 50 files accepted without error."""
-    files = [f"file_{i}.py" for i in range(MAX_FILES_PER_QUARANTINE)]
-    # Files don't exist, so they'll be in failed_files but no ValueError raised
+    files = []
+    for i in range(MAX_FILES_PER_QUARANTINE):
+        path = f"src/file_{i}.py"
+        full = Path(repo_root) / path
+        full.parent.mkdir(parents=True, exist_ok=True)
+        full.write_text(f"# file {i}\n")
+        files.append(path)
+    subprocess.run(["git", "add", "."], cwd=repo_root, check=True)
+    subprocess.run(["git", "commit", "-m", "init batch"], cwd=repo_root, check=True)
     result = engine.move_to_quarantine(
         files=files, run_id="run-106", phase=4,
         violation_type="SKIP_RED_PHASE",
     )
     assert isinstance(result, QuarantineResult)
+    assert result.success is True
 
 
 # === Q-107: Use suffix up to MAX_SUFFIX_RETRY as upper limit ===
 
-def test_should_use_suffix_up_to_max_retry_as_upper_limit(engine, repo_root, clean_file):
+def test_should_use_suffix_up_to_max_retry_as_upper_limit(engine, repo_root, clean_file, caplog):
     """Q-107: Hash collision suffix retries capped at MAX_SUFFIX_RETRY (100)."""
-    engine.move_to_quarantine(files=["test.py"], run_id="run-107", phase=4, violation_type="SKIP_RED_PHASE")
+    engine.move_to_quarantine(
+        files=[clean_file], run_id="run-107", phase=4,
+        violation_type="SKIP_RED_PHASE",
+    )
+    quarantine_dir = Path(repo_root) / "local-assets" / ".violation-quarantine" / "run-107" / "phase4"
+    base_hash = hashlib.sha256(clean_file.encode()).hexdigest()[:8]
+    for i in range(2, MAX_SUFFIX_RETRY + 2):
+        (quarantine_dir / f"metadata-{base_hash}-{i}.json").write_text("{}")
+    full = Path(repo_root) / clean_file
+    full.parent.mkdir(parents=True, exist_ok=True)
+    full.write_text("another attempt")
+    subprocess.run(["git", "add", "."], cwd=repo_root, check=True)
+    subprocess.run(["git", "commit", "-m", "re-add-107"], cwd=repo_root, check=True)
+    with caplog.at_level(logging.WARNING):
+        result = engine.move_to_quarantine(
+            files=[clean_file], run_id="run-107", phase=4,
+            violation_type="SKIP_RED_PHASE",
+        )
+    assert isinstance(result, QuarantineResult)
+    assert len(result.failed_files) >= 1 or result.quarantine_success is False
 
 
 # === Q-108: List quarantined files across all runs when run_id is null ===
@@ -1637,6 +1708,8 @@ def test_should_list_quarantined_files_across_all_runs_when_run_id_is_null(engin
     engine.move_to_quarantine(files=[path_b], run_id="run-108b", phase=4, violation_type="SKIP_RED_PHASE")
     records = engine.list_quarantine(run_id=None)
     assert len(records) >= 2
+    run_ids = {r.run_id for r in records}
+    assert len(run_ids) >= 2
 
 
 # === Q-116: Truncate filename_hash to 8 hex chars ===

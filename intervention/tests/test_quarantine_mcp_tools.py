@@ -149,6 +149,8 @@ def test_quarantine_retry_tool_is_idempotent(engine, clean_file):
         phase=4, violation_type="SKIP_RED_PHASE",
     )
     assert isinstance(result, dict)
+    assert result.get("success") is True
+    assert result.get("files_affected") == [] or clean_file not in result.get("files_affected", [])
 
 
 # === Q-031b: quarantine_retry returns QuarantineResult on success ===
@@ -227,6 +229,8 @@ def test_should_set_quarantine_success_false_on_resume_with_failure(engine, repo
     )
     records = engine.list_quarantine(run_id="run-076")
     assert isinstance(records, list)
+    assert len(records) >= 1
+    assert records[0].run_id == "run-076"
 
 
 # === Q-077: Handle runtime quarantine hook failure ===
@@ -239,6 +243,8 @@ def test_should_handle_runtime_quarantine_hook_failure(engine, repo_root, clean_
     )
     records = engine.list_quarantine(run_id="run-077")
     assert isinstance(records, list)
+    assert len(records) >= 1
+    assert records[0].run_id == "run-077"
 
 
 # === Q-078: Detect orphaned suspend and reconcile workspace ===
@@ -251,6 +257,8 @@ def test_should_detect_orphaned_suspend_and_reconcile_workspace(engine, repo_roo
     )
     result = engine.reconcile(project_id="test-proj", run_id="run-078")
     assert isinstance(result, ReconcileResult)
+    assert result.success is True
+    assert isinstance(result.mismatches, list)
 
 
 # === Q-120: Reconcile tool propagates QuarantineNotFoundError ===
