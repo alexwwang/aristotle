@@ -3,7 +3,6 @@ import pytest
 import subprocess
 import json
 from pathlib import Path
-from datetime import datetime
 
 from quarantine_engine import QuarantineEngine
 

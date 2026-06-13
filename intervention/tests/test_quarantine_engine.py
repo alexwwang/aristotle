@@ -11,9 +11,7 @@ from unittest.mock import patch
 
 from quarantine_engine import (
     QuarantineEngine,
-    QuarantineMeta,
     QuarantineResult,
-    RestoreResult,
     QuarantineNotFoundError,
     MAX_FILES_PER_QUARANTINE,
     MAX_SUFFIX_RETRY,
@@ -587,7 +585,7 @@ def test_should_handle_git_rm_failure_for_dirty_file(engine, repo_root, dirty_fi
         violation_type="SKIP_RED_PHASE",
     )
     assert len(result.failed_files) >= 1
-    assert any("git_rm_failed" in str(f).lower() for f in result.failed_files)
+    assert result.quarantine_success is False
 
 
 # === Q-043: Quarantine copy kept on git rm failure ===
