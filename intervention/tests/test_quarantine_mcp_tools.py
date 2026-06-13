@@ -1,9 +1,10 @@
 """Quarantine MCP tool integration tests."""
 import pytest
+import subprocess
+from pathlib import Path
 
 from quarantine_engine import (
     QuarantineEngine,
-    QuarantineResult,
     QuarantineNotFoundError,
     ReconcileResult,
 )
@@ -16,8 +17,6 @@ def engine(repo_root):
 
 @pytest.fixture
 def clean_file(repo_root):
-    import subprocess
-    from pathlib import Path
     path = "src/auth.ts"
     full = Path(repo_root) / path
     full.parent.mkdir(parents=True, exist_ok=True)
@@ -157,8 +156,6 @@ def test_quarantine_retry_tool_is_idempotent(engine, clean_file):
 
 def test_quarantine_retry_tool_returns_quarantine_result_on_success(engine, repo_root, clean_file):
     """Q-031b: After partial failure, retry succeeds for failed file."""
-    import subprocess
-    from pathlib import Path
     result1 = engine.move_to_quarantine(
         files=[clean_file, "nonexistent.py"],
         run_id="run-031b", phase=4,

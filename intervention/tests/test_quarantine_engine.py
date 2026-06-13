@@ -677,7 +677,6 @@ def test_should_restore_deleted_files_via_git_checkout_after_reset(engine, repo_
 
 def test_should_log_warning_with_stderr_on_commit_failure(engine, clean_file, mock_subprocess_run_failure, caplog):
     """Q-049: WARN log containing git stderr."""
-    import logging
     with caplog.at_level(logging.WARNING):
         engine.move_to_quarantine(
             files=[clean_file], run_id="run-049", phase=4,
@@ -696,7 +695,7 @@ def test_should_set_quarantine_success_false_on_integration_commit_failure_fm10(
             violation_type="SKIP_RED_PHASE",
         )
     assert result.quarantine_success is False
-    assert any("commit" in r.message.lower() or "stderr" in r.message.lower() for r in caplog.records)
+    assert any("commit failed" in r.message.lower() or "stderr" in r.message.lower() for r in caplog.records)
 
 
 # === Q-051: Raise FileExistsError when original path occupied ===
@@ -976,6 +975,11 @@ def test_should_set_empty_boundary_commit_when_git_rev_parse_fails(repo_root_no_
         violation_type="SKIP_RED_PHASE", boundary_commit="HEAD",
     )
     assert result.quarantine_success is True
+    quarantine_dir = Path(repo_root_no_git_user) / "local-assets" / ".violation-quarantine" / "run-065" / "phase4"
+    meta_files = list(quarantine_dir.glob("metadata-*.json"))
+    assert meta_files, "Expected at least one metadata file"
+    meta = json.loads(meta_files[0].read_text())
+    assert meta.get("boundary_commit") == ""
 
 
 # === Q-065b: Store empty string boundary_commit when rev-parse fails in non-empty repo ===
@@ -1504,7 +1508,11 @@ def test_should_include_list_warnings_field_when_io_errors_during_listing(engine
         with caplog.at_level(logging.WARNING):
             records = engine.list_quarantine(run_id="run-098")
         assert isinstance(records, list)
-        assert len(records) >= 0
+        # IO errors during listing should produce a warning (permission/IO related)
+        assert any(
+            "permission" in r.message.lower() or "io" in r.message.lower() or "denied" in r.message.lower()
+            for r in caplog.records
+        )
     finally:
         for f in quarantine_dir.glob("metadata-*.json"):
             _os.chmod(f, 0o644)

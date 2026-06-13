@@ -5,13 +5,7 @@ import json
 from pathlib import Path
 from datetime import datetime
 
-from quarantine_engine import (
-    QuarantineEngine,
-    QuarantineResult,
-    QuarantineMeta,
-    QuarantineNotFoundError,
-    MAX_FILES_PER_QUARANTINE,
-)
+from quarantine_engine import QuarantineEngine
 
 
 @pytest.fixture
@@ -128,6 +122,7 @@ def test_e2e_reconcile_detects_manual_changes(engine, repo_root):
     Path(repo_root, "src/unexpected_new.ts").write_text("surprise\n")
 
     reconcile_result = engine.reconcile(project_id="e2e-proj", run_id="run-e2e-113")
+    assert isinstance(reconcile_result.mismatches, list)
     assert len(reconcile_result.mismatches) >= 1
 
 
@@ -160,6 +155,8 @@ def test_e2e_orphan_detection_and_cleanup(engine, repo_root):
 
     reconcile_result = engine.reconcile(project_id="e2e-proj", run_id="run-e2e-114")
     assert reconcile_result.success is True
+    assert isinstance(reconcile_result.mismatches, list)
+    assert len(reconcile_result.mismatches) >= 1
 
 
 # === Q-115: E2E crash recovery idempotent retry ===
