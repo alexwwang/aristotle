@@ -178,7 +178,7 @@ describe('pipeline nesting - e2e', () => {
     // F-025: tighten event name — 'recover' matches any substring; use 'ORPHANED'.
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ event: expect.stringContaining('ORPHANED') }),
+      expect.objectContaining({ event: expect.stringMatching(/^ORPHANED_SUSPEND_RECOVERY$/) }),
     )
   })
 
@@ -207,6 +207,10 @@ describe('pipeline nesting - e2e', () => {
     expect(mockStateStore.write).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ depth: 0 }),
+    )
+    expect(mockStateStore.write).toHaveBeenCalledWith(
+      expect.stringContaining('/suspended-stack'),
+      expect.objectContaining({ entries: [] }),
     )
   })
 })

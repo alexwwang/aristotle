@@ -39,6 +39,7 @@ describe('types - pipeline nesting', () => {
       suspendedPhase: 5,
       prePauseStatus: 'ralph_loop',
       preSuspendStatus: 'ralph_loop',
+      pausedAt: '2026-01-01T00:00:00Z',
       pending_pause: { reason: 'PATTERN_CYCLE', violation_type: 'REGRESSION', files: ['a.ts'] },
       child_pause_timer_started_at: '2026-01-01T00:00:00Z',
     }
@@ -52,6 +53,7 @@ describe('types - pipeline nesting', () => {
     expect(state.suspendedPhase).toBe(5)
     expect(state.prePauseStatus).toBe('ralph_loop')
     expect(state.preSuspendStatus).toBe('ralph_loop')
+    expect(state.pausedAt).toBe('2026-01-01T00:00:00Z')
     expect(state.pending_pause?.reason).toBe('PATTERN_CYCLE')
     expect(state.child_pause_timer_started_at).toBe('2026-01-01T00:00:00Z')
   })

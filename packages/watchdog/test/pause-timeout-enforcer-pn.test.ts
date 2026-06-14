@@ -41,6 +41,7 @@ describe('PauseTimeoutEnforcer', () => {
   // #39
   it('should not auto resume pipeline awaiting approval when timeout exceeded', () => {
     const past = new Date(Date.now() - PAUSE_TIMEOUT_MS - BUFFER_MS).toISOString()
+    // pausedAt intentionally set; verifier ignores it when status != paused
     const state = makeState({
       phaseStatus: 'awaiting_approval',
       pausedAt: past,

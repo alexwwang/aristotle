@@ -87,6 +87,7 @@ describe('CheckpointHandler - pipeline nesting', () => {
     // Spec #57: rejection must be about missing 'reason' field in payload,
     // NOT about unknown event or corrupted state.
     expect(parsed.violation).toMatch(/reason|payload/i)
+    expect(store.suspendActive).not.toHaveBeenCalled()
   })
 
   // #58
@@ -106,7 +107,7 @@ describe('CheckpointHandler - pipeline nesting', () => {
       expect.any(String),
       expect.objectContaining({
         event: 'pipeline_suspend',
-        decision: expect.any(String),
+        decision: 'PASS',
       }),
     )
   })
@@ -180,6 +181,7 @@ describe('CheckpointHandler - pipeline nesting', () => {
     const parsed = JSON.parse(result)
     expect(parsed.ok).toBe(false)
     expect(parsed.violation).toContain('paused')
+    expect(parsed.violation).toMatch(/resumeFromPause|resume.*pause/i)
   })
 
   // #108
@@ -201,6 +203,7 @@ describe('CheckpointHandler - pipeline nesting', () => {
       expect.objectContaining({
         depth: (state.depth ?? 0) + 1,
         parentRunId: 'run-123',
+        parentPipelineProjectId: expect.any(String),
         phaseStatus: expect.any(String),
       }),
     )
@@ -209,7 +212,7 @@ describe('CheckpointHandler - pipeline nesting', () => {
   // #109
   it('should block pipeline_start when active status is active and already running', async () => {
     const { handler, store } = createHandler()
-    const state = makeState({ phaseStatus: 'ralph_loop', lastCheckpointAt: '2026-06-14T12:00:00Z' })
+    const state = makeState({ phaseStatus: 'ralph_loop' })
     store.readState.mockReturnValue(state)
     store.getActiveRun.mockReturnValue({ runId: 'run-123', projectId: 'proj-1' })
     const result = await handler.handle(

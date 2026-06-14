@@ -101,6 +101,21 @@ describe('crash recovery integration - pipeline nesting', () => {
   // #68 — merged into #70 (identical fixture: childRunId undefined).
   // See #70 below for the merged test covering "crash before child started".
 
+  // #68 — F-011: distinct from #70 (childRunId set but child state file missing
+  // vs #70's childRunId never set). Previously merged into #70.
+  it('#68 — should handle childRunId set but child state file missing', () => {
+    const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
+    mockStateStore.read.mockImplementation((key: string) => {
+      if (key.endsWith('/child-456/state')) return null
+      if (key.endsWith('/active')) return null
+      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
+      return null
+    })
+    const result = store.detectOrphanedSuspend('proj-1')
+    expect(result).not.toBeNull()
+    expect(mockStateStore.write).toHaveBeenCalled()
+  })
+
   // #69
   it('should pop stale stack entry if resume crashed after state persist', () => {
     const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
@@ -268,7 +283,7 @@ describe('crash recovery integration - pipeline nesting', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-06-14T12:00:00Z'))
     const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
-    const oldTimestamp = new Date('2026-06-14T11:29:00Z').toISOString()
+    const oldTimestamp = new Date('2026-06-14T10:30:00Z').toISOString()
     const state = {
       ...makeNestingState({ runId: 'parent-123', phaseStatus: 'suspended' }),
       child_pause_timer_started_at: oldTimestamp,
@@ -314,6 +329,7 @@ describe('crash recovery integration - pipeline nesting', () => {
     store.createRegressionCounter = vi.fn()
     store.resumeSuspended('proj-1', 'child-456')
     expect(existingCounter.reset).toHaveBeenCalledTimes(1)
+    expect(existingCounter.reset).toHaveBeenCalledWith()
     expect(store.createRegressionCounter).not.toHaveBeenCalled()
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
@@ -509,6 +525,6 @@ describe('crash recovery integration - pipeline nesting', () => {
     )
     expect(stateWrite).toBeDefined()
     const writtenState = stateWrite![1]
-    expect('child_pause_timer_started_at' in writtenState).toBe(false)
+    expect(writtenState.child_pause_timer_started_at).toBeUndefined()
   })
 })

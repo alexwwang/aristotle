@@ -94,19 +94,22 @@ describe('child lifecycle integration - pipeline nesting', () => {
     )
   })
 
-  // #77
-  it('should reject resume when child has unfinished work', () => {
+  // #77 — F-003 (H): spec requires testing grandchild nesting: child should be
+  // 'suspended' with a grandchild entry in its own suspended_stack, NOT ralph_loop.
+  it('should reject resume when child has unfinished nested work', () => {
     const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
+    const grandchild = makeSuspendedPipeline({ runId: 'grandchild-789', depth: 1 })
     const childState = makeNestingState({
-      runId: 'child-456', phaseStatus: 'ralph_loop', currentPhase: 3,
+      runId: 'child-456', phaseStatus: 'suspended', currentPhase: 3,
     })
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/child-456/state')) return childState
+      if (key.endsWith('/child-456/suspended-stack')) return makeSuspendedStack([grandchild])
       if (key.endsWith('/active')) return null
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
       return null
     })
-    expect(() => store.resumeSuspended('proj-1', 'child-456')).toThrow(/unfinished|incomplete/i)
+    expect(() => store.resumeSuspended('proj-1', 'child-456')).toThrow(/grandchild|suspended_stack|nested/i)
   })
 
   // #78
@@ -218,9 +221,9 @@ describe('child lifecycle integration - pipeline nesting', () => {
     expect(output).toContain('A')
     expect(output).toContain('B')
     expect(output).toContain('C')
-    expect(output).toMatch(/phase.*3/i)
-    expect(output).toMatch(/phase.*5/i)
-    expect(output).toMatch(/phase.*7/i)
+    expect(output).toMatch(/phase.*3\b/i)
+    expect(output).toMatch(/phase.*5\b/i)
+    expect(output).toMatch(/phase.*7\b/i)
   })
 
   // #112
@@ -232,8 +235,8 @@ describe('child lifecycle integration - pipeline nesting', () => {
       ...makeNestingState({ runId: 'parent-123', phaseStatus: 'suspended', suspendedAt: '2025-12-31T23:59:00Z' }),
     }
     const deferredEntries = [
-      { event: 'DEFERRED_PAUSE', trigger_type: 'compliance', reason: 'compliance', timestamp: '2026-01-01T00:00:00Z' },
-      { event: 'DEFERRED_PAUSE', trigger_type: 'UNFIXED_ISSUES', reason: 'unfixed', timestamp: '2026-01-01T00:01:00Z' },
+      { event: 'DEFERRED_PAUSE', trigger_type: 'compliance', reason: 'compliance', timestamp: '2026-01-01T00:01:00Z' },
+      { event: 'DEFERRED_PAUSE', trigger_type: 'UNFIXED_ISSUES', reason: 'unfixed', timestamp: '2026-01-01T00:00:00Z' },
     ]
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/parent-123/state')) return parentState
@@ -336,6 +339,14 @@ describe('child lifecycle integration - pipeline nesting', () => {
       expect.any(String),
       expect.objectContaining({ phaseStatus: 'paused' }),
     )
+    expect(mockStateStore.appendLog).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          interventionType: expect.stringMatching(/PATTERN_CYCLE|FILE_SPLIT_NEEDED|REVIEW_ESCALATION/i),
+        }),
+      }),
+    )
   })
 
   // #127
@@ -358,6 +369,14 @@ describe('child lifecycle integration - pipeline nesting', () => {
       expect.any(String),
       expect.objectContaining({ phaseStatus: 'paused' }),
     )
+    expect(mockStateStore.appendLog).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          interventionType: expect.stringMatching(/PATTERN_CYCLE|FILE_SPLIT_NEEDED|REVIEW_ESCALATION/i),
+        }),
+      }),
+    )
   })
 
   // #140
@@ -378,6 +397,14 @@ describe('child lifecycle integration - pipeline nesting', () => {
     expect(mockStateStore.write).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ phaseStatus: 'paused' }),
+    )
+    expect(mockStateStore.appendLog).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          interventionType: expect.stringMatching(/PATTERN_CYCLE|FILE_SPLIT_NEEDED|REVIEW_ESCALATION/i),
+        }),
+      }),
     )
   })
 
@@ -499,34 +526,38 @@ describe('child lifecycle integration - pipeline nesting', () => {
     )
   })
 
-  // #154
+  // #154 — F-057: parameterized for both 'failed' AND 'cancelled' terminal statuses.
+  // F-023: handlePhaseFail argument aligned with fixture runId ('child-456').
   // F-014: REMOVED `store.handlePhaseFail = vi.fn()` override — see #142.
-  it('should clean up suspended stack when pipeline transitions to failed or cancelled', () => {
-    const entries = [
-      makeSuspendedPipeline({ runId: 'A', depth: 0 }),
-      makeSuspendedPipeline({ runId: 'B', depth: 1 }),
-    ]
-    const state = makeNestingState({ runId: 'A', phaseStatus: 'failed' })
-    mockStateStore.read.mockImplementation((key: string) => {
-      if (key.endsWith('/state')) return state
-      if (key.endsWith('/suspended-stack')) return makeSuspendedStack(entries)
-      return null
-    })
-    store.handlePhaseFail('proj-1', 'child-456')
-    expect(mockStateStore.write).toHaveBeenCalledWith(
-      expect.stringMatching(/suspended-stack/),
-      expect.objectContaining({ entries: expect.any(Array) }),
-    )
-    // F-008: parent must NOT be auto-resumed after child cleanup — verify no
-    // write transitions parent back to ralph_loop/active (would cause double-exec).
-    expect(mockStateStore.write).not.toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({
-        runId: 'parent-123',
-        phaseStatus: expect.stringMatching(/ralph_loop|active/),
-      }),
-    )
-  })
+  it.each(['failed', 'cancelled'])(
+    'should clean up suspended stack when pipeline transitions to %s',
+    (terminalStatus) => {
+      const entries = [
+        makeSuspendedPipeline({ runId: 'A', depth: 0 }),
+        makeSuspendedPipeline({ runId: 'B', depth: 1 }),
+      ]
+      const state = makeNestingState({ runId: 'child-456', phaseStatus: terminalStatus })
+      mockStateStore.read.mockImplementation((key: string) => {
+        if (key.endsWith('/state')) return state
+        if (key.endsWith('/suspended-stack')) return makeSuspendedStack(entries)
+        return null
+      })
+      store.handlePhaseFail('proj-1', 'child-456')
+      expect(mockStateStore.write).toHaveBeenCalledWith(
+        expect.stringMatching(/suspended-stack/),
+        expect.objectContaining({ entries: expect.any(Array) }),
+      )
+      // F-008: parent must NOT be auto-resumed after child cleanup — verify no
+      // write transitions parent back to ralph_loop/active (would cause double-exec).
+      expect(mockStateStore.write).not.toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          runId: 'parent-123',
+          phaseStatus: expect.stringMatching(/ralph_loop|active/),
+        }),
+      )
+    },
+  )
 
   // #156
   // F-014: REMOVED `store.handlePhaseFail = vi.fn()` override — see #142.

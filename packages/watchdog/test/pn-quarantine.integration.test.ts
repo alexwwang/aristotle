@@ -76,6 +76,7 @@ describe('quarantine integration - pipeline nesting', () => {
     const state = makeNestingState({ runId: 'parent-123', phaseStatus: 'ralph_loop' })
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/parent-123/state')) return state
+      if (key.endsWith('/active')) return { runId: 'parent-123', projectId: 'proj-1' }
       return null
     })
     const storeFail = new PipelineStore(mockStateStore, mockLogger, {
@@ -110,6 +111,9 @@ describe('quarantine integration - pipeline nesting', () => {
     })
     const result = store.resumeSuspended('proj-1', 'child-456')
     expect(result.phaseStatus).toBe('ralph_loop')
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('RESUME_WARNING_QUARANTINE_FAILED'),
+    )
   })
 
   // #62

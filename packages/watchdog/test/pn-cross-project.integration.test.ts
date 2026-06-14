@@ -113,6 +113,12 @@ describe('cross-project integration - pipeline nesting', () => {
       return null
     })
     expect(() => store.resumeSuspended('proj-unreachable', 'child-456')).toThrow(/cross.project|resolution/i)
+    expect(mockStateStore.appendLog).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        metadata: expect.objectContaining({ code: expect.stringMatching(/CRITICAL|RESOLUTION_FAILURE/i) }),
+      }),
+    )
   })
 
   // #65
@@ -129,6 +135,12 @@ describe('cross-project integration - pipeline nesting', () => {
       return null
     })
     expect(() => store.resumeSuspended('proj-slow', 'child-456')).toThrow(/timeout/i)
+    expect(mockStateStore.appendLog).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        metadata: expect.objectContaining({ code: expect.stringMatching(/CRITICAL|RESOLUTION_FAILURE/i) }),
+      }),
+    )
   })
 
   // #66
