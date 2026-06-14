@@ -83,6 +83,11 @@ describe('ContestedIssue', () => {
     const dossier = buildEscalationDossier(issue, 'Agent says valid', 'Main rejects')
     expect(dossier.evidence).toBeInstanceOf(Array)
     expect(dossier.evidence.length).toBeGreaterThan(0)
+    expect(dossier.agent_rationale).toBe('Agent says valid')
+    expect(dossier.rejection_rationale).toBe('Main rejects')
+    expect(dossier.recommendation).toBeDefined()
+    expect(typeof dossier.recommendation).toBe('string')
+    expect(dossier.recommendation.length).toBeGreaterThan(0)
   })
 
   // RT-056b
@@ -91,6 +96,10 @@ describe('ContestedIssue', () => {
     const dossier = buildEscalationDossier(issue, 'Agent rationale', 'Rejection rationale')
     expect(dossier).toBeDefined()
     expect(dossier.finding).toBeDefined()
+    expect(dossier.agent_rationale).toBe('Agent rationale')
+    expect(dossier.rejection_rationale).toBe('Rejection rationale')
+    expect(dossier.evidence).toBeInstanceOf(Array)
+    expect(dossier.recommendation).toBeDefined()
   })
 
   // RT-056c

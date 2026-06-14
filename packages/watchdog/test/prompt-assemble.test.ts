@@ -91,6 +91,6 @@ describe('Prompt Assemble MCP Tool', () => {
       isOmo: false,
       internalParams: ['fact_context'],
     })
-    expect(['spawn_subagent', 'error']).toContain(result.action)
+    expect(result.action).toBe('spawn_subagent')
   })
 })

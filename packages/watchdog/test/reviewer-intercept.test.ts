@@ -146,7 +146,7 @@ describe('ReviewerInterceptRule', () => {
       const state = makeRalphState()
       rule.evaluate('Task', { subagent_type: 'oracle', prompt: 'Review', description: 'Review' }, state, 'ses-main-001')
       const result = rule.evaluate('Task', { subagent_type: 'oracle', prompt: 'Review', description: 'Review' }, state, 'ses-main-001')
-      expect(result.state_mutated === false || result.state_mutated === undefined).toBe(true)
+      expect(result.state_mutated).toBeFalsy()
     })
 
     // RT-009e
@@ -175,7 +175,7 @@ describe('ReviewerInterceptRule', () => {
       const second = rule.evaluate('Task', { subagent_type: 'oracle', prompt: 'Review again', description: 'Another review' }, state, 'ses-main-001')
       expect(first.blocked).toBe(true)
       expect(second.blocked).toBe(true)
-      expect(second.state_mutated === false || second.state_mutated === undefined).toBe(true)
+      expect(second.state_mutated).toBeFalsy()
     })
   })
 
@@ -186,7 +186,7 @@ describe('ReviewerInterceptRule', () => {
     const start = performance.now()
     rule.evaluate('Task', { subagent_type: 'oracle', prompt: 'Review', description: 'Review' }, state, 'ses-main-001')
     const elapsed = performance.now() - start
-    expect(elapsed).toBeLessThan(50)
+    expect(elapsed).toBeLessThan(5)
   })
   })
 
@@ -197,7 +197,7 @@ describe('ReviewerInterceptRule', () => {
       const first = rule.evaluate('Task', { subagent_type: 'oracle', prompt: 'Review', description: 'Review' }, state, 'ses-main-001')
       const second = rule.evaluate('Task', { subagent_type: 'reviewer', prompt: 'Another review', description: 'Review again' }, state, 'ses-main-001')
       expect(first.state_mutated).toBe(true)
-      expect(second.state_mutated === false || second.state_mutated === undefined).toBe(true)
+      expect(second.state_mutated).toBeFalsy()
     })
   })
 })

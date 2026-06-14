@@ -49,6 +49,29 @@ describe('Dual-Pass Batch', () => {
     expect(merged[0].verdict).toBe('CONFIRM')
   })
 
+  // RT-051d — dual DOWNGRADE: lower severity wins (spec: dual_downgrade_to_lower_severity)
+  it('should_select_lower_severity_on_dual_downgrade_merge', () => {
+    const batches = [
+      [{ id: 'F-01', verdict: 'DOWNGRADE', severity: 'M' }],
+      [{ id: 'F-01', verdict: 'DOWNGRADE', severity: 'L' }],
+    ]
+    const merged = mergeBatchVerdicts(batches) as Array<{ id: string; verdict: string; severity: string }>
+    expect(merged).toHaveLength(1)
+    expect(merged[0].verdict).toBe('DOWNGRADE')
+    expect(merged[0].severity).toBe('L')
+  })
+
+  // RT-051e — same verdict+severity tie: batch 0's rationale preserved (spec: lower_batch_index_on_tie)
+  it('should_keep_batch_index_0_data_on_tie', () => {
+    const batches = [
+      [{ id: 'F-01', verdict: 'CONFIRM', rationale: 'batch-0-rationale' }],
+      [{ id: 'F-01', verdict: 'CONFIRM', rationale: 'batch-1-rationale' }],
+    ]
+    const merged = mergeBatchVerdicts(batches) as Array<{ id: string; verdict: string; rationale: string }>
+    expect(merged).toHaveLength(1)
+    expect(merged[0].rationale).toBe('batch-0-rationale')
+  })
+
   // RT-052a
   it('should_merge_partial_batch_results_with_recall_conversion', () => {
     const successful = [{ id: 'F-01', verdict: 'CONFIRM' }]

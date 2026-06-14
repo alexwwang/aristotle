@@ -51,20 +51,26 @@ describe('Dual-Pass Orchestration', () => {
 
   // RT-042c-6
   it('should_handle_bare_file_path_in_location_map', () => {
-    const result = parseLocationMap(['src/auth.ts'])
-    expect(Array.isArray(result)).toBe(true)
+    const result = parseLocationMap(['src/auth.ts']) as Array<{ file: string; line: number | null }>
+    expect(result).toHaveLength(1)
+    expect(result[0].file).toBe('src/auth.ts')
+    expect(result[0].line).toBeNull()
   })
 
   // RT-042c-7
   it('should_merge_contiguous_ranges_by_file_in_location_map', () => {
-    const result = parseLocationMap(['src/auth.ts:10-20', 'src/auth.ts:21-30'])
-    expect(Array.isArray(result)).toBe(true)
+    const result = parseLocationMap(['src/auth.ts:10-20', 'src/auth.ts:21-30']) as Array<{ file: string; line: number; endLine: number }>
+    expect(result).toHaveLength(1)
+    expect(result[0].file).toBe('src/auth.ts')
+    expect(result[0].line).toBe(10)
+    expect(result[0].endLine).toBe(30)
   })
 
   // RT-042c-8
   it('should_exclude_non_file_locations_from_location_map', () => {
-    const result = parseLocationMap(['https://example.com'])
+    const result = parseLocationMap(['https://example.com']) as unknown[]
     expect(Array.isArray(result)).toBe(true)
+    expect(result).toHaveLength(0)
   })
 
   // RT-043a
@@ -163,6 +169,14 @@ describe('Dual-Pass Orchestration', () => {
     const result = enforceT10Contract(decisions) as Array<{ finding_id: string; decision: string }>
     expect(result).toHaveLength(1)
     expect(result[0].decision).toBe('DEFER')
+  })
+
+  // RT-058b-3c — DEFER with invalid defer_target format → auto-REJECT (spec: should_auto_reject_defer_with_invalid_defer_target_format)
+  it.each(['', 'next time', 'invalid format'])('should_auto_reject_defer_with_invalid_defer_target_%s', (deferTarget) => {
+    const decisions = [{ finding_id: 'F-01', decision: 'DEFER', rationale: 'Defer', severity: 'P', defer_target: deferTarget }]
+    const result = enforceT10Contract(decisions) as Array<{ finding_id: string; decision: string; rationale: string }>
+    expect(result).toHaveLength(1)
+    expect(result[0].decision).toBe('REJECT')
   })
 
   // RT-058b-4 — MODIFY with fix_code → accepted
