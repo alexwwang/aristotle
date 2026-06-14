@@ -27,49 +27,49 @@ describe('Dual-Pass Orchestration', () => {
 
   // RT-042c-3
   it('should_parse_line_only_location_format', () => {
-    const result = parseLocationMap([':42']) as Array<{ line: number; endLine: number }>
+    const result = parseLocationMap([':42'])
     expect(result).toHaveLength(1)
-    expect(result[0].line).toBe(42)
-    expect(result[0].endLine).toBe(42)
+    expect((result[0] as { line: number; endLine: number }).line).toBe(42)
+    expect((result[0] as { line: number; endLine: number }).endLine).toBe(42)
   })
 
   // RT-042c-4
   it('should_parse_line_column_location_format', () => {
-    const result = parseLocationMap([':42:7']) as Array<{ line: number; column: number; endLine: number }>
+    const result = parseLocationMap([':42:7'])
     expect(result).toHaveLength(1)
-    expect(result[0].line).toBe(42)
-    expect(result[0].column).toBe(7)
-    expect(result[0].endLine).toBe(42)
+    expect((result[0] as { line: number; column: number; endLine: number }).line).toBe(42)
+    expect((result[0] as { line: number; column: number; endLine: number }).column).toBe(7)
+    expect((result[0] as { line: number; column: number; endLine: number }).endLine).toBe(42)
   })
 
   // RT-042c-5
   it('should_parse_line_range_location_format', () => {
-    const result = parseLocationMap([':42-58']) as Array<{ line: number; endLine: number }>
+    const result = parseLocationMap([':42-58'])
     expect(result).toHaveLength(1)
-    expect(result[0].line).toBe(42)
-    expect(result[0].endLine).toBe(58)
+    expect((result[0] as { line: number; endLine: number }).line).toBe(42)
+    expect((result[0] as { line: number; endLine: number }).endLine).toBe(58)
   })
 
   // RT-042c-6
   it('should_handle_bare_file_path_in_location_map', () => {
-    const result = parseLocationMap(['src/auth.ts']) as Array<{ file: string; line: number | null }>
+    const result = parseLocationMap(['src/auth.ts'])
     expect(result).toHaveLength(1)
-    expect(result[0].file).toBe('src/auth.ts')
-    expect(result[0].line).toBeNull()
+    expect((result[0] as { file: string; line: number | null }).file).toBe('src/auth.ts')
+    expect((result[0] as { file: string; line: number | null }).line).toBeNull()
   })
 
   // RT-042c-7
   it('should_merge_contiguous_ranges_by_file_in_location_map', () => {
-    const result = parseLocationMap(['src/auth.ts:10-20', 'src/auth.ts:21-30']) as Array<{ file: string; line: number; endLine: number }>
+    const result = parseLocationMap(['src/auth.ts:10-20', 'src/auth.ts:21-30'])
     expect(result).toHaveLength(1)
-    expect(result[0].file).toBe('src/auth.ts')
-    expect(result[0].line).toBe(10)
-    expect(result[0].endLine).toBe(30)
+    expect((result[0] as { file: string; line: number; endLine: number }).file).toBe('src/auth.ts')
+    expect((result[0] as { file: string; line: number; endLine: number }).line).toBe(10)
+    expect((result[0] as { file: string; line: number; endLine: number }).endLine).toBe(30)
   })
 
   // RT-042c-8
   it('should_exclude_non_file_locations_from_location_map', () => {
-    const result = parseLocationMap(['https://example.com']) as unknown[]
+    const result = parseLocationMap(['https://example.com'])
     expect(Array.isArray(result)).toBe(true)
     expect(result).toHaveLength(0)
   })
@@ -106,15 +106,17 @@ describe('Dual-Pass Orchestration', () => {
     expect(result).toBeDefined()
   })
 
-  // RT-043e
-  it('should_emit_4_gpav_events_one_per_pass_step', () => {
+  // RT-043e — F-014: drive full Dual-Pass pipeline, verify 4 GPAVEvents per round
+  it('should_emit_4_gpav_events_one_per_pass_step', async () => {
     const emitSpy = vi.spyOn(orchestrator, 'emitGPAVEvent')
-    const baseEvent = { round: 1, dualPassAttempt: 1, timestamp: new Date().toISOString() }
-    orchestrator.emitGPAVEvent({ ...baseEvent, pass_step: 1 } as GPAVEvent)
-    orchestrator.emitGPAVEvent({ ...baseEvent, pass_step: 2 } as GPAVEvent)
-    orchestrator.emitGPAVEvent({ ...baseEvent, pass_step: 3 } as GPAVEvent)
-    orchestrator.emitGPAVEvent({ ...baseEvent, pass_step: 4 } as GPAVEvent)
+    const state = makeRalphState()
+    await orchestrator.executeRecall(state)
+    await orchestrator.executeFactGather(state, [])
+    await orchestrator.executePrecision(state, [], [])
+    await orchestrator.executeEvalFix(state, [])
     expect(emitSpy).toHaveBeenCalledTimes(4)
+    const steps = emitSpy.mock.calls.map(call => (call[0] as GPAVEvent).pass_step)
+    expect(steps).toEqual([1, 2, 3, 4])
   })
 
   // RT-043f
@@ -123,11 +125,12 @@ describe('Dual-Pass Orchestration', () => {
     await orchestrator.executeEvalFix(state, [])
     const path = orchestrator.getResultFilePath(3)
     expect(path).toContain('reviewer-result-')
-    if (existsSync(path)) {
+    try {
       const content = JSON.parse(readFileSync(path, 'utf-8'))
       expect(content.status).toBe('complete')
       expect(Array.isArray(content.findings)).toBe(true)
-      unlinkSync(path)
+    } finally {
+      if (existsSync(path)) unlinkSync(path)
     }
   })
 
@@ -143,8 +146,11 @@ describe('Dual-Pass Orchestration', () => {
     const state = makeRalphState()
     const rawFindings = [{ id: 'F-01', severity: 'M', description: 'Issue', location: 'deleted.ts:10' }]
     const locationMap = [{ file: 'deleted.ts', line: 10, exists: false }]
-    const result = await orchestrator.executePrecision(state, rawFindings, locationMap)
+    const result = await orchestrator.executePrecision(state, rawFindings, locationMap) as { findings?: Array<{ adjusted_severity?: string; verdict_reason?: string }> }
     expect(result).toBeDefined()
+    const finding = result.findings?.[0]
+    expect(finding?.adjusted_severity).toBe('I')
+    expect(finding?.verdict_reason ?? '').toMatch(/quarantined|no longer exists/i)
   })
 
   // RT-058b-1 — ADOPT without fix → auto-REJECT
@@ -216,9 +222,15 @@ describe('Dual-Pass Orchestration', () => {
   // RT-087d
   it('should_clear_intercepted_fields_after_dual_pass_spawn_completes', () => {
     const state = makeRalphState()
-    expect(() => orchestrator.emitGPAVEvent({
+    state.reviewerTakeover = {
+      round: 1, interceptAt: new Date().toISOString(), spawnPhase: 't2_running',
+      interceptedPrompt: 'prompt-data', interceptedDescription: 'desc-data',
+    }
+    orchestrator.emitGPAVEvent({
       pass_step: 4, round: state.ralph?.round ?? 1, dualPassAttempt: 1,
       timestamp: new Date().toISOString(),
-    })).not.toThrow()
+    })
+    expect(state.reviewerTakeover?.interceptedPrompt).toBeFalsy()
+    expect(state.reviewerTakeover?.interceptedDescription).toBeFalsy()
   })
 })

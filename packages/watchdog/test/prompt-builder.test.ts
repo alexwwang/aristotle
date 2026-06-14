@@ -11,6 +11,7 @@ describe('PromptBuilder', () => {
   })
 
   // TC-PB-001
+  // Phase 3 spec: T-2 prompt (OMO=true) ≤ 330 tokens
   it('should_generate_short_prompt_when_omo_detected', () => {
     const template = registry.get_template('T-2')
     const result = builder.build(template, { phase: 1, round: 2, runId: 'run-001', projectId: 'proj-1' }, true)
@@ -20,6 +21,7 @@ describe('PromptBuilder', () => {
   })
 
   // TC-PB-002
+  // Phase 3 spec: T-2 prompt (OMO=false) ≤ 1500 tokens
   it('should_generate_long_prompt_with_role_definition', () => {
     const template = registry.get_template('T-2')
     const result = builder.build(template, { phase: 1, round: 2, runId: 'run-001', projectId: 'proj-1' }, false)
@@ -62,9 +64,6 @@ describe('PromptBuilder', () => {
     const template = registry.get_template('T-2')
     const result = builder.build(template, { phase: 4, round: 1, runId: 'run-001', projectId: 'proj-1' }, false)
     expect(result.prompt).toContain('TDD')
-    // Verify TDD protocol-specific terms, not just the acronym.
-    const tddTerms = ['Red', 'Green', 'Refactor']
-    const hasProtocolTerm = tddTerms.some(term => result.prompt.includes(term))
-    expect(hasProtocolTerm).toBe(true)
+    expect(/Red.*Green.*Refactor/s.test(result.prompt)).toBe(true)
   })
 })

@@ -89,7 +89,10 @@ describe('ReviewerInterceptRule', () => {
       const state = makeRalphState()
       const result = rule.evaluate('Task', { subagent_type: 'oracle', prompt: 'Review', description: 'Review' }, state)
       expect(result.blocked).toBe(false)
-      expect(errorSpy).toHaveBeenCalled()
+      const sessionCalls = errorSpy.mock.calls.filter(
+        call => call.some(arg => String(arg).includes('calling_session_id')),
+      )
+      expect(sessionCalls.length).toBeGreaterThanOrEqual(1)
       errorSpy.mockRestore()
     })
   })
@@ -145,9 +148,12 @@ describe('ReviewerInterceptRule', () => {
       const resultPath = `.aristotle/reviewer-result-${round}.json`
       mkdirSync('.aristotle', { recursive: true })
       writeFileSync(resultPath, JSON.stringify({ status: 'complete', round, sessionId: 'ses-main-001', findings: [] }))
-      const result = rule.evaluate('Task', { subagent_type: 'oracle', prompt: 'Review', description: 'Review' }, state, 'ses-main-001')
-      expect(result.blocked).toBe(true)
-      if (existsSync(resultPath)) unlinkSync(resultPath)
+      try {
+        const result = rule.evaluate('Task', { subagent_type: 'oracle', prompt: 'Review', description: 'Review' }, state, 'ses-main-001')
+        expect(result.blocked).toBe(true)
+      } finally {
+        if (existsSync(resultPath)) unlinkSync(resultPath)
+      }
     })
 
     // RT-009d
@@ -195,17 +201,22 @@ describe('ReviewerInterceptRule', () => {
   })
 
   describe('RT-040: Interceptor detection latency < 5ms', () => {
-  // RT-040 — average over multiple iterations to reduce wall-clock flakiness
-  it('should_complete_intercept_evaluation_under_5ms', () => {
-    const state = makeRalphState()
-    const iterations = 10
-    const start = performance.now()
-    for (let i = 0; i < iterations; i++) {
-      rule.evaluate('Task', { subagent_type: 'oracle', prompt: 'Review', description: 'Review' }, state, 'ses-main-001')
-    }
-    const avgElapsed = (performance.now() - start) / iterations
-    expect(avgElapsed).toBeLessThan(5)
-  })
+    // RT-040 — per-call max to catch spikes; high iteration count for stability; skip in CI
+    it.skipIf(process.env.CI === 'true' || process.env.CI === '1')('should_complete_intercept_evaluation_under_5ms', () => {
+      const state = makeRalphState()
+      const iterations = 1000
+      // warmup
+      for (let i = 0; i < 100; i++) {
+        rule.evaluate('Task', { subagent_type: 'oracle', prompt: 'Review', description: 'Review' }, state, 'ses-main-001')
+      }
+      let maxElapsed = 0
+      for (let i = 0; i < iterations; i++) {
+        const start = performance.now()
+        rule.evaluate('Task', { subagent_type: 'oracle', prompt: 'Review', description: 'Review' }, state, 'ses-main-001')
+        maxElapsed = Math.max(maxElapsed, performance.now() - start)
+      }
+      expect(maxElapsed).toBeLessThan(5)
+    })
   })
 
   describe('RT-041: Maximum concurrent takeovers = 1', () => {

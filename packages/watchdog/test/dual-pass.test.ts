@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { runDualPass } from '../src/dual-pass.js'
 import type { GPAVFinding, DualPassConfig } from '../src/dual-pass.js'
 
+// F-043: createDualPassOrchestrator (src/dual-pass-gpav.ts) is the canonical API;
+// runDualPass here is a legacy batch wrapper retained for these integration scenarios.
 describe('Dual-Pass Integration', () => {
   const findings: GPAVFinding[] = [
     { id: 'F-01', severity: 'H', description: 'Missing error handling', location: 'src/main.ts:42' },
@@ -16,14 +18,14 @@ describe('Dual-Pass Integration', () => {
     evalFixTimeout: 120,
   }
 
-  // TC-DP-001
+  // RT-043e (legacy TC-DP-001)
   it('should_emit_4_gpav_events_per_round', () => {
     const result = runDualPass(config, findings)
     expect(result.events).toHaveLength(4)
     expect(result.events.map(e => e.pass_step)).toEqual([1, 2, 3, 4])
   })
 
-  // TC-DP-002
+  // RT-046a (legacy TC-DP-002)
   it('should_degrade_recall_failed_to_pipeline_state', () => {
     const failConfig: DualPassConfig = { ...config, recallTimeout: 0 }
     const result = runDualPass(failConfig, findings)
@@ -32,7 +34,7 @@ describe('Dual-Pass Integration', () => {
     expect(recallEvent?.degradation).toBeDefined()
   })
 
-  // TC-DP-003
+  // RT-047a (legacy TC-DP-003)
   it('should_degrade_fact_gather_failed_to_main_agent', () => {
     const result = runDualPass(config, findings)
     const fgEvent = result.events.find(e => e.pass_step === 2)
@@ -40,7 +42,7 @@ describe('Dual-Pass Integration', () => {
     expect(fgEvent?.degradation).toContain('main-agent')
   })
 
-  // TC-DP-004
+  // RT-048a (legacy TC-DP-004)
   it('should_degrade_precision_failed_to_recall_only', () => {
     const failConfig: DualPassConfig = { ...config, precisionTimeout: 0 }
     const result = runDualPass(failConfig, findings)
@@ -49,7 +51,7 @@ describe('Dual-Pass Integration', () => {
     expect(precisionEvent?.degradation).toContain('recall_only')
   })
 
-  // TC-DP-005
+  // RT-049a (legacy TC-DP-005)
   it('should_degrade_eval_fix_failed_to_confirmed_findings', () => {
     const failConfig: DualPassConfig = { ...config, evalFixTimeout: 0 }
     const result = runDualPass(failConfig, findings)
@@ -58,10 +60,10 @@ describe('Dual-Pass Integration', () => {
     expect(evalEvent?.degradation).toContain('confirmed_findings')
   })
 
-  // TC-DP-006
+  // RT-046b/047b/048b/049b cascade (legacy TC-DP-006)
   it('should_propagate_originating_reason_in_cascade_skip', () => {
     const result = runDualPass(config, findings)
     expect(result.originatingReason).toBeDefined()
-    expect(result.originatingReason.length).toBeGreaterThan(0)
+    expect(result.originatingReason!.length).toBeGreaterThan(0)
   })
 })

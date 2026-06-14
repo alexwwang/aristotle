@@ -1,27 +1,30 @@
 import { describe, it, expect } from 'vitest'
 import { splitFindingsIntoBatches, mergeBatchVerdicts, mergePartialBatchResults } from '../src/dual-pass-batch.js'
 
+// Phase 3 spec: 30-finding batch threshold for splitFindingsIntoBatches
+const SPEC_BATCH_THRESHOLD = 30
+
 describe('Dual-Pass Batch', () => {
-  // RT-050a
+  // RT-050a — F-032: omit batch-size to verify production default = 30
   it('should_split_findings_into_batches_of_30', () => {
     const findings = Array.from({ length: 45 }, (_, i) => ({ id: `F-${i}`, severity: 'M' }))
-    const batches = splitFindingsIntoBatches(findings, 30)
+    const batches = splitFindingsIntoBatches(findings)
     expect(batches.length).toBe(2)
-    expect(batches[0].length).toBe(30)
+    expect(batches[0].length).toBe(SPEC_BATCH_THRESHOLD)
     expect(batches[1].length).toBe(15)
   })
 
   // RT-050b
   it('should_not_split_when_findings_count_under_30', () => {
     const findings = Array.from({ length: 25 }, (_, i) => ({ id: `F-${i}`, severity: 'M' }))
-    const batches = splitFindingsIntoBatches(findings, 30)
+    const batches = splitFindingsIntoBatches(findings)
     expect(batches.length).toBe(1)
   })
 
   // RT-050c
   it('should_not_split_when_findings_count_exactly_30', () => {
-    const findings = Array.from({ length: 30 }, (_, i) => ({ id: `F-${i}`, severity: 'M' }))
-    const batches = splitFindingsIntoBatches(findings, 30)
+    const findings = Array.from({ length: SPEC_BATCH_THRESHOLD }, (_, i) => ({ id: `F-${i}`, severity: 'M' }))
+    const batches = splitFindingsIntoBatches(findings)
     expect(batches.length).toBe(1)
   })
 

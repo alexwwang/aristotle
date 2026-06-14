@@ -74,6 +74,14 @@ export interface PipelineState {
   pausedAt?: string
   pending_pause?: PendingPause | null
   child_pause_timer_started_at?: string
+
+  // Phase 3: reviewer-takeover fields (type-only — implementations in Phase 5)
+  activeSubagentSession?: string
+  reviewerTakeover?: ReviewerTakeoverState
+  cleanupToken?: string
+  dualPassAttempt?: number
+  d2TimeoutCycleCount?: number
+  rpsConsecutiveFailures?: number
 }
 
 /** Phase 2+ pipeline state with guaranteed ownerSessionId. */
@@ -283,11 +291,20 @@ export interface SuspendedStack {
 }
 
 export interface ReviewerTakeoverState {
-  t1SessionId: string
-  t2SessionId: string
-  resultFile: string
-  cleanupToken: string
+  round: number
+  interceptAt: string
   spawnPhase: string
+  t1SessionId?: string
+  t2SessionId?: string
+  resultFile?: string
+  cleanupToken?: string
+  t1Degraded?: boolean
+  dualPassMode?: boolean
+  dualPassPhase?: string
+  dualPassAttempt?: number
+  interceptedPrompt?: string | null
+  interceptedDescription?: string | null
+  factContextPath?: string
 }
 
 export interface ChildFailureContext {

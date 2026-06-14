@@ -31,6 +31,8 @@ export interface DualPassOrchestrator {
   emitGPAVEvent(event: GPAVEvent): void
   supersedePriorEvents(round: number, newAttempt: number): void
   getResultFilePath(round: number): string
+  getEmittedEvents(): GPAVEvent[]
+  getCurrentAttempt(): number
 }
 
 export function createDualPassOrchestrator(): DualPassOrchestrator {

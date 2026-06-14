@@ -129,4 +129,19 @@ describe('Parameter Naming Convention', () => {
     })
     expect(result.valid).toBe(false)
   })
+
+  // F-035: negative naming-convention tests for remaining templates
+  it.each([
+    ['T-2', { phase: 1, round: 2, run_id: 'run-abc123', project_id: 'project-xyz' }],
+    ['T-4', { files: ['src/violating-file.ts'], runId: 'run-abc123', phase: 5, violationType: 'REGRESSION', boundaryCommit: 'abc123def456' }],
+    ['T-6', { phase: 5, runId: 'run-abc123', events: [] }],
+    ['T-7', { modulePath: 'src/business-logic.ts', requirements: 'Implement feature X', designDoc: 'design_plan/phase-4/impl-design.md', language: 'typescript' }],
+    ['T-7b', { violationType: 'REGRESSION', files: ['src/violating-file.ts'], phase: 5, runId: 'run-abc123', designDocPath: 'design_plan/phase-5/impl-design.md' }],
+    ['T-8', { modulePath: 'src/business-logic.ts', testFiles: ['tests/business-logic.test.ts'], designDoc: 'design_plan/phase-5/impl-design.md', language: 'typescript' }],
+    ['T-9', { rawFindings: [{ id: 'F-01', severity: 'H', description: 'Missing error handling', location: 'src/main.ts:42', suggestion: 'Add try/catch' }], locationMap: { 'src/main.ts': { line_ranges: [[40, 50]], exists: true } }, reviewScope: { in_scope: ['src/main.ts'], out_of_scope: ['src/vendor/'] } }],
+    ['T-10', { confirmedFindings: [{ id: 'F-01', adjusted_severity: 'H', description: 'Missing error handling', location: 'src/main.ts:42', verdict: 'CONFIRM', verdict_reason: 'Confirmed by location_map' }], deliverable: { target_files: ['src/main.ts'], current_content_summary: 'Module with missing error handling' }, context: { phase: 4, ralph_round: 2, task_description: 'Add error handling', prior_phase_outputs: { phase_outputs: [] } } }],
+  ])('should_reject_wrong_naming_convention_for_%s', (templateId, params) => {
+    const result = registry.validate_params(templateId, params)
+    expect(result.valid).toBe(false)
+  })
 })

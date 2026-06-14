@@ -29,18 +29,16 @@ describe('Dual-Pass Supervision', () => {
     expect(result).toBe('evalfix_done')
   })
 
-  // RT-062a
+  // RT-062a — F-018: replace manual increment+setFailed with auto-transition via resetDualPassPhaseOnInactivity
   it('should_set_failed_after_3_consecutive_d2_inactivity_timeouts', () => {
-    const state = { d2TimeoutCycleCount: 0 }
-    expect(detectStalePhase('d2_running', 240_000, 240_000, false)).toBe(true)
-    state.d2TimeoutCycleCount = incrementD2TimeoutCycleCount(state)
-    expect(detectStalePhase('d2_running', 240_000, 240_000, false)).toBe(true)
-    state.d2TimeoutCycleCount = incrementD2TimeoutCycleCount(state)
-    expect(detectStalePhase('d2_running', 240_000, 240_000, false)).toBe(true)
-    state.d2TimeoutCycleCount = incrementD2TimeoutCycleCount(state)
-    expect(state.d2TimeoutCycleCount).toBe(3)
-    const result = setDualPassPhaseFailed(state)
-    expect(result.dualPassPhase).toBe('failed')
+    const state: { d2TimeoutCycleCount: number; dualPassPhase?: string } = { d2TimeoutCycleCount: 0, dualPassPhase: 'd2_running' }
+    const phase1 = resetDualPassPhaseOnInactivity('d2_running', 240, false)
+    expect(phase1).toBe('evalfix_done')
+    const phase2 = resetDualPassPhaseOnInactivity('d2_running', 240, false)
+    expect(phase2).toBe('evalfix_done')
+    const phase3 = resetDualPassPhaseOnInactivity('d2_running', 240, false)
+    expect(phase3).toBe('failed')
+    expect(state.dualPassPhase === 'failed' || phase3 === 'failed').toBe(true)
   })
 
   // RT-062b
@@ -62,10 +60,12 @@ describe('Dual-Pass Supervision', () => {
     }
   })
 
-  // RT-063b
+  // RT-063b — F-049: full degradation chain (recall_done → factgather_running → factgather_done → evalfix_running)
   it('should_follow_degradation_shortcut_recall_failed_to_evalfix', () => {
-    const valid = validateDualPassTransition('recall_done', 'evalfix_running', true)
-    expect(valid).toBe(true)
+    expect(validateDualPassTransition('recall_done', 'factgather_running', true)).toBe(true)
+    expect(validateDualPassTransition('factgather_running', 'factgather_done', true)).toBe(true)
+    expect(validateDualPassTransition('factgather_done', 'evalfix_running', true)).toBe(true)
+    expect(validateDualPassTransition('recall_done', 'evalfix_running', true)).toBe(true)
   })
 
   // RT-063c
@@ -74,13 +74,13 @@ describe('Dual-Pass Supervision', () => {
     expect(isDualPassPhaseValid('done')).toBe(true)
   })
 
-  // RT-064a
+  // RT-064a — F-045: supervision-layer mutation guard (complements RT-079a schema-layer)
   it('should_reject_dual_pass_mode_mutation_after_creation', () => {
     const state: { dualPassMode?: boolean } = { dualPassMode: true }
     expect(() => setDualPassMode(state, false)).toThrow('dualPassMode is immutable after takeover creation')
   })
 
-  // RT-064b
+  // RT-064b — F-045: supervision-layer initial write-once (complements RT-079b schema-layer)
   it('should_set_dual_pass_mode_once_at_takeover_creation', () => {
     const state: { dualPassMode?: boolean } = {}
     setDualPassMode(state, true)

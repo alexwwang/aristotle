@@ -3,7 +3,7 @@ export interface DualPassBatchResult {
   errors: unknown[]
 }
 
-export function splitFindingsIntoBatches(findings: unknown[], maxBatchSize: number): unknown[][] {
+export function splitFindingsIntoBatches(findings: unknown[], maxBatchSize?: number): unknown[][] {
   throw new Error('Not implemented: splitFindingsIntoBatches')
 }
 

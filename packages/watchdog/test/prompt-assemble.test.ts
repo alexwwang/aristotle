@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { promptAssemble } from '../src/prompt-assemble.js'
+import { PromptBuilder } from '../src/prompt-builder.js'
 
 describe('Prompt Assemble MCP Tool', () => {
   // TC-MCP-001
@@ -75,12 +76,9 @@ describe('Prompt Assemble MCP Tool', () => {
     expect(typeof result.error).toBe('string')
   })
 
-  // TC-MCP-008
-  // TODO: This test passes fully valid T-1 params but expects action='error'.
-  // After implementation, valid params will succeed — this test needs a
-  // vi.spyOn(PromptBuilder.prototype, 'build') mock to trigger a build
-  // exception. Without the mock, this test will fail post-implementation.
+  // TC-MCP-008 — F-021: trigger build failure via PromptBuilder.prototype.build mock
   it('should_return_template_build_failed_error', () => {
+    const buildSpy = vi.spyOn(PromptBuilder.prototype, 'build').mockImplementationOnce(() => { throw new Error('build failed') })
     const result = promptAssemble({
       templateId: 'T-1',
       params: { phase: 1, round: 2, runId: 'run-1', projectId: 'proj-1', scope: 'full' },
@@ -88,6 +86,7 @@ describe('Prompt Assemble MCP Tool', () => {
     })
     expect(result.action).toBe('error')
     expect(result.error).toBeDefined()
+    buildSpy.mockRestore()
   })
 
   // TC-MCP-009

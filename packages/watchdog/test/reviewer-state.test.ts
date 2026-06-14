@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import type { PipelineState } from '../src/schema.js'
 import {
   validateReviewerTakeoverState,
   validateSpawnPhase,
@@ -47,11 +48,30 @@ describe('ReviewerTakeoverState validation', () => {
     expect(error ?? '').toMatch(/spawnPhase|spawn_phase/i)
   })
 
-  // RT-080a — negative: round is wrong type
-  it('should_reject_state_with_non_number_round', () => {
-    const error = validateReviewerTakeoverState(JSON.parse('{"round":"three","interceptAt":"2026-01-01T00:00:00Z","spawnPhase":"pending"}'))
+  // RT-080a — negative: round wrong types expanded (F-037)
+  it.each([
+    ['string', 'three'],
+    ['null', null],
+    ['undefined', undefined],
+    ['float', 1.5],
+    ['boolean', true],
+    ['negative', -1],
+    ['object', {}],
+    ['array', []],
+  ])('should_reject_state_with_non_integer_round_%s', (_label, badRound) => {
+    const error = validateReviewerTakeoverState(JSON.parse(JSON.stringify({ round: badRound, interceptAt: '2026-01-01T00:00:00Z', spawnPhase: 'pending' })))
     expect(error).not.toBeNull()
-    expect(error ?? '').toMatch(/round.*number|number.*round/i)
+    expect(error ?? '').toMatch(/round.*number|number.*round|round.*integer|integer.*round|round.*positive|positive.*round/i)
+  })
+
+  // RT-080a — interceptAt format validation (F-038)
+  it.each([
+    ['number', 1234567890],
+    ['non-date-string', 'not-a-date'],
+  ])('should_reject_state_with_invalid_intercept_at_format_%s', (_label, badInterceptAt) => {
+    const error = validateReviewerTakeoverState({ round: 3, interceptAt: badInterceptAt as unknown as string, spawnPhase: 'pending' })
+    expect(error).not.toBeNull()
+    expect(error ?? '').toMatch(/interceptAt|intercept_at|date|ISO/i)
   })
 
   // RT-080b — all valid spawnPhase enum values
@@ -105,5 +125,24 @@ describe('ReviewerTakeoverState validation', () => {
     't3_running',
   ])('should_reject_invalid_dual_pass_phase_%j', (phase) => {
     expect(validateDualPassPhaseEnum(phase)).toBe(false)
+  })
+
+  // RT-080 integration: dualPassMode=true requires dualPassPhase (F-040)
+  describe('integrated dualPassMode + dualPassPhase validation', () => {
+    it('should_reject_state_with_dualPassMode_true_but_missing_dualPassPhase', () => {
+      const error = validateReviewerTakeoverState({ round: 3, interceptAt: '2026-01-01T00:00:00Z', spawnPhase: 'pending', dualPassMode: true })
+      expect(error).not.toBeNull()
+      expect(error ?? '').toMatch(/dualPassPhase|dual_pass_phase/i)
+    })
+
+    it('should_accept_state_with_dualPassMode_true_and_valid_dualPassPhase', () => {
+      const error = validateReviewerTakeoverState({ round: 3, interceptAt: '2026-01-01T00:00:00Z', spawnPhase: 'pending', dualPassMode: true, dualPassPhase: 'recall_running' })
+      expect(error).toBeNull()
+    })
+
+    it('should_accept_state_with_dualPassMode_false_without_dualPassPhase', () => {
+      const error = validateReviewerTakeoverState({ round: 3, interceptAt: '2026-01-01T00:00:00Z', spawnPhase: 'pending', dualPassMode: false })
+      expect(error).toBeNull()
+    })
   })
 })

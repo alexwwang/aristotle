@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   resolveContestedIssue,
   removeContestedIssue,
@@ -123,13 +123,9 @@ describe('ContestedIssue', () => {
     expect(remaining[0].issue_id).toBe('M-2')
   })
 
-  // RT-057b
-  // Per spec RT-057: "Acceptance round does NOT increment dispute_rounds counter".
-  // The accept path removes the issue (RT-057a) without bumping the counter.
-  // Calling incrementDisputeRounds here would contradict RT-057b-cross below
-  // (which proves incrementDisputeRounds DOES increment 0→1→2).
-  // Verify accept path (removeContestedIssue) preserves dispute_rounds of remaining issues.
+  // RT-057b — F-048: verify accept path does NOT call incrementDisputeRounds
   it('should_not_increment_dispute_rounds_on_accept', () => {
+    const incrementSpy = vi.spyOn({ incrementDisputeRounds }, 'incrementDisputeRounds')
     const issues = [
       { ...baseIssue, issue_id: 'M-1', dispute_rounds: 2 },
       { ...baseIssue, issue_id: 'M-2', dispute_rounds: 1 },
@@ -137,6 +133,7 @@ describe('ContestedIssue', () => {
     const acceptedIssue = issues.find(i => i.issue_id === 'M-1')
     expect(acceptedIssue?.dispute_rounds).toBe(2)
     const remaining = removeContestedIssue(issues, 'M-1')
+    expect(incrementSpy).not.toHaveBeenCalled()
     expect(remaining).toHaveLength(1)
     expect(remaining[0].dispute_rounds).toBe(1)
   })

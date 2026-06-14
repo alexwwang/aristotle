@@ -5,6 +5,9 @@ export interface ReviewerSpawnResult {
   success: boolean
   t1SessionId?: string
   t2SessionId?: string
+  t1Degraded?: boolean
+  pipelineAction?: 'suspend' | 'resume' | 'block' | 'auto-commit'
+  action?: 'blocked' | 'auto-committed' | 'suspended' | 'resumed'
   error?: string
 }
 
@@ -15,6 +18,7 @@ export function createReviewerSpawnHandler(): {
   waitForIdle(sessionId: string): Promise<void>
   writeResultFile(state: PipelineState, findings: unknown[], decisions?: unknown[]): void
   writeFailedResultFile(state: PipelineState, error: string): void
+  convertLegacyAction(legacy: { action: string }): ReviewerSpawnResult
 } {
   throw new Error('Not implemented: createReviewerSpawnHandler')
 }
