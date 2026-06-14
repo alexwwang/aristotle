@@ -56,7 +56,7 @@ describe('Dual-Pass Supervision', () => {
   // RT-063b
   it('should_follow_degradation_shortcut_recall_failed_to_evalfix', () => {
     const valid = validateDualPassTransition('recall_done', 'evalfix_running', true)
-    expect(typeof valid).toBe('boolean')
+    expect(valid).toBe(true)
   })
 
   // RT-063c
@@ -84,6 +84,24 @@ describe('Dual-Pass Supervision', () => {
     expect(result).toBe(true)
   })
 
+  // RT-065a — under threshold: not stale
+  it('should_not_detect_stale_when_elapsed_under_threshold', () => {
+    const result = detectStalePhase('d2_running', 239_000, 240_000, false)
+    expect(result).toBe(false)
+  })
+
+  // RT-065a — over threshold: stale
+  it('should_detect_stale_when_elapsed_over_threshold', () => {
+    const result = detectStalePhase('d2_running', 300_000, 240_000, false)
+    expect(result).toBe(true)
+  })
+
+  // RT-065a — file changed: not stale regardless of elapsed
+  it('should_not_detect_stale_when_file_changed', () => {
+    const result = detectStalePhase('d2_running', 300_000, 240_000, true)
+    expect(result).toBe(false)
+  })
+
   // RT-065b
   it('should_detect_stale_d25_running_phase', () => {
     const result = detectStalePhase('d25_running', 240_000, 240_000, false)
@@ -96,7 +114,7 @@ describe('Dual-Pass Supervision', () => {
     expect(count).toBe(2)
   })
 
-  // RT-065b-reset — spec requires resetD2TimeoutCycleCount (Phase 5); tests increment until then
+  // RT-065c — increment from zero
   it('should_increment_d2_timeout_cycle_count_from_zero', () => {
     const count = incrementD2TimeoutCycleCount({ d2TimeoutCycleCount: 0 })
     expect(count).toBe(1)

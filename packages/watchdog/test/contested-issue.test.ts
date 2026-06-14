@@ -64,9 +64,9 @@ describe('ContestedIssue', () => {
     expect(result).toBe('auto_accept')
   })
 
-  // RT-055 condition 6b
-  it('should_resolve_condition_6b_l_i_severity_to_auto_accept', () => {
-    const issue = { ...baseIssue, severity: 'L' as const, dispute_rounds: 2 }
+  // RT-055 condition 6b — L and I severity → auto_accept
+  it.each(['L', 'I'] as const)('should_resolve_condition_6b_severity_%s_to_auto_accept', (severity) => {
+    const issue: ContestedIssueState = { ...baseIssue, severity, dispute_rounds: 2 }
     const result = resolveContestedIssue(issue)
     expect(result).toBe('auto_accept')
   })
@@ -81,7 +81,8 @@ describe('ContestedIssue', () => {
   it('should_populate_escalation_dossier_from_rationale_history', () => {
     const issue = { ...baseIssue, rationale_history: ['Original', 'Rejection rationale'] }
     const dossier = buildEscalationDossier(issue, 'Agent says valid', 'Main rejects')
-    expect(dossier.evidence).toBeDefined()
+    expect(dossier.evidence).toBeInstanceOf(Array)
+    expect(dossier.evidence.length).toBeGreaterThan(0)
   })
 
   // RT-056b
@@ -94,7 +95,7 @@ describe('ContestedIssue', () => {
 
   // RT-056c
   it('should_populate_dossier_finding_from_contested_issue_fields', () => {
-    const issue = { ...baseIssue, issue_id: 'M-1', severity: 'M', description: 'Issue', location: 'file.ts:10' }
+    const issue: ContestedIssueState = { ...baseIssue, issue_id: 'M-1', severity: 'M', description: 'Issue', location: 'file.ts:10' }
     const dossier = buildEscalationDossier(issue, 'Rationale', 'Rejection')
     expect(dossier.finding.id).toBe('M-1')
   })

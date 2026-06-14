@@ -16,9 +16,16 @@ describe('dualPassPhase state machine', () => {
     }
   })
 
-  // RT-044b
-  it('should_reject_invalid_dual_pass_phase_transitions', () => {
-    const valid = validateDualPassTransition('recall_running', 'precision_running', true)
+  // RT-044b — multiple invalid transitions
+  it.each([
+    ['recall_running', 'precision_running'],
+    ['pending', 'done'],
+    ['done', 'pending'],
+    ['failed', 'recall_running'],
+    ['recall_running', 'd2_running'],
+    ['factgather_done', 'evalfix_done'],
+  ] as const)('should_reject_invalid_transition_%s_to_%s', (from, to) => {
+    const valid = validateDualPassTransition(from, to, true)
     expect(valid).toBe(false)
   })
 

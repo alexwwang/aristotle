@@ -46,12 +46,16 @@ describe('Dual-Pass Degradation', () => {
 
   // RT-048b — verify conversion field mappings per spec
   it('should_apply_recall_to_t10_schema_conversion_rules', () => {
-    const findings = [{ id: 'F-01', severity: 'M', verdict: 'CONFIRM' }]
+    const findings = [
+      { id: 'F-01', severity: 'M', verdict: 'CONFIRM' },
+      { id: 'F-02', severity: 'H', verdict: 'REJECT' },
+    ]
     const converted = applyRecallToT10SchemaConversion(findings) as Array<Record<string, unknown>>
     expect(converted).toHaveLength(1)
     expect(converted[0].adjusted_severity).toBe('M')
     expect(converted[0].original_severity).toBe('M')
     expect(converted[0].verdict_reason).toBe('confirmed')
+    expect(converted.find(f => f.id === 'F-02')).toBeUndefined()
   })
 
   // RT-048c

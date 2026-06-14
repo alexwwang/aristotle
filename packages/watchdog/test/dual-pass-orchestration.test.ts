@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { createDualPassOrchestrator, assembleReviewScope, parseLocationMap, enforceT10Contract } from '../src/dual-pass-gpav.js'
 import type { DualPassOrchestrator, GPAVEvent } from '../src/dual-pass-gpav.js'
 import { makeRalphState } from './helpers.js'
@@ -52,19 +52,19 @@ describe('Dual-Pass Orchestration', () => {
   // RT-042c-6
   it('should_handle_bare_file_path_in_location_map', () => {
     const result = parseLocationMap(['src/auth.ts'])
-    expect(result).toBeDefined()
+    expect(Array.isArray(result)).toBe(true)
   })
 
   // RT-042c-7
   it('should_merge_contiguous_ranges_by_file_in_location_map', () => {
     const result = parseLocationMap(['src/auth.ts:10-20', 'src/auth.ts:21-30'])
-    expect(result).toBeDefined()
+    expect(Array.isArray(result)).toBe(true)
   })
 
   // RT-042c-8
   it('should_exclude_non_file_locations_from_location_map', () => {
     const result = parseLocationMap(['https://example.com'])
-    expect(result).toBeDefined()
+    expect(Array.isArray(result)).toBe(true)
   })
 
   // RT-043a
@@ -150,16 +150,16 @@ describe('Dual-Pass Orchestration', () => {
   })
 
   // RT-058b-3 — DEFER on C/H/M → auto-REJECT
-  it('should_reject_defer_for_chm_severity_findings', () => {
-    const decisions = [{ finding_id: 'F-01', decision: 'DEFER', rationale: 'Later', severity: 'C' }]
+  it.each(['C', 'H', 'M'])('should_reject_defer_for_severity_%s', (severity) => {
+    const decisions = [{ finding_id: 'F-01', decision: 'DEFER', rationale: 'Later', severity }]
     const result = enforceT10Contract(decisions) as Array<{ finding_id: string; decision: string }>
     expect(result).toHaveLength(1)
     expect(result[0].decision).toBe('REJECT')
   })
 
   // RT-058b-3b — DEFER on P/L/I → accepted (spec: "DEFER on P/L/I → accepted")
-  it('should_accept_defer_for_pli_severity_findings', () => {
-    const decisions = [{ finding_id: 'F-01', decision: 'DEFER', rationale: 'Phase 5', severity: 'P', defer_target: 'Phase 5' }]
+  it.each(['P', 'L', 'I'])('should_accept_defer_for_severity_%s', (severity) => {
+    const decisions = [{ finding_id: 'F-01', decision: 'DEFER', rationale: 'Phase 5', severity, defer_target: 'Phase 5' }]
     const result = enforceT10Contract(decisions) as Array<{ finding_id: string; decision: string }>
     expect(result).toHaveLength(1)
     expect(result[0].decision).toBe('DEFER')
@@ -184,7 +184,6 @@ describe('Dual-Pass Orchestration', () => {
 
   // RT-087d
   it('should_clear_intercepted_fields_after_dual_pass_spawn_completes', () => {
-    const orchestrator = createDualPassOrchestrator()
     expect(orchestrator.getResultFilePath(3)).toBeDefined()
   })
 })

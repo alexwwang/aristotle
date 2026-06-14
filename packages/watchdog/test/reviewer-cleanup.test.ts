@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { cleanupStaleState, generateCleanupToken, validateCleanupToken, deleteResultFiles } from '../src/reviewer-cleanup.js'
 import { makeRalphState } from './helpers.js'
 
@@ -12,8 +12,7 @@ describe('Reviewer Cleanup', () => {
 
   // RT-029b
   it('should_delete_result_files_on_suspend_cleanup', () => {
-    deleteResultFiles('run-001', 3)
-    expect(true).toBe(true)
+    expect(() => deleteResultFiles('run-001', 3)).not.toThrow()
   })
 
   // RT-029c
@@ -32,36 +31,35 @@ describe('Reviewer Cleanup', () => {
 
   // RT-030b
   it('should_verify_session_id_before_deleting_result_files_on_resume', () => {
-    deleteResultFiles('run-001', 3, true)
-    expect(true).toBe(true)
+    expect(() => deleteResultFiles('run-001', 3, true)).not.toThrow()
   })
 
   // RT-030c
   it('should_delete_stale_result_files_on_resume', () => {
     const state = makeRalphState()
-    cleanupStaleState('resume', state)
-    expect(true).toBe(true)
+    const result = cleanupStaleState('resume', state)
+    expect(result).toBeDefined()
   })
 
   // RT-030d
   it('should_delete_stale_result_files_older_than_24h_on_resume', () => {
     const state = makeRalphState()
-    cleanupStaleState('resume', state)
-    expect(true).toBe(true)
+    const result = cleanupStaleState('resume', state)
+    expect(result).toBeDefined()
   })
 
   // RT-030e
   it('should_wait_for_active_t2_session_on_resume', () => {
     const state = makeRalphState()
-    cleanupStaleState('resume', state)
-    expect(true).toBe(true)
+    const result = cleanupStaleState('resume', state)
+    expect(result).toBeDefined()
   })
 
   // RT-030f
   it('should_log_warning_if_t2_exceeds_wait_on_resume', () => {
     const state = makeRalphState()
-    cleanupStaleState('resume', state)
-    expect(true).toBe(true)
+    const result = cleanupStaleState('resume', state)
+    expect(result).toBeDefined()
   })
 
   // RT-031a
@@ -73,8 +71,7 @@ describe('Reviewer Cleanup', () => {
 
   // RT-031b
   it('should_delete_result_files_without_session_check_on_start', () => {
-    deleteResultFiles('run-001', 3)
-    expect(true).toBe(true)
+    expect(() => deleteResultFiles('run-001', 3)).not.toThrow()
   })
 
   // RT-031c
@@ -123,8 +120,8 @@ describe('Reviewer Cleanup', () => {
   // RT-032c
   it('should_clear_cleanup_token_after_successful_cleanup', () => {
     const state = makeRalphState()
-    cleanupStaleState('suspend', state)
-    expect(true).toBe(true)
+    const result = cleanupStaleState('suspend', state)
+    expect(result).toBeDefined()
   })
 
   // RT-032d
@@ -137,22 +134,22 @@ describe('Reviewer Cleanup', () => {
   // RT-032e
   it('should_log_takeover_stale_cleanup_audit_event', () => {
     const state = makeRalphState()
-    cleanupStaleState('suspend', state)
-    expect(true).toBe(true)
+    const result = cleanupStaleState('suspend', state)
+    expect(result).toBeDefined()
   })
 
   // RT-033a
   it('should_treat_t1_done_as_stale_only_when_t2_never_started', () => {
     const state = makeRalphState()
-    cleanupStaleState('resume', state)
-    expect(true).toBe(true)
+    const result = cleanupStaleState('resume', state)
+    expect(result).toBeDefined()
   })
 
   // RT-033b
   it('should_not_treat_t1_done_as_stale_when_t2_running_occurred', () => {
     const state = makeRalphState()
-    cleanupStaleState('resume', state)
-    expect(true).toBe(true)
+    const result = cleanupStaleState('resume', state)
+    expect(result).toBeDefined()
   })
 
   // RT-037

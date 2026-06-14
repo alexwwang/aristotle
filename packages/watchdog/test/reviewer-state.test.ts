@@ -26,15 +26,80 @@ describe('ReviewerTakeoverState validation', () => {
     expect(error).toBeNull()
   })
 
-  // RT-080b
-  it('should_validate_spawn_phase_enum_values', () => {
-    expect(validateSpawnPhase('pending')).toBe(true)
-    expect(validateSpawnPhase('invalid_phase')).toBe(false)
+  // RT-080a — negative: missing round
+  it('should_reject_state_with_missing_round', () => {
+    const error = validateReviewerTakeoverState({ interceptAt: '2026-01-01T00:00:00Z', spawnPhase: 'pending' })
+    expect(error).not.toBeNull()
   })
 
-  // RT-080c
-  it('should_validate_dual_pass_phase_enum_values_when_dual_pass_mode', () => {
-    expect(validateDualPassPhaseEnum('recall_running')).toBe(true)
-    expect(validateDualPassPhaseEnum('invalid')).toBe(false)
+  // RT-080a — negative: missing interceptAt
+  it('should_reject_state_with_missing_intercept_at', () => {
+    const error = validateReviewerTakeoverState({ round: 3, spawnPhase: 'pending' })
+    expect(error).not.toBeNull()
+  })
+
+  // RT-080a — negative: missing spawnPhase
+  it('should_reject_state_with_missing_spawn_phase', () => {
+    const error = validateReviewerTakeoverState({ round: 3, interceptAt: '2026-01-01T00:00:00Z' })
+    expect(error).not.toBeNull()
+  })
+
+  // RT-080a — negative: round is wrong type
+  it('should_reject_state_with_non_number_round', () => {
+    const error = validateReviewerTakeoverState(JSON.parse('{"round":"three","interceptAt":"2026-01-01T00:00:00Z","spawnPhase":"pending"}'))
+    expect(error).not.toBeNull()
+  })
+
+  // RT-080b — all valid spawnPhase enum values
+  it.each([
+    'pending',
+    't1_running',
+    't1_done',
+    't2_running',
+    'done',
+    'failed',
+  ])('should_accept_valid_spawn_phase_%s', (phase) => {
+    expect(validateSpawnPhase(phase)).toBe(true)
+  })
+
+  // RT-080b — invalid spawnPhase values
+  it.each([
+    'invalid_phase',
+    '',
+    'PENDING',
+    'pending ',
+    't3_running',
+  ])('should_reject_invalid_spawn_phase_%j', (phase) => {
+    expect(validateSpawnPhase(phase)).toBe(false)
+  })
+
+  // RT-080c — all 13 valid dualPassPhase enum values
+  it.each([
+    'pending',
+    'recall_running',
+    'recall_done',
+    'factgather_running',
+    'factgather_done',
+    'precision_running',
+    'precision_done',
+    'evalfix_running',
+    'evalfix_done',
+    'd2_running',
+    'd25_running',
+    'done',
+    'failed',
+  ])('should_accept_valid_dual_pass_phase_%s', (phase) => {
+    expect(validateDualPassPhaseEnum(phase)).toBe(true)
+  })
+
+  // RT-080c — invalid dualPassPhase values
+  it.each([
+    'invalid',
+    '',
+    'RECALL_RUNNING',
+    'recall_running ',
+    't3_running',
+  ])('should_reject_invalid_dual_pass_phase_%j', (phase) => {
+    expect(validateDualPassPhaseEnum(phase)).toBe(false)
   })
 })

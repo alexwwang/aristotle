@@ -54,7 +54,7 @@ describe('Dual-Pass Batch', () => {
     const successful = [{ id: 'F-01', verdict: 'CONFIRM' }]
     const failed = [{ id: 'F-02', verdict: 'CONFIRM' }]
     const merged = mergePartialBatchResults(successful, failed)
-    expect(merged).toBeDefined()
+    expect(merged).toHaveLength(2)
   })
 
   // RT-052b
@@ -62,6 +62,6 @@ describe('Dual-Pass Batch', () => {
     const successful = [{ id: 'F-01', verdict: 'CONFIRM' }]
     const failed = [{ id: 'F-02', verdict: 'CONFIRM', error: 'batch crash' }]
     const merged = mergePartialBatchResults(successful, failed)
-    expect(merged).toBeDefined()
+    expect(merged).toHaveLength(2)
   })
 })

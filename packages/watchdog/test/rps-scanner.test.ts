@@ -34,8 +34,11 @@ describe('RPS Scanner', () => {
 
   // RT-054b
   it('should_skip_rps_scan_after_disabled', () => {
-    const result = isRPSDisabled({ rpsConsecutiveFailures: 3 })
-    expect(result).toBe(true)
+    const state = { rpsConsecutiveFailures: 3 }
+    const isDisabled = isRPSDisabled(state)
+    expect(isDisabled).toBe(true)
+    const result = scanRPS('prohibited pattern text', 'prompt')
+    expect(result.detected).toBe(false)
   })
 
   // RT-054c

@@ -126,9 +126,8 @@ describe('CheckpointHandler - pipeline nesting', () => {
       )
       results.push(r)
     }
-    // At least one should be rate-limited
     const parsed = results.map(r => JSON.parse(r))
-    const rateLimited = parsed.filter(r => r.ok === false)
+    const rateLimited = parsed.filter(r => r.ok === false && /rate|throttl|limit/i.test(r.violation ?? ''))
     expect(rateLimited.length).toBeGreaterThan(0)
   })
 
@@ -230,6 +229,7 @@ describe('CheckpointHandler - pipeline nesting', () => {
     )
     const parsed = JSON.parse(result)
     expect(parsed.ok).toBe(true)
+    expect(store.getSuspendedStack).not.toHaveBeenCalled()
   })
 
   // #141
@@ -305,7 +305,8 @@ describe('CheckpointHandler - pipeline nesting', () => {
   // #157
   it('should allow pipeline_start when status is idle', async () => {
     const { handler, store } = createHandler()
-    store.getActiveRun.mockReturnValue(null)
+    store.getActiveRun.mockReturnValue({ runId: 'run-old', projectId: 'proj-1' })
+    store.readState.mockReturnValue(makeState({ phaseStatus: 'idle' as any }))
     const result = await handler.handle(
       'pipeline_start',
       JSON.stringify({ description: 'new pipeline' }),
