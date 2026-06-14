@@ -415,6 +415,9 @@ describe('child lifecycle integration - pipeline nesting', () => {
     const parentWrites = mockStateStore.write.mock.calls.filter(
       ([key]) => key.includes('parent-123')
     )
+    // F-007: length guard — without this, forEach over [] is a vacuous pass
+    // (all assertions inside are never run, false-green risk).
+    expect(parentWrites.length).toBeGreaterThan(0)
     parentWrites.forEach(([, value]) => {
       expect((value as any).pending_pause).toBeUndefined()
     })
@@ -455,6 +458,11 @@ describe('child lifecycle integration - pipeline nesting', () => {
   })
 
   // #152
+  // F-008 (MODIFY): SPEC-AMBIGUITY — spec #152 says 'DEFERRED_PAUSE entries
+  // ignored (not consumed)'. Unclear if 'ignored' means (a) no action at all,
+  // or (b) logged as phase_fail then skipped. Test currently asserts (b) by
+  // requiring phase_fail audit log. Revisit after spec clarification — do NOT
+  // change assertion until spec intent is confirmed. Tracked as spec gap.
   it('should apply pending_pause and ignore deferred_pause when both exist on resume', () => {
     const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
     const parentState = {
@@ -593,6 +601,8 @@ describe('child lifecycle integration - pipeline nesting', () => {
       const writes = mockStateStore.write.mock.calls.filter(
         ([key]) => key.includes(runId)
       )
+      // F-007: length guard — see #142 above. forEach over [] is vacuous.
+      expect(writes.length).toBeGreaterThan(0)
       writes.forEach(([, value]) => {
         expect((value as any).pending_pause).toBeUndefined()
         expect((value as any).phaseStatus).toBe('suspended')

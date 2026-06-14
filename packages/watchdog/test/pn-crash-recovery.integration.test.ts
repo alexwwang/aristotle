@@ -66,6 +66,12 @@ function createStore(): PipelineStore {
 describe('crash recovery integration - pipeline nesting', () => {
   let store: PipelineStore
 
+  // F-016: Spec coverage matrix correction — the following specs are PARTIAL,
+  // not fully covered. Do NOT mark as covered in spec-coverage-matrix.md:
+  //   #68  → PARTIAL (uses same fixture as #70, needs distinct scenario)
+  //   #147 → PARTIAL (force=false branch not yet tested; see TODO at test site)
+  //   #149 → PARTIAL (quarantineSuccess=undefined during suspend not yet tested)
+
   beforeEach(() => {
     vi.resetAllMocks()
     mockStateStore.readLogSafe.mockReturnValue([])

@@ -59,16 +59,19 @@ const mockStateStore = {
 
 // F-006: add debug method — Logger interface requires all four levels.
 // Without it, any PipelineStore call to this.logger.debug throws TypeError.
+// F-022: use `satisfies Logger` (not `as Logger`) — preserves vi.fn() return
+// types while still satisfying the structural contract, no type erasure.
 const mockLogger = {
   debug: vi.fn(),
   info: vi.fn(),
   warn: vi.fn(),
   error: vi.fn(),
-}
+} satisfies Logger
 
 function createStore(): PipelineStore {
   // F-012: remove `as any` — mockStateStore already uses `satisfies StateStore`.
-  return new PipelineStore(mockStateStore, mockLogger as Logger)
+  // F-022: mockLogger already satisfies Logger — no cast needed.
+  return new PipelineStore(mockStateStore, mockLogger)
 }
 
 describe('PipelineStore - Pipeline Nesting', () => {
@@ -84,7 +87,13 @@ describe('PipelineStore - Pipeline Nesting', () => {
   describe('Stack Operations', () => {
   // #1
   it('should push entry to suspended stack when suspending active pipeline', () => {
-    mockStateStore.read.mockReturnValue(null)
+    // F-003: in-memory Map bridge so writes persist across reads. Without this,
+    // getSuspendedStack reads from the same blanket null mock as pushSuspended,
+    // making the assertion unable to distinguish 'implementation works' from
+    // 'implementation no-ops returning empty' (false-positive risk).
+    const memStore = new Map<string, unknown>()
+    mockStateStore.write.mockImplementation((k: string, v: unknown) => { memStore.set(k, v); return true })
+    mockStateStore.read.mockImplementation((k: string) => memStore.get(k) ?? null)
     const entry = makeSuspendedPipeline()
     store.pushSuspended('proj-1', entry)
     const stack = store.getSuspendedStack('proj-1')
@@ -119,9 +128,13 @@ describe('PipelineStore - Pipeline Nesting', () => {
       entries.push(makeSuspendedPipeline({ depth: i }))
     }
     const activeState = makeNestingState({ depth: 9, phaseStatus: 'ralph_loop' })
+    // F-004: explicit /active branch BEFORE catch-all — without it, the catch-all
+    // returns makeSuspendedStack for /active keys, causing type confusion.
     mockStateStore.read.mockImplementation((key: string) => {
+      if (key.endsWith('/active')) return { runId: 'run-123', projectId: 'proj-1' }
       if (key.endsWith('/state')) return activeState
-      return makeSuspendedStack(entries)
+      if (key.endsWith('/suspended-stack')) return makeSuspendedStack(entries)
+      return null
     })
     const result = store.canSuspend('proj-1')
     expect(result).toBe(false)
@@ -134,15 +147,17 @@ describe('PipelineStore - Pipeline Nesting', () => {
       entries.push(makeSuspendedPipeline({ depth: i }))
     }
     const activeState = makeNestingState({ depth: 9, phaseStatus: 'ralph_loop' })
+    // F-004: explicit /active branch BEFORE catch-all — see #3 above.
     mockStateStore.read.mockImplementation((key: string) => {
+      if (key.endsWith('/active')) return { runId: 'run-123', projectId: 'proj-1' }
       if (key.endsWith('/state')) return activeState
-      return makeSuspendedStack(entries)
+      if (key.endsWith('/suspended-stack')) return makeSuspendedStack(entries)
+      return null
     })
     expect(() => store.suspendActive('proj-1', 'test_modification')).toThrow('depth')
-    // F-011: verify no stack mutation occurred before the throw (replaces
-    // circular length assertion that read from the same mock).
-    expect(mockStateStore.write).not.toHaveBeenCalledWith(
-      expect.stringMatching(/suspended-stack|\/stack/), expect.anything())
+    // F-023: stronger than regex-based negative matcher — suspendActive should
+    // throw BEFORE any state mutation, so no write should have occurred at all.
+    expect(mockStateStore.write).not.toHaveBeenCalled()
   })
 
   // #5
@@ -174,6 +189,14 @@ describe('PipelineStore - Pipeline Nesting', () => {
   // #6
   it('should persist stack before state to prevent deadlock', () => {
     // F-031: flexible key matching — don't hardcode exact key format.
+    // F-002: explicit /active and /state branches — without them, the blanket
+    // null read causes suspendActive to fail with 'no active pipeline' before
+    // reaching the write-order code path under test (wrong failure reason).
+    mockStateStore.read.mockImplementation((key: string) => {
+      if (key.endsWith('/active')) return { runId: 'run-123', projectId: 'proj-1' }
+      if (key.endsWith('/state')) return makeNestingState({ phaseStatus: 'ralph_loop' })
+      return null
+    })
     const writeOrder: string[] = []
     mockStateStore.write.mockImplementation((key: string) => {
       writeOrder.push(key)
@@ -790,6 +813,10 @@ describe('PipelineStore - Pipeline Nesting', () => {
   // #101 (cont.) — pending_pause=undefined preserved equivalently
   // F-014: assert behavioral equivalence with null variant (null or undefined,
   // not a substantive value).
+  // F-011: removed `expect('pending_pause' in writtenState).toBe(true)` —
+  // over-specifies internal representation. JSON serialization treats undefined
+  // and null identically, so asserting key presence contradicts spec semantics.
+  // Behavioral assertion (== null) is sufficient and still fails in Red Phase.
   it('should preserve pending_pause=undefined on PipelineState through suspendActive', () => {
     const state = { ...makeNestingState(), pending_pause: undefined }
     mockStateStore.read.mockReturnValue(state)
@@ -800,7 +827,6 @@ describe('PipelineStore - Pipeline Nesting', () => {
     )
     expect(stateWrite).toBeDefined()
     const writtenState = stateWrite![1]
-    expect('pending_pause' in writtenState).toBe(true)
     expect(writtenState.pending_pause == null).toBe(true)
   })
 
@@ -977,9 +1003,20 @@ describe('PipelineStore - Pipeline Nesting', () => {
     )
   })
 
+  // #116c — F-013: inclusive boundary coverage (companion to #116 exclusion test).
+  // If implementation uses < 1 or > 8 instead of <= 1 or >= 8, this test catches it.
+  it.each([1, 8])('should accept orphaned recovery at inclusive boundary suspendedPhase=%i', (validPhase) => {
+    const entry = makeSuspendedPipeline({ suspendedPhase: validPhase })
+    mockStateStore.read.mockImplementation((key: string) => {
+      if (key.endsWith('/active')) return null
+      return makeSuspendedStack([entry])
+    })
+    const result = store.detectOrphanedSuspend('proj-1')
+    expect(result).not.toBeNull()
+  })
+
   // #116b — Multi-entry stop-iteration sub-test (AC-PN5)
-  it('should stop iteration at topmost entry with invalid phase, leaving lower entries untouched', () => {
-    const entryA = makeSuspendedPipeline({ runId: 'A', depth: 0, suspendedPhase: 5 })
+  it('should stop iteration at topmost entry with invalid phase, leaving lower entries untouched', () => {const entryA = makeSuspendedPipeline({ runId: 'A', depth: 0, suspendedPhase: 5 })
     const entryB = makeSuspendedPipeline({ runId: 'B', depth: 1, suspendedPhase: 9 })
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/active')) return null

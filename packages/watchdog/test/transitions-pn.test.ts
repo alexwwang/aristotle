@@ -50,6 +50,8 @@ describe('transitions - pipeline nesting', () => {
     expect(result.valid).toBe(false)
   })
 
+  // F-026: spec ID needed — suspended→active transition. Supplemental coverage;
+  // assign #161 during next spec coverage matrix update.
   // Transition matrix: suspended→active is valid (precondition for #30 defaulting).
   it('validateNestingTransition: suspended→active is valid', () => {
     const result = validateNestingTransition('suspended', 'active')
@@ -123,11 +125,15 @@ describe('transitions - pipeline nesting', () => {
     expect(result.valid).toBe(true)
   })
 
-  // Transition matrix: active→ralph_loop is not a direct transition (requires phase_enter first).
+  // #128 — F-005: explicit spec ID + reason assertion. The transition itself
+  // was already tested above (unlabeled), but #128 specifically requires the
+  // rejection reason to mention 'pause' so future refactors can't accidentally
+  // permit resume_from_pause from a non-paused status.
   // Operation-level guard (resumeFromPause checks phaseStatus==='paused') is in PipelineStore.
-  it('validateNestingTransition: active→ralph_loop is rejected', () => {
+  it('#128 should reject resume_from_pause when not paused', () => {
     const result = validateNestingTransition('active', 'ralph_loop')
     expect(result.valid).toBe(false)
+    expect(result.reason).toMatch(/pause|paused/i)
   })
 
   // #54
@@ -135,6 +141,7 @@ describe('transitions - pipeline nesting', () => {
   // or undefined during recovery. The validator must REJECT unknown target statuses
   // so the recovery path can fall back to 'active'. Without this rejection, the
   // fallback branch would never fire (false-green risk in Green Phase).
+  // F-026: spec ID #54 confirmed; supplemental coverage for unknown status rejection.
   it('should reject transition to unknown status (#54 fallback precondition)', () => {
     const result = validateNestingTransition('suspended', 'bogus_status')
     expect(result.valid).toBe(false)

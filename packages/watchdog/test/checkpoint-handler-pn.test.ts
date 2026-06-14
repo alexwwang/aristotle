@@ -6,6 +6,7 @@ import { CheckpointHandler } from '../src/checkpoint.js'
 import { formatPhaseStatus } from '../src/pause-timeout-enforcer.js'
 import { STALE_THRESHOLD_MS } from '../src/constants.js'
 import type { CheckpointEvent } from '../src/schema.js'
+import type { Logger } from '@opencode-ai/core/logger'
 import { createMockStore, makeState } from './helpers.js'
 
 
@@ -15,7 +16,9 @@ function createHandler(storeOverrides: Record<string, any> = {}) {
   // F-019/F-023: expose logger mock so tests can verify warn calls and ordering.
   // F-005: include debug method — Logger interface requires all four levels.
   // Without it, any CheckpointHandler call to logger.debug throws TypeError.
-  const loggerMock = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } as any
+  // F-022: use `satisfies Logger` (not `as any`) — preserves vi.fn() return
+  // types while still satisfying the structural contract, no type erasure.
+  const loggerMock = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } satisfies Logger
   const handler = new CheckpointHandler(
     store as any,
     STALE_THRESHOLD_MS,
@@ -303,12 +306,14 @@ describe('CheckpointHandler - pipeline nesting', () => {
   })
 
   // #145a
+  // F-020: removed redundant `store.pauseActive = vi.fn()` — createMockStore()
+  // already provides this mock (helpers.ts L144). Reassignment risks masking
+  // mock-state pollution between tests; use mockClear() if a fresh mock is needed.
   it('should route pipeline_pause event to pauseActive', async () => {
     const { handler, store } = createHandler()
     const state = makeState({ currentPhase: 5, phaseStatus: 'ralph_loop' })
     store.readState.mockReturnValue(state)
     store.getActiveRun.mockReturnValue({ runId: 'run-123', projectId: 'proj-1' })
-    store.pauseActive = vi.fn()
 
     const pauseResult = await handler.handle(
       'pipeline_pause',
@@ -323,12 +328,12 @@ describe('CheckpointHandler - pipeline nesting', () => {
   // #145b
   // pipeline_unpause intentionally does NOT require a 'reason' payload — pause requires
   // justification, unpause is the symmetric release and needs no payload.
+  // F-020: removed redundant `store.resumeFromPause = vi.fn()` — see #145a above.
   it('should route pipeline_unpause event to resumeFromPause', async () => {
     const { handler, store } = createHandler()
     const state = makeState({ currentPhase: 5, phaseStatus: 'paused' })
     store.readState.mockReturnValue(state)
     store.getActiveRun.mockReturnValue({ runId: 'run-123', projectId: 'proj-1' })
-    store.resumeFromPause = vi.fn()
 
     const unpauseResult = await handler.handle(
       'pipeline_unpause',
