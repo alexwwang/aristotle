@@ -5,6 +5,7 @@ import type { Logger } from '@opencode-ai/core/logger'
 import type { SuspendedPipeline, SuspendedStack, PipelineState } from '../src/schema.js'
 import { makeState } from './helpers.js'
 
+// NOTE: Mock-based integration tests (Red Phase). True component-interaction tests deferred to Green Phase.
 // F-001: replaced 18 expect(true).toBe(false) stubs with real SUT invocations.
 // Tests still fail in Red Phase because PipelineStore methods throw 'Not implemented'.
 
@@ -14,7 +15,12 @@ function makeSuspendedPipeline(overrides?: Partial<SuspendedPipeline>): Suspende
     suspendedAt: '2026-06-06T12:00:00Z',
     suspendedPhase: 5,
     depth: 0,
+    childDepth: undefined,
+    parentRunId: undefined,
+    parentPipelineProjectId: undefined,
     suspendedReason: 'test_modification',
+    childRunId: undefined,
+    quarantineSuccess: undefined,
     parentRegressionHistory: [],
     ...overrides,
   }
@@ -213,6 +219,7 @@ describe('child lifecycle integration - pipeline nesting', () => {
 
   // #122
   it('should retry session info once on exception then proceed on second failure', () => {
+    vi.useFakeTimers()
     const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/child-456/state')) return null
@@ -227,7 +234,12 @@ describe('child lifecycle integration - pipeline nesting', () => {
       return { status: 'inactive' }
     })
     store.resumeSuspended('proj-1', 'child-456')
+    expect(store.getSessionInfo).toHaveBeenCalledTimes(1)
+    vi.advanceTimersByTime(999)
+    expect(store.getSessionInfo).toHaveBeenCalledTimes(1)
+    vi.advanceTimersByTime(1)
     expect(store.getSessionInfo).toHaveBeenCalledTimes(2)
+    vi.useRealTimers()
   })
 
   // #126
@@ -302,7 +314,7 @@ describe('child lifecycle integration - pipeline nesting', () => {
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
       return null
     })
-    store.suspendActive('proj-1', 'concurrent_trigger')
+    store.handleConcurrentPauseTrigger('proj-1', 'concurrent_trigger')
     expect(mockStateStore.write).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ runId: 'child-456', phaseStatus: 'paused' }),
@@ -318,7 +330,7 @@ describe('child lifecycle integration - pipeline nesting', () => {
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack([])
       return null
     })
-    store.suspendActive('proj-1', 'pause_trigger')
+    store.handleConcurrentPauseTrigger('proj-1', 'pause_trigger')
     expect(mockStateStore.write).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ pending_pause: expect.objectContaining({ reason: expect.any(String) }) }),
@@ -360,7 +372,7 @@ describe('child lifecycle integration - pipeline nesting', () => {
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack(entries)
       return null
     })
-    store.resumeSuspended('proj-1', 'child-456')
+    store.handlePhaseFail('proj-1', 'child-456')
     expect(mockStateStore.write).toHaveBeenCalledWith(
       expect.stringMatching(/suspended-stack/),
       expect.objectContaining({ entries: expect.any(Array) }),
@@ -379,7 +391,7 @@ describe('child lifecycle integration - pipeline nesting', () => {
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
       return null
     })
-    store.resumeSuspended('proj-1', 'child-456', true)
+    store.handlePhaseFail('proj-1', 'child-456')
     expect(mockStateStore.write).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ runId: 'child-456', phaseStatus: 'cancelled' }),
@@ -400,7 +412,7 @@ describe('child lifecycle integration - pipeline nesting', () => {
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack(entries)
       return null
     })
-    store.suspendActive('proj-1', 'recursive_trigger')
+    store.handleConcurrentPauseTrigger('proj-1', 'recursive_trigger')
     expect(mockStateStore.write).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ runId: 'grandchild', phaseStatus: 'paused' }),

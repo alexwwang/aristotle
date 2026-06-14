@@ -7,15 +7,24 @@ import type { Logger } from '@opencode-ai/core/logger'
 import type { SuspendedPipeline, SuspendedStack, PipelineState } from '../src/schema.js'
 import { makeState } from './helpers.js'
 
+// NOTE: This file uses mock-based E2E patterns (Red Phase). True integration tests
+// with in-memory StateStore are deferred to Green Phase. See F-013.
 // F-001: replaced 5 expect(true).toBe(false) stubs with real SUT invocations.
 
+// F-021: factory includes ALL SuspendedPipeline fields explicitly (including
+// childDepth, parentPipelineProjectId as undefined defaults) for cross-file consistency.
 function makeSuspendedPipeline(overrides?: Partial<SuspendedPipeline>): SuspendedPipeline {
   return {
     runId: 'parent-123',
     suspendedAt: '2026-06-06T12:00:00Z',
     suspendedPhase: 5,
     depth: 0,
+    childDepth: undefined,
+    parentRunId: undefined,
+    parentPipelineProjectId: undefined,
     suspendedReason: 'test_modification',
+    childRunId: undefined,
+    quarantineSuccess: undefined,
     parentRegressionHistory: [],
     ...overrides,
   }
@@ -65,10 +74,14 @@ describe('pipeline nesting - e2e', () => {
 
   // #82
   it('should complete full nested pipeline flow suspend child resume', () => {
-    const parentState = makeNestingState({ runId: 'parent-123', phaseStatus: 'ralph_loop' })
+    const parentActive = makeNestingState({ runId: 'parent-123', phaseStatus: 'ralph_loop', depth: 0, currentPhase: 5 })
+    const parentSuspended = makeNestingState({ runId: 'parent-123', phaseStatus: 'suspended', preSuspendStatus: 'ralph_loop', depth: 0, currentPhase: 5 })
+    const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
+    let resumed = false
     mockStateStore.read.mockImplementation((key: string) => {
-      if (key.endsWith('/parent-123/state')) return parentState
-      if (key.endsWith('/active')) return { runId: 'parent-123', projectId: 'proj-1' }
+      if (key.endsWith('/parent-123/state')) return resumed ? parentSuspended : parentActive
+      if (key.endsWith('/active')) return resumed ? null : { runId: 'parent-123', projectId: 'proj-1' }
+      if (key.endsWith('/suspended-stack')) return resumed ? makeSuspendedStack([entry]) : makeSuspendedStack([])
       return null
     })
     store.suspendActive('proj-1', 'child_nesting')
@@ -76,18 +89,21 @@ describe('pipeline nesting - e2e', () => {
     expect(stack.entries).toHaveLength(1)
     expect(stack.entries[0].runId).toBe('parent-123')
     store.setChildRunId('proj-1', 'parent-123', 'child-456')
-    const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
-    const resumeParentState = makeNestingState({
-      runId: 'parent-123', phaseStatus: 'suspended', preSuspendStatus: 'ralph_loop',
-    })
-    mockStateStore.read.mockImplementation((key: string) => {
-      if (key.endsWith('/parent-123/state')) return resumeParentState
-      if (key.endsWith('/active')) return null
-      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
-      return null
-    })
+    resumed = true
     const result = store.resumeSuspended('proj-1', 'child-456')
     expect(result.phaseStatus).toBe('ralph_loop')
+    expect(result.depth).toBe(0)
+    expect(result.currentPhase).toBe(5)
+    const postStack = store.getSuspendedStack('proj-1')
+    expect(postStack.entries).toHaveLength(0)
+    expect(mockStateStore.appendLog).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ event: 'pipeline_suspend' }),
+    )
+    expect(mockStateStore.appendLog).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ event: 'pipeline_resume' }),
+    )
   })
 
   // #83
@@ -107,11 +123,15 @@ describe('pipeline nesting - e2e', () => {
       return null
     })
     store.resumeSuspended('proj-1', 'child-456')
+    const postStack = store.getSuspendedStack('proj-1')
+    expect(postStack.entries).toHaveLength(0)
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({
         childRunId: 'child-456',
         failurePhase: expect.any(Number),
+        failureReason: expect.any(String),
+        quarantinedFiles: expect.any(Array),
       }),
     )
   })
@@ -120,16 +140,17 @@ describe('pipeline nesting - e2e', () => {
   it('should enforce maximum nesting depth across full flow', () => {
     expect(MAX_DEPTH).toBe(10)
     const entries: SuspendedPipeline[] = []
-    for (let i = 0; i < MAX_DEPTH; i++) {
+    for (let i = 0; i < MAX_DEPTH - 1; i++) {
       entries.push(makeSuspendedPipeline({ runId: `run-${i}`, depth: i }))
     }
-    const activeState = makeNestingState({ depth: MAX_DEPTH, phaseStatus: 'ralph_loop' })
+    const activeState = makeNestingState({ depth: MAX_DEPTH - 1, phaseStatus: 'ralph_loop' })
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/state')) return activeState
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack(entries)
       return null
     })
     expect(() => store.suspendActive('proj-1', 'depth_exceed')).toThrow(/depth/i)
+    expect(mockStateStore.write).not.toHaveBeenCalled()
   })
 
   // #85

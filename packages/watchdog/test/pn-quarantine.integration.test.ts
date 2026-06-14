@@ -5,6 +5,7 @@ import type { Logger } from '@opencode-ai/core/logger'
 import type { SuspendedPipeline, SuspendedStack, PipelineState } from '../src/schema.js'
 import { makeState } from './helpers.js'
 
+// NOTE: Mock-based integration tests (Red Phase). True component-interaction tests deferred to Green Phase.
 // F-001: replaced 5 expect(true).toBe(false) stubs with real SUT invocations.
 
 function makeSuspendedPipeline(overrides?: Partial<SuspendedPipeline>): SuspendedPipeline {
@@ -13,7 +14,12 @@ function makeSuspendedPipeline(overrides?: Partial<SuspendedPipeline>): Suspende
     suspendedAt: '2026-06-06T12:00:00Z',
     suspendedPhase: 5,
     depth: 0,
+    childDepth: undefined,
+    parentRunId: undefined,
+    parentPipelineProjectId: undefined,
     suspendedReason: 'test_modification',
+    childRunId: undefined,
+    quarantineSuccess: undefined,
     parentRegressionHistory: [],
     ...overrides,
   }
@@ -72,7 +78,10 @@ describe('quarantine integration - pipeline nesting', () => {
       if (key.endsWith('/parent-123/state')) return state
       return null
     })
-    store.suspendActive('proj-1', 'test_modification')
+    const storeFail = new PipelineStore(mockStateStore, mockLogger, {
+      quarantineHook: vi.fn().mockImplementation(() => { throw new Error('hook failed') }),
+    })
+    storeFail.suspendActive('proj-1', 'test_modification')
     expect(mockStateStore.write).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ quarantineSuccess: false }),
@@ -144,7 +153,10 @@ describe('quarantine integration - pipeline nesting', () => {
       if (key.endsWith('/parent-123/state')) return state
       return null
     })
-    store.suspendActive('proj-1', 'test_modification')
+    const storeCrash = new PipelineStore(mockStateStore, mockLogger, {
+      quarantineHook: vi.fn().mockReturnValue(undefined),
+    })
+    storeCrash.suspendActive('proj-1', 'test_modification')
     expect(mockStateStore.write).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ quarantineSuccess: undefined }),

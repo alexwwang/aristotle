@@ -50,6 +50,7 @@ const mockStateStore = {
   write: vi.fn(),
   appendLog: vi.fn(),
   readLogSafe: vi.fn().mockReturnValue([]),
+  list: vi.fn().mockReturnValue([]),
 }
 
 const mockLogger = {
@@ -68,6 +69,7 @@ describe('PipelineStore - Pipeline Nesting', () => {
   beforeEach(() => {
     vi.resetAllMocks()
     mockStateStore.readLogSafe.mockReturnValue([])
+    mockStateStore.list.mockReturnValue([])
     store = createStore()
   })
 
@@ -133,15 +135,19 @@ describe('PipelineStore - Pipeline Nesting', () => {
 
   // #5
   it('should detect depth metric divergence and use parent.depth+1 (not stack.length+1)', () => {
-    // Discriminating boundary: stack.length=10 (>MAX) but parent.depth=5 (<MAX).
-    // True result proves parent.depth+1=6 is the metric, not stack.length+1=11.
     const entries: SuspendedPipeline[] = []
     for (let i = 0; i < 9; i++) {
       entries.push(makeSuspendedPipeline({ runId: `run-${i}`, depth: i }))
     }
     entries.push(makeSuspendedPipeline({ runId: 'run-corrupt', depth: 5 }))
     expect(entries).toHaveLength(10)
-    mockStateStore.read.mockReturnValue(makeSuspendedStack(entries))
+    const parentState = makeNestingState({ depth: 5, phaseStatus: 'ralph_loop' })
+    mockStateStore.read.mockImplementation((key: string) => {
+      if (key.endsWith('/suspended-stack')) return makeSuspendedStack(entries)
+      if (key.endsWith('/state')) return parentState
+      if (key.endsWith('/active')) return { runId: 'parent-123', projectId: 'proj-1' }
+      return null
+    })
     const result = store.canSuspend('proj-1')
     const warnCalls = mockLogger.warn.mock.calls
     const divergenceCall = warnCalls.find(c => typeof c[0] === 'string' && c[0].includes('DEPTH_METRIC_DIVERGENCE'))
@@ -232,17 +238,18 @@ describe('PipelineStore - Pipeline Nesting', () => {
   })
 
   // #13
-  // F-006: verify quarantine side-effect occurs AFTER state persistence via
-  // appendLog invocation order (the post-write audit channel), not via logger
-  // substring matching. Constructor hook param deferred to Green Phase.
+  // F-011: pass quarantine hook via constructor and verify hook is called
+  // after state persistence (write). Constructor hook param exists in Red Phase.
   it('should call quarantine hook after state persistence', () => {
+    const quarantineHook = vi.fn().mockReturnValue(true)
+    const storeWithHook = new PipelineStore(mockStateStore as any, mockLogger as any, { quarantineHook })
     const state = makeNestingState()
     mockStateStore.read.mockReturnValue(state)
-    store.suspendActive('proj-1', 'test_modification')
-    expect(mockStateStore.write).toHaveBeenCalled()
+    storeWithHook.suspendActive('proj-1', 'test_modification')
+    expect(quarantineHook).toHaveBeenCalled()
     const writeOrder = mockStateStore.write.mock.invocationCallOrder[0]
-    const firstPostWriteAudit = mockStateStore.appendLog.mock.invocationCallOrder.find(o => o > writeOrder)
-    expect(firstPostWriteAudit).toBeDefined()
+    const hookOrder = quarantineHook.mock.invocationCallOrder[0]
+    expect(hookOrder).toBeGreaterThan(writeOrder)
   })
 
   // #14
@@ -406,8 +413,10 @@ describe('PipelineStore - Pipeline Nesting', () => {
       if (key.endsWith('/active')) return null
       return makeSuspendedStack([entry])
     })
+    mockStateStore.list.mockReturnValue(['quarantine/metadata-abc.json'])
     const result = store.detectOrphanedSuspend('proj-1')
     expect(result).not.toBeNull()
+    expect(mockStateStore.list).toHaveBeenCalledWith(expect.stringContaining('quarantine'))
     expect(mockLogger.info).toHaveBeenCalledWith(
       expect.stringContaining('orphaned'),
     )
@@ -585,10 +594,18 @@ describe('PipelineStore - Pipeline Nesting', () => {
   // #36
   it('should handle race condition when reviewer result file deleted during polling', () => {
     const entry = makeSuspendedPipeline({ runId: 'A', depth: 0, childRunId: 'child-456' })
+    let detectionDone = false
     mockStateStore.read.mockImplementation((key: string) => {
-      if (key.endsWith('/state')) return {
-        ...makeNestingState({ phaseStatus: 'suspended' }),
-        reviewerTakeover: { t2SessionId: 'ses-t2-done', resultFile: '/tmp/gone-result.json', cleanupToken: 'tok-1' },
+      if (key.endsWith('/state')) {
+        const takeover = {
+          ...makeNestingState({ phaseStatus: 'suspended' }),
+          reviewerTakeover: { t2SessionId: 'ses-t2-done', resultFile: '/tmp/gone-result.json', cleanupToken: 'tok-1' },
+        }
+        if (!detectionDone) {
+          detectionDone = true
+          return takeover
+        }
+        return { ...takeover, reviewerTakeover: null }
       }
       return makeSuspendedStack([entry])
     })

@@ -1,10 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { PipelineStore } from '../src/pipeline-store.js'
+import { CheckpointHandler } from '../src/checkpoint.js'
+import { STALE_THRESHOLD_MS } from '../src/constants.js'
 import type { StateStore } from '@opencode-ai/core/store/state-store'
 import type { Logger } from '@opencode-ai/core/logger'
 import type { SuspendedPipeline, SuspendedStack, PipelineState } from '../src/schema.js'
 import { makeState } from './helpers.js'
 
+// NOTE: Mock-based integration tests (Red Phase). True component-interaction tests deferred to Green Phase.
 // F-001: replaced 22 expect(true).toBe(false) stubs with real SUT invocations.
 // Tests still fail in Red Phase because PipelineStore methods throw 'Not implemented'.
 
@@ -14,7 +17,12 @@ function makeSuspendedPipeline(overrides?: Partial<SuspendedPipeline>): Suspende
     suspendedAt: '2026-06-06T12:00:00Z',
     suspendedPhase: 5,
     depth: 0,
+    childDepth: undefined,
+    parentRunId: undefined,
+    parentPipelineProjectId: undefined,
     suspendedReason: 'test_modification',
+    childRunId: undefined,
+    quarantineSuccess: undefined,
     parentRegressionHistory: [],
     ...overrides,
   }
@@ -71,11 +79,12 @@ describe('crash recovery integration - pipeline nesting', () => {
     const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
+      if (key.endsWith('/active')) return null
       return null
     })
-    const stack = store.getSuspendedStack('proj-1')
-    expect(stack.entries).toHaveLength(1)
-    expect(stack.entries[0].runId).toBe('parent-123')
+    const result = store.detectOrphanedSuspend('proj-1')
+    expect(result).not.toBeNull()
+    expect(mockStateStore.write).toHaveBeenCalled()
   })
 
   // #68
@@ -158,6 +167,10 @@ describe('crash recovery integration - pipeline nesting', () => {
     mockStateStore.read.mockReturnValue(null)
     const result = store.detectOrphanedSuspend('proj-1')
     expect(result).toBeNull()
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.stringContaining('CRITICAL'),
+    )
+    expect(mockStateStore.write).not.toHaveBeenCalled()
   })
 
   // #74
@@ -199,20 +212,22 @@ describe('crash recovery integration - pipeline nesting', () => {
   // #105
   it('should preserve pending_pause through crash recovery and apply on resume', () => {
     const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
-    const state = {
+    const stateWithPause = {
       ...makeNestingState({ runId: 'parent-123', phaseStatus: 'suspended' }),
-      pending_pause: { reason: 'PATTERN_CYCLE', violation_type: 'REGRESSION', files: ['src/a.ts'] } as any,
+      pending_pause: { reason: 'PENDING', violation_type: 'REGRESSION', files: ['src/a.ts'] } as any,
     }
     mockStateStore.read.mockImplementation((key: string) => {
-      if (key.endsWith('/parent-123/state')) return state
-      if (key.endsWith('/active')) return null
+      if (key.endsWith('/parent-123/state')) return stateWithPause
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
+      if (key.endsWith('/active')) return null
       return null
     })
-    store.resumeSuspended('proj-1', 'child-456')
+    const restartedStore = new PipelineStore(mockStateStore, mockLogger)
+    restartedStore.detectOrphanedSuspend('proj-1')
+    const result = restartedStore.resumeSuspended('proj-1', 'child-456')
     expect(mockStateStore.write).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ pending_pause: expect.objectContaining({ reason: 'PATTERN_CYCLE' }) }),
+      expect.objectContaining({ phaseStatus: 'paused' }),
     )
   })
 
@@ -300,10 +315,17 @@ describe('crash recovery integration - pipeline nesting', () => {
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
       return null
     })
+    mockStateStore.list.mockReturnValue([
+      'quarantine/metadata-hash1.json',
+      'quarantine/metadata-hash2.json',
+    ])
     store.detectOrphanedSuspend('proj-1')
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('unmatched metadata'),
+    )
     expect(mockStateStore.write).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ quarantineSuccess: expect.any(Boolean) }),
+      expect.objectContaining({ quarantineSuccess: true }),
     )
   })
 
@@ -330,16 +352,19 @@ describe('crash recovery integration - pipeline nesting', () => {
 
   // #139
   it('should call RegressionCounter.remove for abandoned runId on force=true pipeline_start', () => {
+    const handler = new CheckpointHandler(store, STALE_THRESHOLD_MS, undefined, undefined, undefined, mockLogger)
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/active')) return { runId: 'abandoned-run', projectId: 'proj-1' }
       if (key.endsWith('/abandoned-run/state')) return makeNestingState({ runId: 'abandoned-run' })
       return null
     })
-    store.resumeSuspended('proj-1', 'child-456', true)
-    expect(mockStateStore.appendLog).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({ event: expect.stringContaining('REGRESSION_COUNTER'), action: 'remove' }),
+    store.getRegressionCounter = vi.fn().mockReturnValue({ per_cycle_count: 3, total_count: 7 })
+    handler.handle(
+      'pipeline_start',
+      JSON.stringify({ description: 'force restart', force: true }),
+      { worktree: '/tmp/test', sessionID: 'ses-1' },
     )
+    expect(store.removeRegressionCounter).toHaveBeenCalledWith('abandoned-run')
   })
 
   // #147
@@ -349,8 +374,17 @@ describe('crash recovery integration - pipeline nesting', () => {
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack([])
       return null
     })
-    const result = store.detectOrphanedSuspend('proj-1')
-    expect(result).toBeNull()
+    const recoveryResult = store.detectOrphanedSuspend('proj-1')
+    expect(recoveryResult).toBeNull()
+    mockStateStore.read.mockImplementation((key: string) => {
+      if (key.endsWith('/active')) return null
+      return null
+    })
+    store.resumeFromPause = vi.fn()
+    const startResult = store.startPipeline('proj-1', { description: 'fresh' })
+    expect(startResult.depth).toBe(0)
+    expect(startResult.runId).not.toBe('abandoned-run')
+    expect(store.createRegressionCounter).toHaveBeenCalledWith(startResult.runId)
   })
 
   // #149
@@ -365,8 +399,12 @@ describe('crash recovery integration - pipeline nesting', () => {
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack(entries)
       return null
     })
+    store.detectOrphanedSuspend('proj-1')
     const result = store.canSuspend('proj-1')
     expect(result).toBe(true)
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('DEPTH_METRIC_DIVERGENCE'),
+    )
   })
 
   // #160
