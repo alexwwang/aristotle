@@ -1,8 +1,9 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { promptAssemble } from '../src/prompt-assemble.js'
 import { PromptBuilder } from '../src/prompt-builder.js'
 
 describe('Prompt Assemble MCP Tool', () => {
+  afterEach(() => { vi.restoreAllMocks() })
   // TC-MCP-001
   it('should_return_execute_internal_for_t4', () => {
     const result = promptAssemble({
@@ -76,7 +77,7 @@ describe('Prompt Assemble MCP Tool', () => {
     expect(typeof result.error).toBe('string')
   })
 
-  // TC-MCP-008 — F-021: trigger build failure via PromptBuilder.prototype.build mock
+  // TC-MCP-008: trigger build failure via PromptBuilder.prototype.build mock
   it('should_return_template_build_failed_error', () => {
     const buildSpy = vi.spyOn(PromptBuilder.prototype, 'build').mockImplementationOnce(() => { throw new Error('build failed') })
     const result = promptAssemble({
@@ -86,7 +87,6 @@ describe('Prompt Assemble MCP Tool', () => {
     })
     expect(result.action).toBe('error')
     expect(result.error).toBeDefined()
-    buildSpy.mockRestore()
   })
 
   // TC-MCP-009

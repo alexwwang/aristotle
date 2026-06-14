@@ -123,6 +123,8 @@ describe('GPAV Schema Validation', () => {
   // to validate cross-pass correlation structure via imported logic.
   it('should_track_cross_pass_finding_correlation', () => {
     const findingId = 'F-01'
+    // pass_step=2 (Fact-Gather / T-1) is omitted because T-1 does not emit
+    // GPAVEvents per Phase 2 design — it gathers context, not findings.
     const events: GPAVEvent[] = [
       {
         round: 1, pass_step: 1, pass_name: 'Recall',

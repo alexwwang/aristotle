@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import * as fs from 'node:fs'
 import { detectMultiAgent } from '../src/multi-agent.js'
 
+// Mock assumes detectMultiAgent uses sync fs API (existsSync/readFileSync).
+// If Phase 5 implementation uses fs/promises, accessSync, or statSync,
+// update this mock accordingly.
 vi.mock('node:fs', () => ({
   existsSync: vi.fn(),
   readFileSync: vi.fn(),
@@ -57,17 +60,24 @@ describe('detectMultiAgent', () => {
     expect(detectMultiAgent({ directory: '/project' })).toBe(true)
   })
 
-  // TC-OMO-006
-  it('should_not_detect_omo_when_none_installed', () => {
+  // TC-OMO-006a
+  it('should_not_detect_omo_when_unrecognized_plugin', () => {
     mockFs.existsSync.mockReturnValue(true)
     mockFs.readFileSync.mockReturnValue(JSON.stringify({
       plugin: ['/path/to/other-plugin/index.js'],
     }))
     expect(detectMultiAgent({ directory: '/project' })).toBe(false)
+  })
 
+  // TC-OMO-006b
+  it('should_not_detect_omo_when_empty_plugin_array', () => {
+    mockFs.existsSync.mockReturnValue(true)
     mockFs.readFileSync.mockReturnValue(JSON.stringify({ plugin: [] }))
     expect(detectMultiAgent({ directory: '/project' })).toBe(false)
+  })
 
+  // TC-OMO-006c
+  it('should_not_detect_omo_when_config_missing', () => {
     mockFs.existsSync.mockReturnValue(false)
     expect(detectMultiAgent({ directory: '/project' })).toBe(false)
   })
@@ -96,5 +106,14 @@ describe('detectMultiAgent', () => {
     mockFs.readFileSync.mockImplementation(() => { throw new Error('read error') })
     const result = detectMultiAgent({ directory: '/project' })
     expect(result).toBe(false)
+  })
+
+  // TC-OMO-010
+  it('should_use_default_directory_when_undefined', () => {
+    mockFs.existsSync.mockReturnValue(true)
+    mockFs.readFileSync.mockReturnValue(JSON.stringify({
+      plugin: ['file:///path/to/oh-my-opencode/index.js'],
+    }))
+    expect(detectMultiAgent({})).toBe(true)
   })
 })

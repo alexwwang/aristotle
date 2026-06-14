@@ -130,7 +130,7 @@ describe('Parameter Naming Convention', () => {
     expect(result.valid).toBe(false)
   })
 
-  // F-035: negative naming-convention tests for remaining templates
+  // TC-PNC-012: negative naming-convention tests for remaining templates
   it.each([
     ['T-2', { phase: 1, round: 2, run_id: 'run-abc123', project_id: 'project-xyz' }],
     ['T-4', { files: ['src/violating-file.ts'], runId: 'run-abc123', phase: 5, violationType: 'REGRESSION', boundaryCommit: 'abc123def456' }],

@@ -36,5 +36,6 @@ describe('Template Independence', () => {
       review_scope: { in_scope: [], out_of_scope: [] },
     }, true)
     expect(result.prompt).not.toContain('fact_context')
+    expect(result.prompt).toContain('precision_filter')
   })
 })

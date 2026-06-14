@@ -21,7 +21,7 @@ describe('T-10 Eval Fix', () => {
     expect(template.name).toBe('eval_fix')
   })
 
-  // TC-T10-002
+  // TC-T10-002a
   it('should_auto_reject_adopt_or_modify_without_fix', () => {
     const adoptDecision: T10Decision = {
       finding_id: 'F-01', decision: 'ADOPT', rationale: 'Valid',
@@ -44,7 +44,10 @@ describe('T-10 Eval Fix', () => {
       severityMap: { 'F-02': 'M' },
     })
     expect(result2.decisions[0].decision).toBe('REJECT')
+  })
 
+  // TC-T10-002b
+  it('should_accept_adopt_when_fix_suggestion_provided', () => {
     const adoptWithFix: T10Decision[] = [
       { finding_id: 'F-03', decision: 'ADOPT', rationale: 'Fix 1', fix_suggestion: 'Edit src/a.ts' },
       { finding_id: 'F-04', decision: 'ADOPT', rationale: 'Fix 2', fix_suggestion: 'Edit src/b.ts' },
@@ -58,43 +61,34 @@ describe('T-10 Eval Fix', () => {
     expect(result3.decisions.every(d => d.decision === 'ADOPT')).toBe(true)
   })
 
-  // TC-T10-003
-  it('should_auto_reject_defer_on_c_h_m_severity', () => {
-    const rejectSeverities: Array<{ sev: string; fid: string }> = [
-      { sev: 'C', fid: 'F-01' },
-      { sev: 'H', fid: 'F-02' },
-      { sev: 'M', fid: 'F-03' },
-    ]
-    for (const { sev, fid } of rejectSeverities) {
-      const decision: T10Decision = {
-        finding_id: fid, decision: 'DEFER', rationale: `Defer ${sev}`,
-        defer_target: 'Phase 5', deferral_reason: 'complex',
-      }
-      const result = processT10Decisions({
-        decisions: [decision],
-        current_phase: 4,
-        severityMap: { [fid]: sev },
-      })
-      expect(result.decisions[0].decision).toBe('REJECT')
+  // TC-T10-003a
+  it.each(['C', 'H', 'M'] as const)('should_auto_reject_defer_on_severity_%s', (sev) => {
+    const fid = `F-${sev}`
+    const decision: T10Decision = {
+      finding_id: fid, decision: 'DEFER', rationale: `Defer ${sev}`,
+      defer_target: 'Phase 5', deferral_reason: 'complex',
     }
+    const result = processT10Decisions({
+      decisions: [decision],
+      current_phase: 4,
+      severityMap: { [fid]: sev },
+    })
+    expect(result.decisions[0].decision).toBe('REJECT')
+  })
 
-    const acceptSeverities: Array<{ sev: string; fid: string }> = [
-      { sev: 'P', fid: 'F-04' },
-      { sev: 'L', fid: 'F-05' },
-      { sev: 'I', fid: 'F-06' },
-    ]
-    for (const { sev, fid } of acceptSeverities) {
-      const decision: T10Decision = {
-        finding_id: fid, decision: 'DEFER', rationale: `Defer ${sev}`,
-        defer_target: 'Phase 5', deferral_reason: 'low priority',
-      }
-      const result = processT10Decisions({
-        decisions: [decision],
-        current_phase: 4,
-        severityMap: { [fid]: sev },
-      })
-      expect(result.decisions[0].decision).toBe('DEFER')
+  // TC-T10-003b
+  it.each(['P', 'L', 'I'] as const)('should_accept_defer_on_severity_%s', (sev) => {
+    const fid = `F-${sev}`
+    const decision: T10Decision = {
+      finding_id: fid, decision: 'DEFER', rationale: `Defer ${sev}`,
+      defer_target: 'Phase 5', deferral_reason: 'low priority',
     }
+    const result = processT10Decisions({
+      decisions: [decision],
+      current_phase: 4,
+      severityMap: { [fid]: sev },
+    })
+    expect(result.decisions[0].decision).toBe('DEFER')
   })
 
   // TC-T10-004
@@ -122,12 +116,6 @@ describe('T-10 Eval Fix', () => {
     expect(result.decisions).toBeDefined()
     expect(result.decisions.length).toBeGreaterThan(0)
     expect(result.decisions[0].fix_suggestion).toMatch(/nonexistent|not found|error|does not exist/i)
-  })
-
-  // TC-T10-006
-  it('should_fallback_defer_target_on_invalid_format', () => {
-    const result = validateDeferTarget('InvalidFormat', 4)
-    expect(result).toBe('Phase 5')
   })
 
   // TC-T10-007
@@ -232,6 +220,8 @@ describe('T-10 Eval Fix', () => {
     })
     expect(result4.decisions[0].decision).toBe('REJECT')
 
+    // Additional edge case (beyond spec's 4 stated cases): '+++' prefix
+    // without '---' should be treated same as unified diff — no original_code needed.
     const diffPlusNoOriginal: T10Decision = {
       finding_id: 'F-05', decision: 'ADOPT', rationale: 'Unified diff +++',
       fix_code: '+++ b/src/file.ts\n@@ -1,1 +1,1 @@\n-old\n+new', original_code: null,
@@ -251,7 +241,8 @@ describe('T-10 Eval Fix', () => {
     ['Phase 5 Round 0', 4, 'Phase 5'],
     ['Invalid', 8, 'Phase 8'],
     ['Invalid', 7, 'Phase 8'],
-  ])('should_fallback_defer_target_on_out_of_range_values(%s, phase=%i)', (target, phase, expected) => {
+    ['InvalidFormat', 4, 'Phase 5'],
+  ])('should_fallback_defer_target_on_invalid_or_out_of_range(%s, phase=%i → %s)', (target, phase, expected) => {
     expect(validateDeferTarget(target, phase)).toBe(expected)
   })
 
@@ -268,5 +259,8 @@ describe('T-10 Eval Fix', () => {
     })
     expect(result.decisions[0].rationale).not.toContain('null')
     expect(result.decisions[0].rationale).toContain('auto-rejected')
+    // Rationale should explain WHY it was auto-rejected (no fix provided)
+    expect(result.decisions[0].rationale.length).toBeGreaterThan('auto-rejected'.length)
+    expect(result.decisions[0].rationale).toMatch(/fix|suggestion|provided/i)
   })
 })

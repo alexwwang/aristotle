@@ -17,6 +17,7 @@ describe('PromptBuilder', () => {
     const result = builder.build(template, { phase: 1, round: 2, runId: 'run-001', projectId: 'proj-1' }, true)
     expect(result.is_omo).toBe(true)
     expect(result.token_estimate).toBeLessThanOrEqual(330)
+    expect(result.token_estimate).toBeGreaterThan(0)
     expect(result.prompt).not.toContain('You are a strict code reviewer')
   })
 
@@ -28,6 +29,7 @@ describe('PromptBuilder', () => {
     expect(result.is_omo).toBe(false)
     expect(result.prompt).toContain('You are a strict code reviewer')
     expect(result.token_estimate).toBeLessThanOrEqual(1500)
+    expect(result.token_estimate).toBeGreaterThan(0)
   })
 
   // TC-PB-003
@@ -64,6 +66,6 @@ describe('PromptBuilder', () => {
     const template = registry.get_template('T-2')
     const result = builder.build(template, { phase: 4, round: 1, runId: 'run-001', projectId: 'proj-1' }, false)
     expect(result.prompt).toContain('TDD')
-    expect(/Red.*Green.*Refactor/s.test(result.prompt)).toBe(true)
+    expect(/\bRed\b.*\bGreen\b.*\bRefactor\b/s.test(result.prompt)).toBe(true)
   })
 })

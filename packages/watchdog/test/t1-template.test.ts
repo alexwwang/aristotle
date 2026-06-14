@@ -15,7 +15,7 @@ describe('T-1 Fact Gather', () => {
   // Input validation uses only input fields; builder.build accepts extras
   // for placeholder substitution. Removing code_changes from validate_params
   // avoids contradiction with TC-REG-006 (extra fields → invalid).
-  it('should_accept_empty_code_changes_as_valid', () => {
+  it('should_build_prompt_with_empty_code_changes_output_field', () => {
     const t1 = registry.get_template('T-1')
     const validation = registry.validate_params('T-1', {
       phase: 1, round: 1, runId: 'run-1', projectId: 'proj-1', scope: 'full',
@@ -36,7 +36,7 @@ describe('T-1 Fact Gather', () => {
       phase: 1, round: 1, runId: 'run-1', projectId: 'proj-1', scope: 'full',
     }, true)
     expect(result.prompt.length).toBeGreaterThan(0)
-    expect(result.prompt).toContain('full')
+    expect(result.prompt).toMatch(/\bscope[:\s]+['"]?full['"]?/i)
     expect(result.token_estimate).toBeGreaterThan(0)
   })
 })

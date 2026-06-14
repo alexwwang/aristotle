@@ -27,6 +27,9 @@ describe('T-9 Precision Filter', () => {
     for (const f of result.confirmed_findings) {
       expect(['CONFIRM', 'DOWNGRADE', 'REJECT']).toContain(f.verdict)
     }
+    // Known-good input (in_scope, exists=true, line_ranges present) should CONFIRM
+    const f = result.confirmed_findings.find(f => f.id === 'F-01')
+    expect(f?.verdict).toBe('CONFIRM')
   })
 
   // TC-T9-003
@@ -56,6 +59,10 @@ describe('T-9 Precision Filter', () => {
   })
 
   // TC-T9-005
+  // Spec allows either REJECT or DOWNGRADE for out_of_scope findings that exist
+  // in location_map: REJECT if the policy is to exclude out_of_scope entirely,
+  // DOWNGRADE if the policy is to retain with reduced severity. Both are valid
+  // T-9 outcomes per the precision filter specification.
   it('should_reject_or_downgrade_out_of_scope', () => {
     const result = runT9PrecisionFilter({
       raw_findings: [{ id: 'F-01', severity: 'M', description: 'test', location: 'vendor/lib.ts:1', suggestion: 'fix' }],
@@ -79,7 +86,8 @@ describe('T-9 Precision Filter', () => {
       location_map: {},
       review_scope: { in_scope: ['src/a.ts', 'src/b.ts'], out_of_scope: [] },
     })
-    expect(result.halt_reason).toBeTruthy()
+    expect(result.halt_reason).toEqual(expect.any(String))
+    expect((result.halt_reason as string).length).toBeGreaterThan(0)
   })
 
   // TC-T9-007
@@ -91,12 +99,19 @@ describe('T-9 Precision Filter', () => {
     })
     const f = result.confirmed_findings.find(f => f.id === 'F-01')
     expect(f?.verdict).toBe('CONFIRM')
+    // CONFIRM findings should not carry a severity downgrade
+    if (f?.original_severity !== undefined) {
+      expect(f.original_severity).toBe(f.adjusted_severity)
+    }
   })
 
   // TC-T9-008
   it('should_downgrade_when_location_undefined', () => {
     const result = runT9PrecisionFilter({
       raw_findings: [{ id: 'F-01', severity: 'H', description: 'test', location: undefined, suggestion: 'fix' }],
+      // location_map intentionally populated to verify function ignores the map
+      // when finding.location is undefined (the DOWNGRADE comes from missing location,
+      // not from map lookup)
       location_map: { 'src/a.ts': { line_ranges: [[1, 10]], exists: true } },
       review_scope: { in_scope: ['src/a.ts'], out_of_scope: [] },
     })
@@ -127,6 +142,7 @@ describe('T-9 Precision Filter', () => {
     expect(f?.verdict).toBe('DOWNGRADE')
     expect(f?.adjusted_severity).toBe('I')
     expect(f?.note).toBeDefined()
+    expect(f?.note).toMatch(/not exist|deleted|missing|does not exist/i)
   })
 
   // TC-T9-011
