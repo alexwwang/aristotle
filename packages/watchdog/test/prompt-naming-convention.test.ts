@@ -101,4 +101,29 @@ describe('Parameter Naming Convention', () => {
     })
     expect(result.valid).toBe(true)
   })
+
+  // TC-PNC-001-negative
+  it('should_reject_snakecase_for_t1', () => {
+    const result = registry.validate_params('T-1', {
+      phase: 1, round: 2, run_id: 'run-abc123', project_id: 'project-xyz', scope: 'full',
+    })
+    expect(result.valid).toBe(false)
+  })
+
+  // TC-PNC-003-negative
+  it('should_reject_camelcase_for_t3', () => {
+    const result = registry.validate_params('T-3', {
+      filePath: 'src/large-module.ts', size: 150000, language: 'typescript',
+    })
+    expect(result.valid).toBe(false)
+  })
+
+  // TC-PNC-005-negative
+  it('should_reject_snakecase_for_t5', () => {
+    const result = registry.validate_params('T-5', {
+      violation_type: 'REGRESSION', occurrences: 3, pattern_window: 10,
+      run_id: 'run-abc123', phase: 4,
+    })
+    expect(result.valid).toBe(false)
+  })
 })

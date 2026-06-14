@@ -30,24 +30,28 @@ describe('ReviewerTakeoverState validation', () => {
   it('should_reject_state_with_missing_round', () => {
     const error = validateReviewerTakeoverState({ interceptAt: '2026-01-01T00:00:00Z', spawnPhase: 'pending' })
     expect(error).not.toBeNull()
+    expect(error ?? '').toMatch(/round/i)
   })
 
   // RT-080a — negative: missing interceptAt
   it('should_reject_state_with_missing_intercept_at', () => {
     const error = validateReviewerTakeoverState({ round: 3, spawnPhase: 'pending' })
     expect(error).not.toBeNull()
+    expect(error ?? '').toMatch(/interceptAt|intercept_at/i)
   })
 
   // RT-080a — negative: missing spawnPhase
   it('should_reject_state_with_missing_spawn_phase', () => {
     const error = validateReviewerTakeoverState({ round: 3, interceptAt: '2026-01-01T00:00:00Z' })
     expect(error).not.toBeNull()
+    expect(error ?? '').toMatch(/spawnPhase|spawn_phase/i)
   })
 
   // RT-080a — negative: round is wrong type
   it('should_reject_state_with_non_number_round', () => {
     const error = validateReviewerTakeoverState(JSON.parse('{"round":"three","interceptAt":"2026-01-01T00:00:00Z","spawnPhase":"pending"}'))
     expect(error).not.toBeNull()
+    expect(error ?? '').toMatch(/round.*number|number.*round/i)
   })
 
   // RT-080b — all valid spawnPhase enum values

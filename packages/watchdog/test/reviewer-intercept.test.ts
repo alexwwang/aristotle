@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createReviewerInterceptRule } from '../src/reviewer-intercept.js'
+import { writeFileSync, mkdirSync, existsSync, unlinkSync } from 'fs'
 import { makeRalphState } from './helpers.js'
 
 describe('ReviewerInterceptRule', () => {
@@ -84,9 +85,12 @@ describe('ReviewerInterceptRule', () => {
   describe('RT-007: Handle missing calling_session_id', () => {
     // RT-007
     it('should_log_error_when_calling_session_id_missing', () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
       const state = makeRalphState()
       const result = rule.evaluate('Task', { subagent_type: 'oracle', prompt: 'Review', description: 'Review' }, state)
       expect(result.blocked).toBe(false)
+      expect(errorSpy).toHaveBeenCalled()
+      errorSpy.mockRestore()
     })
   })
 
@@ -137,8 +141,13 @@ describe('ReviewerInterceptRule', () => {
     it('should_return_cached_block_message_when_result_file_exists', () => {
       const state = makeRalphState()
       rule.evaluate('Task', { subagent_type: 'oracle', prompt: 'Review', description: 'Review' }, state, 'ses-main-001')
+      const round = state.ralph?.round ? state.ralph.round + 1 : 2
+      const resultPath = `.aristotle/reviewer-result-${round}.json`
+      mkdirSync('.aristotle', { recursive: true })
+      writeFileSync(resultPath, JSON.stringify({ status: 'complete', round, sessionId: 'ses-main-001', findings: [] }))
       const result = rule.evaluate('Task', { subagent_type: 'oracle', prompt: 'Review', description: 'Review' }, state, 'ses-main-001')
       expect(result.blocked).toBe(true)
+      if (existsSync(resultPath)) unlinkSync(resultPath)
     })
 
     // RT-009d
@@ -151,19 +160,25 @@ describe('ReviewerInterceptRule', () => {
 
     // RT-009e
     it('should_log_debug_message_when_returning_cached_result', () => {
+      const debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {})
       const state = makeRalphState()
       rule.evaluate('Task', { subagent_type: 'oracle', prompt: 'Review', description: 'Review' }, state, 'ses-main-001')
       const result = rule.evaluate('Task', { subagent_type: 'oracle', prompt: 'Review', description: 'Review' }, state, 'ses-main-001')
       expect(result.blocked).toBe(true)
+      expect(debugSpy).toHaveBeenCalled()
+      debugSpy.mockRestore()
     })
   })
 
   describe('RT-010: Audit logging on intercept', () => {
     // RT-010
     it('should_log_intercept_audit_event', () => {
+      const auditSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
       const state = makeRalphState()
       const result = rule.evaluate('Task', { subagent_type: 'oracle', prompt: 'Review', description: 'Review' }, state, 'ses-main-001')
       expect(result.blocked).toBe(true)
+      expect(auditSpy).toHaveBeenCalled()
+      auditSpy.mockRestore()
     })
   })
 

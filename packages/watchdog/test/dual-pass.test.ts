@@ -25,7 +25,8 @@ describe('Dual-Pass Integration', () => {
 
   // TC-DP-002
   it('should_degrade_recall_failed_to_pipeline_state', () => {
-    const result = runDualPass(config, findings)
+    const failConfig: DualPassConfig = { ...config, recallTimeout: 0 }
+    const result = runDualPass(failConfig, findings)
     const recallEvent = result.events.find(e => e.pass_step === 1)
     expect(recallEvent).toBeDefined()
     expect(recallEvent?.degradation).toBeDefined()
@@ -41,7 +42,8 @@ describe('Dual-Pass Integration', () => {
 
   // TC-DP-004
   it('should_degrade_precision_failed_to_recall_only', () => {
-    const result = runDualPass(config, findings)
+    const failConfig: DualPassConfig = { ...config, precisionTimeout: 0 }
+    const result = runDualPass(failConfig, findings)
     const precisionEvent = result.events.find(e => e.pass_step === 3)
     expect(precisionEvent).toBeDefined()
     expect(precisionEvent?.degradation).toContain('recall_only')
@@ -49,7 +51,8 @@ describe('Dual-Pass Integration', () => {
 
   // TC-DP-005
   it('should_degrade_eval_fix_failed_to_confirmed_findings', () => {
-    const result = runDualPass(config, findings)
+    const failConfig: DualPassConfig = { ...config, evalFixTimeout: 0 }
+    const result = runDualPass(failConfig, findings)
     const evalEvent = result.events.find(e => e.pass_step === 4)
     expect(evalEvent).toBeDefined()
     expect(evalEvent?.degradation).toContain('confirmed_findings')

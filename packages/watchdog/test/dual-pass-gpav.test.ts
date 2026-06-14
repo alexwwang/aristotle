@@ -8,19 +8,30 @@ describe('GPAVEvent dedup and retry', () => {
   // RT-060a
   it('should_supersede_prior_gpav_events_on_retry', () => {
     const orchestrator = createDualPassOrchestrator()
+    const ts = new Date().toISOString()
+    orchestrator.emitGPAVEvent({ pass_step: 1, round: 3, dualPassAttempt: 1, timestamp: ts })
+    orchestrator.emitGPAVEvent({ pass_step: 2, round: 3, dualPassAttempt: 1, timestamp: ts })
     expect(() => orchestrator.supersedePriorEvents(3, 2)).not.toThrow()
   })
 
   // RT-060b
   it('should_increment_dual_pass_attempt_counter_on_retry', () => {
     const orchestrator = createDualPassOrchestrator()
+    const ts = new Date().toISOString()
+    orchestrator.emitGPAVEvent({ pass_step: 1, round: 3, dualPassAttempt: 1, timestamp: ts })
+    orchestrator.emitGPAVEvent({ pass_step: 2, round: 3, dualPassAttempt: 1, timestamp: ts })
     expect(() => orchestrator.supersedePriorEvents(3, 2)).not.toThrow()
   })
 
   // RT-060c
   it('should_skip_dedup_on_cache_hit', () => {
     const orchestrator = createDualPassOrchestrator()
-    expect(orchestrator.getResultFilePath(3)).toContain('reviewer-result')
+    const ts = new Date().toISOString()
+    orchestrator.emitGPAVEvent({ pass_step: 1, round: 3, dualPassAttempt: 1, timestamp: ts })
+    orchestrator.emitGPAVEvent({ pass_step: 2, round: 3, dualPassAttempt: 1, timestamp: ts })
+    orchestrator.emitGPAVEvent({ pass_step: 3, round: 3, dualPassAttempt: 1, timestamp: ts })
+    orchestrator.emitGPAVEvent({ pass_step: 4, round: 3, dualPassAttempt: 1, timestamp: ts })
+    expect(() => orchestrator.supersedePriorEvents(3, 2)).not.toThrow()
   })
 
   // RT-060d

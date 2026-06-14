@@ -31,13 +31,22 @@ describe('Dual-Pass Supervision', () => {
 
   // RT-062a
   it('should_set_failed_after_3_consecutive_d2_inactivity_timeouts', () => {
-    const result = setDualPassPhaseFailed({ d2TimeoutCycleCount: 3 })
+    const state = { d2TimeoutCycleCount: 0 }
+    expect(detectStalePhase('d2_running', 240_000, 240_000, false)).toBe(true)
+    state.d2TimeoutCycleCount = incrementD2TimeoutCycleCount(state)
+    expect(detectStalePhase('d2_running', 240_000, 240_000, false)).toBe(true)
+    state.d2TimeoutCycleCount = incrementD2TimeoutCycleCount(state)
+    expect(detectStalePhase('d2_running', 240_000, 240_000, false)).toBe(true)
+    state.d2TimeoutCycleCount = incrementD2TimeoutCycleCount(state)
+    expect(state.d2TimeoutCycleCount).toBe(3)
+    const result = setDualPassPhaseFailed(state)
     expect(result.dualPassPhase).toBe('failed')
   })
 
   // RT-062b
   it('should_preserve_pipeline_state_on_d2_loop_guard_failure', () => {
-    const result = setDualPassPhaseFailed({ d2TimeoutCycleCount: 3 })
+    const state = { d2TimeoutCycleCount: 3 }
+    const result = setDualPassPhaseFailed(state)
     expect(result.d2TimeoutCycleCount).toBe(3)
   })
 

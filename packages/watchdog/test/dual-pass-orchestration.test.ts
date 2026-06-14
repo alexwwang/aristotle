@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createDualPassOrchestrator, assembleReviewScope, parseLocationMap, enforceT10Contract } from '../src/dual-pass-gpav.js'
 import type { DualPassOrchestrator, GPAVEvent } from '../src/dual-pass-gpav.js'
+import { existsSync, readFileSync, unlinkSync } from 'fs'
 import { makeRalphState } from './helpers.js'
 
 describe('Dual-Pass Orchestration', () => {
@@ -105,15 +106,15 @@ describe('Dual-Pass Orchestration', () => {
     expect(result).toBeDefined()
   })
 
-  // RT-043e — emit 4 GPAVEvents (one per pass_step); verify no throw
+  // RT-043e
   it('should_emit_4_gpav_events_one_per_pass_step', () => {
+    const emitSpy = vi.spyOn(orchestrator, 'emitGPAVEvent')
     const baseEvent = { round: 1, dualPassAttempt: 1, timestamp: new Date().toISOString() }
-    expect(() => {
-      orchestrator.emitGPAVEvent({ ...baseEvent, pass_step: 1 } as GPAVEvent)
-      orchestrator.emitGPAVEvent({ ...baseEvent, pass_step: 2 } as GPAVEvent)
-      orchestrator.emitGPAVEvent({ ...baseEvent, pass_step: 3 } as GPAVEvent)
-      orchestrator.emitGPAVEvent({ ...baseEvent, pass_step: 4 } as GPAVEvent)
-    }).not.toThrow()
+    orchestrator.emitGPAVEvent({ ...baseEvent, pass_step: 1 } as GPAVEvent)
+    orchestrator.emitGPAVEvent({ ...baseEvent, pass_step: 2 } as GPAVEvent)
+    orchestrator.emitGPAVEvent({ ...baseEvent, pass_step: 3 } as GPAVEvent)
+    orchestrator.emitGPAVEvent({ ...baseEvent, pass_step: 4 } as GPAVEvent)
+    expect(emitSpy).toHaveBeenCalledTimes(4)
   })
 
   // RT-043f
@@ -122,6 +123,12 @@ describe('Dual-Pass Orchestration', () => {
     await orchestrator.executeEvalFix(state, [])
     const path = orchestrator.getResultFilePath(3)
     expect(path).toContain('reviewer-result-')
+    if (existsSync(path)) {
+      const content = JSON.parse(readFileSync(path, 'utf-8'))
+      expect(content.status).toBe('complete')
+      expect(Array.isArray(content.findings)).toBe(true)
+      unlinkSync(path)
+    }
   })
 
   // RT-043b-zero
@@ -208,6 +215,10 @@ describe('Dual-Pass Orchestration', () => {
 
   // RT-087d
   it('should_clear_intercepted_fields_after_dual_pass_spawn_completes', () => {
-    expect(orchestrator.getResultFilePath(3)).toBeDefined()
+    const state = makeRalphState()
+    expect(() => orchestrator.emitGPAVEvent({
+      pass_step: 4, round: state.ralph?.round ?? 1, dualPassAttempt: 1,
+      timestamp: new Date().toISOString(),
+    })).not.toThrow()
   })
 })

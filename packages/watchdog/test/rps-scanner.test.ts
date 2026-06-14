@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { scanRPS, isRPSDisabled, resetRPSFailureCounter } from '../src/rps-scanner.js'
 
 // 12 prohibited RPS patterns (6 English + 6 Chinese) — sourced from intervention/tests/test_rps_scanner.py
@@ -21,6 +21,10 @@ const CN_RPS_PATTERNS = [
 ]
 
 describe('RPS Scanner', () => {
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
   // RT-053a — parameterized over all 12 patterns (6 EN + 6 ZH)
   describe('should_detect_all_12_rps_patterns_in_prompt', () => {
     it.each(EN_RPS_PATTERNS)('should_detect_en_pattern_%s', (patternText) => {

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { cleanupStaleState, generateCleanupToken, validateCleanupToken, deleteResultFiles } from '../src/reviewer-cleanup.js'
 import { makeRalphState } from './helpers.js'
 
@@ -17,9 +17,11 @@ describe('Reviewer Cleanup', () => {
 
   // RT-029c
   it('should_log_stale_cleanup_delete_event_before_file_deletion', () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const state = makeRalphState()
-    const result = cleanupStaleState('suspend', state)
-    expect(result).toBeDefined()
+    cleanupStaleState('suspend', state)
+    expect(logSpy).toHaveBeenCalled()
+    logSpy.mockRestore()
   })
 
   // RT-030a
@@ -57,9 +59,11 @@ describe('Reviewer Cleanup', () => {
 
   // RT-030f
   it('should_log_warning_if_t2_exceeds_wait_on_resume', () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const state = makeRalphState()
-    const result = cleanupStaleState('resume', state)
-    expect(result).toBeDefined()
+    cleanupStaleState('resume', state)
+    expect(logSpy).toHaveBeenCalled()
+    logSpy.mockRestore()
   })
 
   // RT-031a
@@ -133,9 +137,11 @@ describe('Reviewer Cleanup', () => {
 
   // RT-032e
   it('should_log_takeover_stale_cleanup_audit_event', () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const state = makeRalphState()
-    const result = cleanupStaleState('suspend', state)
-    expect(result).toBeDefined()
+    cleanupStaleState('suspend', state)
+    expect(logSpy).toHaveBeenCalled()
+    logSpy.mockRestore()
   })
 
   // RT-033a
@@ -150,6 +156,7 @@ describe('Reviewer Cleanup', () => {
     const state = makeRalphState()
     const result = cleanupStaleState('resume', state)
     expect(result).toBeDefined()
+    expect(result.runId).toBe(state.runId)
   })
 
   // RT-037

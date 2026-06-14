@@ -134,8 +134,9 @@ describe('ContestedIssue', () => {
       { ...baseIssue, issue_id: 'M-1', dispute_rounds: 2 },
       { ...baseIssue, issue_id: 'M-2', dispute_rounds: 1 },
     ]
+    const acceptedIssue = issues.find(i => i.issue_id === 'M-1')
+    expect(acceptedIssue?.dispute_rounds).toBe(2)
     const remaining = removeContestedIssue(issues, 'M-1')
-    // Accepted issue removed; surviving issue's dispute_rounds unchanged
     expect(remaining).toHaveLength(1)
     expect(remaining[0].dispute_rounds).toBe(1)
   })

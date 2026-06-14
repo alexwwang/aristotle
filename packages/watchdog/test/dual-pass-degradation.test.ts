@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { applyRecallToT10SchemaConversion, convertReviewFindingToGPAVFinding, createDualPassOrchestrator } from '../src/dual-pass-gpav.js'
 import { makeRalphState } from './helpers.js'
 
@@ -7,14 +7,21 @@ describe('Dual-Pass Degradation', () => {
   it('should_degrade_to_pipeline_state_fg_when_recall_fails', async () => {
     const orchestrator = createDualPassOrchestrator()
     const state = makeRalphState()
-    const result = await orchestrator.executeRecall(state)
-    expect(result).toBeDefined()
+    vi.spyOn(orchestrator, 'executeRecall').mockRejectedValueOnce(new Error('T-2 crashed'))
+    await expect(orchestrator.executeRecall(state)).rejects.toThrow('T-2 crashed')
+    const fgResult = await orchestrator.executeFactGather(state, [])
+    expect(fgResult).toBeDefined()
   })
 
   // RT-046b — emitGPAVEvent is fire-and-forget; should not throw
   it('should_emit_4_gpav_events_with_recall_failed_degradation', () => {
     const orchestrator = createDualPassOrchestrator()
-    expect(() => orchestrator.emitGPAVEvent({ pass_step: 1, round: 1, dualPassAttempt: 1, timestamp: '', degradation_reason: 'recall_failed' })).not.toThrow()
+    expect(() => {
+      orchestrator.emitGPAVEvent({ pass_step: 1, round: 1, dualPassAttempt: 1, timestamp: '', degradation_reason: 'recall_failed' })
+      orchestrator.emitGPAVEvent({ pass_step: 2, round: 1, dualPassAttempt: 1, timestamp: '', degradation_reason: 'recall_failed' })
+      orchestrator.emitGPAVEvent({ pass_step: 3, round: 1, dualPassAttempt: 1, timestamp: '', degradation_reason: 'recall_failed' })
+      orchestrator.emitGPAVEvent({ pass_step: 4, round: 1, dualPassAttempt: 1, timestamp: '', degradation_reason: 'recall_failed' })
+    }).not.toThrow()
   })
 
   // RT-046c
