@@ -103,7 +103,7 @@ describe('T-10 Eval Fix', () => {
   it('should_handle_nonexistent_file_in_fix_suggestion', () => {
     const decision: T10Decision = {
       finding_id: 'F-01', decision: 'ADOPT', rationale: 'Fix applied',
-      fix_code: 'const x = 1', fix_suggestion: 'Edit src/nonexistent.ts',
+      fix_code: 'const x = 1', fix_suggestion: 'Apply changes to src/fix-target.ts',
       original_code: 'const x = 0',
     }
     const result = processT10Decisions({
@@ -127,7 +127,7 @@ describe('T-10 Eval Fix', () => {
   it('should_not_crash_on_nonexistent_file_in_fix_suggestion', () => {
     const decision: T10Decision = {
       finding_id: 'F-01', decision: 'MODIFY', rationale: 'Fix applied',
-      fix_code: 'const x = 1', fix_suggestion: 'Edit /nonexistent/path/file.ts',
+      fix_code: 'const x = 1', fix_suggestion: 'Apply changes to /opt/data/fix-target.ts',
       original_code: 'const x = 0',
     }
     const outcomes: Array<ReturnType<typeof processT10Decisions>> = []
