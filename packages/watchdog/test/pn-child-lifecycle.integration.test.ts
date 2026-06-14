@@ -196,12 +196,13 @@ describe('child lifecycle integration - pipeline nesting', () => {
   })
 
   // #112
+  // F-054: use spec-defined trigger types instead of generic HIGH/LOW.
   it('should query DEFERRED_PAUSE audit entries on resume and apply highest-priority deferred trigger', () => {
     const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
     const parentState = makeNestingState({ runId: 'parent-123', phaseStatus: 'suspended' })
     const deferredEntries = [
-      { event: 'DEFERRED_PAUSE', trigger_type: 'LOW', reason: 'PATTERN_CYCLE', timestamp: '2026-01-01T00:00:00Z' },
-      { event: 'DEFERRED_PAUSE', trigger_type: 'HIGH', reason: 'FILE_SPLIT', timestamp: '2026-01-01T00:01:00Z' },
+      { event: 'DEFERRED_PAUSE', trigger_type: 'compliance', reason: 'compliance', timestamp: '2026-01-01T00:00:00Z' },
+      { event: 'DEFERRED_PAUSE', trigger_type: 'UNFIXED_ISSUES', reason: 'unfixed', timestamp: '2026-01-01T00:01:00Z' },
     ]
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/parent-123/state')) return parentState
@@ -213,7 +214,7 @@ describe('child lifecycle integration - pipeline nesting', () => {
     store.resumeSuspended('proj-1', 'child-456')
     expect(mockStateStore.write).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ pending_pause: expect.objectContaining({ reason: 'FILE_SPLIT' }) }),
+      expect.objectContaining({ pending_pause: expect.objectContaining({ reason: 'unfixed' }) }),
     )
   })
 

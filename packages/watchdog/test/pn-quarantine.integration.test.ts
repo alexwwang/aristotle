@@ -157,9 +157,10 @@ describe('quarantine integration - pipeline nesting', () => {
       quarantineHook: vi.fn().mockReturnValue(undefined),
     })
     storeCrash.suspendActive('proj-1', 'test_modification')
-    expect(mockStateStore.write).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({ quarantineSuccess: undefined }),
-    )
+    const writtenState = mockStateStore.write.mock.calls[0][1]
+    // F-046: check key exists explicitly — objectContaining with undefined
+    // may match objects where the key is absent entirely.
+    expect('quarantineSuccess' in writtenState).toBe(true)
+    expect(writtenState.quarantineSuccess).toBeUndefined()
   })
 })

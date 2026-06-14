@@ -43,7 +43,8 @@ describe('CheckpointHandler - pipeline nesting', () => {
     )
     const parsed = JSON.parse(result)
     expect(parsed.ok).toBe(true)
-    expect(store.suspendActive).toHaveBeenCalled()
+    // F-040: verify correct arguments, not just that it was called
+    expect(store.suspendActive).toHaveBeenCalledWith('proj-1', 'test_modification')
   })
 
   // #56
@@ -60,7 +61,8 @@ describe('CheckpointHandler - pipeline nesting', () => {
     )
     const parsed = JSON.parse(result)
     expect(parsed.ok).toBe(true)
-    expect(store.resumeSuspended).toHaveBeenCalled()
+    // F-040: verify correct arguments, not just that it was called
+    expect(store.resumeSuspended).toHaveBeenCalledWith(expect.any(String), expect.any(String))
   })
 
   // #57
@@ -250,6 +252,13 @@ describe('CheckpointHandler - pipeline nesting', () => {
     const parsed = JSON.parse(result)
     expect(parsed.ok).toBe(true)
     expect(store.getSuspendedStack).not.toHaveBeenCalled()
+    // F-041: verify writeState was called with a new PipelineState at depth=0
+    expect(store.writeState).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ depth: 0 }),
+    )
+    const writtenState = store.writeState.mock.calls[0][1]
+    expect(writtenState.runId).not.toBe('run-old')
   })
 
   // #141
@@ -352,5 +361,7 @@ describe('CheckpointHandler - pipeline nesting', () => {
     // F-005: spec #157 is authoritative — pipeline_start transitions to 'active'.
     expect(parsed.state.phaseStatus).toBe('active')
     expect(parsed.state.runId).not.toBe('run-old')
+    // F-042: verify fresh RegressionCounter created for the new runId
+    expect(store.createRegressionCounter).toHaveBeenCalledWith(parsed.state.runId)
   })
 })

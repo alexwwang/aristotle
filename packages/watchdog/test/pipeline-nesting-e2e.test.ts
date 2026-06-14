@@ -164,10 +164,17 @@ describe('pipeline nesting - e2e', () => {
     const result = store.detectOrphanedSuspend('proj-1')
     expect(result).not.toBeNull()
     expect(result?.runId).toBe('parent-123')
+    // F-049: verify recovered state has correct depth, phaseStatus, and audit entries
+    expect(result?.depth).toBe(0)
+    expect(result?.phaseStatus).not.toBe('suspended')
+    expect(mockStateStore.appendLog).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ event: expect.stringContaining('recover') }),
+    )
   })
 
   // #86
-  it('should handle force mode on pipeline start with orphaned entries', () => {
+  it('should handle force mode on pipeline start with orphaned entries', async () => {
     const handler = new CheckpointHandler(store, STALE_THRESHOLD_MS, undefined, undefined, undefined, mockLogger)
     const entries = [
       makeSuspendedPipeline({ runId: 'orphaned-1', depth: 0 }),
@@ -180,11 +187,17 @@ describe('pipeline nesting - e2e', () => {
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack(entries)
       return null
     })
-    const result = handler.handle(
+    const result = await handler.handle(
       'pipeline_start',
       JSON.stringify({ description: 'force start', force: true }),
       { worktree: '/tmp/test', sessionID: 'ses-1' },
     )
-    return expect(result).resolves.toMatchObject({ ok: true })
+    const parsed = JSON.parse(result)
+    // F-050: verify stack discarded and fresh pipeline started at depth=0
+    expect(parsed.ok).toBe(true)
+    expect(mockStateStore.write).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ depth: 0 }),
+    )
   })
 })

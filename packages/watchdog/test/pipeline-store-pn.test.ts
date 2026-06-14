@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { PipelineStore } from '../src/pipeline-store.js'
 import type { SuspendedPipeline, SuspendedStack, PipelineState, ChildFailureContext } from '../src/schema.js'
 import { MAX_DEPTH } from '../src/constants.js'
+import type { StateStore } from '@opencode-ai/core/store/state-store'
 
 import { makeState } from './helpers.js'
 
@@ -25,8 +26,6 @@ function makeSuspendedPipeline(overrides?: Partial<SuspendedPipeline>): Suspende
   }
 }
 
-const PARTIAL_STACK_SIZE = 7
-
 function makeSuspendedStack(entries: SuspendedPipeline[]): SuspendedStack {
   return { entries }
 }
@@ -34,7 +33,7 @@ function makeSuspendedStack(entries: SuspendedPipeline[]): SuspendedStack {
 function makeNestingState(overrides?: Partial<PipelineState>): PipelineState {
   return makeState({
     currentPhase: 5,
-    phaseStatus: 'ralph_loop' as PipelineState['phaseStatus'],
+    phaseStatus: 'ralph_loop',
     depth: 0,
     suspendedReason: undefined,
     suspendedAt: undefined,
@@ -45,10 +44,12 @@ function makeNestingState(overrides?: Partial<PipelineState>): PipelineState {
   })
 }
 
-const mockStateStore = {
+// F-043: typed StateStore mock for compile-time method coverage.
+const mockStateStore: StateStore = {
   read: vi.fn(),
   write: vi.fn(),
   appendLog: vi.fn(),
+  readLog: vi.fn().mockReturnValue([]),
   readLogSafe: vi.fn().mockReturnValue([]),
   list: vi.fn().mockReturnValue([]),
 }
@@ -159,18 +160,15 @@ describe('PipelineStore - Pipeline Nesting', () => {
 
   // #6
   it('should persist stack before state to prevent deadlock', () => {
-    // Expected key format (documented contract): ${projectId}:suspended-stack and
-    // ${projectId}:state:${runId}. F-012: distinguish by documented key, not substring.
-    const STACK_KEY = 'proj-1:suspended-stack'
-    const STATE_KEY_PREFIX = 'proj-1:state:'
+    // F-031: flexible key matching — don't hardcode exact key format.
     const writeOrder: string[] = []
     mockStateStore.write.mockImplementation((key: string) => {
       writeOrder.push(key)
     })
     store.suspendActive('proj-1', 'test_modification')
     expect(writeOrder.length).toBeGreaterThanOrEqual(2)
-    const stackWriteIdx = writeOrder.findIndex(k => k === STACK_KEY)
-    const stateWriteIdx = writeOrder.findIndex(k => k.startsWith(STATE_KEY_PREFIX))
+    const stackWriteIdx = writeOrder.findIndex(k => k.includes('suspended-stack') || k.includes('/stack'))
+    const stateWriteIdx = writeOrder.findIndex(k => k.includes('state:') || k.includes('/state/'))
     expect(stackWriteIdx).toBeGreaterThanOrEqual(0)
     expect(stateWriteIdx).toBeGreaterThanOrEqual(0)
     expect(stackWriteIdx).toBeLessThan(stateWriteIdx)
@@ -312,7 +310,7 @@ describe('PipelineStore - Pipeline Nesting', () => {
   it('should verify child runId matches topmost entry', () => {
     const entry = makeSuspendedPipeline({ childRunId: 'child-123' })
     mockStateStore.read.mockReturnValue(makeSuspendedStack([entry]))
-    expect(() => store.resumeSuspended('proj-1', 'wrong-id')).toThrow('child_run_id')
+    expect(() => store.resumeSuspended('proj-1', 'wrong-id')).toThrow(/child_run_id/i)
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ event: 'pipeline_resume', decision: 'BLOCK' }),
@@ -333,7 +331,7 @@ describe('PipelineStore - Pipeline Nesting', () => {
       makeSuspendedPipeline({ runId: 'C', depth: 2, childRunId: 'child-789' }),
     ]
     mockStateStore.read.mockReturnValue(makeSuspendedStack(entries))
-    expect(() => store.resumeSuspended('proj-1', 'child-456')).toThrow('Intermediate pipelines exist')
+    expect(() => store.resumeSuspended('proj-1', 'child-456')).toThrow(/intermediate pipelines exist/i)
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
       // 'RESUME_GUARD_FAILURE' is not a CheckpointEvent — carry via metadata.code.
@@ -507,7 +505,7 @@ describe('PipelineStore - Pipeline Nesting', () => {
     )
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ metadata: { code: 'QUARANTINE_HOOK_FAILED' } }),
+      expect.objectContaining({ metadata: { code: 'QUARANTINE_HOOK_FAILED_SUSPEND', phase: expect.any(Number) } }),
     )
   })
 
@@ -526,7 +524,7 @@ describe('PipelineStore - Pipeline Nesting', () => {
     )
     expect(mockStateStore.appendLog).not.toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ metadata: { code: 'QUARANTINE_HOOK_FAILED' } }),
+      expect.objectContaining({ metadata: { code: 'QUARANTINE_HOOK_FAILED_SUSPEND' } }),
     )
   })
   }) // describe('Orphaned Detection')
@@ -555,8 +553,7 @@ describe('PipelineStore - Pipeline Nesting', () => {
   })
 
   // #34
-  // F-007: mock getSessionInfo explicitly to verify the T-2 status check path,
-  // decoupling from string-convention sessionId signaling.
+  // F-029: use vi.spyOn on prototype instead of direct instance assignment for robustness.
   it('should defer reviewer takeover cleanup if t2 still running', () => {
     const entry = makeSuspendedPipeline({ runId: 'A', depth: 0, childRunId: 'child-456' })
     const mockState = {
@@ -567,12 +564,13 @@ describe('PipelineStore - Pipeline Nesting', () => {
       if (key.endsWith('/state')) return mockState
       return makeSuspendedStack([entry])
     })
-    store.getSessionInfo = vi.fn().mockReturnValue({ status: 'active' })
+    const getSessionInfoSpy = vi.spyOn(store, 'getSessionInfo').mockReturnValue({ status: 'active' })
     store.resumeSuspended('proj-1', 'child-456')
-    expect(store.getSessionInfo).toHaveBeenCalledWith('ses-t2-001')
+    expect(getSessionInfoSpy).toHaveBeenCalledWith('ses-t2-001')
     expect(mockLogger.info).toHaveBeenCalledWith(
       expect.stringContaining('TAKEOVER_DEFERRED'),
     )
+    getSessionInfoSpy.mockRestore()
   })
 
   // #35
@@ -588,6 +586,10 @@ describe('PipelineStore - Pipeline Nesting', () => {
     store.resumeSuspended('proj-1', 'child-456')
     expect(mockLogger.info).toHaveBeenCalledWith(
       expect.stringContaining('TAKEOVER_STALE_CLEANUP'),
+    )
+    // F-033: verify the stale result file path appears in cleanup logging
+    expect(mockLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('/tmp/stale-result.json'),
     )
   })
 
@@ -649,6 +651,8 @@ describe('PipelineStore - Pipeline Nesting', () => {
   // testing requires async pushSuspended (future enhancement)
   // F-008: renamed to accurately reflect that this verifies sequential
   // serialization, not concurrent access.
+  // F-023: PARTIAL — sequential writes tested. Concurrent access test deferred to Green Phase
+  // when pushSuspended becomes async. See F-023.
   it('should serialize sequential stack writes with deterministic ordering (concurrent test deferred to async pushSuspended)', () => {
     const entry = makeSuspendedPipeline()
     store.pushSuspended('proj-1', entry)
@@ -661,12 +665,16 @@ describe('PipelineStore - Pipeline Nesting', () => {
   })
 
   // #92
+  // F-052: include metadata count and verify entry count matches stored metadata.
   it('should validate stack integrity on every read', () => {
     const entries = [
       makeSuspendedPipeline({ depth: 7 }),
       makeSuspendedPipeline({ depth: 3 }),
     ]
-    mockStateStore.read.mockReturnValue(makeSuspendedStack(entries))
+    mockStateStore.read.mockImplementation((key: string) => {
+      if (key.endsWith('/suspended-stack')) return { entries, metadata: { count: 2 } }
+      return null
+    })
     const stack = store.getSuspendedStack('proj-1')
     expect(stack.entries).toHaveLength(2)
     expect(stack.entries[0].depth).toBeLessThan(stack.entries[1].depth)
@@ -676,18 +684,21 @@ describe('PipelineStore - Pipeline Nesting', () => {
   it('should reject suspendActive when pipeline status is already suspended with error message', () => {
     const state = makeNestingState({ phaseStatus: 'suspended' })
     mockStateStore.read.mockReturnValue(state)
-    expect(() => store.suspendActive('proj-1', 'test_modification')).toThrow('Pipeline is already suspended')
+    expect(() => store.suspendActive('proj-1', 'test_modification')).toThrow(/already suspended/i)
   })
 
   // #97
   it('should reject suspendActive when no active pipeline exists', () => {
     mockStateStore.read.mockReturnValue(null)
-    expect(() => store.suspendActive('proj-1', 'test_modification')).toThrow('No active pipeline to suspend')
+    expect(() => store.suspendActive('proj-1', 'test_modification')).toThrow(/no active pipeline/i)
   })
 
   // #100
+  // F-047: define named type for regression record fixture to avoid inline assertion.
   it('should deep copy parentRegressionHistory isolating child from parent mutations', () => {
-    const history = [{
+    interface RegressionViolationEvent { file: string; line: number; expected: string; actual: string }
+    interface RegressionRecord { violation: string; violationEvents: RegressionViolationEvent[]; timestamp: string }
+    const history: RegressionRecord[] = [{
       violation: 'PATTERN_VIOLATION',
       violationEvents: [{ file: 'a.ts', line: 10, expected: 'foo', actual: 'bar' }],
       timestamp: '2026-06-14T12:00:00Z',
@@ -698,7 +709,7 @@ describe('PipelineStore - Pipeline Nesting', () => {
     expect(stack.entries[0].parentRegressionHistory).not.toBe(history)
     const original = history[0].violationEvents[0]!
     const stackEntry = stack.entries[0]!
-    const copiedEntry = stackEntry.parentRegressionHistory![0] as { violationEvents: { line: number }[] }
+    const copiedEntry = stackEntry.parentRegressionHistory![0] as RegressionRecord
     const copied = copiedEntry.violationEvents[0]!
     expect(copied).not.toBe(original)
     original.line = 999
@@ -735,11 +746,9 @@ describe('PipelineStore - Pipeline Nesting', () => {
       phaseStatus: 'failed',
       currentPhase: 4,
     })
-    // F-014: mock at PipelineStore method level (decouples from key naming convention).
-    store.readState = vi.fn().mockImplementation((_projectId: string, runId: string) =>
-      runId === 'child-456' ? childFailedState : null,
-    )
+    // F-030: mock only at mockStateStore.read level — no double-mocking via store.readState.
     mockStateStore.read.mockImplementation((key: string) => {
+      if (key.endsWith('/child-456/state')) return childFailedState
       if (key.endsWith('/active')) return null
       if (key.endsWith('/state')) return makeNestingState({ runId: 'parent-123', phaseStatus: 'suspended' })
       return makeSuspendedStack([entry])
@@ -789,6 +798,16 @@ describe('PipelineStore - Pipeline Nesting', () => {
     })
     const result = store.resumeSuspended('proj-1', 'child-456', true)
     expect(result.phaseStatus).toBe('active')
+    // F-034: verify child state was written as cancelled
+    expect(mockStateStore.write).toHaveBeenCalledWith(
+      expect.stringContaining('child-456'),
+      expect.objectContaining({ phaseStatus: 'cancelled' }),
+    )
+    // F-034: verify force-resume audit entry
+    expect(mockStateStore.appendLog).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ event: 'pipeline_resume', metadata: { code: 'FORCE_RESUME' } }),
+    )
   })
 
   // #111
@@ -812,6 +831,9 @@ describe('PipelineStore - Pipeline Nesting', () => {
     const writtenState = parentWrite![1]
     expect('pending_pause' in writtenState).toBe(true)
     expect(writtenState.pending_pause).toBeUndefined()
+    // F-035: verify no pause applied — phaseStatus should not be 'paused'
+    expect(writtenState.phaseStatus).not.toBe('paused')
+    expect(writtenState.phaseStatus).toBe('ralph_loop')
   })
 
   // #114
@@ -875,13 +897,18 @@ describe('PipelineStore - Pipeline Nesting', () => {
     expect(() => store.detectOrphanedSuspend('proj-1')).toThrow(new RegExp('INVALID_PHASE.*9'))
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
-      // 'INVALID_PHASE_RECOVERY' is not a CheckpointEvent — carry via metadata.code.
       expect.objectContaining({ event: 'pipeline_resume', metadata: { code: 'INVALID_PHASE_RECOVERY', phase: 9 } }),
     )
     const stackWrites = mockStateStore.write.mock.calls.filter(
       ([key]: [string]) => key.endsWith('/suspended-stack'),
     )
     expect(stackWrites).toHaveLength(0)
+    // F-024: verify entry A remains intact after the throw
+    const postStack = store.getSuspendedStack('proj-1')
+    const entryAResult = postStack.entries.find(e => e.runId === 'A')
+    expect(entryAResult).toBeDefined()
+    expect(entryAResult!.depth).toBe(0)
+    expect(entryAResult!.suspendedPhase).toBe(5)
   })
 
   // #117
@@ -900,8 +927,13 @@ describe('PipelineStore - Pipeline Nesting', () => {
       expect.any(String),
       expect.objectContaining({ phaseStatus: 'active' }),
     )
+    // F-048: verify warning includes the TERMINAL_STATUS_RECOVERY_DEFAULT code
+    // and the original terminal status value ('failed').
     expect(mockLogger.warn).toHaveBeenCalledWith(
       expect.stringContaining('TERMINAL_STATUS_RECOVERY_DEFAULT'),
+    )
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('failed'),
     )
   })
 
@@ -925,7 +957,7 @@ describe('PipelineStore - Pipeline Nesting', () => {
   it('should reject suspendActive when pipeline status is paused', () => {
     const state = makeNestingState({ phaseStatus: 'paused' })
     mockStateStore.read.mockReturnValue(state)
-    expect(() => store.suspendActive('proj-1', 'test_modification')).toThrow('Pipeline is paused')
+    expect(() => store.suspendActive('proj-1', 'test_modification')).toThrow(/paused/i)
     expect(mockStateStore.write).not.toHaveBeenCalled()
   })
 
@@ -968,5 +1000,8 @@ describe('PipelineStore - Pipeline Nesting', () => {
     expect(msg).toContain('Phase 5')
     expect(msg).toContain('orphaned suspend')
     expect(msg).toContain('crash recovery')
+    // F-036: verify additional spec-required substrings
+    expect(msg).toContain('child pipeline was never started')
+    expect(msg).toContain('Phase continues from pre-suspend state')
   })
 })

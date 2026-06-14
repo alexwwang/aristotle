@@ -182,7 +182,11 @@ describe('crash recovery integration - pipeline nesting', () => {
       return null
     })
     store.detectOrphanedSuspend('proj-1')
-    expect(mockStateStore.write).toHaveBeenCalled()
+    // F-039: strengthen assertion with objectContaining
+    expect(mockStateStore.write).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ entries: expect.any(Array) }),
+    )
   })
 
   // #75
@@ -248,6 +252,16 @@ describe('crash recovery integration - pipeline nesting', () => {
     store.resumeSuspended('proj-1', 'child-456')
     expect(mockLogger.warn).toHaveBeenCalledWith(
       expect.stringMatching(/escalat|timeout|30.*min/i),
+    )
+    // F-038: verify escalation fires pause-timeout — parent transitions to 'paused'
+    expect(mockStateStore.write).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ phaseStatus: 'paused' }),
+    )
+    // F-038: verify pause-timeout audit entry was emitted
+    expect(mockStateStore.appendLog).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ event: 'pause_timeout', metadata: { code: 'ESCALATION_FIRED' } }),
     )
   })
 

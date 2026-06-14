@@ -1,14 +1,21 @@
-// File naming deviation: spec says pause-timeout-enforcer-pn.test.ts; actual file omits -pn
-// because it tests Phase 1/2 pause logic that predates the Phase 3 pipeline-nesting convention.
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { checkPausedTimeout } from '../src/pause-timeout-enforcer.js'
 import { PAUSE_TIMEOUT_MS } from '../src/constants.js'
 import { makeState } from './helpers.js'
 
-const BUFFER_MS = 60_000
-const RECENT_MS = 10_000
+const BUFFER_MS = 60_000 // Safety margin beyond PAUSE_TIMEOUT_MS to prevent wall-clock flakiness
+const RECENT_MS = 10_000 // Well within timeout window (10s < 30min) for negative-test stability
 
 describe('PauseTimeoutEnforcer', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-06-14T12:00:00Z'))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   // #37
   it('should flag paused pipeline exceeding PAUSE_TIMEOUT_MS', () => {
     const past = new Date(Date.now() - PAUSE_TIMEOUT_MS - BUFFER_MS).toISOString()

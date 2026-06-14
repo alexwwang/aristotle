@@ -127,9 +127,10 @@ describe('transitions - pipeline nesting', () => {
 
   // #128 — validateNestingTransition('active','ralph_loop') is rejected because
   // active→ralph_loop is not a direct transition (requires phase_enter first).
-  // This covers the resume_from_pause guard at transition level; the operation-
-  // level guard (resumeFromPause checks phaseStatus==='paused') is in PipelineStore.
-  it('should reject active→ralph_loop direct transition (proxy for resume_from_pause guard: only paused status allows restore)', () => {
+  // F-051: renamed to clarify this tests the transition matrix consequence, not the
+  // resume_from_pause guard directly. The operation-level guard (resumeFromPause
+  // checks phaseStatus==='paused') is in PipelineStore.
+  it('should reject active→ralph_loop direct transition (transition matrix prevents post-active resume)', () => {
     const result = validateNestingTransition('active', 'ralph_loop')
     expect(result.valid).toBe(false)
   })

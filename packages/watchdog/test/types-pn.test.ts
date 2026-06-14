@@ -42,10 +42,18 @@ describe('types - pipeline nesting', () => {
       pending_pause: { reason: 'PATTERN_CYCLE', violation_type: 'REGRESSION', files: ['a.ts'] },
       child_pause_timer_started_at: '2026-01-01T00:00:00Z',
     }
+    // F-028: assert all nesting fields explicitly
     expect(state.depth).toBe(1)
     expect(state.parentRunId).toBe('parent-1')
+    expect(state.parentPipelineProjectId).toBe('proj-parent')
+    expect(state.childPipelineRunId).toBe('child-1')
     expect(state.suspendedReason).toBe('test_modification')
+    expect(state.suspendedAt).toBe('2026-01-01T00:00:00Z')
+    expect(state.suspendedPhase).toBe(5)
+    expect(state.prePauseStatus).toBe('ralph_loop')
+    expect(state.preSuspendStatus).toBe('ralph_loop')
     expect(state.pending_pause?.reason).toBe('PATTERN_CYCLE')
+    expect(state.child_pause_timer_started_at).toBe('2026-01-01T00:00:00Z')
   })
 
   // #43
@@ -63,8 +71,17 @@ describe('types - pipeline nesting', () => {
       childRunId: 'child-456',
       quarantineSuccess: true,
     }
+    // F-028: assert all SuspendedPipeline fields explicitly
     expect(entry.runId).toBe('run-123')
+    expect(entry.suspendedAt).toBe('2026-01-01T00:00:00Z')
+    expect(entry.suspendedPhase).toBe(5)
+    expect(entry.depth).toBe(0)
     expect(entry.childDepth).toBe(1)
+    expect(entry.parentRunId).toBe('parent-1')
+    expect(entry.parentPipelineProjectId).toBe('proj-parent')
+    expect(entry.parentRegressionHistory).toEqual([])
+    expect(entry.suspendedReason).toBe('test_modification')
+    expect(entry.childRunId).toBe('child-456')
     expect(entry.quarantineSuccess).toBe(true)
   })
 
