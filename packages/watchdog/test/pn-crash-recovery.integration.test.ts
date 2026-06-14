@@ -418,10 +418,9 @@ describe('crash recovery integration - pipeline nesting', () => {
     expect(mockLogger.warn).toHaveBeenCalledWith(
       expect.stringContaining('missing metadata'),
     )
-    expect(mockStateStore.write).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({ quarantineSuccess: true }),
-    )
+    // P-010 (M-13): removed quarantineSuccess:true write assertion — spec #123
+    // only specifies metadata matching + WARN logging. Over-specifying risks
+    // false failures if the impl doesn't write quarantineSuccess in this path.
   })
 
   // #130
@@ -454,6 +453,11 @@ describe('crash recovery integration - pipeline nesting', () => {
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/active')) return { runId: 'abandoned-run', projectId: 'proj-1' }
       if (key.endsWith('/abandoned-run/state')) return makeNestingState({ runId: 'abandoned-run' })
+      // P-016: spec #139 says 'Given orphaned suspended pipeline' — add
+      // suspended-stack mock so orphaned entries exist for cleanup.
+      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([
+        makeSuspendedPipeline({ runId: 'abandoned-run', depth: 0 }),
+      ])
       return null
     })
     store.getRegressionCounter = vi.fn().mockReturnValue({ per_cycle_count: 3, total_count: 7 })

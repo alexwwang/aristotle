@@ -150,6 +150,10 @@ describe('pipeline nesting - e2e', () => {
     }
     const activeState = makeNestingState({ depth: MAX_DEPTH - 1, phaseStatus: 'ralph_loop' })
     mockStateStore.read.mockImplementation((key: string) => {
+      // P-009: add /active mock return so suspendActive can detect the active
+      // pipeline before checking depth. Without it, the expected /depth/i
+      // throw may not match if the impl checks active status first.
+      if (key.endsWith('/active')) return { runId: 'parent-123', projectId: 'proj-1' }
       if (key.endsWith('/state')) return activeState
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack(entries)
       return null
@@ -180,8 +184,9 @@ describe('pipeline nesting - e2e', () => {
     // stack entry by LIFO order (grandchild-789, depth=2), NOT the root (parent-123).
     // Recovery walks the stack from top down; the topmost orphan is the recovery target.
     expect(result?.runId).toBe('grandchild-789')
-    // F-001: verify recovered state — depth + recovery write occurred.
-    expect(result?.depth).toBe(0)
+    // P-008: fixture sets grandchild-789 depth=2 — detectOrphanedSuspend returns
+    // the raw topmost entry, so depth should match the fixture (2), not 0.
+    expect(result?.depth).toBe(2)
     expect(mockStateStore.write).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ phaseStatus: expect.not.stringContaining('suspended') }),

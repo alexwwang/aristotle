@@ -115,6 +115,12 @@ describe('PipelineStore - Pipeline Nesting', () => {
 
   // #2
   it('should pop topmost entry from suspended stack when resuming', () => {
+    // P-004: in-memory Map bridge so pushSuspended writes persist for
+    // getSuspendedStack reads. Without it, reads return null and the
+    // entries.toHaveLength(1) assertion fails for the wrong reason.
+    const memStore = new Map<string, unknown>()
+    mockStateStore.write.mockImplementation((k: string, v: unknown) => { memStore.set(k, v); return true })
+    mockStateStore.read.mockImplementation((k: string) => memStore.get(k) ?? null)
     const entryA = makeSuspendedPipeline({ runId: 'A', depth: 0 })
     const entryB = makeSuspendedPipeline({ runId: 'B', depth: 1 })
     store.pushSuspended('proj-1', entryA)
@@ -194,10 +200,12 @@ describe('PipelineStore - Pipeline Nesting', () => {
       entries.push(makeSuspendedPipeline({ runId: `run-${i}`, depth: i }))
     }
     expect(entries).toHaveLength(9)
-    const parentState = makeNestingState({ depth: 3, phaseStatus: 'ralph_loop' })
+    const parentState = makeNestingState({ depth: 3, phaseStatus: 'ralph_loop', runId: 'parent-123' })
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack(entries)
-      if (key.endsWith('/state')) return parentState
+      // P-012: scope /state to active runId — generic suffix match causes
+      // type confusion when the impl probes other /state keys.
+      if (key.endsWith('/parent-123/state')) return parentState
       if (key.endsWith('/active')) return { runId: 'parent-123', projectId: 'proj-1' }
       return null
     })
@@ -218,7 +226,8 @@ describe('PipelineStore - Pipeline Nesting', () => {
     // reaching the write-order code path under test (wrong failure reason).
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/active')) return { runId: 'run-123', projectId: 'proj-1' }
-      if (key.endsWith('/state')) return makeNestingState({ phaseStatus: 'ralph_loop' })
+      // P-013: scope /state to active runId — see P-012 rationale.
+      if (key.endsWith('/run-123/state')) return makeNestingState({ phaseStatus: 'ralph_loop' })
       return null
     })
     const writeOrder: string[] = []
@@ -336,6 +345,12 @@ describe('PipelineStore - Pipeline Nesting', () => {
 
   // #14
   it('should set childRunId on suspended entry after child pipeline starts', () => {
+    // P-005: in-memory Map bridge so pushSuspended write persists for
+    // getSuspendedStack read. Without it, entries[0].childRunId throws
+    // because the stack is empty.
+    const memStore = new Map<string, unknown>()
+    mockStateStore.write.mockImplementation((k: string, v: unknown) => { memStore.set(k, v); return true })
+    mockStateStore.read.mockImplementation((k: string) => memStore.get(k) ?? null)
     const entry = makeSuspendedPipeline()
     store.pushSuspended('proj-1', entry)
     store.setChildRunId('proj-1', 'run-123', 'child-456')
@@ -543,7 +558,10 @@ describe('PipelineStore - Pipeline Nesting', () => {
     const entry = makeSuspendedPipeline({ childRunId: 'run-active' })
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/active')) return { runId: 'run-active' }
-      return makeSuspendedStack([entry])
+      // P-001: explicit /suspended-stack branch — catch-all return masks
+      // type confusion (returns a SuspendedStack for /state and other keys).
+      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
+      return null
     })
     store.detectOrphanedSuspend('proj-1')
     expect(mockLogger.info).toHaveBeenCalledWith(
@@ -555,7 +573,9 @@ describe('PipelineStore - Pipeline Nesting', () => {
   // F-017: explicit key matching — see #9 above.
   it('should update parent to preSuspendStatus when stack popped but state still suspended', () => {
     mockStateStore.read.mockImplementation((key: string) => {
-      if (key.endsWith('/state')) return makeNestingState({ phaseStatus: 'suspended', preSuspendStatus: 'ralph_loop' })
+      if (key.endsWith('/active')) return null
+      // P-014: scope /state to project runId — see P-012 rationale.
+      if (key.endsWith('/run-123/state')) return makeNestingState({ phaseStatus: 'suspended', preSuspendStatus: 'ralph_loop' })
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack([])
       return null
     })
@@ -695,6 +715,13 @@ describe('PipelineStore - Pipeline Nesting', () => {
     expect(mockLogger.info).toHaveBeenCalledWith(
       expect.stringContaining('TAKEOVER_DEFERRED'),
     )
+    // P-002: verify reviewerTakeover cleanup was deferred — no write should
+    // clear the existing reviewerTakeover value to null/undefined.
+    const cleanupWrites = mockStateStore.write.mock.calls.filter(
+      ([, s]: [string, Record<string, unknown>]) =>
+        s && 'reviewerTakeover' in s && s.reviewerTakeover == null,
+    )
+    expect(cleanupWrites).toHaveLength(0)
   })
 
   // #35
@@ -740,6 +767,9 @@ describe('PipelineStore - Pipeline Nesting', () => {
     expect(mockLogger.warn).toHaveBeenCalledWith(
       expect.stringContaining('TAKEOVER_RESULT_FILE_RACE'),
     )
+    // P-003: verify cleanup continued after race detection — write should
+    // have been called (cleanup not silently aborted after the race warning).
+    expect(mockStateStore.write).toHaveBeenCalled()
   })
   }) // describe('Reviewer Takeover Cleanup')
 
@@ -778,6 +808,12 @@ describe('PipelineStore - Pipeline Nesting', () => {
   // F-023: PARTIAL — sequential writes tested. Concurrent access test deferred to Green Phase
   // when pushSuspended becomes async. See F-023.
   it('should serialize sequential stack writes with deterministic ordering (concurrent test deferred to async pushSuspended)', () => {
+    // P-006: in-memory Map bridge so pushSuspended writes persist for
+    // getSuspendedStack reads. Without it, entries.toHaveLength(2) fails
+    // because reads return null. (Concurrent access deferral F-023 remains.)
+    const memStore = new Map<string, unknown>()
+    mockStateStore.write.mockImplementation((k: string, v: unknown) => { memStore.set(k, v); return true })
+    mockStateStore.read.mockImplementation((k: string) => memStore.get(k) ?? null)
     const entry = makeSuspendedPipeline()
     store.pushSuspended('proj-1', entry)
     store.pushSuspended('proj-1', makeSuspendedPipeline({ runId: 'run-456' }))
@@ -825,6 +861,12 @@ describe('PipelineStore - Pipeline Nesting', () => {
   // #100
   // F-047: define named type for regression record fixture to avoid inline assertion.
   it('should deep copy parentRegressionHistory isolating child from parent mutations', () => {
+    // P-007: in-memory Map bridge so pushSuspended write persists for
+    // getSuspendedStack read. Without it, entries[0] throws because
+    // the stack is empty, making the deep-copy assertion vacuous.
+    const memStore = new Map<string, unknown>()
+    mockStateStore.write.mockImplementation((k: string, v: unknown) => { memStore.set(k, v); return true })
+    mockStateStore.read.mockImplementation((k: string) => memStore.get(k) ?? null)
     interface RegressionViolationEvent { file: string; line: number; expected: string; actual: string }
     interface RegressionRecord { violation: string; violationEvents: RegressionViolationEvent[]; timestamp: string }
     const history: RegressionRecord[] = [{
@@ -1088,9 +1130,16 @@ describe('PipelineStore - Pipeline Nesting', () => {
   it('should stop iteration at topmost entry with invalid phase, leaving lower entries untouched', () => {
     const entryA = makeSuspendedPipeline({ runId: 'A', depth: 0, suspendedPhase: 5 })
     const entryB = makeSuspendedPipeline({ runId: 'B', depth: 1, suspendedPhase: 9 })
-    mockStateStore.read.mockImplementation((key: string) => {
-      if (key.endsWith('/active')) return null
-      return makeSuspendedStack([entryA, entryB])
+    // P-015: in-memory Map bridge so writes persist — without it, getSuspendedStack
+    // always returns the seeded [entryA, entryB] regardless of impl modifications,
+    // making the entryAResult assertion vacuous.
+    const memStore = new Map<string, unknown>()
+    const seedStack = makeSuspendedStack([entryA, entryB])
+    mockStateStore.write.mockImplementation((k: string, v: unknown) => { memStore.set(k, v); return true })
+    mockStateStore.read.mockImplementation((k: string) => {
+      if (k.endsWith('/active')) return null
+      if (k.endsWith('/suspended-stack')) return memStore.get(k) ?? seedStack
+      return memStore.get(k) ?? null
     })
     expect(() => store.detectOrphanedSuspend('proj-1')).toThrow(new RegExp('INVALID_PHASE.*9'))
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(

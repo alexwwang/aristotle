@@ -42,7 +42,8 @@ describe('CheckpointHandler - pipeline nesting', () => {
     const state = makeState({ currentPhase: 5, phaseStatus: 'ralph_loop' })
     store.readState.mockReturnValue(state)
     store.getActiveRun.mockReturnValue({ runId: 'run-123', projectId: 'proj-1' })
-    store.suspendActive = vi.fn()
+    // P-017: removed redundant `store.suspendActive = vi.fn()` — createMockStore
+    // already provides suspendActive as vi.fn().
     const result = await handler.handle(
       'pipeline_suspend',
       JSON.stringify({ reason: 'test_modification' }),
@@ -60,7 +61,8 @@ describe('CheckpointHandler - pipeline nesting', () => {
     store.getActiveRun.mockReturnValue({ runId: 'run-123', projectId: 'proj-1' })
     const state = makeState({ phaseStatus: 'suspended' })
     store.readState.mockReturnValue(state)
-    store.resumeSuspended = vi.fn()
+    // P-018: removed redundant `store.resumeSuspended = vi.fn()` — createMockStore
+    // already provides resumeSuspended as vi.fn().
     const result = await handler.handle(
       'pipeline_resume',
       JSON.stringify({ child_run_id: 'child-456' }),

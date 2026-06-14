@@ -183,6 +183,10 @@ describe('cross-project integration - pipeline nesting', () => {
       projectId: 'proj-X',
     })
     mockStateStore.read.mockImplementation((key: string) => {
+      // P-011: add /active mock return so suspendActive can detect the active
+      // pipeline before checking depth. Without it, the expected /depth/i
+      // throw may not match if the impl checks active status first.
+      if (key.endsWith('/active')) return { runId: 'child-run', projectId: 'proj-X' }
       if (key.endsWith('/proj-X/state') || key.endsWith('/state')) return childActiveState
       if (key === 'proj-Y/suspended-stack' || key.endsWith('/proj-Y/suspended-stack')) {
         return makeSuspendedStack(parentEntries)
