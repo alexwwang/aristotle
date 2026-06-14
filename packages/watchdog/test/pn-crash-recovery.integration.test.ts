@@ -422,28 +422,19 @@ describe('crash recovery integration - pipeline nesting', () => {
   })
 
   // #147
-  // Unit test (mock-based): verifies detectOrphanedSuspend throws on corruption
-  // + startPipeline stub returns fresh pipeline. True integration via
-  // handler.handle('pipeline_start') deferred to Phase 5.
-  it('[unit] orphaned recovery discards corrupted stack and startPipeline stub returns fresh pipeline', () => {
+  // F-004: removed tautological startPipeline stub + assertions on that stub's
+  // configured return value. The detectOrphanedSuspend coverage is valid; the
+  // startPipeline fresh-run behavior should be tested separately in Green Phase.
+  it('[unit] orphaned recovery detects corrupted stack and logs CRITICAL', () => {
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/active')) return null
       if (key.endsWith('/suspended-stack')) return '{ broken json :::'
       return null
     })
-
     expect(() => store.detectOrphanedSuspend('proj-1')).toThrow(/corrupt|CRITICAL/i)
     expect(mockLogger.error).toHaveBeenCalledWith(
       expect.stringContaining('CRITICAL'),
     )
-
-    store.startPipeline = vi.fn().mockReturnValue({ depth: 0, runId: 'fresh-run-001' })
-    store.createRegressionCounter = vi.fn()
-
-    const startResult = store.startPipeline('proj-1', { description: 'fresh' })
-    expect(startResult.depth).toBe(0)
-    expect(startResult.runId).not.toBe('abandoned-run')
-    expect(store.createRegressionCounter).toHaveBeenCalledWith(startResult.runId)
   })
 
   // #149

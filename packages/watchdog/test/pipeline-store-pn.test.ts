@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { PipelineStore } from '../src/pipeline-store.js'
-import type { SuspendedPipeline, SuspendedStack, PipelineState, ChildFailureContext, PendingPause } from '../src/schema.js'
+import type { SuspendedPipeline, SuspendedStack, PipelineState, ChildFailureContext, PendingPause, ReviewerTakeoverState } from '../src/schema.js'
 import { MAX_DEPTH } from '../src/constants.js'
 import type { StateStore } from '@opencode-ai/core/store/state-store'
+import type { Logger } from '@opencode-ai/core/logger'
 
 import { makeState } from './helpers.js'
 
@@ -66,7 +67,8 @@ const mockLogger = {
 }
 
 function createStore(): PipelineStore {
-  return new PipelineStore(mockStateStore as any, mockLogger as any)
+  // F-012: remove `as any` — mockStateStore already uses `satisfies StateStore`.
+  return new PipelineStore(mockStateStore, mockLogger as Logger)
 }
 
 describe('PipelineStore - Pipeline Nesting', () => {
@@ -145,14 +147,15 @@ describe('PipelineStore - Pipeline Nesting', () => {
 
   // #5
   it('should detect depth metric divergence and use parent.depth+1 (not stack.length+1)', () => {
-    // F-016: spec #5 describes stack.length=8 — match spec scenario count.
+    // F-003: divergent scenario — stack.length=9 (buggy path: 9+1=10 >= MAX_DEPTH → false)
+    // vs parent.depth=3 (correct path: 3+1=4 < MAX_DEPTH → true). A correct impl returns
+    // true; a buggy impl returns false. Only a divergent scenario can distinguish them.
     const entries: SuspendedPipeline[] = []
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < 9; i++) {
       entries.push(makeSuspendedPipeline({ runId: `run-${i}`, depth: i }))
     }
-    entries.push(makeSuspendedPipeline({ runId: 'run-corrupt', depth: 5 }))
-    expect(entries).toHaveLength(8)
-    const parentState = makeNestingState({ depth: 5, phaseStatus: 'ralph_loop' })
+    expect(entries).toHaveLength(9)
+    const parentState = makeNestingState({ depth: 3, phaseStatus: 'ralph_loop' })
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack(entries)
       if (key.endsWith('/state')) return parentState
@@ -163,8 +166,8 @@ describe('PipelineStore - Pipeline Nesting', () => {
     const warnCalls = mockLogger.warn.mock.calls
     const divergenceCall = warnCalls.find(c => typeof c[0] === 'string' && c[0].includes('DEPTH_METRIC_DIVERGENCE'))
     expect(divergenceCall).toBeDefined()
-    expect(divergenceCall![0]).toContain('stack.length=8')
-    expect(divergenceCall![0]).toContain('parent.depth=5')
+    expect(divergenceCall![0]).toContain('stack.length=9')
+    expect(divergenceCall![0]).toContain('parent.depth=3')
     expect(result).toBe(true)
   })
 
@@ -178,7 +181,7 @@ describe('PipelineStore - Pipeline Nesting', () => {
     store.suspendActive('proj-1', 'test_modification')
     expect(writeOrder.length).toBeGreaterThanOrEqual(2)
     const stackWriteIdx = writeOrder.findIndex(k => k.includes('suspended-stack') || k.includes('/stack'))
-    const stateWriteIdx = writeOrder.findIndex(k => k.includes('state:') || k.includes('/state/'))
+    const stateWriteIdx = writeOrder.findIndex(k => k.endsWith('/state'))
     expect(stackWriteIdx).toBeGreaterThanOrEqual(0)
     expect(stateWriteIdx).toBeGreaterThanOrEqual(0)
     expect(stackWriteIdx).toBeLessThan(stateWriteIdx)
@@ -568,10 +571,12 @@ describe('PipelineStore - Pipeline Nesting', () => {
   it('should clear stale reviewer takeover state on suspend', () => {
     const state = {
       ...makeNestingState({ currentPhase: 5 }),
+      // F-011: typed as ReviewerTakeoverState — no `as any`.
       reviewerTakeover: {
+        round: 1, interceptAt: 'phase-5',
         t1SessionId: 'ses-t1', t2SessionId: 'ses-t2', resultFile: '/tmp/result.json',
         cleanupToken: 'tok-1', spawnPhase: 't2_running',
-      } as any,
+      } satisfies ReviewerTakeoverState,
     }
     mockStateStore.read.mockReturnValue(state)
     store.suspendActive('proj-1', 'test_modification')
@@ -592,7 +597,11 @@ describe('PipelineStore - Pipeline Nesting', () => {
     const entry = makeSuspendedPipeline({ runId: 'A', depth: 0, childRunId: 'child-456' })
     const mockState = {
       ...makeNestingState({ phaseStatus: 'suspended' }),
-      reviewerTakeover: { t2SessionId: 'ses-t2-001', resultFile: '/tmp/result.json', cleanupToken: 'tok-1' } as any,
+      // F-011: typed as ReviewerTakeoverState — no `as any`.
+      reviewerTakeover: {
+        round: 1, interceptAt: 'phase-5',
+        t2SessionId: 'ses-t2-001', resultFile: '/tmp/result.json', cleanupToken: 'tok-1',
+      } satisfies ReviewerTakeoverState,
     }
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/state')) return mockState
@@ -713,7 +722,10 @@ describe('PipelineStore - Pipeline Nesting', () => {
     })
     const stack = store.getSuspendedStack('proj-1')
     expect(stack.entries).toHaveLength(2)
-    expect(stack.entries[0].depth).toBeLessThan(stack.entries[1].depth)
+    // F-006: verify insertion-order preservation (LIFO semantics) — entries
+    // are returned in stored order (depth 7 first, depth 3 second), NOT sorted.
+    expect(stack.entries[0].depth).toBe(7)
+    expect(stack.entries[1].depth).toBe(3)
   })
 
   // #96
@@ -907,7 +919,7 @@ describe('PipelineStore - Pipeline Nesting', () => {
         reason: 'PATTERN_CYCLE',
         violation_type: 'REGRESSION',
         files: ['src/a.ts'],
-      } as any,
+      } satisfies PendingPause,
     }
     const entry = makeSuspendedPipeline({
       runId: 'parent-123', depth: 0, childRunId: 'child-456',
@@ -939,8 +951,17 @@ describe('PipelineStore - Pipeline Nesting', () => {
       if (key.endsWith('/active')) return null
       return makeSuspendedStack([entry])
     })
-    expect(() => store.detectOrphanedSuspend('proj-1')).toThrow(/INVALID_PHASE/)
-    expect(() => store.detectOrphanedSuspend('proj-1')).toThrow(RegExp(String(invalidPhase)))
+    // F-010: call detectOrphanedSuspend exactly once — multiple invocations
+    // cause side effects (appendLog) to fire twice, making log assertions ambiguous.
+    let thrownError: Error | undefined
+    try {
+      store.detectOrphanedSuspend('proj-1')
+    } catch (e) {
+      thrownError = e as Error
+    }
+    expect(thrownError).toBeDefined()
+    expect(thrownError!.message).toMatch(/INVALID_PHASE/)
+    expect(thrownError!.message).toContain(String(invalidPhase))
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
       // 'INVALID_PHASE_RECOVERY' is not a CheckpointEvent — carry via metadata.code.

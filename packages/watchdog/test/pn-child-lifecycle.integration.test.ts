@@ -183,7 +183,7 @@ describe('child lifecycle integration - pipeline nesting', () => {
     )
   })
 
-  // #90
+  // (Supplemental — stack entry linkage; NOT #90. See new #90 display test below.)
   it('should preserve nested parent-child linkage in stack entries', () => {
     const entries = [
       makeSuspendedPipeline({ runId: 'A', depth: 0 }),
@@ -199,6 +199,28 @@ describe('child lifecycle integration - pipeline nesting', () => {
     expect(stack.entries[0].runId).toBe('A')
     expect(stack.entries[1].parentRunId).toBe('A')
     expect(stack.entries[2].parentRunId).toBe('B')
+  })
+
+  // #90
+  // F-005: spec #90 requires display rendering with phase+status per level,
+  // not just stack linkage. The test above was mislabeled #90.
+  it('should display nested pipeline tree in status output with phase and status per level', () => {
+    const entries = [
+      makeSuspendedPipeline({ runId: 'A', depth: 0, suspendedPhase: 3 }),
+      makeSuspendedPipeline({ runId: 'B', depth: 1, parentRunId: 'A', childRunId: 'child-B', suspendedPhase: 5 }),
+      makeSuspendedPipeline({ runId: 'C', depth: 2, parentRunId: 'B', childRunId: 'child-C', suspendedPhase: 7 }),
+    ]
+    mockStateStore.read.mockImplementation((key: string) => {
+      if (key.endsWith('/suspended-stack')) return makeSuspendedStack(entries)
+      return null
+    })
+    const output = store.formatNestedStatus('proj-1')
+    expect(output).toContain('A')
+    expect(output).toContain('B')
+    expect(output).toContain('C')
+    expect(output).toMatch(/phase.*3/i)
+    expect(output).toMatch(/phase.*5/i)
+    expect(output).toMatch(/phase.*7/i)
   })
 
   // #112
@@ -236,7 +258,10 @@ describe('child lifecycle integration - pipeline nesting', () => {
 
   // #122
   // F-014: add setSystemTime for deterministic behavior; afterEach handles cleanup.
-  it('should retry session info once on exception then proceed on second failure', () => {
+  // F-013: handle both sync and async SUT architectures — Green Phase may
+  // implement resumeSuspended as async (awaiting internal retry), which would
+  // deadlock with frozen fake timers. This test works for both shapes.
+  it('should retry session info once on exception then proceed on second failure', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-06-14T12:00:00Z'))
     const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
@@ -252,11 +277,18 @@ describe('child lifecycle integration - pipeline nesting', () => {
       if (callCount === 1) throw new Error('transient')
       return { status: 'inactive' }
     })
-    store.resumeSuspended('proj-1', 'child-456')
+    const result = store.resumeSuspended('proj-1', 'child-456')
+    if (result instanceof Promise) {
+      await vi.advanceTimersByTimeAsync(999)
+    } else {
+      vi.advanceTimersByTime(999)
+    }
     expect(store.getSessionInfo).toHaveBeenCalledTimes(1)
-    vi.advanceTimersByTime(999)
-    expect(store.getSessionInfo).toHaveBeenCalledTimes(1)
-    vi.advanceTimersByTime(1)
+    if (result instanceof Promise) {
+      await vi.advanceTimersByTimeAsync(1)
+    } else {
+      vi.advanceTimersByTime(1)
+    }
     expect(store.getSessionInfo).toHaveBeenCalledTimes(2)
   })
 
@@ -273,6 +305,9 @@ describe('child lifecycle integration - pipeline nesting', () => {
       return null
     })
     store.getSessionInfo = vi.fn().mockImplementation(() => { throw new Error('persistent') })
+    // F-001: invoke the SUT so getSessionInfo mock and warn fire — without this
+    // call the mock is dead code and the test fails for the wrong reason.
+    store.resumeSuspended('proj-1', 'child-456')
     vi.advanceTimersByTime(2000)
     expect(mockLogger.warn).toHaveBeenCalledWith(
       expect.stringMatching(/child.*fail|session.*unknown|treat.*child/i),
@@ -430,7 +465,7 @@ describe('child lifecycle integration - pipeline nesting', () => {
       return null
     })
     mockStateStore.readLogSafe.mockReturnValue([
-      { event: 'DEFERRED_PAUSE', trigger_type: 'LOW', reason: 'DEFERRED', timestamp: '2026-01-01T00:00:00Z' },
+      { event: 'DEFERRED_PAUSE', trigger_type: 'compliance', reason: 'DEFERRED', timestamp: '2026-01-01T00:00:00Z' },
     ])
     store.resumeSuspended('proj-1', 'child-456')
     expect(mockStateStore.write).toHaveBeenCalledWith(

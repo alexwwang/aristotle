@@ -56,11 +56,8 @@ describe('transitions - pipeline nesting', () => {
     expect(result.valid).toBe(true)
   })
 
-  // Transition matrix: suspended→paused is rejected (must resume to preSuspendStatus).
-  it('validateNestingTransition: suspended→paused is rejected', () => {
-    const result = validateNestingTransition('suspended', 'paused')
-    expect(result.valid).toBe(false)
-  })
+  // F-007: removed duplicate 'suspended→paused is rejected' test — it was
+  // identical to #52 above (same input, same assertion, no spec ID annotation).
 
   // #98
   it('should reject transition from paused to paused', () => {

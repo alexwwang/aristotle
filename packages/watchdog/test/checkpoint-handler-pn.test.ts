@@ -149,10 +149,10 @@ describe('CheckpointHandler - pipeline nesting', () => {
       )
     }
     const allCalls = store.suspendActive.mock.calls
-    // F-005: toBeLessThanOrEqual(50) after 50 iterations is trivially true.
-    // Use toBeLessThan to verify at least one event was rate-limited.
-    expect(allCalls.length).toBeLessThan(RAPID_REQUEST_COUNT)
-    // Verify rate-limiting was logged (not silently dropped)
+    // F-008: strengthen assertion — verify a meaningful subset was rate-limited
+    // (not just 1 of 50), legitimate events still processed, and rate-limit logged.
+    expect(allCalls.length).toBeLessThanOrEqual(RAPID_REQUEST_COUNT * 0.5)
+    expect(allCalls.length).toBeGreaterThan(0)
     expect(loggerMock.warn).toHaveBeenCalledWith(
       expect.stringContaining('rate'),
     )
