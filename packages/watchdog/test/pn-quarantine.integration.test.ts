@@ -162,5 +162,10 @@ describe('quarantine integration - pipeline nesting', () => {
     // may match objects where the key is absent entirely.
     expect('quarantineSuccess' in writtenState).toBe(true)
     expect(writtenState.quarantineSuccess).toBeUndefined()
+    // F-012: spec #148 requires WARNING log + suspend success despite hook crash.
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('quarantine'),
+    )
+    expect(writtenState.phaseStatus).toBe('suspended')
   })
 })

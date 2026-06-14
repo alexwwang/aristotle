@@ -54,7 +54,10 @@ const mockStateStore: StateStore = {
   list: vi.fn().mockReturnValue([]),
 }
 
+// F-006: add debug method — Logger interface requires all four levels.
+// Without it, any PipelineStore call to this.logger.debug throws TypeError.
 const mockLogger = {
+  debug: vi.fn(),
   info: vi.fn(),
   warn: vi.fn(),
   error: vi.fn(),
@@ -335,7 +338,8 @@ describe('PipelineStore - Pipeline Nesting', () => {
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
       // 'RESUME_GUARD_FAILURE' is not a CheckpointEvent — carry via metadata.code.
-      expect.objectContaining({ event: 'pipeline_resume', metadata: { code: 'RESUME_GUARD_FAILURE' } }),
+      // F-010: wrap metadata in expect.objectContaining so future fields don't break tests.
+      expect.objectContaining({ event: 'pipeline_resume', metadata: expect.objectContaining({ code: 'RESUME_GUARD_FAILURE' }) }),
     )
   })
 
@@ -417,6 +421,11 @@ describe('PipelineStore - Pipeline Nesting', () => {
     expect(mockStateStore.list).toHaveBeenCalledWith(expect.stringContaining('quarantine'))
     expect(mockLogger.info).toHaveBeenCalledWith(
       expect.stringContaining('orphaned'),
+    )
+    // F-019: spec #26 requires BOTH quarantine dir check AND git status check.
+    // Verify incomplete-state detection ran (logged git.status or incomplete.state).
+    expect(mockLogger.info).toHaveBeenCalledWith(
+      expect.stringMatching(/git.status|incomplete.state/i),
     )
   })
 
@@ -505,7 +514,7 @@ describe('PipelineStore - Pipeline Nesting', () => {
     )
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ metadata: { code: 'QUARANTINE_HOOK_FAILED_SUSPEND', phase: expect.any(Number) } }),
+      expect.objectContaining({ metadata: expect.objectContaining({ code: 'QUARANTINE_HOOK_FAILED_SUSPEND', phase: expect.any(Number) }) }),
     )
   })
 
@@ -524,7 +533,7 @@ describe('PipelineStore - Pipeline Nesting', () => {
     )
     expect(mockStateStore.appendLog).not.toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ metadata: { code: 'QUARANTINE_HOOK_FAILED_SUSPEND' } }),
+      expect.objectContaining({ metadata: expect.objectContaining({ code: 'QUARANTINE_HOOK_FAILED_SUSPEND' }) }),
     )
   })
   }) // describe('Orphaned Detection')
@@ -564,13 +573,14 @@ describe('PipelineStore - Pipeline Nesting', () => {
       if (key.endsWith('/state')) return mockState
       return makeSuspendedStack([entry])
     })
-    const getSessionInfoSpy = vi.spyOn(store, 'getSessionInfo').mockReturnValue({ status: 'active' })
+    // F-003: direct vi.fn() assignment (not vi.spyOn) — getSessionInfo has no
+    // source stub in Red Phase; spyOn on a non-existent method throws at setup.
+    store.getSessionInfo = vi.fn().mockReturnValue({ status: 'active' })
     store.resumeSuspended('proj-1', 'child-456')
-    expect(getSessionInfoSpy).toHaveBeenCalledWith('ses-t2-001')
+    expect(store.getSessionInfo).toHaveBeenCalledWith('ses-t2-001')
     expect(mockLogger.info).toHaveBeenCalledWith(
       expect.stringContaining('TAKEOVER_DEFERRED'),
     )
-    getSessionInfoSpy.mockRestore()
   })
 
   // #35
@@ -611,7 +621,8 @@ describe('PipelineStore - Pipeline Nesting', () => {
       }
       return makeSuspendedStack([entry])
     })
-    store.resumeSuspended('proj-1', 'child-456')
+    // F-029: explicit no-throw guarantee — cleanup continues despite race condition.
+    expect(() => store.resumeSuspended('proj-1', 'child-456')).not.toThrow()
     expect(mockLogger.warn).toHaveBeenCalledWith(
       expect.stringContaining('TAKEOVER_RESULT_FILE_RACE'),
     )
@@ -806,7 +817,7 @@ describe('PipelineStore - Pipeline Nesting', () => {
     // F-034: verify force-resume audit entry
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ event: 'pipeline_resume', metadata: { code: 'FORCE_RESUME' } }),
+      expect.objectContaining({ event: 'pipeline_resume', metadata: expect.objectContaining({ code: 'FORCE_RESUME' }) }),
     )
   })
 
@@ -878,11 +889,17 @@ describe('PipelineStore - Pipeline Nesting', () => {
       if (key.endsWith('/active')) return null
       return makeSuspendedStack([entry])
     })
-    expect(() => store.detectOrphanedSuspend('proj-1')).toThrow(new RegExp('INVALID_PHASE.*' + invalidPhase))
+    // F-017: decouple ordering — check INVALID_PHASE and phase number independently.
+    expect(() => store.detectOrphanedSuspend('proj-1')).toThrow(/INVALID_PHASE/)
+    try {
+      store.detectOrphanedSuspend('proj-1')
+    } catch (e) {
+      expect((e as Error).message).toContain(String(invalidPhase))
+    }
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
       // 'INVALID_PHASE_RECOVERY' is not a CheckpointEvent — carry via metadata.code.
-      expect.objectContaining({ event: 'pipeline_resume', metadata: { code: 'INVALID_PHASE_RECOVERY', phase: invalidPhase } }),
+      expect.objectContaining({ event: 'pipeline_resume', metadata: expect.objectContaining({ code: 'INVALID_PHASE_RECOVERY', phase: invalidPhase }) }),
     )
   })
 
@@ -897,7 +914,7 @@ describe('PipelineStore - Pipeline Nesting', () => {
     expect(() => store.detectOrphanedSuspend('proj-1')).toThrow(new RegExp('INVALID_PHASE.*9'))
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ event: 'pipeline_resume', metadata: { code: 'INVALID_PHASE_RECOVERY', phase: 9 } }),
+      expect.objectContaining({ event: 'pipeline_resume', metadata: expect.objectContaining({ code: 'INVALID_PHASE_RECOVERY', phase: 9 }) }),
     )
     const stackWrites = mockStateStore.write.mock.calls.filter(
       ([key]: [string]) => key.endsWith('/suspended-stack'),

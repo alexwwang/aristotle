@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { PipelineStore } from '../src/pipeline-store.js'
 import type { StateStore } from '@opencode-ai/core/store/state-store'
 import type { Logger } from '@opencode-ai/core/logger'
@@ -70,6 +70,11 @@ describe('child lifecycle integration - pipeline nesting', () => {
     mockStateStore.readLog.mockReturnValue([])
     mockStateStore.list.mockReturnValue([])
     store = createStore()
+  })
+
+  // F-014: ensure fake timers never leak across tests.
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   // #76
@@ -197,9 +202,12 @@ describe('child lifecycle integration - pipeline nesting', () => {
 
   // #112
   // F-054: use spec-defined trigger types instead of generic HIGH/LOW.
+  // F-033: add suspendedAt for temporal reference + negative assertion (compliance not applied).
   it('should query DEFERRED_PAUSE audit entries on resume and apply highest-priority deferred trigger', () => {
     const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
-    const parentState = makeNestingState({ runId: 'parent-123', phaseStatus: 'suspended' })
+    const parentState = {
+      ...makeNestingState({ runId: 'parent-123', phaseStatus: 'suspended', suspendedAt: '2025-12-31T23:59:00Z' }),
+    }
     const deferredEntries = [
       { event: 'DEFERRED_PAUSE', trigger_type: 'compliance', reason: 'compliance', timestamp: '2026-01-01T00:00:00Z' },
       { event: 'DEFERRED_PAUSE', trigger_type: 'UNFIXED_ISSUES', reason: 'unfixed', timestamp: '2026-01-01T00:01:00Z' },
@@ -216,11 +224,20 @@ describe('child lifecycle integration - pipeline nesting', () => {
       expect.any(String),
       expect.objectContaining({ pending_pause: expect.objectContaining({ reason: 'unfixed' }) }),
     )
+    // F-033: verify compliance entry was NOT applied (lower priority than UNFIXED_ISSUES)
+    expect(mockStateStore.write).not.toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        pending_pause: expect.objectContaining({ reason: 'compliance' }),
+      }),
+    )
   })
 
   // #122
+  // F-014: add setSystemTime for deterministic behavior; afterEach handles cleanup.
   it('should retry session info once on exception then proceed on second failure', () => {
     vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-06-14T12:00:00Z'))
     const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/child-456/state')) return null
@@ -240,7 +257,6 @@ describe('child lifecycle integration - pipeline nesting', () => {
     expect(store.getSessionInfo).toHaveBeenCalledTimes(1)
     vi.advanceTimersByTime(1)
     expect(store.getSessionInfo).toHaveBeenCalledTimes(2)
-    vi.useRealTimers()
   })
 
   // #126
@@ -304,6 +320,9 @@ describe('child lifecycle integration - pipeline nesting', () => {
   })
 
   // #142
+  // F-002: assign handleConcurrentPauseTrigger as vi.fn() — no source stub exists.
+  // F-011: spec #142 requires verifying child_pause_timer_started_at, parent
+  // pending_pause absence, and parent status remains suspended.
   it('should pause active child directly instead of setting pending_pause when concurrent pause trigger fires during suspension', () => {
     const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
     const parentState = makeNestingState({ runId: 'parent-123', phaseStatus: 'suspended' })
@@ -315,14 +334,37 @@ describe('child lifecycle integration - pipeline nesting', () => {
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
       return null
     })
+    store.handleConcurrentPauseTrigger = vi.fn()
     store.handleConcurrentPauseTrigger('proj-1', 'concurrent_trigger')
     expect(mockStateStore.write).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ runId: 'child-456', phaseStatus: 'paused' }),
     )
+    // F-011: child has pause timer started
+    expect(mockStateStore.write).toHaveBeenCalledWith(
+      expect.stringContaining('child-456'),
+      expect.objectContaining({
+        phaseStatus: 'paused',
+        child_pause_timer_started_at: expect.any(String),
+      }),
+    )
+    // F-011: parent pending_pause is NOT set
+    const parentWrites = mockStateStore.write.mock.calls.filter(
+      ([key]) => key.includes('parent-123')
+    )
+    parentWrites.forEach(([, value]) => {
+      expect((value as any).pending_pause).toBeUndefined()
+    })
+    // F-011: parent status remains suspended
+    expect(mockStateStore.write).toHaveBeenCalledWith(
+      expect.stringContaining('parent-123'),
+      expect.objectContaining({ phaseStatus: 'suspended' }),
+    )
   })
 
   // #151
+  // F-002: assign handleConcurrentPauseTrigger as vi.fn() — no source stub exists.
+  // F-015: strengthen assertion — spec requires PATTERN_CYCLE reason, violation_type, files.
   it('should set pending_pause when pause trigger fires during suspension with no child', () => {
     const parentState = makeNestingState({ runId: 'parent-123', phaseStatus: 'suspended' })
     mockStateStore.read.mockImplementation((key: string) => {
@@ -331,10 +373,22 @@ describe('child lifecycle integration - pipeline nesting', () => {
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack([])
       return null
     })
+    store.handleConcurrentPauseTrigger = vi.fn()
     store.handleConcurrentPauseTrigger('proj-1', 'pause_trigger')
     expect(mockStateStore.write).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ pending_pause: expect.objectContaining({ reason: expect.any(String) }) }),
+      expect.objectContaining({
+        pending_pause: expect.objectContaining({
+          reason: 'PATTERN_CYCLE',
+          violation_type: expect.any(String),
+          files: expect.any(Array),
+        }),
+      }),
+    )
+    // F-015: no child was spawned
+    expect(mockStateStore.write).not.toHaveBeenCalledWith(
+      expect.stringContaining('child-'),
+      expect.anything(),
     )
   })
 
@@ -362,6 +416,7 @@ describe('child lifecycle integration - pipeline nesting', () => {
   })
 
   // #154
+  // F-002: assign handlePhaseFail as vi.fn() — no source stub exists.
   it('should clean up suspended stack when pipeline transitions to failed or cancelled', () => {
     const entries = [
       makeSuspendedPipeline({ runId: 'A', depth: 0 }),
@@ -373,6 +428,7 @@ describe('child lifecycle integration - pipeline nesting', () => {
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack(entries)
       return null
     })
+    store.handlePhaseFail = vi.fn()
     store.handlePhaseFail('proj-1', 'child-456')
     expect(mockStateStore.write).toHaveBeenCalledWith(
       expect.stringMatching(/suspended-stack/),
@@ -381,6 +437,7 @@ describe('child lifecycle integration - pipeline nesting', () => {
   })
 
   // #156
+  // F-002: assign handlePhaseFail as vi.fn() — no source stub exists.
   it('should cancel active child pipeline when suspended parent transitions to failed', () => {
     const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
     const parentState = makeNestingState({ runId: 'parent-123', phaseStatus: 'suspended' })
@@ -392,6 +449,7 @@ describe('child lifecycle integration - pipeline nesting', () => {
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
       return null
     })
+    store.handlePhaseFail = vi.fn()
     store.handlePhaseFail('proj-1', 'child-456')
     expect(mockStateStore.write).toHaveBeenCalledWith(
       expect.any(String),
@@ -400,6 +458,9 @@ describe('child lifecycle integration - pipeline nesting', () => {
   })
 
   // #159
+  // F-002: assign handleConcurrentPauseTrigger as vi.fn() — no source stub exists.
+  // F-032: spec #159 requires verifying intermediate pipelines' pending_pause
+  // undefined and status suspended (not just grandchild paused).
   it('should recurse through suspended chain to pause active grandchild', () => {
     const entries = [
       makeSuspendedPipeline({ runId: 'grandparent', depth: 0 }),
@@ -413,10 +474,29 @@ describe('child lifecycle integration - pipeline nesting', () => {
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack(entries)
       return null
     })
+    store.handleConcurrentPauseTrigger = vi.fn()
     store.handleConcurrentPauseTrigger('proj-1', 'recursive_trigger')
     expect(mockStateStore.write).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ runId: 'grandchild', phaseStatus: 'paused' }),
     )
+    // F-032: grandchild has pause timer
+    expect(mockStateStore.write).toHaveBeenCalledWith(
+      expect.stringContaining('grandchild'),
+      expect.objectContaining({
+        phaseStatus: 'paused',
+        child_pause_timer_started_at: expect.any(String),
+      }),
+    )
+    // F-032: parent and child pending_pause remains undefined, status suspended
+    for (const runId of ['parent', 'child']) {
+      const writes = mockStateStore.write.mock.calls.filter(
+        ([key]) => key.includes(runId)
+      )
+      writes.forEach(([, value]) => {
+        expect((value as any).pending_pause).toBeUndefined()
+        expect((value as any).phaseStatus).toBe('suspended')
+      })
+    }
   })
 })

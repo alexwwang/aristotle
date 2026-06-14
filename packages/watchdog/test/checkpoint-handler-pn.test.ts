@@ -61,8 +61,8 @@ describe('CheckpointHandler - pipeline nesting', () => {
     )
     const parsed = JSON.parse(result)
     expect(parsed.ok).toBe(true)
-    // F-040: verify correct arguments, not just that it was called
-    expect(store.resumeSuspended).toHaveBeenCalledWith(expect.any(String), expect.any(String))
+    // F-020: use concrete expected values from the event payload, not expect.any(String).
+    expect(store.resumeSuspended).toHaveBeenCalledWith('proj-1', 'child-456')
   })
 
   // #57
@@ -126,11 +126,11 @@ describe('CheckpointHandler - pipeline nesting', () => {
 
   // #93
   it('should rate-limit checkpoint event processing', async () => {
-    const { handler, store } = createHandler()
+    const { handler, store, loggerMock } = createHandler()
     const state = makeState({ currentPhase: 5, phaseStatus: 'ralph_loop' })
     store.readState.mockReturnValue(state)
     store.getActiveRun.mockReturnValue({ runId: 'run-123', projectId: 'proj-1' })
-    store.suspendActive = vi.fn()
+    // F-030: createMockStore() already provides suspendActive: vi.fn() — no reassign needed.
 
     const RAPID_REQUEST_COUNT = 50
     for (let i = 0; i < RAPID_REQUEST_COUNT; i++) {
@@ -141,7 +141,13 @@ describe('CheckpointHandler - pipeline nesting', () => {
       )
     }
     const allCalls = store.suspendActive.mock.calls
-    expect(allCalls.length).toBeLessThanOrEqual(RAPID_REQUEST_COUNT)
+    // F-005: toBeLessThanOrEqual(50) after 50 iterations is trivially true.
+    // Use toBeLessThan to verify at least one event was rate-limited.
+    expect(allCalls.length).toBeLessThan(RAPID_REQUEST_COUNT)
+    // Verify rate-limiting was logged (not silently dropped)
+    expect(loggerMock.warn).toHaveBeenCalledWith(
+      expect.stringContaining('rate'),
+    )
   })
 
   // #99
@@ -258,7 +264,8 @@ describe('CheckpointHandler - pipeline nesting', () => {
       expect.objectContaining({ depth: 0 }),
     )
     const writtenState = store.writeState.mock.calls[0][1]
-    expect(writtenState.runId).not.toBe('run-old')
+    // F-013: setup uses runId='run-123'; old assertion checked not.toBe('run-old') (never set).
+    expect(writtenState.runId).not.toBe('run-123')
   })
 
   // #141

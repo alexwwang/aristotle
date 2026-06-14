@@ -73,6 +73,9 @@ describe('pipeline nesting - e2e', () => {
   })
 
   // #82
+  // F-023: mutable `resumed` flag switches all reads at once. Acceptable in
+  // Red Phase (methods throw on first read). Green Phase should use
+  // mockImplementationOnce for sequential read control.
   it('should complete full nested pipeline flow suspend child resume', () => {
     const parentActive = makeNestingState({ runId: 'parent-123', phaseStatus: 'ralph_loop', depth: 0, currentPhase: 5 })
     const parentSuspended = makeNestingState({ runId: 'parent-123', phaseStatus: 'suspended', preSuspendStatus: 'ralph_loop', depth: 0, currentPhase: 5 })
@@ -134,6 +137,13 @@ describe('pipeline nesting - e2e', () => {
         quarantinedFiles: expect.any(Array),
       }),
     )
+    // F-024: spec #83 requires child's partial work committed/recorded in parent state.
+    expect(mockStateStore.write).toHaveBeenCalledWith(
+      expect.stringContaining('parent-123'),
+      expect.objectContaining({
+        lastCompletedChildPhase: expect.any(Number),
+      }),
+    )
   })
 
   // #84
@@ -167,9 +177,10 @@ describe('pipeline nesting - e2e', () => {
     // F-049: verify recovered state has correct depth, phaseStatus, and audit entries
     expect(result?.depth).toBe(0)
     expect(result?.phaseStatus).not.toBe('suspended')
+    // F-025: tighten event name — 'recover' matches any substring; use 'ORPHANED'.
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ event: expect.stringContaining('recover') }),
+      expect.objectContaining({ event: expect.stringContaining('ORPHANED') }),
     )
   })
 

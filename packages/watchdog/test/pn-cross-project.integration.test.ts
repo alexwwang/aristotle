@@ -82,6 +82,7 @@ describe('cross-project integration - pipeline nesting', () => {
   })
 
   // #64
+  // F-028: differentiate from #65 — mock returns null (no readable parent state).
   it('should reject resume if cross project resolution fails', () => {
     const entry = makeSuspendedPipeline({
       runId: 'parent-123', depth: 0, childRunId: 'child-456',
@@ -89,25 +90,27 @@ describe('cross-project integration - pipeline nesting', () => {
     })
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
+      // parent state in proj-unreachable is null — resolution failure
       return null
     })
     expect(() => store.resumeSuspended('proj-unreachable', 'child-456')).toThrow(/cross.project|resolution/i)
   })
 
   // #65
+  // F-028: differentiate from #64 — mock throws ETIMEDOUT (slow I/O timeout).
   it('should reject resume when cross project resolution times out', () => {
     const entry = makeSuspendedPipeline({
       runId: 'parent-123', depth: 0, childRunId: 'child-456',
       parentPipelineProjectId: 'proj-slow',
     })
-    mockStateStore.read.mockImplementation((key: string) => {
-      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
-      return null
+    mockStateStore.read.mockImplementation(() => {
+      throw new Error('ETIMEDOUT: connection timed out')
     })
     expect(() => store.resumeSuspended('proj-slow', 'child-456')).toThrow(/timeout/i)
   })
 
   // #66
+  // F-016: strengthen assertion — verify parentPipelineProjectId field, not just any Object.
   it('should use parent projectId for cross project child pipelines', () => {
     const entry = makeSuspendedPipeline({
       runId: 'parent-123', depth: 0, childRunId: 'child-456',
@@ -120,7 +123,7 @@ describe('cross-project integration - pipeline nesting', () => {
     store.resumeSuspended('proj-parent', 'child-456')
     expect(mockStateStore.write).toHaveBeenCalledWith(
       expect.stringContaining('proj-parent'),
-      expect.any(Object),
+      expect.objectContaining({ parentPipelineProjectId: 'proj-parent' }),
     )
   })
 

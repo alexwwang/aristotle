@@ -112,11 +112,10 @@ describe('transitions - pipeline nesting', () => {
   })
 
   // #137
-  it('should allow transition to suspended from active and awaiting_approval', () => {
-    const resultActive = validateNestingTransition('active', 'suspended')
-    expect(resultActive.valid).toBe(true)
-    const resultAwaiting = validateNestingTransition('awaiting_approval', 'suspended')
-    expect(resultAwaiting.valid).toBe(true)
+  // F-021: split into parameterized test — first assertion failure was masking second.
+  it.each(['active', 'awaiting_approval'])('should allow %s → suspended transition', (from) => {
+    const result = validateNestingTransition(from, 'suspended')
+    expect(result.valid).toBe(true)
   })
 
   // #138

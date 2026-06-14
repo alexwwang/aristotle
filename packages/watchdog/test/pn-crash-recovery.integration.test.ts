@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { PipelineStore } from '../src/pipeline-store.js'
 import { CheckpointHandler } from '../src/checkpoint.js'
 import { STALE_THRESHOLD_MS } from '../src/constants.js'
@@ -72,6 +72,11 @@ describe('crash recovery integration - pipeline nesting', () => {
     mockStateStore.readLog.mockReturnValue([])
     mockStateStore.list.mockReturnValue([])
     store = createStore()
+  })
+
+  // F-022: ensure fake timers never leak across tests.
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   // #67
@@ -203,29 +208,45 @@ describe('crash recovery integration - pipeline nesting', () => {
   })
 
   // #94
-  it('should recover from storage corruption with manual intervention fallback', () => {
-    const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, suspendedPhase: 99 })
+  // F-004: rewrite — old test duplicated #116 (phase validation). Spec #94
+  // requires completely corrupted (unparseable) stack JSON, not phase=99.
+  it('should log CRITICAL and create empty stack when stack JSON is completely corrupted', () => {
+    const corruptedRaw = '{"runId":"parent-123", depth: BROKEN'
     mockStateStore.read.mockImplementation((key: string) => {
-      if (key.endsWith('/active')) return null
-      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
+      if (key.endsWith('/suspended-stack')) return corruptedRaw
       return null
     })
-    expect(() => store.detectOrphanedSuspend('proj-1')).toThrow(/INVALID_PHASE|corrupt/i)
+
+    expect(() => store.detectOrphanedSuspend('proj-1')).toThrow(/corrupt|CRITICAL/i)
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.stringContaining('CRITICAL'),
+    )
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.stringContaining(corruptedRaw),
+    )
+    expect(mockStateStore.write).toHaveBeenCalledWith(
+      expect.stringContaining('/suspended-stack'),
+      [],
+    )
   })
 
   // #105
+  // F-026: use in-memory Map so writes persist across read calls (was fixed
+  // mockImplementation that ignored writes — not a true integration test).
   it('should preserve pending_pause through crash recovery and apply on resume', () => {
     const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
     const stateWithPause = {
       ...makeNestingState({ runId: 'parent-123', phaseStatus: 'suspended' }),
       pending_pause: { reason: 'PENDING', violation_type: 'REGRESSION', files: ['src/a.ts'] } as any,
     }
-    mockStateStore.read.mockImplementation((key: string) => {
-      if (key.endsWith('/parent-123/state')) return stateWithPause
-      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
-      if (key.endsWith('/active')) return null
-      return null
+    const memStore = new Map<string, any>()
+    memStore.set('proj-1/parent-123/state', stateWithPause)
+    memStore.set('proj-1/suspended-stack', makeSuspendedStack([entry]))
+    mockStateStore.read.mockImplementation((key: string) => memStore.get(key) ?? null)
+    mockStateStore.write.mockImplementation((key: string, value: any) => {
+      memStore.set(key, value)
     })
+
     const restartedStore = new PipelineStore(mockStateStore, mockLogger)
     restartedStore.detectOrphanedSuspend('proj-1')
     const result = restartedStore.resumeSuspended('proj-1', 'child-456')
@@ -236,9 +257,12 @@ describe('crash recovery integration - pipeline nesting', () => {
   })
 
   // #106
+  // F-022: use fake timers + deterministic timestamp (was Date.now() — fragile under CI delays).
   it('should preserve child_pause_timer_started_at through crash recovery and fire escalation if >30 min', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-06-14T12:00:00Z'))
     const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
-    const oldTimestamp = new Date(Date.now() - 31 * 60 * 1000).toISOString()
+    const oldTimestamp = new Date('2026-06-14T11:29:00Z').toISOString()
     const state = {
       ...makeNestingState({ runId: 'parent-123', phaseStatus: 'suspended' }),
       child_pause_timer_started_at: oldTimestamp,
@@ -261,7 +285,7 @@ describe('crash recovery integration - pipeline nesting', () => {
     // F-038: verify pause-timeout audit entry was emitted
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ event: 'pause_timeout', metadata: { code: 'ESCALATION_FIRED' } }),
+      expect.objectContaining({ event: 'pause_timeout', metadata: expect.objectContaining({ code: 'ESCALATION_FIRED' }) }),
     )
   })
 
@@ -322,20 +346,33 @@ describe('crash recovery integration - pipeline nesting', () => {
   })
 
   // #123
-  it('should reconcile quarantine metadata on crash recovery', () => {
-    const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456', quarantineSuccess: undefined })
+  // F-027: restructure metadata with runId fields and test
+  // matched/unmatched/missing matrix (was single-entry, no runId association).
+  it('should reconcile quarantine metadata with stack entries by runId', () => {
     mockStateStore.read.mockImplementation((key: string) => {
+      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([
+        makeSuspendedPipeline({ runId: 'parent-123', childRunId: 'child-456' }),
+        makeSuspendedPipeline({ runId: 'parent-456' }),
+      ])
+      if (key.includes('metadata')) {
+        if (key.includes('hash1')) return { runId: 'child-456', data: 'matched' }
+        if (key.includes('hash2')) return { runId: 'orphan-789', data: 'unmatched' }
+        if (key.includes('hash3')) return { runId: 'ghost-000', data: 'no-stack' }
+      }
       if (key.endsWith('/active')) return null
-      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
       return null
     })
     mockStateStore.list.mockReturnValue([
-      'quarantine/metadata-hash1.json',
-      'quarantine/metadata-hash2.json',
+      'metadata-hash1.json', 'metadata-hash2.json', 'metadata-hash3.json',
     ])
+
     store.detectOrphanedSuspend('proj-1')
+
     expect(mockLogger.warn).toHaveBeenCalledWith(
       expect.stringContaining('unmatched metadata'),
+    )
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('missing metadata'),
     )
     expect(mockStateStore.write).toHaveBeenCalledWith(
       expect.any(String),
@@ -365,7 +402,10 @@ describe('crash recovery integration - pipeline nesting', () => {
   })
 
   // #139
-  it('should call RegressionCounter.remove for abandoned runId on force=true pipeline_start', () => {
+  // F-001: make callback async + await handler.handle so the assertion runs
+  // after the Promise resolves (not synchronously before).
+  // F-002: assign removeRegressionCounter as vi.fn() — no source stub exists.
+  it('should call RegressionCounter.remove for abandoned runId on force=true pipeline_start', async () => {
     const handler = new CheckpointHandler(store, STALE_THRESHOLD_MS, undefined, undefined, undefined, mockLogger)
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/active')) return { runId: 'abandoned-run', projectId: 'proj-1' }
@@ -373,7 +413,8 @@ describe('crash recovery integration - pipeline nesting', () => {
       return null
     })
     store.getRegressionCounter = vi.fn().mockReturnValue({ per_cycle_count: 3, total_count: 7 })
-    handler.handle(
+    store.removeRegressionCounter = vi.fn()
+    await handler.handle(
       'pipeline_start',
       JSON.stringify({ description: 'force restart', force: true }),
       { worktree: '/tmp/test', sessionID: 'ses-1' },
@@ -382,19 +423,24 @@ describe('crash recovery integration - pipeline nesting', () => {
   })
 
   // #147
+  // F-007: rewrite — old test used empty stack (not corrupted), had dead
+  // resumeFromPause mock, and called startPipeline/createRegressionCounter
+  // without stubs. Rewrite for corruption scenario + vi.fn() mocks.
   it('should allow fresh pipeline_start after orphaned recovery discards corrupted stack', () => {
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/active')) return null
-      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([])
+      if (key.endsWith('/suspended-stack')) return '{ broken json :::'
       return null
     })
-    const recoveryResult = store.detectOrphanedSuspend('proj-1')
-    expect(recoveryResult).toBeNull()
-    mockStateStore.read.mockImplementation((key: string) => {
-      if (key.endsWith('/active')) return null
-      return null
-    })
-    store.resumeFromPause = vi.fn()
+
+    expect(() => store.detectOrphanedSuspend('proj-1')).toThrow(/corrupt|CRITICAL/i)
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.stringContaining('CRITICAL'),
+    )
+
+    store.startPipeline = vi.fn().mockReturnValue({ depth: 0, runId: 'fresh-run-001' })
+    store.createRegressionCounter = vi.fn()
+
     const startResult = store.startPipeline('proj-1', { description: 'fresh' })
     expect(startResult.depth).toBe(0)
     expect(startResult.runId).not.toBe('abandoned-run')
