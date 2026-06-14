@@ -11,15 +11,17 @@ import { createMockStore, makeState } from './helpers.js'
 function createHandler(storeOverrides: Record<string, any> = {}) {
   const store = createMockStore()
   Object.assign(store, storeOverrides)
+  // F-019/F-023: expose logger mock so tests can verify warn calls and ordering.
+  const loggerMock = { info: vi.fn(), warn: vi.fn(), error: vi.fn() } as any
   const handler = new CheckpointHandler(
     store as any,
     STALE_THRESHOLD_MS,
     undefined,
     undefined,
     undefined,
-    { info: vi.fn(), warn: vi.fn(), error: vi.fn() } as any,
+    loggerMock,
   )
-  return { handler, store }
+  return { handler, store, loggerMock }
 }
 
 describe('CheckpointHandler - pipeline nesting', () => {
@@ -101,7 +103,7 @@ describe('CheckpointHandler - pipeline nesting', () => {
 
   // #59
   it('should handle unknown checkpoint event gracefully', async () => {
-    const { handler, store } = createHandler()
+    const { handler, store, loggerMock } = createHandler()
     store.getActiveRun.mockReturnValue({ runId: 'run-123', projectId: 'proj-1' })
     const state = makeState()
     store.readState.mockReturnValue(state)
@@ -112,6 +114,12 @@ describe('CheckpointHandler - pipeline nesting', () => {
     )
     const parsed = JSON.parse(result)
     expect(parsed.ok).toBe(false)
+    // F-023: verify rejection reason is unsupported/unknown event type.
+    expect(parsed.violation).toMatch(/unsupported|unknown/i)
+    // F-023: verify WARNING was logged for the unsupported event.
+    expect(loggerMock.warn).toHaveBeenCalledWith(
+      expect.stringMatching(/unsupported|unknown/i),
+    )
   })
 
   // #93
@@ -156,7 +164,7 @@ describe('CheckpointHandler - pipeline nesting', () => {
   // #108
   it('should allow pipeline_start when active status is suspended for child nesting', async () => {
     const { handler, store } = createHandler()
-    const state = makeState({ phaseStatus: 'suspended' })
+    const state = makeState({ phaseStatus: 'suspended', depth: 2 })
     store.readState.mockReturnValue(state)
     store.getActiveRun.mockReturnValue({ runId: 'run-123', projectId: 'proj-1' })
     const result = await handler.handle(
@@ -166,6 +174,15 @@ describe('CheckpointHandler - pipeline nesting', () => {
     )
     const parsed = JSON.parse(result)
     expect(parsed.ok).toBe(true)
+    // F-019: verify child pipeline created at depth+1 with parent linkage.
+    expect(store.writeState).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        depth: (state.depth ?? 0) + 1,
+        parentRunId: 'run-123',
+        phaseStatus: expect.any(String),
+      }),
+    )
   })
 
   // #109
@@ -337,12 +354,8 @@ describe('CheckpointHandler - pipeline nesting', () => {
     )
     const parsed = JSON.parse(result)
     expect(parsed.ok).toBe(true)
-    // Spec #157 text says pipeline_start "transitions to 'active'" but the actual state
-    // machine creates an 'idle' state on pipeline_start (active transition happens via
-    // phase_enter). The assertions below verify the implementation contract: the new
-    // state is fresh (not the archived 'run-old') and ok=true. The phaseStatus check is
-    // intentionally 'idle' to match the implementation; the spec text is aspirational.
-    expect(parsed.state.phaseStatus).toBe('idle')
+    // F-005: spec #157 is authoritative — pipeline_start transitions to 'active'.
+    expect(parsed.state.phaseStatus).toBe('active')
     expect(parsed.state.runId).not.toBe('run-old')
   })
 })

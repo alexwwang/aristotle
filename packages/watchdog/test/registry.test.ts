@@ -47,7 +47,7 @@ describe('TaskTemplateRegistry', () => {
 
   // TC-REG-004
   it('should_reject_unknown_template_id', () => {
-    expect(() => registry.get_template('T-99')).toThrow()
+    expect(() => registry.get_template('T-99')).toThrow(/not found|unknown|invalid template/i)
   })
 
   // TC-REG-005

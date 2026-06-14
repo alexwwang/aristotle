@@ -177,9 +177,10 @@ describe('T-9 Precision Filter', () => {
     }
     expect(result.confirmed_findings.length).toBeLessThanOrEqual(rawFindings.length)
     expect(resultIds.size).toBe(rawFindings.length)
-    // TODO: batch count and sizes (30+15) cannot be verified through the
-    //  current API — runT9PrecisionFilter doesn't expose batch metadata.
-    //  Precedence rules (REJECT>DOWNGRADE>CONFIRM) require cross-batch
-    //  conflict fixtures once implementation supports them.
+    // Limitation (Phase 5): batch count (2) and sizes (30+15) cannot be
+    // verified — runT9PrecisionFilter does not expose batch metadata.
+    // Phase 5 schema enhancement: add batch_count/batches[] to T9Result.
+    // Precedence rules (REJECT>DOWNGRADE>CONFIRM) require cross-batch
+    // conflict fixtures once batch metadata is available.
   })
 })

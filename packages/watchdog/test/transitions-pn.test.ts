@@ -53,7 +53,9 @@ describe('transitions - pipeline nesting', () => {
   // #54 — validateNestingTransition('suspended','active') verifies the resumed
   // transition is valid after corruption recovery defaults preSuspendStatus to
   // 'active'. The defaulting logic itself is tested in pipeline-store-pn #30.
-  it('should default to active and return valid when preSuspendStatus is invalid during corruption recovery', () => {
+  // F-009: renamed — this test verifies transition validity (precondition for
+  // defaulting), not the defaulting behavior itself.
+  it('should permit suspended→active transition as valid (precondition for #30 defaulting)', () => {
     const result = validateNestingTransition('suspended', 'active')
     expect(result.valid).toBe(true)
   })

@@ -41,7 +41,7 @@ describe('PromptBuilder', () => {
   // TC-PB-004
   it('should_raise_keyerror_on_missing_parameter', () => {
     const template = registry.get_template('T-1')
-    expect(() => builder.build(template, {}, true)).toThrow()
+    expect(() => builder.build(template, {}, true)).toThrow(/missing|required|invalid parameter/i)
   })
 
   // TC-PB-005
