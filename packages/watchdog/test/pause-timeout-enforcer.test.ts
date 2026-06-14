@@ -1,3 +1,5 @@
+// File naming deviation: spec says pause-timeout-enforcer-pn.test.ts; actual file omits -pn
+// because it tests Phase 1/2 pause logic that predates the Phase 3 pipeline-nesting convention.
 import { describe, it, expect } from 'vitest'
 import { checkPausedTimeout } from '../src/pause-timeout-enforcer.js'
 import { PAUSE_TIMEOUT_MS } from '../src/constants.js'
@@ -51,5 +53,7 @@ describe('PauseTimeoutEnforcer', () => {
     const result = checkPausedTimeout(state)
     expect(result.timedOut).toBe(true)
     expect(result.elapsedMs).toBeGreaterThan(PAUSE_TIMEOUT_MS)
+    expect(result.pausedAt).toBeDefined()
+    expect(result.runId).toBe('run-123')
   })
 })

@@ -1,10 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect } from 'vitest'
 
 describe('child lifecycle integration - pipeline nesting', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   // #76
   it('should reject resume when child status is active', () => {
     expect(true).toBe(false)

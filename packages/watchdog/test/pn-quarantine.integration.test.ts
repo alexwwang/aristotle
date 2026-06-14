@@ -1,10 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect } from 'vitest'
 
 describe('quarantine integration - pipeline nesting', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   // #60
   it('should set quarantineSuccess false if quarantine hook fails', () => {
     expect(true).toBe(false)

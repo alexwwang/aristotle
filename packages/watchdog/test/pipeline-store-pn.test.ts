@@ -5,6 +5,9 @@ import { MAX_DEPTH } from '../src/constants.js'
 
 import { makeState } from './helpers.js'
 
+// Local factories (makeSuspendedPipeline / makeSuspendedStack / makeNestingState) are defined
+// here because helpers.ts does not yet expose them and no other test file reuses them.
+// When Phase 5 lands integration tests, promote these to helpers.ts for shared use.
 function makeSuspendedPipeline(overrides?: Partial<SuspendedPipeline>): SuspendedPipeline {
   return {
     runId: 'run-123',
@@ -68,6 +71,7 @@ describe('PipelineStore - Pipeline Nesting', () => {
     store = createStore()
   })
 
+  describe('Stack Operations', () => {
   // #1
   it('should push entry to suspended stack when suspending active pipeline', () => {
     mockStateStore.read.mockReturnValue(null)
@@ -100,7 +104,11 @@ describe('PipelineStore - Pipeline Nesting', () => {
     for (let i = 0; i < MAX_DEPTH - 1; i++) {
       entries.push(makeSuspendedPipeline({ depth: i }))
     }
-    mockStateStore.read.mockReturnValue(makeSuspendedStack(entries))
+    const activeState = makeNestingState({ depth: 9, phaseStatus: 'ralph_loop' })
+    mockStateStore.read.mockImplementation((key: string) => {
+      if (key.includes('state')) return activeState
+      return makeSuspendedStack(entries)
+    })
     const result = store.canSuspend('proj-1')
     expect(result).toBe(false)
   })
@@ -111,39 +119,50 @@ describe('PipelineStore - Pipeline Nesting', () => {
     for (let i = 0; i < MAX_DEPTH - 1; i++) {
       entries.push(makeSuspendedPipeline({ depth: i }))
     }
-    mockStateStore.read.mockReturnValue(makeSuspendedStack(entries))
+    const activeState = makeNestingState({ depth: 9, phaseStatus: 'ralph_loop' })
+    mockStateStore.read.mockImplementation((key: string) => {
+      if (key.includes('state')) return activeState
+      return makeSuspendedStack(entries)
+    })
     expect(() => store.suspendActive('proj-1', 'test_modification')).toThrow('depth')
     const stack = store.getSuspendedStack('proj-1')
     expect(stack.entries).toHaveLength(MAX_DEPTH - 1)
   })
 
   // #5
-  it('should detect depth metric divergence and use computed depth', () => {
+  it('should detect depth metric divergence and use parent.depth+1 (not stack.length+1)', () => {
+    // Discriminating boundary: stack.length=10 (>MAX) but parent.depth=5 (<MAX).
+    // True result proves parent.depth+1=6 is the metric, not stack.length+1=11.
     const entries: SuspendedPipeline[] = []
-    for (let i = 0; i < PARTIAL_STACK_SIZE; i++) {
+    for (let i = 0; i < 9; i++) {
       entries.push(makeSuspendedPipeline({ runId: `run-${i}`, depth: i }))
     }
     entries.push(makeSuspendedPipeline({ runId: 'run-corrupt', depth: 5 }))
+    expect(entries).toHaveLength(10)
     mockStateStore.read.mockReturnValue(makeSuspendedStack(entries))
     const result = store.canSuspend('proj-1')
-    expect(mockLogger.warn).toHaveBeenCalledWith(
-      expect.stringContaining('DEPTH_METRIC_DIVERGENCE'),
-    )
-    // Spec #5: parent.depth=5 (topmost corrupt entry), computed_depth=parent.depth+1=6.
-    // new_child_depth=6 < MAX_DEPTH=10 → can suspend. Stack has 8 entries (7 normal + 1 corrupt).
+    const warnCalls = mockLogger.warn.mock.calls
+    const divergenceCall = warnCalls.find(c => typeof c[0] === 'string' && c[0].includes('DEPTH_METRIC_DIVERGENCE'))
+    expect(divergenceCall).toBeDefined()
+    expect(divergenceCall![0]).toContain('stack.length=10')
+    expect(divergenceCall![0]).toContain('parent.depth=5')
     expect(result).toBe(true)
   })
 
   // #6
   it('should persist stack before state to prevent deadlock', () => {
+    // Expected key format (documented contract): ${projectId}:suspended-stack and
+    // ${projectId}:state:${runId}. F-012: distinguish by documented key, not substring.
+    const STACK_KEY = 'proj-1:suspended-stack'
+    const STATE_KEY_PREFIX = 'proj-1:state:'
     const writeOrder: string[] = []
     mockStateStore.write.mockImplementation((key: string) => {
       writeOrder.push(key)
     })
     store.suspendActive('proj-1', 'test_modification')
     expect(writeOrder.length).toBeGreaterThanOrEqual(2)
-    const stackWriteIdx = writeOrder.findIndex(k => k.includes('suspended') || k.includes('stack'))
-    const stateWriteIdx = writeOrder.findIndex(k => k.includes('state') || k.includes('active'))
+    const stackWriteIdx = writeOrder.findIndex(k => k === STACK_KEY)
+    const stateWriteIdx = writeOrder.findIndex(k => k.startsWith(STATE_KEY_PREFIX))
     expect(stackWriteIdx).toBeGreaterThanOrEqual(0)
     expect(stateWriteIdx).toBeGreaterThanOrEqual(0)
     expect(stackWriteIdx).toBeLessThan(stateWriteIdx)
@@ -185,7 +204,9 @@ describe('PipelineStore - Pipeline Nesting', () => {
     const result = store.detectOrphanedSuspend('proj-1')
     expect(result).toBeNull()
   })
+  }) // describe('Stack Operations')
 
+  describe('Suspend Flow', () => {
   // #11
   it('should set status to suspended and save preSuspendStatus', () => {
     const state = makeNestingState({ phaseStatus: 'ralph_loop' })
@@ -213,10 +234,13 @@ describe('PipelineStore - Pipeline Nesting', () => {
     const state = makeNestingState()
     mockStateStore.read.mockReturnValue(state)
     store.suspendActive('proj-1', 'test_modification')
-    expect(mockStateStore.write).toHaveBeenCalledBefore(mockLogger.info)
-    expect(mockLogger.info).toHaveBeenCalledWith(
-      expect.stringContaining('QUARANTINE'),
+    const writeCallOrder = mockStateStore.write.mock.invocationCallOrder[0]
+    const quarantineCallIdx = mockLogger.info.mock.calls.findIndex(c =>
+      typeof c[0] === 'string' && c[0].includes('QUARANTINE'),
     )
+    expect(quarantineCallIdx).toBeGreaterThanOrEqual(0)
+    const quarantineCallOrder = mockLogger.info.mock.invocationCallOrder[quarantineCallIdx]
+    expect(quarantineCallOrder).toBeGreaterThan(writeCallOrder)
   })
 
   // #14
@@ -228,6 +252,7 @@ describe('PipelineStore - Pipeline Nesting', () => {
     expect(stack.entries[0].childRunId).toBe('child-456')
   })
 
+  // #87 (covered by #15): format suspend message with phase number and reason
   // #15
   it('should notify user of suspend with phase and reason', () => {
     const msg = store.formatSuspendMessage(5, 'test_modification')
@@ -241,14 +266,11 @@ describe('PipelineStore - Pipeline Nesting', () => {
     const state = makeNestingState({ phaseStatus: 'ralph_loop' })
     mockStateStore.read.mockReturnValue(state)
     store.pauseActive('proj-1')
-    expect(mockStateStore.write).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({
-        phaseStatus: 'paused',
-        prePauseStatus: 'ralph_loop',
-        pausedAt: expect.any(String),
-      }),
-    )
+    const writtenState = mockStateStore.write.mock.calls[0][1] as PipelineState
+    expect(writtenState.phaseStatus).toBe('paused')
+    expect(writtenState.prePauseStatus).toBe('ralph_loop')
+    expect(writtenState.pausedAt).toEqual(expect.any(String))
+    expect(new Date(writtenState.pausedAt!).getTime()).not.toBeNaN()
   })
 
   // #17
@@ -259,7 +281,9 @@ describe('PipelineStore - Pipeline Nesting', () => {
     expect(result.phaseStatus).toBe('ralph_loop')
     expect(result.prePauseStatus).toBeUndefined()
   })
+  }) // describe('Suspend Flow')
 
+  describe('Resume Flow', () => {
   // #18
   it('should restore parent status from preSuspendStatus', () => {
     const state = makeNestingState({ phaseStatus: 'suspended', preSuspendStatus: 'ralph_loop' })
@@ -282,7 +306,7 @@ describe('PipelineStore - Pipeline Nesting', () => {
     expect(() => store.resumeSuspended('proj-1', 'wrong-id')).toThrow('child_run_id')
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ event: 'pipeline_resume' as any, decision: 'BLOCK' }),
+      expect.objectContaining({ event: 'pipeline_resume', decision: 'BLOCK' }),
     )
     // Spec #19: stack NOT popped on rejection — verify entry remains
     const stack = store.getSuspendedStack('proj-1')
@@ -300,7 +324,8 @@ describe('PipelineStore - Pipeline Nesting', () => {
     expect(() => store.resumeSuspended('proj-1', 'child-456')).toThrow('Intermediate pipelines exist')
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ event: 'RESUME_GUARD_FAILURE' as any }),
+      // 'RESUME_GUARD_FAILURE' is not a CheckpointEvent — carry via metadata.code.
+      expect.objectContaining({ event: 'pipeline_resume', metadata: { code: 'RESUME_GUARD_FAILURE' } }),
     )
   })
 
@@ -334,7 +359,9 @@ describe('PipelineStore - Pipeline Nesting', () => {
     const stack = store.getSuspendedStack('proj-1')
     expect(stack.entries).toHaveLength(0)
   })
+  }) // describe('Resume Flow')
 
+  describe('Orphaned Detection', () => {
   // #24
   it('should auto resume topmost pipeline when stack has entries but no active', () => {
     const entry = makeSuspendedPipeline({ runId: 'run-001', depth: 0 })
@@ -462,6 +489,10 @@ describe('PipelineStore - Pipeline Nesting', () => {
       expect.any(String),
       expect.objectContaining({ phaseStatus: 'ralph_loop' }),
     )
+    expect(mockStateStore.appendLog).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ metadata: { code: 'QUARANTINE_HOOK_FAILED' } }),
+    )
   })
 
   // #32b
@@ -476,8 +507,14 @@ describe('PipelineStore - Pipeline Nesting', () => {
       expect.any(String),
       expect.objectContaining({ phaseStatus: 'ralph_loop' }),
     )
+    expect(mockStateStore.appendLog).not.toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ metadata: { code: 'QUARANTINE_HOOK_FAILED' } }),
+    )
   })
+  }) // describe('Orphaned Detection')
 
+  describe('Reviewer Takeover Cleanup', () => {
   // #33
   it('should clear stale reviewer takeover state on suspend', () => {
     const state = {
@@ -546,6 +583,7 @@ describe('PipelineStore - Pipeline Nesting', () => {
       expect.stringContaining('TAKEOVER_RESULT_FILE_RACE'),
     )
   })
+  }) // describe('Reviewer Takeover Cleanup')
 
   // #88
   it('should format resume message with child status and depth', () => {
@@ -611,8 +649,9 @@ describe('PipelineStore - Pipeline Nesting', () => {
   // #100
   it('should deep copy parentRegressionHistory isolating child from parent mutations', () => {
     const history = [{
-      violation: 'V1',
+      violation: 'PATTERN_VIOLATION',
       violationEvents: [{ file: 'a.ts', line: 10, expected: 'foo', actual: 'bar' }],
+      timestamp: '2026-06-14T12:00:00Z',
     }]
     const entry = makeSuspendedPipeline({ parentRegressionHistory: history })
     store.pushSuspended('proj-1', entry)
@@ -628,8 +667,8 @@ describe('PipelineStore - Pipeline Nesting', () => {
   })
 
   // #101
-  it('should map InterventionResult.pendingPause=null to PipelineState.pending_pause', () => {
-    const state = { ...makeNestingState(), pendingPause: null }
+  it('should preserve pending_pause=null on PipelineState through suspendActive', () => {
+    const state = { ...makeNestingState(), pending_pause: null }
     mockStateStore.read.mockReturnValue(state)
     store.suspendActive('proj-1', 'test_modification')
     const writtenState = mockStateStore.write.mock.calls[0][1]
@@ -637,9 +676,9 @@ describe('PipelineStore - Pipeline Nesting', () => {
     expect(writtenState.pending_pause).toBeNull()
   })
 
-  // #101 (cont.) — pendingPause=undefined equivalence
-  it('should map InterventionResult.pendingPause=undefined to PipelineState.pending_pause equivalently', () => {
-    const state = { ...makeNestingState(), pendingPause: undefined }
+  // #101 (cont.) — pending_pause=undefined preserved equivalently
+  it('should preserve pending_pause=undefined on PipelineState through suspendActive', () => {
+    const state = { ...makeNestingState(), pending_pause: undefined }
     mockStateStore.read.mockReturnValue(state)
     store.suspendActive('proj-1', 'test_modification')
     const writtenState = mockStateStore.write.mock.calls[0][1]
@@ -654,8 +693,11 @@ describe('PipelineStore - Pipeline Nesting', () => {
       phaseStatus: 'failed',
       currentPhase: 4,
     })
+    // F-014: mock at PipelineStore method level (decouples from key naming convention).
+    store.readState = vi.fn().mockImplementation((_projectId: string, runId: string) =>
+      runId === 'child-456' ? childFailedState : null,
+    )
     mockStateStore.read.mockImplementation((key: string) => {
-      if (key.includes('child-456')) return childFailedState
       if (key.includes('active')) return null
       if (key.includes('state')) return makeNestingState({ runId: 'parent-123', phaseStatus: 'suspended' })
       return makeSuspendedStack([entry])
@@ -751,10 +793,11 @@ describe('PipelineStore - Pipeline Nesting', () => {
       if (key.includes('active')) return null
       return makeSuspendedStack([entry])
     })
-    expect(() => store.detectOrphanedSuspend('proj-1')).toThrow('INVALID_PHASE')
+    expect(() => store.detectOrphanedSuspend('proj-1')).toThrow(new RegExp('INVALID_PHASE.*' + invalidPhase))
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ event: 'INVALID_PHASE_RECOVERY' as any }),
+      // 'INVALID_PHASE_RECOVERY' is not a CheckpointEvent — carry via metadata.code.
+      expect.objectContaining({ event: 'pipeline_resume', metadata: { code: 'INVALID_PHASE_RECOVERY', phase: invalidPhase } }),
     )
   })
 
@@ -766,10 +809,11 @@ describe('PipelineStore - Pipeline Nesting', () => {
       if (key.includes('active')) return null
       return makeSuspendedStack([entryA, entryB])
     })
-    expect(() => store.detectOrphanedSuspend('proj-1')).toThrow('INVALID_PHASE')
+    expect(() => store.detectOrphanedSuspend('proj-1')).toThrow(new RegExp('INVALID_PHASE.*9'))
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ event: 'INVALID_PHASE_RECOVERY' as any }),
+      // 'INVALID_PHASE_RECOVERY' is not a CheckpointEvent — carry via metadata.code.
+      expect.objectContaining({ event: 'pipeline_resume', metadata: { code: 'INVALID_PHASE_RECOVERY', phase: 9 } }),
     )
     const stackWrites = mockStateStore.write.mock.calls.filter(
       ([key]: [string]) => key.includes('suspended') || key.includes('stack'),
@@ -837,6 +881,13 @@ describe('PipelineStore - Pipeline Nesting', () => {
         regression_counter_reset: true,
       }),
     )
+  })
+
+  // #128b — direct PipelineStore-level guard (supplements transitions-pn.test.ts:130 proxy).
+  it('should reject resumeFromPause when status is not paused', () => {
+    const state = makeNestingState({ phaseStatus: 'ralph_loop' })
+    mockStateStore.read.mockReturnValue(state)
+    expect(() => store.resumeFromPause('proj-1')).toThrow(/not paused/i)
   })
 
   // #150

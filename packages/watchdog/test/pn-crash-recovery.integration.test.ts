@@ -1,10 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect } from 'vitest'
 
 describe('crash recovery integration - pipeline nesting', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   // #67
   it('should recover suspended stack from crash', () => {
     expect(true).toBe(false)

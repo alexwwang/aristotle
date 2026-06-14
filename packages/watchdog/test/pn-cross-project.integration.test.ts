@@ -1,11 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { MAX_DEPTH } from '../src/constants.js'
 
 describe('cross-project integration - pipeline nesting', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   // #63
   it('should resolve cross project parent suspended stack', () => {
     expect(true).toBe(false)

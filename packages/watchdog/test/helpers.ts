@@ -147,6 +147,9 @@ export function createMockStore() {
     resumeFromPause: vi.fn(),
     detectOrphanedSuspend: vi.fn().mockReturnValue(null),
     setChildRunId: vi.fn(),
+    // Phase 3: regression counter lifecycle (fresh counter on pipeline_start)
+    createRegressionCounter: vi.fn().mockReturnValue({ per_cycle_count: 0, total_count: 0 }),
+    removeRegressionCounter: vi.fn(),
     // async — matches production PipelineStore observation methods
     // (async for future StateStore async migration; internal ops currently sync)
     appendObservation: vi.fn().mockResolvedValue(undefined),
