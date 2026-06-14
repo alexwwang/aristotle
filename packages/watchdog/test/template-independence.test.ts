@@ -13,6 +13,8 @@ describe('Template Independence', () => {
     expect(t2Template.id).not.toBe(t9Template.id)
     expect(t2Template.name).toBe('reviewer')
     expect(t9Template.name).toBe('precision_filter')
+    expect(t2Template.timeout).not.toBe(t9Template.timeout)
+    expect(t2Template.instruction_template).not.toBe(t9Template.instruction_template)
   })
 
   // TC-IND-002

@@ -80,7 +80,8 @@ describe('Prompt Assemble MCP Tool', () => {
       params: { phase: 1, round: 2, runId: 'run-1', projectId: 'proj-1', scope: 'full' },
       isOmo: false,
     })
-    expect(['error', 'spawn_subagent']).toContain(result.action)
+    expect(result.action).toBe('error')
+    expect(result.error).toBeDefined()
   })
 
   // TC-MCP-009

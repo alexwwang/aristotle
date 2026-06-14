@@ -11,8 +11,10 @@ describe('T-1 Fact Gather', () => {
     const t1 = registry.get_template('T-1')
     const result = builder.build(t1, {
       phase: 1, round: 1, runId: 'run-1', projectId: 'proj-1', scope: 'full',
+      code_changes: [],
     }, true)
     expect(result).toBeDefined()
+    expect(result.prompt).toBeDefined()
   })
 
   // TC-T1-002
@@ -22,5 +24,6 @@ describe('T-1 Fact Gather', () => {
       phase: 1, round: 1, runId: 'run-1', projectId: 'proj-1', scope: 'full',
     }, true)
     expect(result.prompt.length).toBeGreaterThan(0)
+    expect(result.prompt).toContain('full')
   })
 })

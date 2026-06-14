@@ -37,37 +37,66 @@ describe('T-10 Eval Fix', () => {
       severityMap: { 'F-02': 'M' },
     })
     expect(result2.decisions[0].decision).toBe('REJECT')
+
+    const adoptWithFix: T10Decision[] = [
+      { finding_id: 'F-03', decision: 'ADOPT', rationale: 'Fix 1', fix_suggestion: 'Edit src/a.ts' },
+      { finding_id: 'F-04', decision: 'ADOPT', rationale: 'Fix 2', fix_suggestion: 'Edit src/b.ts' },
+      { finding_id: 'F-05', decision: 'ADOPT', rationale: 'Fix 3', fix_suggestion: 'Edit src/c.ts' },
+    ]
+    const result3 = processT10Decisions({
+      decisions: adoptWithFix,
+      current_phase: 4,
+      severityMap: { 'F-03': 'H', 'F-04': 'M', 'F-05': 'L' },
+    })
+    expect(result3.decisions.every(d => d.decision === 'ADOPT')).toBe(true)
   })
 
   // TC-T10-003
   it('should_auto_reject_defer_on_c_h_m_severity', () => {
-    const deferCritical: T10Decision = {
-      finding_id: 'F-01', decision: 'DEFER', rationale: 'Defer critical',
-      defer_target: 'Phase 5', deferral_reason: 'too complex',
+    const rejectSeverities: Array<{ sev: string; fid: string }> = [
+      { sev: 'C', fid: 'F-01' },
+      { sev: 'H', fid: 'F-02' },
+      { sev: 'M', fid: 'F-03' },
+    ]
+    for (const { sev, fid } of rejectSeverities) {
+      const decision: T10Decision = {
+        finding_id: fid, decision: 'DEFER', rationale: `Defer ${sev}`,
+        defer_target: 'Phase 5', deferral_reason: 'complex',
+      }
+      const result = processT10Decisions({
+        decisions: [decision],
+        current_phase: 4,
+        severityMap: { [fid]: sev },
+      })
+      expect(result.decisions[0].decision).toBe('REJECT')
     }
-    const result = processT10Decisions({
-      decisions: [deferCritical],
-      current_phase: 4,
-      severityMap: { 'F-01': 'C' },
-    })
-    expect(result.decisions[0].decision).toBe('REJECT')
 
-    const deferInfo: T10Decision = {
-      finding_id: 'F-02', decision: 'DEFER', rationale: 'Defer info',
-      defer_target: 'Phase 5', deferral_reason: 'low priority',
+    const acceptSeverities: Array<{ sev: string; fid: string }> = [
+      { sev: 'P', fid: 'F-04' },
+      { sev: 'L', fid: 'F-05' },
+      { sev: 'I', fid: 'F-06' },
+    ]
+    for (const { sev, fid } of acceptSeverities) {
+      const decision: T10Decision = {
+        finding_id: fid, decision: 'DEFER', rationale: `Defer ${sev}`,
+        defer_target: 'Phase 5', deferral_reason: 'low priority',
+      }
+      const result = processT10Decisions({
+        decisions: [decision],
+        current_phase: 4,
+        severityMap: { [fid]: sev },
+      })
+      expect(result.decisions[0].decision).toBe('DEFER')
     }
-    const result2 = processT10Decisions({
-      decisions: [deferInfo],
-      current_phase: 4,
-      severityMap: { 'F-02': 'I' },
-    })
-    expect(result2.decisions[0].decision).toBe('DEFER')
   })
 
   // TC-T10-004
   it('should_validate_defer_target_format', () => {
     expect(validateDeferTarget('Phase 5', 4)).toBe('Phase 5')
     expect(validateDeferTarget('Phase 6 Round 2', 5)).toBe('Phase 6 Round 2')
+    expect(validateDeferTarget('Phase5', 4)).not.toBe('Phase5')
+    expect(validateDeferTarget('phase 5', 4)).not.toBe('phase 5')
+    expect(validateDeferTarget('Phase 5 Round', 4)).not.toBe('Phase 5 Round')
   })
 
   // TC-T10-005
@@ -128,7 +157,8 @@ describe('T-10 Eval Fix', () => {
       current_phase: 4,
       severityMap: { 'F-01': 'H' },
     })
-    expect(result).toBeDefined()
+    expect(result.decisions[0].decision).toBe('ADOPT')
+    expect(typeof result.pending_count).toBe('number')
   })
 
   // TC-T10-010
@@ -154,6 +184,28 @@ describe('T-10 Eval Fix', () => {
       severityMap: { 'F-02': 'H' },
     })
     expect(result2.decisions[0].decision).toBe('ADOPT')
+
+    const inlineWithOriginal: T10Decision = {
+      finding_id: 'F-03', decision: 'ADOPT', rationale: 'Fix with original',
+      fix_code: 'const x = 1', original_code: 'const x = 0',
+    }
+    const result3 = processT10Decisions({
+      decisions: [inlineWithOriginal],
+      current_phase: 4,
+      severityMap: { 'F-03': 'H' },
+    })
+    expect(result3.decisions[0].decision).toBe('ADOPT')
+
+    const modifyInlineNoOriginal: T10Decision = {
+      finding_id: 'F-04', decision: 'MODIFY', rationale: 'Modify inline',
+      fix_code: 'const x = 1', original_code: null,
+    }
+    const result4 = processT10Decisions({
+      decisions: [modifyInlineNoOriginal],
+      current_phase: 4,
+      severityMap: { 'F-04': 'M' },
+    })
+    expect(result4.decisions[0].decision).toBe('REJECT')
   })
 
   // TC-T10-011

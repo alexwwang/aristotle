@@ -32,6 +32,7 @@ describe('T-2 Timeout Calculator', () => {
       marginSeconds: 10,
       createdAt: '2026-06-06T10:00:00.000Z',
     })
+    expect(result.timeout).toBe(50)
     expect(result.warning).toBeDefined()
   })
 
@@ -43,6 +44,7 @@ describe('T-2 Timeout Calculator', () => {
       marginSeconds: 10,
       createdAt: null,
     })
+    expect(result.timeout).toBeLessThanOrEqual(285)
     expect(result.timeout).toBeGreaterThanOrEqual(30)
     expect(result.warning).toBeDefined()
   })
@@ -57,6 +59,7 @@ describe('T-2 Timeout Calculator', () => {
       isChildPipeline: true,
       childCreatedAt: '2026-06-06T10:01:40.000Z',
     })
-    expect(result.timeout).toBeGreaterThan(0)
+    expect(result.timeout).toBeGreaterThanOrEqual(30)
+    expect(result.timeout).toBeLessThanOrEqual(290)
   })
 })

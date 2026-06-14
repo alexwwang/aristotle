@@ -20,6 +20,7 @@ describe('T-9 Precision Filter', () => {
       location_map: { 'src/a.ts': { line_ranges: [[1, 10]], exists: true } },
       review_scope: { in_scope: ['src/a.ts'], out_of_scope: [] },
     })
+    expect(result.confirmed_findings.length).toBeGreaterThan(0)
     for (const f of result.confirmed_findings) {
       expect(['CONFIRM', 'DOWNGRADE', 'REJECT']).toContain(f.verdict)
     }
@@ -88,7 +89,7 @@ describe('T-9 Precision Filter', () => {
   // TC-T9-008
   it('should_downgrade_when_location_undefined', () => {
     const result = runT9PrecisionFilter({
-      raw_findings: [{ id: 'F-01', severity: 'H', description: 'test', location: undefined as any, suggestion: 'fix' }],
+      raw_findings: [{ id: 'F-01', severity: 'H', description: 'test', location: undefined, suggestion: 'fix' }],
       location_map: { 'src/a.ts': { line_ranges: [[1, 10]], exists: true } },
       review_scope: { in_scope: ['src/a.ts'], out_of_scope: [] },
     })
@@ -132,6 +133,7 @@ describe('T-9 Precision Filter', () => {
       review_scope: { in_scope: ['src/'], out_of_scope: ['vendor/a.ts', 'vendor/b.ts', 'vendor/c.ts'] },
     })
     expect(result.confirmed_findings).toEqual([])
+    expect(result.halt_reason).toBeUndefined()
   })
 
   // TC-T9-012
@@ -153,5 +155,10 @@ describe('T-9 Precision Filter', () => {
       review_scope: { in_scope: Object.keys(locationMap), out_of_scope: [] },
     })
     expect(result.confirmed_findings.length).toBeGreaterThan(0)
+    expect(result.halt_reason).toBeUndefined()
+    for (const f of result.confirmed_findings) {
+      expect(['CONFIRM', 'DOWNGRADE', 'REJECT']).toContain(f.verdict)
+      expect(f.id).toMatch(/^F-\d{2}$/)
+    }
   })
 })

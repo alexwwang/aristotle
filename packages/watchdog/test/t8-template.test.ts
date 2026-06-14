@@ -38,14 +38,22 @@ describe('T-8 Implementation Test Writing', () => {
 
   // TC-T8-004
   it('should_handle_t8_with_omo_detection', () => {
-    const prompt = buildT8Prompt({
+    const omoPrompt = buildT8Prompt({
       module_path: 'src/module.ts',
       test_files: ['tests/module.test.ts'],
       design_doc: 'design_plan/phase-5/impl-design.md',
       language: 'typescript',
       isOmo: true,
     })
-    expect(prompt.length).toBeGreaterThan(0)
+    const nonOmoPrompt = buildT8Prompt({
+      module_path: 'src/module.ts',
+      test_files: ['tests/module.test.ts'],
+      design_doc: 'design_plan/phase-5/impl-design.md',
+      language: 'typescript',
+      isOmo: false,
+    })
+    expect(omoPrompt.length).toBeGreaterThan(0)
+    expect(omoPrompt.length).toBeLessThanOrEqual(nonOmoPrompt.length)
   })
 
   // TC-T8-005

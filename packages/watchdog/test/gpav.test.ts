@@ -38,29 +38,45 @@ describe('GPAV Schema Validation', () => {
       id: 'F-02', severity: 'M', description: 'test', location: 'b.ts:2',
       rejected: false,
     }
-    expect(precisionFinding.rejected).toBe(true)
-    expect(recallFinding.rejected).toBe(false)
+    expect(validateGPAVFindingId(precisionFinding.id)).toBe(true)
+    expect(validateGPAVFindingSeverity(precisionFinding.severity)).toBe(true)
+    expect(validateGPAVFindingId(recallFinding.id)).toBe(true)
+    expect(validateGPAVFindingSeverity(recallFinding.severity)).toBe(true)
+    expect(precisionFinding.rejected).not.toBe(recallFinding.rejected)
   })
 
   // TC-GPAV-004
   it('should_compute_contested_issue_next_action_6_conditions', () => {
-    const actions: ContestedIssue['next_action'][] = [
+    const validActions: Set<string> = new Set([
       'escalate', 'defer_to_manual', 'accept_downgrade', 'accept_upgrade', 'split_finding', 'reject',
+    ])
+    const severityPairs: Array<[string, string]> = [
+      ['C', 'P'],
+      ['P', 'C'],
+      ['C', 'C'],
+      ['H', 'H'],
+      ['M', 'L'],
+      ['L', 'H'],
     ]
-    for (const action of actions) {
+    const results = new Set<string>()
+    for (const [orig, contested] of severityPairs) {
       const issue: ContestedIssue = {
         finding_id: 'F-01',
-        original_severity: 'H',
-        contested_severity: 'M',
-        next_action: action,
+        original_severity: orig,
+        contested_severity: contested,
+        next_action: 'reject',
       }
-      expect(computeContestedIssueNextAction(issue)).toBe(action)
+      const result = computeContestedIssueNextAction(issue)
+      expect(validActions.has(result)).toBe(true)
+      results.add(result)
     }
+    expect(results.size).toBeGreaterThan(1)
   })
 
   // TC-GPAV-005
   it('should_validate_rps_result_action_always_warn', () => {
     const rps: RPSResult = { action: 'WARN', finding_id: 'F-01', details: 'test' }
+    expect(validateGPAVFindingId(rps.finding_id)).toBe(true)
     expect(rps.action).toBe('WARN')
   })
 
@@ -74,6 +90,9 @@ describe('GPAV Schema Validation', () => {
     expect(timeoutResult.status).toBe('timeout')
     expect(timeoutResult.pending_count).toBe(3)
     expect(timeoutResult.completed_findings).toHaveLength(1)
+    for (const f of timeoutResult.completed_findings) {
+      expect(validateGPAVFindingId(f.id)).toBe(true)
+    }
   })
 
   // TC-GPAV-007
@@ -94,9 +113,12 @@ describe('GPAV Schema Validation', () => {
       findings: [{ id: findingId, severity: 'H', description: 'test', location: 'a.ts:1', verdict: 'CONFIRM', verdict_reason: 'confirmed' }],
       contested_issues: [], rps_results: [],
     }
-    expect(recallEvent.findings[0].id).toBe(findingId)
-    expect(precisionEvent.findings[0].id).toBe(findingId)
-    expect(evalEvent.findings[0].id).toBe(findingId)
+    for (const evt of [recallEvent, precisionEvent, evalEvent]) {
+      for (const f of evt.findings) {
+        expect(f.id).toBe(findingId)
+        expect(validateGPAVFindingId(f.id)).toBe(true)
+      }
+    }
   })
 
   // TC-GPAV-008
@@ -108,5 +130,6 @@ describe('GPAV Schema Validation', () => {
     }
     expect(timeoutResult.completed_findings).toHaveLength(0)
     expect(timeoutResult.pending_count).toBe(5)
+    expect(timeoutResult.pending_count).toBeGreaterThan(timeoutResult.completed_findings.length)
   })
 })

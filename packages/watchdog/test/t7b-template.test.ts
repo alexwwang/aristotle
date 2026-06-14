@@ -35,6 +35,8 @@ describe('T-7b Violation Handling', () => {
       status: 'success', test_files: ['tests/found.test.ts'], all_failing: true,
     }, 'REGRESSION', 5)
     expect(result.status).toBe('success')
+    expect(result.test_files).toBeDefined()
+    expect(result.test_files).toEqual(['tests/found.test.ts'])
   })
 
   // TC-T7B-005
@@ -51,7 +53,9 @@ describe('T-7b Violation Handling', () => {
     const result = processT7BResponse({
       status: 'success', test_files: ['tests/phase5.test.ts'], all_failing: true,
     }, 'REGRESSION', 5)
-    expect(result).toBeDefined()
+    expect(result.status).toBe('success')
+    expect(result.test_files).toEqual(['tests/phase5.test.ts'])
+    expect(result.all_failing).toBe(true)
   })
 
   // TC-T7B-007
