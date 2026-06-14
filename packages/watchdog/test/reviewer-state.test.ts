@@ -20,8 +20,8 @@ describe('ReviewerTakeoverState validation', () => {
     expect(state.dualPassMode).toBe(true)
   })
 
-  // RT-080a
-  it('should_validate_required_fields_in_reviewer_takeover_state', () => {
+  // RT-080a — positive: valid state accepted (negative cases below cover validation)
+  it('should_accept_valid_reviewer_takeover_state', () => {
     const error = validateReviewerTakeoverState({ round: 3, interceptAt: '2026-01-01T00:00:00Z', spawnPhase: 'pending' })
     expect(error).toBeNull()
   })

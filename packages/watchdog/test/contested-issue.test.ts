@@ -77,6 +77,12 @@ describe('ContestedIssue', () => {
     expect(result).toBe('multiple spaces')
   })
 
+  // RT-055b — case-sensitive comparison preserved (spec: case not normalized)
+  it('should_preserve_case_in_grounds_comparison', () => {
+    expect(normalizeGroundsForComparison('Missing Null Check')).toBe('Missing Null Check')
+    expect(normalizeGroundsForComparison('MISSING NULL CHECK')).toBe('MISSING NULL CHECK')
+  })
+
   // RT-056a
   it('should_populate_escalation_dossier_from_rationale_history', () => {
     const issue = { ...baseIssue, rationale_history: ['Original', 'Rejection rationale'] }

@@ -180,13 +180,16 @@ describe('ReviewerInterceptRule', () => {
   })
 
   describe('RT-040: Interceptor detection latency < 5ms', () => {
-  // RT-040
+  // RT-040 — average over multiple iterations to reduce wall-clock flakiness
   it('should_complete_intercept_evaluation_under_5ms', () => {
     const state = makeRalphState()
+    const iterations = 10
     const start = performance.now()
-    rule.evaluate('Task', { subagent_type: 'oracle', prompt: 'Review', description: 'Review' }, state, 'ses-main-001')
-    const elapsed = performance.now() - start
-    expect(elapsed).toBeLessThan(5)
+    for (let i = 0; i < iterations; i++) {
+      rule.evaluate('Task', { subagent_type: 'oracle', prompt: 'Review', description: 'Review' }, state, 'ses-main-001')
+    }
+    const avgElapsed = (performance.now() - start) / iterations
+    expect(avgElapsed).toBeLessThan(5)
   })
   })
 

@@ -24,6 +24,17 @@ describe('Dual-Pass Degradation', () => {
     expect(converted[0].id).toMatch(/^SR-R\d+-\d+$/)
   })
 
+  // RT-046c — multiple findings preserve distinct ordinals
+  it('should_preserve_distinct_sr_ordinals_across_multiple_findings', () => {
+    const converted = applyRecallToT10SchemaConversion([
+      { id: 'SR-R3-1', severity: 'M' },
+      { id: 'SR-R3-2', severity: 'M' },
+      { id: 'SR-R3-3', severity: 'M' },
+    ]) as Array<{ id: string }>
+    expect(converted).toHaveLength(3)
+    expect(converted.map(f => f.id)).toEqual(['SR-R3-1', 'SR-R3-2', 'SR-R3-3'])
+  })
+
   // RT-047a — graceful degradation, not throw
   it('should_degrade_to_self_review_when_fact_gather_fails', async () => {
     const orchestrator = createDualPassOrchestrator()
@@ -58,6 +69,18 @@ describe('Dual-Pass Degradation', () => {
     expect(converted.find(f => f.id === 'F-02')).toBeUndefined()
   })
 
+  // RT-048b — DOWNGRADE verdict: severity→adjusted_severity, original→original_severity, downgrade_reason→verdict_reason
+  it('should_map_downgrade_verdict_fields_per_schema_conversion_rules', () => {
+    const findings = [
+      { id: 'F-03', severity: 'H', verdict: 'DOWNGRADE', downgrade_reason: 'overly strict' },
+    ]
+    const converted = applyRecallToT10SchemaConversion(findings) as Array<Record<string, unknown>>
+    expect(converted).toHaveLength(1)
+    expect(converted[0].adjusted_severity).toBe('H')
+    expect(converted[0].original_severity).toBe('H')
+    expect(converted[0].verdict_reason).toBe('overly strict')
+  })
+
   // RT-048c
   it('should_use_partial_precision_results_over_recall_only', () => {
     const converted = applyRecallToT10SchemaConversion([{ id: 'F-01', verdict: 'CONFIRM', partial: true }])
@@ -72,6 +95,10 @@ describe('Dual-Pass Degradation', () => {
     const gpavFindings = convertReviewFindingToGPAVFinding(reviewFindings)
     expect(gpavFindings).toHaveLength(1)
     expect(gpavFindings[0]).not.toHaveProperty('suggestion')
+    expect(gpavFindings[0].id).toBe('F-01')
+    expect(gpavFindings[0].severity).toBe('M')
+    expect(gpavFindings[0].description).toBe('Issue')
+    expect(gpavFindings[0].location).toBe('file.ts:10')
   })
 
   // RT-049a — graceful degradation, not throw

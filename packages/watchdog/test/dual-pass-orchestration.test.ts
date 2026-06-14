@@ -117,7 +117,9 @@ describe('Dual-Pass Orchestration', () => {
   })
 
   // RT-043f
-  it('should_write_result_file_after_eval_fix_completes', () => {
+  it('should_write_result_file_after_eval_fix_completes', async () => {
+    const state = makeRalphState()
+    await orchestrator.executeEvalFix(state, [])
     const path = orchestrator.getResultFilePath(3)
     expect(path).toContain('reviewer-result-')
   })
@@ -177,6 +179,14 @@ describe('Dual-Pass Orchestration', () => {
     const result = enforceT10Contract(decisions) as Array<{ finding_id: string; decision: string; rationale: string }>
     expect(result).toHaveLength(1)
     expect(result[0].decision).toBe('REJECT')
+  })
+
+  // RT-058b-3c-positive — valid 'Phase N' / 'Phase N Round M' defer_target → accepted
+  it.each(['Phase 5', 'Phase 3 Round 2', 'Phase 7 Round 1'])('should_accept_defer_with_valid_defer_target_%s', (deferTarget) => {
+    const decisions = [{ finding_id: 'F-01', decision: 'DEFER', rationale: 'Defer', severity: 'P', defer_target: deferTarget }]
+    const result = enforceT10Contract(decisions) as Array<{ finding_id: string; decision: string }>
+    expect(result).toHaveLength(1)
+    expect(result[0].decision).toBe('DEFER')
   })
 
   // RT-058b-4 — MODIFY with fix_code → accepted

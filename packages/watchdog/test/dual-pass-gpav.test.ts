@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { createDualPassOrchestrator, enforceT10Contract } from '../src/dual-pass-gpav.js'
-import type { GPAVEvent } from '../src/dual-pass-gpav.js'
-import { makeRalphState } from './helpers.js'
+import { createDualPassOrchestrator } from '../src/dual-pass-gpav.js'
+
+// Spec Constraint #5: 1 initial + 3 retries = 4 total Dual-Pass attempts
+const MAX_DUAL_PASS_ATTEMPTS = 4
 
 describe('GPAVEvent dedup and retry', () => {
   // RT-060a
@@ -31,6 +32,6 @@ describe('GPAVEvent dedup and retry', () => {
   // RT-060b-ceiling
   it('should_enforce_retry_ceiling_on_max_attempts', () => {
     const orchestrator = createDualPassOrchestrator()
-    expect(() => orchestrator.supersedePriorEvents(3, 5)).toThrow()
+    expect(() => orchestrator.supersedePriorEvents(3, MAX_DUAL_PASS_ATTEMPTS + 1)).toThrow()
   })
 })
