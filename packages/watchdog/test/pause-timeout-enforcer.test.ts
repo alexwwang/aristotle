@@ -11,9 +11,9 @@ describe('PauseTimeoutEnforcer', () => {
   it('should flag paused pipeline exceeding PAUSE_TIMEOUT_MS', () => {
     const past = new Date(Date.now() - PAUSE_TIMEOUT_MS - BUFFER_MS).toISOString()
     const state = makeState({
-      phaseStatus: 'paused' as any,
+      phaseStatus: 'paused',
       pausedAt: past,
-    } as any)
+    })
     const result = checkPausedTimeout(state)
     expect(result.timedOut).toBe(true)
   })
@@ -22,9 +22,9 @@ describe('PauseTimeoutEnforcer', () => {
   it('should not flag paused pipeline within timeout window', () => {
     const recent = new Date(Date.now() - RECENT_MS).toISOString()
     const state = makeState({
-      phaseStatus: 'paused' as any,
+      phaseStatus: 'paused',
       pausedAt: recent,
-    } as any)
+    })
     const result = checkPausedTimeout(state)
     expect(result.timedOut).toBe(false)
   })
@@ -33,9 +33,9 @@ describe('PauseTimeoutEnforcer', () => {
   it('should not auto resume pipeline awaiting approval when timeout exceeded', () => {
     const past = new Date(Date.now() - PAUSE_TIMEOUT_MS - BUFFER_MS).toISOString()
     const state = makeState({
-      phaseStatus: 'awaiting_approval' as any,
+      phaseStatus: 'awaiting_approval',
       pausedAt: past,
-    } as any)
+    })
     const result = checkPausedTimeout(state)
     expect(result.timedOut).toBe(false)
   })
@@ -44,10 +44,10 @@ describe('PauseTimeoutEnforcer', () => {
   it('should log diagnostic info on timeout detection', () => {
     const past = new Date(Date.now() - PAUSE_TIMEOUT_MS - BUFFER_MS).toISOString()
     const state = makeState({
-      phaseStatus: 'paused' as any,
+      phaseStatus: 'paused',
       pausedAt: past,
       runId: 'run-123',
-    } as any)
+    })
     const result = checkPausedTimeout(state)
     expect(result.timedOut).toBe(true)
     expect(result.elapsedMs).toBeGreaterThan(PAUSE_TIMEOUT_MS)

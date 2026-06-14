@@ -27,7 +27,7 @@ describe('CheckpointHandler - pipeline nesting', () => {
   // #55
   it('should route pipeline_suspend event to suspend handler', async () => {
     const { handler, store } = createHandler()
-    const state = makeState({ currentPhase: 5, phaseStatus: 'ralph_loop' as any })
+    const state = makeState({ currentPhase: 5, phaseStatus: 'ralph_loop' })
     store.readState.mockReturnValue(state)
     store.getActiveRun.mockReturnValue({ runId: 'run-123', projectId: 'proj-1' })
     store.suspendActive = vi.fn()
@@ -45,7 +45,7 @@ describe('CheckpointHandler - pipeline nesting', () => {
   it('should route pipeline_resume event to resume handler', async () => {
     const { handler, store } = createHandler()
     store.getActiveRun.mockReturnValue({ runId: 'run-123', projectId: 'proj-1' })
-    const state = makeState({ phaseStatus: 'suspended' as any })
+    const state = makeState({ phaseStatus: 'suspended' })
     store.readState.mockReturnValue(state)
     store.resumeSuspended = vi.fn()
     const result = await handler.handle(
@@ -61,7 +61,7 @@ describe('CheckpointHandler - pipeline nesting', () => {
   // #57
   it('should validate event payload before routing', async () => {
     const { handler, store } = createHandler()
-    const state = makeState({ currentPhase: 5, phaseStatus: 'ralph_loop' as any })
+    const state = makeState({ currentPhase: 5, phaseStatus: 'ralph_loop' })
     store.readState.mockReturnValue(state)
     store.getActiveRun.mockReturnValue({ runId: 'run-123', projectId: 'proj-1' })
     const result = await handler.handle(
@@ -79,7 +79,7 @@ describe('CheckpointHandler - pipeline nesting', () => {
   // #58
   it('should emit audit entry for routed events', async () => {
     const { handler, store } = createHandler()
-    const state = makeState({ currentPhase: 5, phaseStatus: 'ralph_loop' as any })
+    const state = makeState({ currentPhase: 5, phaseStatus: 'ralph_loop' })
     store.readState.mockReturnValue(state)
     store.getActiveRun.mockReturnValue({ runId: 'run-123', projectId: 'proj-1' })
     await handler.handle(
@@ -114,7 +114,7 @@ describe('CheckpointHandler - pipeline nesting', () => {
   // #93
   it('should rate-limit checkpoint event processing', async () => {
     const { handler, store } = createHandler()
-    const state = makeState({ currentPhase: 5, phaseStatus: 'ralph_loop' as any })
+    const state = makeState({ currentPhase: 5, phaseStatus: 'ralph_loop' })
     store.readState.mockReturnValue(state)
     store.getActiveRun.mockReturnValue({ runId: 'run-123', projectId: 'proj-1' })
     store.suspendActive = vi.fn()
@@ -137,7 +137,7 @@ describe('CheckpointHandler - pipeline nesting', () => {
   // #99
   it('should block pipeline_start when active status is paused', async () => {
     const { handler, store } = createHandler()
-    const state = makeState({ phaseStatus: 'paused' as any })
+    const state = makeState({ phaseStatus: 'paused' })
     store.readState.mockReturnValue(state)
     store.getActiveRun.mockReturnValue({ runId: 'run-123', projectId: 'proj-1' })
     const result = await handler.handle(
@@ -153,7 +153,7 @@ describe('CheckpointHandler - pipeline nesting', () => {
   // #108
   it('should allow pipeline_start when active status is suspended for child nesting', async () => {
     const { handler, store } = createHandler()
-    const state = makeState({ phaseStatus: 'suspended' as any })
+    const state = makeState({ phaseStatus: 'suspended' })
     store.readState.mockReturnValue(state)
     store.getActiveRun.mockReturnValue({ runId: 'run-123', projectId: 'proj-1' })
     const result = await handler.handle(
@@ -168,7 +168,7 @@ describe('CheckpointHandler - pipeline nesting', () => {
   // #109
   it('should block pipeline_start when active status is active and already running', async () => {
     const { handler, store } = createHandler()
-    const state = makeState({ phaseStatus: 'ralph_loop' as any, lastCheckpointAt: new Date().toISOString() })
+    const state = makeState({ phaseStatus: 'ralph_loop', lastCheckpointAt: new Date().toISOString() })
     store.readState.mockReturnValue(state)
     store.getActiveRun.mockReturnValue({ runId: 'run-123', projectId: 'proj-1' })
     const result = await handler.handle(
@@ -184,7 +184,7 @@ describe('CheckpointHandler - pipeline nesting', () => {
   // #115
   it('should block pipeline_start when active status is awaiting_approval', async () => {
     const { handler, store } = createHandler()
-    const state = makeState({ phaseStatus: 'awaiting_approval' as any })
+    const state = makeState({ phaseStatus: 'awaiting_approval' })
     store.readState.mockReturnValue(state)
     store.getActiveRun.mockReturnValue({ runId: 'run-123', projectId: 'proj-1' })
     const result = await handler.handle(
@@ -200,7 +200,7 @@ describe('CheckpointHandler - pipeline nesting', () => {
   // #124
   it('should allow pipeline start when active status is terminal', async () => {
     const { handler, store } = createHandler()
-    const state = makeState({ phaseStatus: 'complete' as any })
+    const state = makeState({ phaseStatus: 'complete' })
     store.readState.mockReturnValue(state)
     store.getActiveRun.mockReturnValue({ runId: 'run-123', projectId: 'proj-1' })
     const result = await handler.handle(
@@ -215,7 +215,7 @@ describe('CheckpointHandler - pipeline nesting', () => {
   // #143
   it('should check terminal status before suspended stack when starting pipeline', async () => {
     const { handler, store } = createHandler()
-    const state = makeState({ phaseStatus: 'complete' as any })
+    const state = makeState({ phaseStatus: 'complete' })
     store.readState.mockReturnValue(state)
     store.getActiveRun.mockReturnValue({ runId: 'run-123', projectId: 'proj-1' })
     store.getSuspendedStack = vi.fn().mockReturnValue({
@@ -238,7 +238,7 @@ describe('CheckpointHandler - pipeline nesting', () => {
   // #141
   it('should create fresh regression counter at 0 on normal pipeline start', async () => {
     const { handler, store } = createHandler()
-    const state = makeState({ phaseStatus: 'complete' as any })
+    const state = makeState({ phaseStatus: 'complete' })
     store.readState.mockReturnValue(state)
     store.getActiveRun.mockReturnValue({ runId: 'run-old', projectId: 'proj-1' })
     const result = await handler.handle(
@@ -249,12 +249,14 @@ describe('CheckpointHandler - pipeline nesting', () => {
     const parsed = JSON.parse(result)
     expect(parsed.ok).toBe(true)
     expect(store.writeState).toHaveBeenCalled()
+    const writtenState = store.writeState.mock.calls[0][1]
+    expect(writtenState.runId).not.toBe('run-old')
   })
 
   // #145a
   it('should route pipeline_pause event to pauseActive', async () => {
     const { handler, store } = createHandler()
-    const state = makeState({ currentPhase: 5, phaseStatus: 'ralph_loop' as any })
+    const state = makeState({ currentPhase: 5, phaseStatus: 'ralph_loop' })
     store.readState.mockReturnValue(state)
     store.getActiveRun.mockReturnValue({ runId: 'run-123', projectId: 'proj-1' })
     store.pauseActive = vi.fn()
@@ -272,7 +274,7 @@ describe('CheckpointHandler - pipeline nesting', () => {
   // #145b
   it('should route pipeline_unpause event to resumeFromPause', async () => {
     const { handler, store } = createHandler()
-    const state = makeState({ currentPhase: 5, phaseStatus: 'paused' as any })
+    const state = makeState({ currentPhase: 5, phaseStatus: 'paused' })
     store.readState.mockReturnValue(state)
     store.getActiveRun.mockReturnValue({ runId: 'run-123', projectId: 'proj-1' })
     store.resumeFromPause = vi.fn()
@@ -290,7 +292,7 @@ describe('CheckpointHandler - pipeline nesting', () => {
   // #153
   it('should reject pipeline_pause event with invalid payload', async () => {
     const { handler, store } = createHandler()
-    const state = makeState({ currentPhase: 5, phaseStatus: 'ralph_loop' as any })
+    const state = makeState({ currentPhase: 5, phaseStatus: 'ralph_loop' })
     store.readState.mockReturnValue(state)
     store.getActiveRun.mockReturnValue({ runId: 'run-123', projectId: 'proj-1' })
 
@@ -317,7 +319,7 @@ describe('CheckpointHandler - pipeline nesting', () => {
   it('should allow pipeline_start when status is idle', async () => {
     const { handler, store } = createHandler()
     store.getActiveRun.mockReturnValue({ runId: 'run-old', projectId: 'proj-1' })
-    store.readState.mockReturnValue(makeState({ phaseStatus: 'idle' as any }))
+    store.readState.mockReturnValue(makeState({ phaseStatus: 'idle' }))
     const result = await handler.handle(
       'pipeline_start',
       JSON.stringify({ description: 'new pipeline' }),
@@ -326,5 +328,6 @@ describe('CheckpointHandler - pipeline nesting', () => {
     const parsed = JSON.parse(result)
     expect(parsed.ok).toBe(true)
     expect(parsed.state.phaseStatus).toBe('idle')
+    expect(parsed.state.runId).not.toBe('run-old')
   })
 })

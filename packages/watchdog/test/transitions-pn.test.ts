@@ -127,7 +127,7 @@ describe('transitions - pipeline nesting', () => {
   // active→ralph_loop is not a direct transition (requires phase_enter first).
   // This covers the resume_from_pause guard at transition level; the operation-
   // level guard (resumeFromPause checks phaseStatus==='paused') is in PipelineStore.
-  it('should reject resume from pause when not paused', () => {
+  it('should reject active→ralph_loop direct transition (proxy for resume_from_pause guard: only paused status allows restore)', () => {
     const result = validateNestingTransition('active', 'ralph_loop')
     expect(result.valid).toBe(false)
   })
