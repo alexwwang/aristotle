@@ -53,21 +53,21 @@ describe('ReviewerSpawnHandler', () => {
   // RT-019g
   it('should_call_prompt_assemble_for_t2_with_fact_context', async () => {
     const state = makeRalphState()
-    const sessionId = await handler.spawnT2(state, '.aristotle/fact-context-3.json')
+    const sessionId = await handler.spawnT2(state, '.aristotle/fact-context-1.json')
     expect(sessionId).toMatch(/^ses-/)
   })
 
   // RT-019h
   it('should_record_t2_session_id_after_spawn', async () => {
     const state = makeRalphState()
-    const sessionId = await handler.spawnT2(state, '.aristotle/fact-context-3.json')
+    const sessionId = await handler.spawnT2(state, '.aristotle/fact-context-1.json')
     expect(sessionId).toMatch(/^ses-/)
   })
 
   // RT-019i
   it('should_set_spawnPhase_t2_running_before_t2_spawn', async () => {
     const state = makeRalphState()
-    const sessionId = await handler.spawnT2(state, '.aristotle/fact-context-3.json')
+    const sessionId = await handler.spawnT2(state, '.aristotle/fact-context-1.json')
     expect(sessionId).toMatch(/^ses-/)
   })
 
@@ -155,28 +155,28 @@ describe('ReviewerSpawnHandler', () => {
   // RT-023a
   it('should_set_spawnPhase_failed_on_t2_timeout', async () => {
     const state = makeRalphState()
-    const sessionId = await handler.spawnT2(state, '.aristotle/fact-context-3.json')
+    const sessionId = await handler.spawnT2(state, '.aristotle/fact-context-1.json')
     expect(sessionId).toMatch(/^ses-/)
   })
 
   // RT-023b
   it('should_log_t2_timeout_in_audit_log', async () => {
     const state = makeRalphState()
-    const sessionId = await handler.spawnT2(state, '.aristotle/fact-context-3.json')
+    const sessionId = await handler.spawnT2(state, '.aristotle/fact-context-1.json')
     expect(sessionId).toMatch(/^ses-/)
   })
 
   // RT-023c
   it('should_compute_t2_dynamic_timeout_from_pipeline_created_at', async () => {
     const state = makeRalphState()
-    const sessionId = await handler.spawnT2(state, '.aristotle/fact-context-3.json')
+    const sessionId = await handler.spawnT2(state, '.aristotle/fact-context-1.json')
     expect(sessionId).toMatch(/^ses-/)
   })
 
   // RT-023d
   it('should_use_current_time_when_created_at_missing', async () => {
     const state = makeRalphState()
-    const sessionId = await handler.spawnT2(state, '.aristotle/fact-context-3.json')
+    const sessionId = await handler.spawnT2(state, '.aristotle/fact-context-1.json')
     expect(sessionId).toMatch(/^ses-/)
   })
 

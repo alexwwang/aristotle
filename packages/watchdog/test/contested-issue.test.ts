@@ -50,9 +50,9 @@ describe('ContestedIssue', () => {
     expect(result).toBe('continue_dispute')
   })
 
-  // RT-055 condition 5
-  it('should_resolve_condition_5_chm_escalate_to_user', () => {
-    const issue = { ...baseIssue, severity: 'H' as const, dispute_rounds: 2 }
+  // RT-055 condition 5 — severity in C/H/M with dispute_rounds >= 2 → escalate_to_user
+  it.each(['C', 'H', 'M'] as const)('should_resolve_condition_5_severity_%s_escalate_to_user', (severity) => {
+    const issue = { ...baseIssue, severity, dispute_rounds: 2 }
     const result = resolveContestedIssue(issue)
     expect(result).toBe('escalate_to_user')
   })
