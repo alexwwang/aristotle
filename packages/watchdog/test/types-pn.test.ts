@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { PhaseStatus, CheckpointEvent, PipelineState, SuspendedPipeline } from '../src/schema.js'
+import { SCHEMA_VERSION } from '../src/schema.js'
 
 describe('types - pipeline nesting', () => {
   // #40
@@ -17,7 +18,7 @@ describe('types - pipeline nesting', () => {
   // #42
   it('should have correct PipelineState nesting fields', () => {
     const state: PipelineState = {
-      version: 4,
+      version: SCHEMA_VERSION,
       projectId: 'proj-1',
       runId: 'run-123',
       startedAt: '2026-01-01T00:00:00Z',

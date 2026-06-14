@@ -89,7 +89,10 @@ describe('CheckpointHandler - pipeline nesting', () => {
     )
     expect(store.appendAudit).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ event: 'pipeline_suspend' as any }),
+      expect.objectContaining({
+        event: 'pipeline_suspend' as any,
+        decision: expect.any(String),
+      }),
     )
   })
 

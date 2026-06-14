@@ -1,11 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { validateNestingTransition } from '../src/transitions.js'
 
 describe('transitions - pipeline nesting', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   // #46
   it('should allow transition from active to suspended', () => {
     const result = validateNestingTransition('ralph_loop', 'suspended')
@@ -54,7 +50,9 @@ describe('transitions - pipeline nesting', () => {
     expect(result.valid).toBe(false)
   })
 
-  // #54
+  // #54 — validateNestingTransition('suspended','active') verifies the resumed
+  // transition is valid after corruption recovery defaults preSuspendStatus to
+  // 'active'. The defaulting logic itself is tested in pipeline-store-pn #30.
   it('should default to active and return valid when preSuspendStatus is invalid during corruption recovery', () => {
     const result = validateNestingTransition('suspended', 'active')
     expect(result.valid).toBe(true)
@@ -125,7 +123,10 @@ describe('transitions - pipeline nesting', () => {
     expect(result.valid).toBe(true)
   })
 
-  // #128
+  // #128 — validateNestingTransition('active','ralph_loop') is rejected because
+  // active→ralph_loop is not a direct transition (requires phase_enter first).
+  // This covers the resume_from_pause guard at transition level; the operation-
+  // level guard (resumeFromPause checks phaseStatus==='paused') is in PipelineStore.
   it('should reject resume from pause when not paused', () => {
     const result = validateNestingTransition('active', 'ralph_loop')
     expect(result.valid).toBe(false)
