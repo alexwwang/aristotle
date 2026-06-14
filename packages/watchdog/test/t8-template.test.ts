@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { processT8Response, buildT8Prompt } from '../src/t8-status.js'
+import { TaskTemplateRegistry } from '../src/registry.js'
 
 describe('T-8 Implementation Test Writing', () => {
   // TC-T8-001
@@ -29,12 +30,16 @@ describe('T-8 Implementation Test Writing', () => {
   })
 
   // TC-T8-003
+  // Spec: "Schema validation for T-8 params" — test validate_params, not response processing.
   it('should_validate_t8_parameters', () => {
-    const result = processT8Response({
-      status: 'success', impl_files: ['src/module.ts'], all_passing: true,
+    const registry = new TaskTemplateRegistry()
+    const result = registry.validate_params('T-8', {
+      module_path: 'src/module.ts',
+      test_files: ['tests/module.test.ts'],
+      design_doc: 'design_plan/phase-5/impl-design.md',
+      language: 'typescript',
     })
-    expect(result.status).toBe('success')
-    expect(result.impl_files).toContain('src/module.ts')
+    expect(result.valid).toBe(true)
   })
 
   // TC-T8-004

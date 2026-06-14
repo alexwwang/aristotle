@@ -64,6 +64,12 @@ describe('detectMultiAgent', () => {
       plugin: ['/path/to/other-plugin/index.js'],
     }))
     expect(detectMultiAgent({ directory: '/project' })).toBe(false)
+
+    mockFs.readFileSync.mockReturnValue(JSON.stringify({ plugin: [] }))
+    expect(detectMultiAgent({ directory: '/project' })).toBe(false)
+
+    mockFs.existsSync.mockReturnValue(false)
+    expect(detectMultiAgent({ directory: '/project' })).toBe(false)
   })
 
   // TC-OMO-007

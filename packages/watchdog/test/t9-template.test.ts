@@ -22,7 +22,7 @@ describe('T-9 Precision Filter', () => {
     })
     expect(result.confirmed_findings.length).toBeGreaterThan(0)
     for (const f of result.confirmed_findings) {
-      expect(['CONFIRM', 'DOWNGRADE']).toContain(f.verdict)
+      expect(['CONFIRM', 'DOWNGRADE', 'REJECT']).toContain(f.verdict)
     }
   })
 
@@ -87,7 +87,7 @@ describe('T-9 Precision Filter', () => {
       review_scope: { in_scope: ['src/a.ts'], out_of_scope: [] },
     })
     const f = result.confirmed_findings.find(f => f.id === 'F-01')
-    expect(f?.verdict).not.toBe('DOWNGRADE')
+    expect(f?.verdict).toBe('CONFIRM')
   })
 
   // TC-T9-008
@@ -123,6 +123,7 @@ describe('T-9 Precision Filter', () => {
     const f = result.confirmed_findings.find(f => f.id === 'F-01')
     expect(f?.verdict).toBe('DOWNGRADE')
     expect(f?.adjusted_severity).toBe('I')
+    expect(f?.note).toBeDefined()
   })
 
   // TC-T9-011

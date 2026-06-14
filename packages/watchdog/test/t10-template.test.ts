@@ -104,6 +104,7 @@ describe('T-10 Eval Fix', () => {
     const decision: T10Decision = {
       finding_id: 'F-01', decision: 'ADOPT', rationale: 'Fix applied',
       fix_code: 'const x = 1', fix_suggestion: 'Edit src/nonexistent.ts',
+      original_code: 'const x = 0',
     }
     const result = processT10Decisions({
       decisions: [decision],
@@ -127,6 +128,7 @@ describe('T-10 Eval Fix', () => {
     const decision: T10Decision = {
       finding_id: 'F-01', decision: 'MODIFY', rationale: 'Fix applied',
       fix_code: 'const x = 1', fix_suggestion: 'Edit /nonexistent/path/file.ts',
+      original_code: 'const x = 0',
     }
     const outcomes: Array<ReturnType<typeof processT10Decisions>> = []
     expect(() => {
@@ -215,6 +217,17 @@ describe('T-10 Eval Fix', () => {
       severityMap: { 'F-04': 'M' },
     })
     expect(result4.decisions[0].decision).toBe('REJECT')
+
+    const diffPlusNoOriginal: T10Decision = {
+      finding_id: 'F-05', decision: 'ADOPT', rationale: 'Unified diff +++',
+      fix_code: '+++ b/src/file.ts\n@@ -1,1 +1,1 @@\n-old\n+new', original_code: null,
+    }
+    const result5 = processT10Decisions({
+      decisions: [diffPlusNoOriginal],
+      current_phase: 4,
+      severityMap: { 'F-05': 'H' },
+    })
+    expect(result5.decisions[0].decision).toBe('ADOPT')
   })
 
   // TC-T10-011
@@ -222,6 +235,8 @@ describe('T-10 Eval Fix', () => {
     expect(validateDeferTarget('Phase 9', 4)).toBe('Phase 5')
     expect(validateDeferTarget('Phase 0', 4)).toBe('Phase 5')
     expect(validateDeferTarget('Phase 5 Round 0', 4)).toBe('Phase 5')
+    expect(validateDeferTarget('Invalid', 8)).toBe('Phase 8')
+    expect(validateDeferTarget('Invalid', 7)).toBe('Phase 8')
   })
 
   // TC-T10-012
