@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { PipelineStore } from '../src/pipeline-store.js'
 import type { SuspendedPipeline, SuspendedStack, PipelineState, ChildFailureContext } from '../src/schema.js'
+import { MAX_DEPTH } from '../src/constants.js'
 
 import { makeState } from './helpers.js'
 
@@ -21,7 +22,6 @@ function makeSuspendedPipeline(overrides?: Partial<SuspendedPipeline>): Suspende
   }
 }
 
-const MAX_DEPTH = 10
 const PARTIAL_STACK_SIZE = 7
 
 function makeSuspendedStack(entries: SuspendedPipeline[]): SuspendedStack {
@@ -258,7 +258,11 @@ describe('PipelineStore - Pipeline Nesting', () => {
   // #18
   it('should restore parent status from preSuspendStatus', () => {
     const state = makeNestingState({ phaseStatus: 'suspended' as any, preSuspendStatus: 'ralph_loop' as any })
-    mockStateStore.read.mockReturnValue(state)
+    const entry = makeSuspendedPipeline({ childRunId: 'child-456' })
+    mockStateStore.read.mockImplementation((key: string) => {
+      if (key.includes('suspended') || key.includes('stack')) return makeSuspendedStack([entry])
+      return state
+    })
     const result = store.resumeSuspended('proj-1', 'child-456')
     expect(result.phaseStatus).toBe('ralph_loop')
   })
@@ -472,7 +476,7 @@ describe('PipelineStore - Pipeline Nesting', () => {
       ...makeNestingState({ currentPhase: 5 }),
       reviewerTakeover: {
         t1SessionId: 'ses-t1', t2SessionId: 'ses-t2', resultFile: '/tmp/result.json',
-        cleanupToken: 'tok-1', spawnPhase: '5',
+        cleanupToken: 'tok-1', spawnPhase: 't2_running',
       } as any,
     }
     mockStateStore.read.mockReturnValue(state)

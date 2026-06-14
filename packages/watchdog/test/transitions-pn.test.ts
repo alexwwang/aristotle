@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { validateNestingTransition } from '../src/transitions.js'
-import type { ValidationResult } from '../src/transitions.js'
 
 describe('transitions - pipeline nesting', () => {
   beforeEach(() => {
@@ -68,12 +67,13 @@ describe('transitions - pipeline nesting', () => {
   })
 
   // #107
-  it('should transition to failed status via phase_fail from active, ralph_loop, awaiting_approval, and suspended', () => {
-    for (const from of ['ralph_loop', 'active', 'awaiting_approval', 'suspended']) {
+  it.each(['ralph_loop', 'active', 'awaiting_approval', 'suspended'])(
+    'should allow phase_fail transition from %s to failed',
+    (from) => {
       const result = validateNestingTransition(from, 'failed')
       expect(result.valid).toBe(true)
-    }
-  })
+    },
+  )
 
   // #131
   it('should allow transition from active to cancelled', () => {

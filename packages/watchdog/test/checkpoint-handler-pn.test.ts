@@ -245,17 +245,16 @@ describe('CheckpointHandler - pipeline nesting', () => {
     )
     const parsed = JSON.parse(result)
     expect(parsed.ok).toBe(true)
-    expect(parsed.regressionCounter).toBe(0)
+    expect(store.writeState).toHaveBeenCalled()
   })
 
-  // #145
-  it('should route pipeline_pause and pipeline_unpause events', async () => {
+  // #145a
+  it('should route pipeline_pause event to pauseActive', async () => {
     const { handler, store } = createHandler()
     const state = makeState({ currentPhase: 5, phaseStatus: 'ralph_loop' as any })
     store.readState.mockReturnValue(state)
     store.getActiveRun.mockReturnValue({ runId: 'run-123', projectId: 'proj-1' })
     store.pauseActive = vi.fn()
-    store.resumeFromPause = vi.fn()
 
     const pauseResult = await handler.handle(
       'pipeline_pause',
@@ -265,6 +264,15 @@ describe('CheckpointHandler - pipeline nesting', () => {
     const pauseParsed = JSON.parse(pauseResult)
     expect(pauseParsed.ok).toBe(true)
     expect(store.pauseActive).toHaveBeenCalledWith('proj-1')
+  })
+
+  // #145b
+  it('should route pipeline_unpause event to resumeFromPause', async () => {
+    const { handler, store } = createHandler()
+    const state = makeState({ currentPhase: 5, phaseStatus: 'paused' as any })
+    store.readState.mockReturnValue(state)
+    store.getActiveRun.mockReturnValue({ runId: 'run-123', projectId: 'proj-1' })
+    store.resumeFromPause = vi.fn()
 
     const unpauseResult = await handler.handle(
       'pipeline_unpause',

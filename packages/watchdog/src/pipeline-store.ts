@@ -560,7 +560,7 @@ export class PipelineStore {
     throw new Error('Not implemented: suspendActive')
   }
 
-  resumeSuspended(projectId: string, childRunId: string): PipelineState {
+  resumeSuspended(projectId: string, childRunId: string, force?: boolean): PipelineState {
     throw new Error('Not implemented: resumeSuspended')
   }
 
