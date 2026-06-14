@@ -158,10 +158,10 @@ describe('CheckpointHandler - pipeline nesting', () => {
       )
     }
     const allCalls = store.suspendActive.mock.calls
-    // F-012: spec only requires 'rate limiting occurred', not a specific ratio.
-    // Original 50% threshold was over-strict — caused false-red against correct
-    // rate-limiter implementations. Weakened to '< RAPID_REQUEST_COUNT'.
-    expect(allCalls.length).toBeLessThan(RAPID_REQUEST_COUNT)
+    // F-026: tighten from '< RAPID_REQUEST_COUNT' to '< 80%' — a rate limiter
+    // that only blocks 1 of 50 requests is functionally broken. 80% threshold
+    // ensures meaningful throttling without over-specifying the exact ratio.
+    expect(allCalls.length).toBeLessThan(RAPID_REQUEST_COUNT * 0.8)
     expect(allCalls.length).toBeGreaterThan(0)
     expect(loggerMock.warn).toHaveBeenCalledWith(
       expect.stringMatching(/rate.?limit|throttl/i),
@@ -283,7 +283,13 @@ describe('CheckpointHandler - pipeline nesting', () => {
       expect.any(String),
       expect.objectContaining({ depth: 0 }),
     )
-    const writtenState = store.writeState.mock.calls[0][1]
+    // F-012: filter by key suffix '/state' — resilient to write-call ordering
+    // (writeState may not be the first call; audit/preliminary writes can precede it).
+    const stateWriteCall = store.writeState.mock.calls.find(
+      ([k]: [string]) => typeof k === 'string' && k.endsWith('/state'),
+    )
+    expect(stateWriteCall).toBeDefined()
+    const writtenState = stateWriteCall![1]
     // F-013: setup uses runId='run-123'; old assertion checked not.toBe('run-old') (never set).
     expect(writtenState.runId).not.toBe('run-123')
   })

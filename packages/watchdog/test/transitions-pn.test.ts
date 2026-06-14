@@ -50,8 +50,8 @@ describe('transitions - pipeline nesting', () => {
     expect(result.valid).toBe(false)
   })
 
-  // F-026: spec ID needed — suspended→active transition. Supplemental coverage;
-  // assign #161 during next spec coverage matrix update.
+  // F-025: spec ID #161 assigned — suspended→active transition.
+  // Supplemental coverage; precondition for #30 defaulting (preSuspendStatus recovery).
   // Transition matrix: suspended→active is valid (precondition for #30 defaulting).
   it('validateNestingTransition: suspended→active is valid', () => {
     const result = validateNestingTransition('suspended', 'active')

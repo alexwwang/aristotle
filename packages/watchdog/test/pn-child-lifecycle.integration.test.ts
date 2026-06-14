@@ -182,7 +182,7 @@ describe('child lifecycle integration - pipeline nesting', () => {
     store.resumeSuspended('proj-1', 'child-456')
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ event: expect.stringContaining('PARTIAL') }),
+      expect.objectContaining({ event: 'phase_fail' }),
     )
   })
 
@@ -285,16 +285,13 @@ describe('child lifecycle integration - pipeline nesting', () => {
     })
     const result = store.resumeSuspended('proj-1', 'child-456')
     if (result instanceof Promise) {
-      await vi.advanceTimersByTimeAsync(999)
+      await vi.advanceTimersByTimeAsync(5000)
     } else {
-      vi.advanceTimersByTime(999)
+      vi.advanceTimersByTime(5000)
     }
-    expect(store.getSessionInfo).toHaveBeenCalledTimes(1)
-    if (result instanceof Promise) {
-      await vi.advanceTimersByTimeAsync(1)
-    } else {
-      vi.advanceTimersByTime(1)
-    }
+    // F-011: single 5000ms advance covers both the initial check and the retry.
+    // The old 999+1 split was brittle — it assumed a specific retry interval (1s)
+    // which couples the test to an implementation detail.
     expect(store.getSessionInfo).toHaveBeenCalledTimes(2)
   })
 

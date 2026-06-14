@@ -111,6 +111,9 @@ describe('crash recovery integration - pipeline nesting', () => {
     const result = store.detectOrphanedSuspend('proj-1')
     expect(result).not.toBeNull()
     expect(mockStateStore.write).toHaveBeenCalled()
+    // F-008: verify the implementation actually attempted to read child-456's state
+    // (dangling-reference detection requires probing the child state file).
+    expect(mockStateStore.read).toHaveBeenCalledWith(expect.stringContaining('child-456'))
   })
 
   // #69

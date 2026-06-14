@@ -176,17 +176,21 @@ describe('pipeline nesting - e2e', () => {
     })
     const result = store.detectOrphanedSuspend('proj-1')
     expect(result).not.toBeNull()
-    expect(result?.runId).toBe('parent-123')
+    // F-003: LIFO semantics (spec #24) — detectOrphanedSuspend returns the topmost
+    // stack entry by LIFO order (grandchild-789, depth=2), NOT the root (parent-123).
+    // Recovery walks the stack from top down; the topmost orphan is the recovery target.
+    expect(result?.runId).toBe('grandchild-789')
     // F-001: verify recovered state — depth + recovery write occurred.
     expect(result?.depth).toBe(0)
     expect(mockStateStore.write).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ phaseStatus: expect.not.stringContaining('suspended') }),
     )
-    // F-025: tighten event name — 'recover' matches any substring; use 'ORPHANED'.
+    // F-004: 'ORPHANED_SUSPEND_RECOVERY' is not a CheckpointEvent — it is carried
+    // via metadata.code (consistent with #9 and #24 patterns in pipeline-store-pn).
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ event: expect.stringMatching(/^ORPHANED_SUSPEND_RECOVERY$/) }),
+      expect.objectContaining({ metadata: expect.objectContaining({ code: 'ORPHANED_SUSPEND_RECOVERY' }) }),
     )
   })
 

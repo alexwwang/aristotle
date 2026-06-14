@@ -32,10 +32,15 @@ function makeSuspendedStack(entries: SuspendedPipeline[]): SuspendedStack {
 }
 
 function makeNestingState(overrides?: Partial<PipelineState>): PipelineState {
+  // F-024: default runId to 'run-123' so state fixtures align with the
+  // makeSuspendedPipeline default runId in this file (also 'run-123').
+  // Without this, makeState() defaults runId to 'run-001' (helpers.ts L44),
+  // causing silent mismatches between state and stack-entry runIds.
   return makeState({
     currentPhase: 5,
     phaseStatus: 'ralph_loop',
     depth: 0,
+    runId: 'run-123',
     suspendedReason: undefined,
     suspendedAt: undefined,
     suspendedPhase: undefined,
@@ -152,7 +157,9 @@ describe('PipelineStore - Pipeline Nesting', () => {
     // F-004: explicit /active branch BEFORE catch-all — see #3 above.
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/active')) return { runId: 'run-123', projectId: 'proj-1' }
-      if (key.endsWith('/state')) return activeState
+      // F-032: narrow key match from '/state' to '/run-123/state' — generic
+      // suffix matching is fragile when the implementation probes multiple runIds.
+      if (key.endsWith('/run-123/state')) return activeState
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack(entries)
       return null
     })
@@ -599,6 +606,8 @@ describe('PipelineStore - Pipeline Nesting', () => {
 
   // F-032 (MODIFY P): shared setup for #32/#32b — asymmetric audit-log assertions
   // (one asserts WAS called, other NOT called) prevent it.each parameterization.
+  // F-022: shared state-write expect moved INTO each test body so failures point
+  // at the specific test, not at the helper (better debuggability).
   function setupQuarantineInconsistency(quarantineSuccess: boolean) {
     const entry = makeSuspendedPipeline({ quarantineSuccess })
     mockStateStore.read.mockImplementation((key: string) => {
@@ -606,15 +615,16 @@ describe('PipelineStore - Pipeline Nesting', () => {
       return makeSuspendedStack([entry])
     })
     store.detectOrphanedSuspend('proj-1')
-    expect(mockStateStore.write).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({ phaseStatus: 'ralph_loop' }),
-    )
   }
 
   // #32
   it('should complete state update when quarantineSuccess false during inconsistency', () => {
     setupQuarantineInconsistency(false)
+    // F-022: moved from helper — verifies recovery write occurred before audit assertion.
+    expect(mockStateStore.write).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ phaseStatus: 'ralph_loop' }),
+    )
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ metadata: expect.objectContaining({ code: 'QUARANTINE_HOOK_FAILED_SUSPEND', phase: expect.any(Number) }) }),
@@ -624,6 +634,11 @@ describe('PipelineStore - Pipeline Nesting', () => {
   // #32b
   it('should complete state update when quarantineSuccess true during inconsistency', () => {
     setupQuarantineInconsistency(true)
+    // F-022: moved from helper — verifies recovery write occurred before audit assertion.
+    expect(mockStateStore.write).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ phaseStatus: 'ralph_loop' }),
+    )
     expect(mockStateStore.appendLog).not.toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ metadata: expect.objectContaining({ code: 'QUARANTINE_HOOK_FAILED_SUSPEND' }) }),
@@ -1171,7 +1186,10 @@ describe('PipelineStore - Pipeline Nesting', () => {
 
   // #150
   it('should default depth to 0 when field missing from stored state', () => {
-    const { depth: _omitted, ...rest } = makeNestingState()
+    // F-027: use depth: 5 (not the default 0) before stripping — if depth
+    // defaults to 0, omitting it and asserting 0 is a tautology. Setting 5
+    // ensures the test actually verifies the missing-field defaulting path.
+    const { depth: _omitted, ...rest } = makeNestingState({ depth: 5 })
     mockStateStore.read.mockReturnValue(rest)
     const result = store.readState('proj-1', 'run-123')
     expect(result?.depth).toBe(0)
