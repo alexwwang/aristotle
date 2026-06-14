@@ -89,6 +89,10 @@ describe('PipelineStore - Pipeline Nesting', () => {
     expect(stack.entries[0].suspendedPhase).toBe(5)
     expect(stack.entries[0].depth).toBe(0)
     expect(stack.entries[0].suspendedReason).toBe('test_modification')
+    // F-007: spec #1 explicitly lists suspendedAt as required — verify it is set
+    // and is a valid ISO date string so Green Phase cannot omit it.
+    expect(stack.entries[0].suspendedAt).toBeDefined()
+    expect(new Date(stack.entries[0].suspendedAt!).getTime()).not.toBeNaN()
   })
 
   // #2
@@ -193,14 +197,23 @@ describe('PipelineStore - Pipeline Nesting', () => {
   })
 
   // #9
+  // F-001: verify meaningful orphan detection — assert actual SuspendedPipeline fields,
+  // NOT phaseStatus (which doesn't exist on SuspendedPipeline type — tautological assertion).
   it('should detect orphaned suspend when stack exists but no active pipeline', () => {
-    const entry = makeSuspendedPipeline({ depth: 0 })
+    const entry = makeSuspendedPipeline({ depth: 0, runId: 'orphan-run' })
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/active')) return null
       return makeSuspendedStack([entry])
     })
     const result = store.detectOrphanedSuspend('proj-1')
     expect(result).not.toBeNull()
+    expect(result?.runId).toBe('orphan-run')
+    expect(result?.depth).toBe(0)
+    // Verify recovery state write occurred — orphan detection triggers state recovery
+    expect(mockStateStore.write).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ phaseStatus: expect.not.stringContaining('suspended') }),
+    )
   })
 
   // #10
@@ -248,9 +261,13 @@ describe('PipelineStore - Pipeline Nesting', () => {
     mockStateStore.read.mockReturnValue(state)
     storeWithHook.suspendActive('proj-1', 'test_modification')
     expect(quarantineHook).toHaveBeenCalled()
-    const writeOrder = mockStateStore.write.mock.invocationCallOrder[0]
+    // F-008: spec #13 requires hook fires after ALL writes complete — verify
+    // against the LAST write call, not the first (resilient to multi-write impl).
+    const writeOrders = mockStateStore.write.mock.invocationCallOrder
+    expect(writeOrders.length).toBeGreaterThan(0)
+    const lastWriteOrder = writeOrders[writeOrders.length - 1]
     const hookOrder = quarantineHook.mock.invocationCallOrder[0]
-    expect(hookOrder).toBeGreaterThan(writeOrder)
+    expect(hookOrder).toBeGreaterThan(lastWriteOrder)
   })
 
   // #14
@@ -276,7 +293,12 @@ describe('PipelineStore - Pipeline Nesting', () => {
     const state = makeNestingState({ phaseStatus: 'ralph_loop' })
     mockStateStore.read.mockReturnValue(state)
     store.pauseActive('proj-1')
-    const writtenState = mockStateStore.write.mock.calls[0][1] as PipelineState
+    // F-006: key-filtered lookup — resilient to preliminary writes (audit log, etc.)
+    const stateWrite = mockStateStore.write.mock.calls.find(
+      ([k]: [string]) => k.endsWith('/state'),
+    )
+    expect(stateWrite).toBeDefined()
+    const writtenState = stateWrite![1] as PipelineState
     expect(writtenState.phaseStatus).toBe('paused')
     expect(writtenState.prePauseStatus).toBe('ralph_loop')
     expect(writtenState.pausedAt).toEqual(expect.any(String))
@@ -732,7 +754,12 @@ describe('PipelineStore - Pipeline Nesting', () => {
     const state = { ...makeNestingState(), pending_pause: null }
     mockStateStore.read.mockReturnValue(state)
     store.suspendActive('proj-1', 'test_modification')
-    const writtenState = mockStateStore.write.mock.calls[0][1]
+    // F-006: key-filtered lookup — resilient to preliminary writes (audit log, etc.)
+    const stateWrite = mockStateStore.write.mock.calls.find(
+      ([k]: [string]) => k.endsWith('/state'),
+    )
+    expect(stateWrite).toBeDefined()
+    const writtenState = stateWrite![1]
     expect('pending_pause' in writtenState).toBe(true)
     expect(writtenState.pending_pause).toBeNull()
   })
@@ -744,7 +771,12 @@ describe('PipelineStore - Pipeline Nesting', () => {
     const state = { ...makeNestingState(), pending_pause: undefined }
     mockStateStore.read.mockReturnValue(state)
     store.suspendActive('proj-1', 'test_modification')
-    const writtenState = mockStateStore.write.mock.calls[0][1]
+    // F-006: key-filtered lookup — same pattern as null variant above.
+    const stateWrite = mockStateStore.write.mock.calls.find(
+      ([k]: [string]) => k.endsWith('/state'),
+    )
+    expect(stateWrite).toBeDefined()
+    const writtenState = stateWrite![1]
     expect('pending_pause' in writtenState).toBe(true)
     expect(writtenState.pending_pause == null).toBe(true)
   })
@@ -778,19 +810,29 @@ describe('PipelineStore - Pipeline Nesting', () => {
   })
 
   // #104
+  // F-010: spec #104 requires a SINGLE notification containing all three pieces
+  // (child-started + parent-123 + child-456) — not three fragmented logs.
   it('should emit child-started notification when childRunId is set on suspended parent', () => {
     const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0 })
     mockStateStore.read.mockReturnValue(makeSuspendedStack([entry]))
     store.setChildRunId('proj-1', 'parent-123', 'child-456')
-    expect(mockLogger.info).toHaveBeenCalledWith(
-      expect.stringContaining('child-started'),
+    // Capture all info calls containing 'child-started' and verify at least one
+    // also contains both parent-123 AND child-456 (single combined notification).
+    const childStartCalls = mockLogger.info.mock.calls.filter(
+      (call: unknown[]) => {
+        const msg = call?.[0]
+        return typeof msg === 'string' && msg.includes('child-started')
+      },
     )
-    expect(mockLogger.info).toHaveBeenCalledWith(
-      expect.stringContaining('parent-123'),
-    )
-    expect(mockLogger.info).toHaveBeenCalledWith(
-      expect.stringContaining('child-456'),
-    )
+    expect(childStartCalls.length).toBeGreaterThan(0)
+    expect(
+      childStartCalls.some((call: unknown[]) => {
+        const msg = call?.[0]
+        return typeof msg === 'string'
+          && msg.includes('parent-123')
+          && msg.includes('child-456')
+      }),
+    ).toBe(true)
   })
 
   // #110
@@ -828,6 +870,10 @@ describe('PipelineStore - Pipeline Nesting', () => {
       if (key.endsWith('/active')) return { runId: 'child-456', projectId: 'proj-1' }
       if (key.endsWith('/parent-123/state')) return makeNestingState({
         phaseStatus: 'suspended',
+        // F-002: set preSuspendStatus explicitly so the phaseStatus:'ralph_loop'
+        // assertion below is self-consistent — without this, makeNestingState
+        // defaults preSuspendStatus to undefined and Green Phase would set 'active'.
+        preSuspendStatus: 'ralph_loop',
         pending_pause: { reason: 'PATTERN_CYCLE', violation_type: 'REGRESSION', files: ['src/test.ts'] } as any,
       })
       if (key.endsWith('/state')) return makeNestingState({ runId: 'child-456', phaseStatus: 'ralph_loop' })
@@ -890,10 +936,13 @@ describe('PipelineStore - Pipeline Nesting', () => {
       return makeSuspendedStack([entry])
     })
     // F-017: decouple ordering — check INVALID_PHASE and phase number independently.
-    expect(() => store.detectOrphanedSuspend('proj-1')).toThrow(/INVALID_PHASE/)
+    // F-011: single try/catch — calling detectOrphanedSuspend twice risks state mutation
+    // (first call may write a recovery audit log, etc.) skewing the second call's behavior.
     try {
       store.detectOrphanedSuspend('proj-1')
+      fail('detectOrphanedSuspend should have thrown INVALID_PHASE')
     } catch (e) {
+      expect((e as Error).message).toMatch(/INVALID_PHASE/)
       expect((e as Error).message).toContain(String(invalidPhase))
     }
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
@@ -946,12 +995,13 @@ describe('PipelineStore - Pipeline Nesting', () => {
     )
     // F-048: verify warning includes the TERMINAL_STATUS_RECOVERY_DEFAULT code
     // and the original terminal status value ('failed').
-    expect(mockLogger.warn).toHaveBeenCalledWith(
-      expect.stringContaining('TERMINAL_STATUS_RECOVERY_DEFAULT'),
-    )
-    expect(mockLogger.warn).toHaveBeenCalledWith(
-      expect.stringContaining('failed'),
-    )
+    // F-012: spec #117 ambiguous on combined-vs-separate warn calls — accept either
+    // by joining all warn messages and matching both substrings against the union.
+    const warnCalls = mockLogger.warn.mock.calls
+      .map((call: unknown[]) => (typeof call?.[0] === 'string' ? call[0] : ''))
+      .join('\n')
+    expect(warnCalls).toMatch(/TERMINAL_STATUS_RECOVERY_DEFAULT/)
+    expect(warnCalls).toMatch(/failed/)
   })
 
   // #125

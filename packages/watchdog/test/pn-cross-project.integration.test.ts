@@ -15,6 +15,13 @@ function makeSuspendedPipeline(overrides?: Partial<SuspendedPipeline>): Suspende
     suspendedPhase: 5,
     depth: 0,
     suspendedReason: 'test_modification',
+    // F-004: include all optional SuspendedPipeline fields as explicit undefined defaults
+    // for consistency with the other 5 test files (silent type-widening risk otherwise).
+    childDepth: undefined,
+    parentRunId: undefined,
+    parentPipelineProjectId: undefined,
+    childRunId: undefined,
+    quarantineSuccess: undefined,
     parentRegressionHistory: [],
     ...overrides,
   }
@@ -67,18 +74,30 @@ describe('cross-project integration - pipeline nesting', () => {
   })
 
   // #63
+  // F-015: setup DIFFERENT stacks per project (proj-X local empty vs proj-Y parent populated)
+  // — verifies implementation actually loads the parent project's stack, not just the local one.
   it('should resolve cross project parent suspended stack', () => {
-    const entry = makeSuspendedPipeline({
+    const parentEntry = makeSuspendedPipeline({
       runId: 'parent-123', depth: 0, childRunId: 'child-456',
-      parentPipelineProjectId: 'proj-other',
+      parentPipelineProjectId: 'proj-Y',
     })
     mockStateStore.read.mockImplementation((key: string) => {
-      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
+      // Parent project (proj-Y) has the suspended stack
+      if (key === 'proj-Y/suspended-stack' || key.endsWith('/proj-Y/suspended-stack')) {
+        return makeSuspendedStack([parentEntry])
+      }
+      // Child project (proj-X) has empty/no stack
+      if (key === 'proj-X/suspended-stack' || key.endsWith('/proj-X/suspended-stack')) {
+        return makeSuspendedStack([])
+      }
       return null
     })
-    const stack = store.getSuspendedStack('proj-other')
+    const stack = store.getSuspendedStack('proj-Y')
     expect(stack.entries).toHaveLength(1)
-    expect(stack.entries[0].parentPipelineProjectId).toBe('proj-other')
+    expect(stack.entries[0].parentPipelineProjectId).toBe('proj-Y')
+    expect(stack.entries[0].childRunId).toBe('child-456')
+    // Verify parent project's stack was actually read (cross-project resolution occurred)
+    expect(mockStateStore.read).toHaveBeenCalledWith(expect.stringContaining('proj-Y'))
   })
 
   // #64
@@ -128,18 +147,33 @@ describe('cross-project integration - pipeline nesting', () => {
   })
 
   // #129
+  // F-016: setup two project contexts (proj-X child + proj-Y parent) with the PARENT's
+  // stack populated — the previous setup returned the same entries for proj-1 regardless
+  // of context, so it never proved cross-project depth resolution.
   it('should reject cross-project child suspend when depth exceeds MAX_DEPTH', () => {
     expect(MAX_DEPTH).toBe(10)
-    const entries: SuspendedPipeline[] = []
+    // Parent project (proj-Y) already at MAX_DEPTH entries
+    const parentEntries: SuspendedPipeline[] = []
     for (let i = 0; i < MAX_DEPTH; i++) {
-      entries.push(makeSuspendedPipeline({ runId: `run-${i}`, depth: i }))
+      parentEntries.push(makeSuspendedPipeline({ runId: `parent-run-${i}`, depth: i }))
     }
-    const activeState = makeNestingState({ depth: MAX_DEPTH, phaseStatus: 'ralph_loop' })
+    // Child project (proj-X) active state — references proj-Y as parent
+    const childActiveState = makeNestingState({
+      depth: MAX_DEPTH,
+      phaseStatus: 'ralph_loop',
+      parentPipelineProjectId: 'proj-Y',
+      projectId: 'proj-X',
+    })
     mockStateStore.read.mockImplementation((key: string) => {
-      if (key.endsWith('/state')) return activeState
-      if (key.endsWith('/suspended-stack')) return makeSuspendedStack(entries)
+      if (key.endsWith('/proj-X/state') || key.endsWith('/state')) return childActiveState
+      if (key === 'proj-Y/suspended-stack' || key.endsWith('/proj-Y/suspended-stack')) {
+        return makeSuspendedStack(parentEntries)
+      }
+      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([])
       return null
     })
-    expect(() => store.suspendActive('proj-1', 'cross_project_suspend')).toThrow(/depth/i)
+    expect(() => store.suspendActive('proj-X', 'cross_project_suspend')).toThrow(/depth/i)
+    // Verify parent project's stack was loaded for depth computation
+    expect(mockStateStore.read).toHaveBeenCalledWith(expect.stringContaining('proj-Y'))
   })
 })

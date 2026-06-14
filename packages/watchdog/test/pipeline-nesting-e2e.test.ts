@@ -174,9 +174,12 @@ describe('pipeline nesting - e2e', () => {
     const result = store.detectOrphanedSuspend('proj-1')
     expect(result).not.toBeNull()
     expect(result?.runId).toBe('parent-123')
-    // F-049: verify recovered state has correct depth, phaseStatus, and audit entries
+    // F-001: verify recovered state — depth + recovery write occurred.
     expect(result?.depth).toBe(0)
-    expect(result?.phaseStatus).not.toBe('suspended')
+    expect(mockStateStore.write).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ phaseStatus: expect.not.stringContaining('suspended') }),
+    )
     // F-025: tighten event name — 'recover' matches any substring; use 'ORPHANED'.
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),

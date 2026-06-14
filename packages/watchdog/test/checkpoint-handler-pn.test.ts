@@ -12,7 +12,9 @@ function createHandler(storeOverrides: Record<string, any> = {}) {
   const store = createMockStore()
   Object.assign(store, storeOverrides)
   // F-019/F-023: expose logger mock so tests can verify warn calls and ordering.
-  const loggerMock = { info: vi.fn(), warn: vi.fn(), error: vi.fn() } as any
+  // F-005: include debug method — Logger interface requires all four levels.
+  // Without it, any CheckpointHandler call to logger.debug throws TypeError.
+  const loggerMock = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } as any
   const handler = new CheckpointHandler(
     store as any,
     STALE_THRESHOLD_MS,
