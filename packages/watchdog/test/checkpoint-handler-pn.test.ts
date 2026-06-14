@@ -129,6 +129,10 @@ describe('CheckpointHandler - pipeline nesting', () => {
   })
 
   // #93
+  // F-009: readState intentionally returns a constant ralph_loop state to isolate
+  // the rate limiter as the sole reducer. If state advanced to 'suspended' after
+  // the first call, subsequent rejections would be for 'already suspended',
+  // confounding the rate-limit assertion.
   it('should rate-limit checkpoint event processing', async () => {
     const { handler, store, loggerMock } = createHandler()
     const state = makeState({ currentPhase: 5, phaseStatus: 'ralph_loop' })

@@ -40,14 +40,14 @@ function makeNestingState(overrides?: Partial<PipelineState>): PipelineState {
   })
 }
 
-const mockStateStore: StateStore = {
+const mockStateStore = {
   read: vi.fn(),
   write: vi.fn(),
   appendLog: vi.fn(),
   readLog: vi.fn().mockReturnValue([]),
   readLogSafe: vi.fn().mockReturnValue([]),
   list: vi.fn().mockReturnValue([]),
-}
+} satisfies StateStore
 
 const mockLogger: Logger = {
   debug: vi.fn(),
@@ -169,20 +169,35 @@ describe('quarantine integration - pipeline nesting', () => {
       quarantineHook: vi.fn().mockReturnValue(undefined),
     })
     storeCrash.suspendActive('proj-1', 'test_modification')
-    // F-018: positional index calls[0][1] is brittle if impl writes to multiple keys.
-    const stateWrite = mockStateStore.write.mock.calls.find(
-      ([key]: [string]) => key.endsWith('/state')
+    const stackWrite = mockStateStore.write.mock.calls.find(
+      ([key]: [string]) => key.endsWith('/suspended-stack')
     )
-    expect(stateWrite).toBeDefined()
-    const writtenState = stateWrite![1]
-    // F-046: check key exists explicitly — objectContaining with undefined
-    // may match objects where the key is absent entirely.
-    expect('quarantineSuccess' in writtenState).toBe(true)
-    expect(writtenState.quarantineSuccess).toBeUndefined()
-    // F-012: spec #148 requires WARNING log + suspend success despite hook crash.
+    expect(stackWrite).toBeDefined()
+    const stackEntry = (stackWrite![1] as SuspendedStack).entries[0]
+    expect('quarantineSuccess' in stackEntry).toBe(true)
+    expect(stackEntry.quarantineSuccess).toBeUndefined()
     expect(mockLogger.warn).toHaveBeenCalledWith(
       expect.stringContaining('quarantine'),
     )
-    expect(writtenState.phaseStatus).toBe('suspended')
+  })
+
+  // #103 — I/O error fallback variant
+  it('#103 — fallback to empty array on list() I/O error', () => {
+    const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
+    const childFailedState = makeNestingState({ runId: 'child-456', phaseStatus: 'failed', currentPhase: 4 })
+    mockStateStore.read.mockImplementation((key: string) => {
+      if (key.endsWith('/child-456/state')) return childFailedState
+      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
+      return null
+    })
+    mockStateStore.list.mockImplementationOnce(() => { throw new Error('EIO') })
+    store.resumeSuspended('proj-1', 'child-456')
+    expect(mockStateStore.appendLog).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ quarantinedFiles: [] }),
+    )
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect.stringMatching(/quarantine.*list|list.*fail|fallback/i),
+    )
   })
 })

@@ -43,14 +43,14 @@ function makeNestingState(overrides?: Partial<PipelineState>): PipelineState {
   })
 }
 
-const mockStateStore: StateStore = {
+const mockStateStore = {
   read: vi.fn(),
   write: vi.fn(),
   appendLog: vi.fn(),
   readLog: vi.fn().mockReturnValue([]),
   readLogSafe: vi.fn().mockReturnValue([]),
   list: vi.fn().mockReturnValue([]),
-}
+} satisfies StateStore
 
 const mockLogger: Logger = {
   debug: vi.fn(),
@@ -92,17 +92,8 @@ describe('crash recovery integration - pipeline nesting', () => {
     expect(mockStateStore.write).toHaveBeenCalled()
   })
 
-  // #68
-  it('should recover orphaned suspend after crash between suspend and child start', () => {
-    const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: undefined })
-    mockStateStore.read.mockImplementation((key: string) => {
-      if (key.endsWith('/active')) return null
-      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
-      return null
-    })
-    const result = store.detectOrphanedSuspend('proj-1')
-    expect(result).not.toBeNull()
-  })
+  // #68 — merged into #70 (identical fixture: childRunId undefined).
+  // See #70 below for the merged test covering "crash before child started".
 
   // #69
   it('should pop stale stack entry if resume crashed after state persist', () => {
@@ -119,8 +110,8 @@ describe('crash recovery integration - pipeline nesting', () => {
     )
   })
 
-  // #70
-  it('should handle crash during suspend stack pushed but child never started', () => {
+  // #70 — covers #68 (crash before child started, childRunId undefined).
+  it('#70 — should detect orphaned suspend when child not yet started', () => {
     const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: undefined })
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/active')) return null
@@ -163,7 +154,7 @@ describe('crash recovery integration - pipeline nesting', () => {
     store.detectOrphanedSuspend('proj-1')
     expect(mockStateStore.write).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ phaseStatus: expect.not.stringContaining('suspended') }),
+      expect.objectContaining({ phaseStatus: 'ralph_loop' }),
     )
   })
 
@@ -173,7 +164,7 @@ describe('crash recovery integration - pipeline nesting', () => {
     const result = store.detectOrphanedSuspend('proj-1')
     expect(result).toBeNull()
     expect(mockLogger.error).toHaveBeenCalledWith(
-      expect.stringContaining('CRITICAL'),
+      expect.stringMatching(/CRITICAL.*(no.*parent.*state|state.*found|manual.*intervention)/i),
     )
     expect(mockStateStore.write).not.toHaveBeenCalled()
   })
@@ -300,7 +291,10 @@ describe('crash recovery integration - pipeline nesting', () => {
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
       return null
     })
+    const mockRegressionCounter = { reset: vi.fn(), per_cycle_count: 0 }
+    store.createRegressionCounter = vi.fn().mockReturnValue(mockRegressionCounter)
     store.resumeSuspended('proj-1', 'child-456')
+    expect(mockRegressionCounter.reset).toHaveBeenCalledTimes(1)
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ event: 'pipeline_resume', regression_counter_reset: true }),
@@ -328,9 +322,10 @@ describe('crash recovery integration - pipeline nesting', () => {
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
       return null
     })
+    const mockCommitGuard = { clearFailures: vi.fn() }
+    Object.assign(store, { commitGuard: mockCommitGuard })
     store.resumeSuspended('proj-1', 'child-456')
-    // F-002: commitGuardFailures is owned by CommitGuard, not PipelineState (spec L256).
-    // Verify resume write happened; commit guard reset is verified via CommitGuard mock in #121.
+    expect(mockCommitGuard.clearFailures).toHaveBeenCalledTimes(1)
     expect(mockStateStore.write).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ phaseStatus: 'ralph_loop' }),
@@ -427,10 +422,10 @@ describe('crash recovery integration - pipeline nesting', () => {
   })
 
   // #147
-  // F-007: rewrite — old test used empty stack (not corrupted), had dead
-  // resumeFromPause mock, and called startPipeline/createRegressionCounter
-  // without stubs. Rewrite for corruption scenario + vi.fn() mocks.
-  it('should allow fresh pipeline_start after orphaned recovery discards corrupted stack', () => {
+  // Unit test (mock-based): verifies detectOrphanedSuspend throws on corruption
+  // + startPipeline stub returns fresh pipeline. True integration via
+  // handler.handle('pipeline_start') deferred to Phase 5.
+  it('[unit] orphaned recovery discards corrupted stack and startPipeline stub returns fresh pipeline', () => {
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/active')) return null
       if (key.endsWith('/suspended-stack')) return '{ broken json :::'
@@ -464,6 +459,12 @@ describe('crash recovery integration - pipeline nesting', () => {
       return null
     })
     store.detectOrphanedSuspend('proj-1')
+    vi.clearAllMocks()
+    mockStateStore.read.mockImplementation((key: string) => {
+      if (key.endsWith('/active')) return null
+      if (key.endsWith('/suspended-stack')) return makeSuspendedStack(entries)
+      return null
+    })
     const result = store.canSuspend('proj-1')
     expect(result).toBe(true)
     expect(mockLogger.warn).toHaveBeenCalledWith(

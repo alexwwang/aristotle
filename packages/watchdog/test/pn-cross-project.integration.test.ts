@@ -42,14 +42,14 @@ function makeNestingState(overrides?: Partial<PipelineState>): PipelineState {
   })
 }
 
-const mockStateStore: StateStore = {
+const mockStateStore = {
   read: vi.fn(),
   write: vi.fn(),
   appendLog: vi.fn(),
   readLog: vi.fn().mockReturnValue([]),
   readLogSafe: vi.fn().mockReturnValue([]),
   list: vi.fn().mockReturnValue([]),
-}
+} satisfies StateStore
 
 const mockLogger: Logger = {
   debug: vi.fn(),
@@ -122,8 +122,11 @@ describe('cross-project integration - pipeline nesting', () => {
       runId: 'parent-123', depth: 0, childRunId: 'child-456',
       parentPipelineProjectId: 'proj-slow',
     })
-    mockStateStore.read.mockImplementation(() => {
-      throw new Error('ETIMEDOUT: connection timed out')
+    mockStateStore.read.mockImplementation((key: string) => {
+      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
+      if (key.endsWith('/active')) return null
+      if (key.includes('proj-slow')) throw new Error('ETIMEDOUT: connection timed out')
+      return null
     })
     expect(() => store.resumeSuspended('proj-slow', 'child-456')).toThrow(/timeout/i)
   })

@@ -50,22 +50,14 @@ describe('transitions - pipeline nesting', () => {
     expect(result.valid).toBe(false)
   })
 
-  // #54 — validateNestingTransition('suspended','active') verifies the resumed
-  // transition is valid after corruption recovery defaults preSuspendStatus to
-  // 'active'. The defaulting logic itself is tested in pipeline-store-pn #30.
-  // F-009: renamed — this test verifies transition validity (precondition for
-  // defaulting), not the defaulting behavior itself.
-  it('should permit suspended→active transition as valid (precondition for #30 defaulting)', () => {
+  // Transition matrix: suspended→active is valid (precondition for #30 defaulting).
+  it('validateNestingTransition: suspended→active is valid', () => {
     const result = validateNestingTransition('suspended', 'active')
     expect(result.valid).toBe(true)
   })
 
-  // F-012: #54 original spec intent — reject resume from suspended when the
-  // preSuspendStatus is invalid. Phase 5 will extend validateNestingTransition
-  // to accept context with preSuspendStatus validation. Current 2-arg form
-  // verifies a related rejection: suspended→paused is not a valid transition
-  // (a suspended pipeline must resume to its preSuspendStatus, not pause).
-  it('should reject suspended→paused (preSuspendStatus validation, #54 original)', () => {
+  // Transition matrix: suspended→paused is rejected (must resume to preSuspendStatus).
+  it('validateNestingTransition: suspended→paused is rejected', () => {
     const result = validateNestingTransition('suspended', 'paused')
     expect(result.valid).toBe(false)
   })
@@ -134,12 +126,9 @@ describe('transitions - pipeline nesting', () => {
     expect(result.valid).toBe(true)
   })
 
-  // #128 — validateNestingTransition('active','ralph_loop') is rejected because
-  // active→ralph_loop is not a direct transition (requires phase_enter first).
-  // F-012: this is the 2-arg representation of #128's spec intent (reject resume
-  // when not paused). The operation-level guard (resumeFromPause checks
-  // phaseStatus==='paused') is in PipelineStore.
-  it('should reject active→ralph_loop direct transition (transition matrix prevents post-active resume)', () => {
+  // Transition matrix: active→ralph_loop is not a direct transition (requires phase_enter first).
+  // Operation-level guard (resumeFromPause checks phaseStatus==='paused') is in PipelineStore.
+  it('validateNestingTransition: active→ralph_loop is rejected', () => {
     const result = validateNestingTransition('active', 'ralph_loop')
     expect(result.valid).toBe(false)
   })

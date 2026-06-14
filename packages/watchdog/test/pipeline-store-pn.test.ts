@@ -45,14 +45,16 @@ function makeNestingState(overrides?: Partial<PipelineState>): PipelineState {
 }
 
 // F-043: typed StateStore mock for compile-time method coverage.
-const mockStateStore: StateStore = {
+// F-001: use `satisfies StateStore` (not `: StateStore`) to preserve vi.fn()
+// return types while still satisfying the structural contract.
+const mockStateStore = {
   read: vi.fn(),
   write: vi.fn(),
   appendLog: vi.fn(),
   readLog: vi.fn().mockReturnValue([]),
   readLogSafe: vi.fn().mockReturnValue([]),
   list: vi.fn().mockReturnValue([]),
-}
+} satisfies StateStore
 
 // F-006: add debug method — Logger interface requires all four levels.
 // Without it, any PipelineStore call to this.logger.debug throws TypeError.
@@ -213,7 +215,7 @@ describe('PipelineStore - Pipeline Nesting', () => {
     // Verify recovery state write occurred — orphan detection triggers state recovery
     expect(mockStateStore.write).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ phaseStatus: expect.not.stringContaining('suspended') }),
+      expect.objectContaining({ phaseStatus: 'active' }),
     )
   })
 
@@ -937,16 +939,8 @@ describe('PipelineStore - Pipeline Nesting', () => {
       if (key.endsWith('/active')) return null
       return makeSuspendedStack([entry])
     })
-    // F-017: decouple ordering — check INVALID_PHASE and phase number independently.
-    // F-011: single try/catch — calling detectOrphanedSuspend twice risks state mutation
-    // (first call may write a recovery audit log, etc.) skewing the second call's behavior.
-    try {
-      store.detectOrphanedSuspend('proj-1')
-      fail('detectOrphanedSuspend should have thrown INVALID_PHASE')
-    } catch (e) {
-      expect((e as Error).message).toMatch(/INVALID_PHASE/)
-      expect((e as Error).message).toContain(String(invalidPhase))
-    }
+    expect(() => store.detectOrphanedSuspend('proj-1')).toThrow(/INVALID_PHASE/)
+    expect(() => store.detectOrphanedSuspend('proj-1')).toThrow(RegExp(String(invalidPhase)))
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
       // 'INVALID_PHASE_RECOVERY' is not a CheckpointEvent — carry via metadata.code.

@@ -41,14 +41,14 @@ function makeNestingState(overrides?: Partial<PipelineState>): PipelineState {
   })
 }
 
-const mockStateStore: StateStore = {
+const mockStateStore = {
   read: vi.fn(),
   write: vi.fn(),
   appendLog: vi.fn(),
   readLog: vi.fn().mockReturnValue([]),
   readLogSafe: vi.fn().mockReturnValue([]),
   list: vi.fn().mockReturnValue([]),
-}
+} satisfies StateStore
 
 const mockLogger: Logger = {
   debug: vi.fn(),
@@ -184,7 +184,7 @@ describe('child lifecycle integration - pipeline nesting', () => {
   })
 
   // #90
-  it('should display nested pipeline tree in status output', () => {
+  it('should preserve nested parent-child linkage in stack entries', () => {
     const entries = [
       makeSuspendedPipeline({ runId: 'A', depth: 0 }),
       makeSuspendedPipeline({ runId: 'B', depth: 1, parentRunId: 'A', childRunId: 'child-B' }),
@@ -223,7 +223,7 @@ describe('child lifecycle integration - pipeline nesting', () => {
     store.resumeSuspended('proj-1', 'child-456')
     expect(mockStateStore.write).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ pending_pause: expect.objectContaining({ reason: 'unfixed' }) }),
+      expect.objectContaining({ pending_pause: expect.objectContaining({ violation_type: 'UNFIXED_ISSUES' }) }),
     )
     // F-033: verify compliance entry was NOT applied (lower priority than UNFIXED_ISSUES)
     expect(mockStateStore.write).not.toHaveBeenCalledWith(
@@ -258,6 +258,25 @@ describe('child lifecycle integration - pipeline nesting', () => {
     expect(store.getSessionInfo).toHaveBeenCalledTimes(1)
     vi.advanceTimersByTime(1)
     expect(store.getSessionInfo).toHaveBeenCalledTimes(2)
+  })
+
+  // #122 — persistent failure variant
+  it('#122 — child failure path when session check fails persistently', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-06-14T12:00:00Z'))
+    const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
+    const parentState = makeNestingState({ runId: 'parent-123', phaseStatus: 'suspended', preSuspendStatus: 'ralph_loop' })
+    mockStateStore.read.mockImplementation((key: string) => {
+      if (key.endsWith('/parent-123/state')) return parentState
+      if (key.endsWith('/active')) return null
+      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
+      return null
+    })
+    store.getSessionInfo = vi.fn().mockImplementation(() => { throw new Error('persistent') })
+    vi.advanceTimersByTime(2000)
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect.stringMatching(/child.*fail|session.*unknown|treat.*child/i),
+    )
   })
 
   // #126
