@@ -129,4 +129,14 @@ describe('transitions - pipeline nesting', () => {
     const result = validateNestingTransition('active', 'ralph_loop')
     expect(result.valid).toBe(false)
   })
+
+  // #54
+  // F-001: spec #54 requires preSuspendStatus to default to 'active' when invalid
+  // or undefined during recovery. The validator must REJECT unknown target statuses
+  // so the recovery path can fall back to 'active'. Without this rejection, the
+  // fallback branch would never fire (false-green risk in Green Phase).
+  it('should reject transition to unknown status (#54 fallback precondition)', () => {
+    const result = validateNestingTransition('suspended', 'bogus_status')
+    expect(result.valid).toBe(false)
+  })
 })

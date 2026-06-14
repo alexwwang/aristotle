@@ -205,11 +205,15 @@ describe('PipelineStore - Pipeline Nesting', () => {
   // #9
   // F-001: verify meaningful orphan detection — assert actual SuspendedPipeline fields,
   // NOT phaseStatus (which doesn't exist on SuspendedPipeline type — tautological assertion).
+  // F-017: explicit key matching — catch-all `return makeSuspendedStack([entry])` masks
+  // wrong-project reads and pollutes cross-test state. Only return stack for
+  // /suspended-stack keys; return null otherwise.
   it('should detect orphaned suspend when stack exists but no active pipeline', () => {
     const entry = makeSuspendedPipeline({ depth: 0, runId: 'orphan-run' })
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/active')) return null
-      return makeSuspendedStack([entry])
+      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
+      return null
     })
     const result = store.detectOrphanedSuspend('proj-1')
     expect(result).not.toBeNull()
@@ -482,10 +486,12 @@ describe('PipelineStore - Pipeline Nesting', () => {
   })
 
   // #29
+  // F-017: explicit key matching — see #9 above.
   it('should update parent to preSuspendStatus when stack popped but state still suspended', () => {
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/state')) return makeNestingState({ phaseStatus: 'suspended', preSuspendStatus: 'ralph_loop' })
-      return makeSuspendedStack([])
+      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([])
+      return null
     })
     store.detectOrphanedSuspend('proj-1')
     expect(mockStateStore.write).toHaveBeenCalledWith(
@@ -497,13 +503,15 @@ describe('PipelineStore - Pipeline Nesting', () => {
   // #30
   it('should default preSuspendStatus to active when invalid during corruption recovery', () => {
     const entry = makeSuspendedPipeline({ runId: 'A', depth: 0 })
+    // F-017: explicit key matching — see #9 above.
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/active')) return null
       if (key.endsWith('/state')) return makeNestingState({
         phaseStatus: 'suspended',
         preSuspendStatus: undefined,
       })
-      return makeSuspendedStack([entry])
+      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
+      return null
     })
     store.detectOrphanedSuspend('proj-1')
     expect(mockStateStore.write).toHaveBeenCalledWith(

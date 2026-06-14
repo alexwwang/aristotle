@@ -312,6 +312,9 @@ describe('child lifecycle integration - pipeline nesting', () => {
     expect(mockLogger.warn).toHaveBeenCalledWith(
       expect.stringMatching(/child.*fail|session.*unknown|treat.*child/i),
     )
+    // F-013: enforce 'retry once' contract — max 2 getSessionInfo calls
+    // (1 initial check + 1 retry). Implementation must not retry indefinitely.
+    expect(store.getSessionInfo).toHaveBeenCalledTimes(2)
   })
 
   // #126
@@ -472,6 +475,20 @@ describe('child lifecycle integration - pipeline nesting', () => {
       expect.any(String),
       expect.objectContaining({ phaseStatus: 'paused' }),
     )
+    // F-007: DEFERRED_PAUSE entries must survive resumeSuspended — verify no
+    // write call removed/replaced audit log entries, and the DEFERRED_PAUSE
+    // audit entry was preserved (not silently cleared by implementation).
+    expect(mockStateStore.write).not.toHaveBeenCalledWith(
+      expect.stringMatching(/log|audit/i),
+      expect.anything(),
+    )
+    expect(mockStateStore.appendLog).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        event: 'phase_fail',
+        metadata: expect.objectContaining({ code: 'DEFERRED_PAUSE' }),
+      }),
+    )
   })
 
   // #154
@@ -491,6 +508,15 @@ describe('child lifecycle integration - pipeline nesting', () => {
     expect(mockStateStore.write).toHaveBeenCalledWith(
       expect.stringMatching(/suspended-stack/),
       expect.objectContaining({ entries: expect.any(Array) }),
+    )
+    // F-008: parent must NOT be auto-resumed after child cleanup — verify no
+    // write transitions parent back to ralph_loop/active (would cause double-exec).
+    expect(mockStateStore.write).not.toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        runId: 'parent-123',
+        phaseStatus: expect.stringMatching(/ralph_loop|active/),
+      }),
     )
   })
 
@@ -512,18 +538,36 @@ describe('child lifecycle integration - pipeline nesting', () => {
       expect.any(String),
       expect.objectContaining({ runId: 'child-456', phaseStatus: 'cancelled' }),
     )
+    // F-009: audit entries required for BOTH parent phase_fail AND child CHILD_CANCELLED.
+    // Without both, implementation can skip audit logging entirely (compliance gap).
+    expect(mockStateStore.appendLog).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ event: 'phase_fail', runId: 'parent-123' }),
+    )
+    expect(mockStateStore.appendLog).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        runId: 'child-456',
+        metadata: expect.objectContaining({ code: 'CHILD_CANCELLED' }),
+      }),
+    )
   })
 
   // #159
   // F-014: REMOVED `store.handleConcurrentPauseTrigger = vi.fn()` override — see #142.
   // F-032: spec #159 requires verifying intermediate pipelines' pending_pause
   // undefined and status suspended (not just grandchild paused).
+  // F-003: verify active grandchild is NOT on the suspended stack (only
+  // grandparent/parent/child are suspended). Active runner must not appear in
+  // stack entries — otherwise fixture is self-contradictory.
   it('should recurse through suspended chain to pause active grandchild', () => {
     const entries = [
       makeSuspendedPipeline({ runId: 'grandparent', depth: 0 }),
       makeSuspendedPipeline({ runId: 'parent', depth: 1, parentRunId: 'grandparent', childRunId: 'child' }),
       makeSuspendedPipeline({ runId: 'child', depth: 2, parentRunId: 'parent', childRunId: 'grandchild' }),
     ]
+    // F-003: grandchild must not appear as a stack entry — it is the active runner.
+    expect(entries.some(e => e.runId === 'grandchild')).toBe(false)
     const grandchildState = makeNestingState({ runId: 'grandchild', phaseStatus: 'ralph_loop' })
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/grandchild/state')) return grandchildState

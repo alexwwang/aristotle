@@ -4,7 +4,7 @@ import { CheckpointHandler } from '../src/checkpoint.js'
 import { STALE_THRESHOLD_MS } from '../src/constants.js'
 import type { StateStore } from '@opencode-ai/core/store/state-store'
 import type { Logger } from '@opencode-ai/core/logger'
-import type { SuspendedPipeline, SuspendedStack, PipelineState } from '../src/schema.js'
+import type { SuspendedPipeline, SuspendedStack, PipelineState, PendingPause } from '../src/schema.js'
 import { makeState } from './helpers.js'
 
 // NOTE: Mock-based integration tests (Red Phase). True component-interaction tests deferred to Green Phase.
@@ -225,17 +225,25 @@ describe('crash recovery integration - pipeline nesting', () => {
   // #105
   // F-026: use in-memory Map so writes persist across read calls (was fixed
   // mockImplementation that ignored writes — not a true integration test).
+  // F-019: align memStore keys with implementation-generated format. The impl
+  // writes 'watchdog/proj-1/...' but the test was setting 'proj-1/...' keys —
+  // making all mocked data unreachable and the test a tautology. Use
+  // prefix-tolerant read so both formats resolve to the same memStore entry.
   it('should preserve pending_pause through crash recovery and apply on resume', () => {
     const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
+    // F-011: typed via satisfies PendingPause — no `as any`.
     const stateWithPause = {
       ...makeNestingState({ runId: 'parent-123', phaseStatus: 'suspended' }),
-      pending_pause: { reason: 'PENDING', violation_type: 'REGRESSION', files: ['src/a.ts'] } as any,
+      pending_pause: { reason: 'PENDING', violation_type: 'REGRESSION', files: ['src/a.ts'] } satisfies PendingPause,
     }
-    const memStore = new Map<string, any>()
-    memStore.set('proj-1/parent-123/state', stateWithPause)
-    memStore.set('proj-1/suspended-stack', makeSuspendedStack([entry]))
-    mockStateStore.read.mockImplementation((key: string) => memStore.get(key) ?? null)
-    mockStateStore.write.mockImplementation((key: string, value: any) => {
+    const memStore = new Map<string, unknown>()
+    memStore.set('watchdog/proj-1/parent-123/state', stateWithPause)
+    memStore.set('watchdog/proj-1/suspended-stack', makeSuspendedStack([entry]))
+    mockStateStore.read.mockImplementation((key: string) => {
+      const shortKey = key.replace(/^watchdog\//, '')
+      return (memStore.get(key) ?? memStore.get(shortKey) ?? null) as unknown
+    })
+    mockStateStore.write.mockImplementation((key: string, value: unknown) => {
       memStore.set(key, value)
     })
 
@@ -291,10 +299,16 @@ describe('crash recovery integration - pipeline nesting', () => {
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
       return null
     })
-    const mockRegressionCounter = { reset: vi.fn(), per_cycle_count: 0 }
-    store.createRegressionCounter = vi.fn().mockReturnValue(mockRegressionCounter)
+    // F-005: spec says resumeSuspended resets the EXISTING counter via
+    // getRegressionCounter().reset() — NOT by creating a new counter.
+    // Mocking createRegressionCounter inverts the contract and lets Green Phase
+    // implementations delete-and-recreate counters without detection.
+    const existingCounter = { per_cycle_count: 3, reset: vi.fn() }
+    store.getRegressionCounter = vi.fn().mockReturnValue(existingCounter)
+    store.createRegressionCounter = vi.fn()
     store.resumeSuspended('proj-1', 'child-456')
-    expect(mockRegressionCounter.reset).toHaveBeenCalledTimes(1)
+    expect(existingCounter.reset).toHaveBeenCalledTimes(1)
+    expect(store.createRegressionCounter).not.toHaveBeenCalled()
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ event: 'pipeline_resume', regression_counter_reset: true }),
@@ -336,7 +350,13 @@ describe('crash recovery integration - pipeline nesting', () => {
   it('should reset commit guard failures on pipeline unpause', () => {
     const state = makeNestingState({ runId: 'parent-123', phaseStatus: 'paused', prePauseStatus: 'ralph_loop' })
     mockStateStore.read.mockReturnValue(state)
+    // F-004: inject commitGuard mock BEFORE resumeFromPause, then assert
+    // clearFailures was called exactly once. Without this assertion, Green Phase
+    // can skip the clearFailures() call entirely and the test still passes.
+    const mockCommitGuard = { clearFailures: vi.fn() }
+    Object.assign(store, { commitGuard: mockCommitGuard })
     store.resumeFromPause('proj-1')
+    expect(mockCommitGuard.clearFailures).toHaveBeenCalledTimes(1)
     // F-002: commitGuardFailures is owned by CommitGuard, not PipelineState (spec L256).
     expect(mockStateStore.write).toHaveBeenCalledWith(
       expect.any(String),
@@ -419,12 +439,19 @@ describe('crash recovery integration - pipeline nesting', () => {
       { worktree: '/tmp/test', sessionID: 'ses-1' },
     )
     expect(store.removeRegressionCounter).toHaveBeenCalledWith('abandoned-run')
+    // F-010: verify a fresh counter was created for the new run — but NOT for
+    // the abandoned runId (would indicate the impl is re-creating the leak).
+    // NOTE: 'no longer in memory' check intentionally omitted — vi.fn() mocks
+    // don't reflect removeRegressionCounter side effects on getRegressionCounter.
+    expect(store.createRegressionCounter).toHaveBeenCalled()
+    expect(store.createRegressionCounter).not.toHaveBeenCalledWith('abandoned-run')
   })
 
-  // #147
-  // F-004: removed tautological startPipeline stub + assertions on that stub's
-  // configured return value. The detectOrphanedSuspend coverage is valid; the
-  // startPipeline fresh-run behavior should be tested separately in Green Phase.
+  // F-006: originally annotated as #147, but the test body only covers the
+  // depth-divergence / corrupted-stack detection path — NOT pipeline_start with
+  // force=false (which is the real #147 spec). #147 annotation dropped to avoid
+  // misleading coverage claims. Full #147 coverage deferred to Green Phase.
+  // TODO: #147 full spec coverage (pipeline_start with force=false)
   it('[unit] orphaned recovery detects corrupted stack and logs CRITICAL', () => {
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/active')) return null
@@ -437,19 +464,17 @@ describe('crash recovery integration - pipeline nesting', () => {
     )
   })
 
-  // #149
-  it('should use stack_length as authoritative depth during crash recovery when depth_field_diverges', () => {
+  // F-014: originally annotated as #149, but the test body calls
+  // detectOrphanedSuspend before clearAllMocks (no-op), then asserts on
+  // canSuspend depth divergence — not orphan recovery. #149 annotation dropped
+  // and no-op detectOrphanedSuspend call removed so the test name reflects
+  // what is actually asserted (canSuspend divergence detection).
+  it('canSuspend detects depth metric divergence during crash recovery', () => {
     const entries: SuspendedPipeline[] = []
     for (let i = 0; i < 9; i++) {
       entries.push(makeSuspendedPipeline({ runId: `run-${i}`, depth: i }))
     }
     entries.push(makeSuspendedPipeline({ runId: 'run-corrupt', depth: 5 }))
-    mockStateStore.read.mockImplementation((key: string) => {
-      if (key.endsWith('/active')) return null
-      if (key.endsWith('/suspended-stack')) return makeSuspendedStack(entries)
-      return null
-    })
-    store.detectOrphanedSuspend('proj-1')
     vi.clearAllMocks()
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/active')) return null
