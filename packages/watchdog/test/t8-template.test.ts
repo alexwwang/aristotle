@@ -13,6 +13,7 @@ describe('T-8 Implementation Test Writing', () => {
     })
     expect(prompt).toContain('src/business-logic.ts')
     expect(prompt).toContain('tests/business-logic.test.ts')
+    expect(prompt).toContain('typescript')
   })
 
   // TC-T8-002

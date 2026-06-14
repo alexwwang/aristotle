@@ -7,11 +7,14 @@ describe('T-1 Fact Gather', () => {
   const builder = new PromptBuilder()
 
   // TC-T1-001
+  // code_changes is an OUTPUT field (spec L385), not in T-1 input_schema.
+  // Input validation uses only input fields; builder.build accepts extras
+  // for placeholder substitution. Removing code_changes from validate_params
+  // avoids contradiction with TC-REG-006 (extra fields → invalid).
   it('should_accept_empty_code_changes_as_valid', () => {
     const t1 = registry.get_template('T-1')
     const validation = registry.validate_params('T-1', {
       phase: 1, round: 1, runId: 'run-1', projectId: 'proj-1', scope: 'full',
-      code_changes: [],
     })
     expect(validation.valid).toBe(true)
     const result = builder.build(t1, {
@@ -30,6 +33,6 @@ describe('T-1 Fact Gather', () => {
     }, true)
     expect(result.prompt.length).toBeGreaterThan(0)
     expect(result.prompt).toContain('full')
-    expect(result.token_estimate).toBeGreaterThanOrEqual(0)
+    expect(result.token_estimate).toBeGreaterThan(0)
   })
 })

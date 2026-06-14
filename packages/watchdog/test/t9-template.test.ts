@@ -22,7 +22,7 @@ describe('T-9 Precision Filter', () => {
     })
     expect(result.confirmed_findings.length).toBeGreaterThan(0)
     for (const f of result.confirmed_findings) {
-      expect(['CONFIRM', 'DOWNGRADE', 'REJECT']).toContain(f.verdict)
+      expect(['CONFIRM', 'DOWNGRADE']).toContain(f.verdict)
     }
   })
 
@@ -34,6 +34,7 @@ describe('T-9 Precision Filter', () => {
       review_scope: { in_scope: ['src/a.ts'], out_of_scope: ['out-of-scope.ts'] },
     })
     const downgraded = result.confirmed_findings.filter(f => f.verdict === 'DOWNGRADE')
+    expect(downgraded.length).toBeGreaterThan(0)
     for (const f of downgraded) {
       expect(f.original_severity).toBeDefined()
     }
@@ -75,7 +76,7 @@ describe('T-9 Precision Filter', () => {
       location_map: {},
       review_scope: { in_scope: ['src/a.ts', 'src/b.ts'], out_of_scope: [] },
     })
-    expect(result.halt_reason).toBeDefined()
+    expect(result.halt_reason).toBeTruthy()
   })
 
   // TC-T9-007
@@ -98,7 +99,7 @@ describe('T-9 Precision Filter', () => {
     })
     const f = result.confirmed_findings.find(f => f.id === 'F-01')
     expect(f?.verdict).toBe('DOWNGRADE')
-    expect(f?.note).toContain('location not provided')
+    expect(f?.verdict_reason).toContain('location not provided')
   })
 
   // TC-T9-009

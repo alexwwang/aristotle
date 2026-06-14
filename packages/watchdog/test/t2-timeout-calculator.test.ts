@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { calculateT2Timeout } from '../src/t2-timeout.js'
 
 describe('T-2 Timeout Calculator', () => {
@@ -33,7 +33,7 @@ describe('T-2 Timeout Calculator', () => {
       createdAt: '2026-06-06T10:00:00.000Z',
     })
     expect(result.timeout).toBe(50)
-    expect(result.warning).toBeDefined()
+    expect(result.warning).toBeTruthy()
   })
 
   // TC-T2-004
@@ -44,9 +44,8 @@ describe('T-2 Timeout Calculator', () => {
       marginSeconds: 10,
       createdAt: null,
     })
-    expect(result.timeout).toBeLessThanOrEqual(285)
-    expect(result.timeout).toBeGreaterThanOrEqual(30)
-    expect(result.warning).toBeDefined()
+    expect(result.timeout).toBe(290)
+    expect(result.warning).toBeTruthy()
   })
 
   // TC-T2-005

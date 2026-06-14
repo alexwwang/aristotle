@@ -94,9 +94,9 @@ describe('T-10 Eval Fix', () => {
   it('should_validate_defer_target_format', () => {
     expect(validateDeferTarget('Phase 5', 4)).toBe('Phase 5')
     expect(validateDeferTarget('Phase 6 Round 2', 5)).toBe('Phase 6 Round 2')
-    expect(validateDeferTarget('Phase5', 4)).not.toBe('Phase5')
-    expect(validateDeferTarget('phase 5', 4)).not.toBe('phase 5')
-    expect(validateDeferTarget('Phase 5 Round', 4)).not.toBe('Phase 5 Round')
+    expect(validateDeferTarget('Phase5', 4)).toBe('Phase 5')
+    expect(validateDeferTarget('phase 5', 4)).toBe('Phase 5')
+    expect(validateDeferTarget('Phase 5 Round', 4)).toBe('Phase 5')
   })
 
   // TC-T10-005
@@ -113,6 +113,7 @@ describe('T-10 Eval Fix', () => {
     expect(result).toBeDefined()
     expect(result.decisions).toBeDefined()
     expect(result.decisions.length).toBeGreaterThan(0)
+    expect(result.decisions[0].fix_suggestion).toMatch(/nonexistent|not found|error|does not exist/i)
   })
 
   // TC-T10-006
@@ -137,6 +138,7 @@ describe('T-10 Eval Fix', () => {
     }).not.toThrow()
     expect(outcomes).toHaveLength(1)
     expect(outcomes[0].decisions).toBeDefined()
+    expect(outcomes[0].decisions[0].fix_suggestion).toMatch(/nonexistent|not found|error|does not exist/i)
   })
 
   // TC-T10-008
