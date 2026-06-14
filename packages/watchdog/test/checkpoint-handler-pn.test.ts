@@ -96,7 +96,9 @@ describe('CheckpointHandler - pipeline nesting', () => {
       JSON.stringify({ reason: 'test_modification' }),
       { worktree: '/tmp/test', sessionID: 'ses-1' },
     )
+    // F-001: appendAudit signature is (projectId, runId, entry) — 3 args.
     expect(store.appendAudit).toHaveBeenCalledWith(
+      expect.any(String),
       expect.any(String),
       expect.objectContaining({
         event: 'pipeline_suspend',

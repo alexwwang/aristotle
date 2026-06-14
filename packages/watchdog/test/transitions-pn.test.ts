@@ -60,6 +60,16 @@ describe('transitions - pipeline nesting', () => {
     expect(result.valid).toBe(true)
   })
 
+  // F-012: #54 original spec intent — reject resume from suspended when the
+  // preSuspendStatus is invalid. Phase 5 will extend validateNestingTransition
+  // to accept context with preSuspendStatus validation. Current 2-arg form
+  // verifies a related rejection: suspended→paused is not a valid transition
+  // (a suspended pipeline must resume to its preSuspendStatus, not pause).
+  it('should reject suspended→paused (preSuspendStatus validation, #54 original)', () => {
+    const result = validateNestingTransition('suspended', 'paused')
+    expect(result.valid).toBe(false)
+  })
+
   // #98
   it('should reject transition from paused to paused', () => {
     const result = validateNestingTransition('paused', 'paused')
@@ -126,9 +136,9 @@ describe('transitions - pipeline nesting', () => {
 
   // #128 — validateNestingTransition('active','ralph_loop') is rejected because
   // active→ralph_loop is not a direct transition (requires phase_enter first).
-  // F-051: renamed to clarify this tests the transition matrix consequence, not the
-  // resume_from_pause guard directly. The operation-level guard (resumeFromPause
-  // checks phaseStatus==='paused') is in PipelineStore.
+  // F-012: this is the 2-arg representation of #128's spec intent (reject resume
+  // when not paused). The operation-level guard (resumeFromPause checks
+  // phaseStatus==='paused') is in PipelineStore.
   it('should reject active→ralph_loop direct transition (transition matrix prevents post-active resume)', () => {
     const result = validateNestingTransition('active', 'ralph_loop')
     expect(result.valid).toBe(false)

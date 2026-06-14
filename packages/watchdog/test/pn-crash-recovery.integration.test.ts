@@ -224,9 +224,10 @@ describe('crash recovery integration - pipeline nesting', () => {
     expect(mockLogger.error).toHaveBeenCalledWith(
       expect.stringContaining(corruptedRaw),
     )
+    // F-005: SuspendedStack schema is { entries: SuspendedPipeline[] }, not bare [].
     expect(mockStateStore.write).toHaveBeenCalledWith(
       expect.stringContaining('/suspended-stack'),
-      [],
+      { entries: [] },
     )
   })
 
@@ -282,10 +283,10 @@ describe('crash recovery integration - pipeline nesting', () => {
       expect.any(String),
       expect.objectContaining({ phaseStatus: 'paused' }),
     )
-    // F-038: verify pause-timeout audit entry was emitted
+    // F-004: spec L695 canonical event name is 'pause_timeout_escalation', not 'pause_timeout'.
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ event: 'pause_timeout', metadata: expect.objectContaining({ code: 'ESCALATION_FIRED' }) }),
+      expect.objectContaining({ event: 'pause_timeout_escalation', metadata: expect.objectContaining({ code: 'ESCALATION_FIRED' }) }),
     )
   })
 
@@ -328,9 +329,11 @@ describe('crash recovery integration - pipeline nesting', () => {
       return null
     })
     store.resumeSuspended('proj-1', 'child-456')
+    // F-002: commitGuardFailures is owned by CommitGuard, not PipelineState (spec L256).
+    // Verify resume write happened; commit guard reset is verified via CommitGuard mock in #121.
     expect(mockStateStore.write).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ commitGuardFailures: 0 }),
+      expect.objectContaining({ phaseStatus: 'ralph_loop' }),
     )
   })
 
@@ -339,9 +342,10 @@ describe('crash recovery integration - pipeline nesting', () => {
     const state = makeNestingState({ runId: 'parent-123', phaseStatus: 'paused', prePauseStatus: 'ralph_loop' })
     mockStateStore.read.mockReturnValue(state)
     store.resumeFromPause('proj-1')
+    // F-002: commitGuardFailures is owned by CommitGuard, not PipelineState (spec L256).
     expect(mockStateStore.write).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ commitGuardFailures: 0 }),
+      expect.objectContaining({ phaseStatus: 'ralph_loop' }),
     )
   })
 
@@ -475,9 +479,13 @@ describe('crash recovery integration - pipeline nesting', () => {
     }
     mockStateStore.read.mockReturnValue(state)
     store.resumeFromPause('proj-1')
-    expect(mockStateStore.write).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.not.objectContaining({ child_pause_timer_started_at: expect.any(String) }),
+    // F-014: expect.not.objectContaining passes even if key was never written.
+    // Verify the field was actively cleared via read-back of the actual written state.
+    const stateWrite = mockStateStore.write.mock.calls.find(
+      ([key]: [string]) => key.endsWith('/state'),
     )
+    expect(stateWrite).toBeDefined()
+    const writtenState = stateWrite![1]
+    expect('child_pause_timer_started_at' in writtenState).toBe(false)
   })
 })

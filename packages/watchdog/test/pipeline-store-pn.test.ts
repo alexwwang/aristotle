@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { PipelineStore } from '../src/pipeline-store.js'
-import type { SuspendedPipeline, SuspendedStack, PipelineState, ChildFailureContext } from '../src/schema.js'
+import type { SuspendedPipeline, SuspendedStack, PipelineState, ChildFailureContext, PendingPause } from '../src/schema.js'
 import { MAX_DEPTH } from '../src/constants.js'
 import type { StateStore } from '@opencode-ai/core/store/state-store'
 
@@ -143,12 +143,13 @@ describe('PipelineStore - Pipeline Nesting', () => {
 
   // #5
   it('should detect depth metric divergence and use parent.depth+1 (not stack.length+1)', () => {
+    // F-016: spec #5 describes stack.length=8 — match spec scenario count.
     const entries: SuspendedPipeline[] = []
-    for (let i = 0; i < 9; i++) {
+    for (let i = 0; i < 7; i++) {
       entries.push(makeSuspendedPipeline({ runId: `run-${i}`, depth: i }))
     }
     entries.push(makeSuspendedPipeline({ runId: 'run-corrupt', depth: 5 }))
-    expect(entries).toHaveLength(10)
+    expect(entries).toHaveLength(8)
     const parentState = makeNestingState({ depth: 5, phaseStatus: 'ralph_loop' })
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack(entries)
@@ -160,7 +161,7 @@ describe('PipelineStore - Pipeline Nesting', () => {
     const warnCalls = mockLogger.warn.mock.calls
     const divergenceCall = warnCalls.find(c => typeof c[0] === 'string' && c[0].includes('DEPTH_METRIC_DIVERGENCE'))
     expect(divergenceCall).toBeDefined()
-    expect(divergenceCall![0]).toContain('stack.length=10')
+    expect(divergenceCall![0]).toContain('stack.length=8')
     expect(divergenceCall![0]).toContain('parent.depth=5')
     expect(result).toBe(true)
   })
@@ -874,7 +875,8 @@ describe('PipelineStore - Pipeline Nesting', () => {
         // assertion below is self-consistent — without this, makeNestingState
         // defaults preSuspendStatus to undefined and Green Phase would set 'active'.
         preSuspendStatus: 'ralph_loop',
-        pending_pause: { reason: 'PATTERN_CYCLE', violation_type: 'REGRESSION', files: ['src/test.ts'] } as any,
+        // F-013: typed as PendingPause — no `as any`.
+        pending_pause: { reason: 'pattern_cycle', violation_type: 'REGRESSION', files: ['src/test.ts'] } satisfies PendingPause,
       })
       if (key.endsWith('/state')) return makeNestingState({ runId: 'child-456', phaseStatus: 'ralph_loop' })
       return makeSuspendedStack([entry])

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { PipelineStore } from '../src/pipeline-store.js'
 import type { StateStore } from '@opencode-ai/core/store/state-store'
 import type { Logger } from '@opencode-ai/core/logger'
-import type { SuspendedPipeline, SuspendedStack, PipelineState } from '../src/schema.js'
+import type { SuspendedPipeline, SuspendedStack, PipelineState, PendingPause } from '../src/schema.js'
 import { makeState } from './helpers.js'
 
 // NOTE: Mock-based integration tests (Red Phase). True component-interaction tests deferred to Green Phase.
@@ -166,8 +166,9 @@ describe('child lifecycle integration - pipeline nesting', () => {
   // #81
   it('should handle child partial completion', () => {
     const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
+    // F-015: spec #81 says 'child completed some phases before failing' → status is 'failed'.
     const childPartialState = makeNestingState({
-      runId: 'child-456', phaseStatus: 'complete', currentPhase: 3,
+      runId: 'child-456', phaseStatus: 'failed', currentPhase: 3,
     })
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/child-456/state')) return childPartialState
@@ -264,7 +265,8 @@ describe('child lifecycle integration - pipeline nesting', () => {
     const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
     const parentState = {
       ...makeNestingState({ runId: 'parent-123', phaseStatus: 'suspended', preSuspendStatus: 'ralph_loop' }),
-      pending_pause: { reason: 'PATTERN_CYCLE', violation_type: 'REGRESSION', files: ['src/a.ts'] } as any,
+      // F-007: align trigger types to spec enums. F-013: typed — no `as any`.
+      pending_pause: { reason: 'pattern_cycle', violation_type: 'REGRESSION', files: ['src/a.ts'] } satisfies PendingPause,
     }
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/parent-123/state')) return parentState
@@ -284,7 +286,9 @@ describe('child lifecycle integration - pipeline nesting', () => {
     const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
     const parentState = {
       ...makeNestingState({ runId: 'parent-123', phaseStatus: 'suspended', preSuspendStatus: 'ralph_loop' }),
-      pending_pause: { reason: 'FILE_SPLIT', violation_type: 'SCOPE', files: ['src/big.ts'] } as any,
+      // F-006: spec SpecialViolationType is FILE_SPLIT_NEEDED, reason is file_too_large.
+      // F-013: typed as PendingPause — no `as any`.
+      pending_pause: { reason: 'file_too_large', violation_type: 'FILE_SPLIT_NEEDED', files: ['src/big.ts'] } satisfies PendingPause,
     }
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/parent-123/state')) return parentState
@@ -304,7 +308,8 @@ describe('child lifecycle integration - pipeline nesting', () => {
     const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
     const parentState = {
       ...makeNestingState({ runId: 'parent-123', phaseStatus: 'suspended', preSuspendStatus: 'awaiting_approval' }),
-      pending_pause: { reason: 'MANUAL', violation_type: 'PROCESS', files: [] } as any,
+      // F-007: trigger values illustrative (not exercising trigger dispatch).
+      pending_pause: { reason: 'pattern_cycle', violation_type: 'REGRESSION', files: [] } satisfies PendingPause,
     }
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/parent-123/state')) return parentState
@@ -397,7 +402,7 @@ describe('child lifecycle integration - pipeline nesting', () => {
     const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
     const parentState = {
       ...makeNestingState({ runId: 'parent-123', phaseStatus: 'suspended', preSuspendStatus: 'ralph_loop' }),
-      pending_pause: { reason: 'PENDING', violation_type: 'REGRESSION', files: ['src/a.ts'] } as any,
+      pending_pause: { reason: 'pending_pause', violation_type: 'REGRESSION', files: ['src/a.ts'] } satisfies PendingPause,
     }
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/parent-123/state')) return parentState

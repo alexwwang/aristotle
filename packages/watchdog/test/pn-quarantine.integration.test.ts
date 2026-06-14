@@ -82,9 +82,15 @@ describe('quarantine integration - pipeline nesting', () => {
       quarantineHook: vi.fn().mockImplementation(() => { throw new Error('hook failed') }),
     })
     storeFail.suspendActive('proj-1', 'test_modification')
+    // F-008: quarantineSuccess lives on SuspendedPipeline entries (inside the stack),
+    // not on top-level PipelineState (schema L286 vs L29-85).
     expect(mockStateStore.write).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({ quarantineSuccess: false }),
+      expect.stringContaining('/suspended-stack'),
+      expect.objectContaining({
+        entries: expect.arrayContaining([
+          expect.objectContaining({ quarantineSuccess: false }),
+        ]),
+      }),
     )
   })
 
@@ -118,9 +124,14 @@ describe('quarantine integration - pipeline nesting', () => {
     })
     const result = store.detectOrphanedSuspend('proj-1')
     expect(result).not.toBeNull()
+    // F-008: quarantineSuccess is on the stack entry, not PipelineState.
     expect(mockStateStore.write).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({ quarantineSuccess: expect.any(Boolean) }),
+      expect.stringContaining('/suspended-stack'),
+      expect.objectContaining({
+        entries: expect.arrayContaining([
+          expect.objectContaining({ quarantineSuccess: expect.any(Boolean) }),
+        ]),
+      }),
     )
   })
 
@@ -138,10 +149,11 @@ describe('quarantine integration - pipeline nesting', () => {
     })
     mockStateStore.list.mockReturnValue(['.quarantine/file1.ts', '.quarantine/file2.ts'])
     store.resumeSuspended('proj-1', 'child-456')
+    // F-017: match mock return values exactly — no spec mandates basename extraction.
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({
-        quarantinedFiles: expect.arrayContaining(['file1.ts', 'file2.ts']),
+        quarantinedFiles: expect.arrayContaining(['.quarantine/file1.ts', '.quarantine/file2.ts']),
       }),
     )
   })
@@ -157,7 +169,12 @@ describe('quarantine integration - pipeline nesting', () => {
       quarantineHook: vi.fn().mockReturnValue(undefined),
     })
     storeCrash.suspendActive('proj-1', 'test_modification')
-    const writtenState = mockStateStore.write.mock.calls[0][1]
+    // F-018: positional index calls[0][1] is brittle if impl writes to multiple keys.
+    const stateWrite = mockStateStore.write.mock.calls.find(
+      ([key]: [string]) => key.endsWith('/state')
+    )
+    expect(stateWrite).toBeDefined()
+    const writtenState = stateWrite![1]
     // F-046: check key exists explicitly — objectContaining with undefined
     // may match objects where the key is absent entirely.
     expect('quarantineSuccess' in writtenState).toBe(true)
