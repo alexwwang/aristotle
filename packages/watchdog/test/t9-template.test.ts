@@ -63,6 +63,9 @@ describe('T-9 Precision Filter', () => {
   })
 
   // TC-T9-006
+  // HALT triggered: findings reference in_scope files but location_map is empty,
+  // meaning the reviewer cannot verify locations. This is distinct from TC-T9-011
+  // where all findings are out_of_scope (auto-REJECT skips HALT).
   it('should_halt_on_empty_location_map_with_findings', () => {
     const result = runT9PrecisionFilter({
       raw_findings: [
@@ -122,6 +125,8 @@ describe('T-9 Precision Filter', () => {
   })
 
   // TC-T9-011
+  // No HALT: all findings reference out_of_scope files (auto-REJECT), so empty
+  // location_map is moot. Contrast with TC-T9-006 where in_scope + empty map = HALT.
   it('should_return_empty_confirmed_findings_when_all_rejected', () => {
     const result = runT9PrecisionFilter({
       raw_findings: [
@@ -156,9 +161,15 @@ describe('T-9 Precision Filter', () => {
     })
     expect(result.confirmed_findings.length).toBeGreaterThan(0)
     expect(result.halt_reason).toBeUndefined()
+    const inputIds = new Set(rawFindings.map(f => f.id))
+    const resultIds = new Set<string>()
     for (const f of result.confirmed_findings) {
       expect(['CONFIRM', 'DOWNGRADE', 'REJECT']).toContain(f.verdict)
       expect(f.id).toMatch(/^F-\d{2}$/)
+      expect(inputIds.has(f.id)).toBe(true)
+      expect(resultIds.has(f.id)).toBe(false)
+      resultIds.add(f.id)
     }
+    expect(result.confirmed_findings.length).toBeLessThanOrEqual(rawFindings.length)
   })
 })

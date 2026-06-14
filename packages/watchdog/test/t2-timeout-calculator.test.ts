@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { calculateT2Timeout } from '../src/t2-timeout.js'
 
 describe('T-2 Timeout Calculator', () => {
@@ -50,16 +50,23 @@ describe('T-2 Timeout Calculator', () => {
   })
 
   // TC-T2-005
+  // Child createdAt must be used (not parent). Mock Date.now() to childCreatedAt
+  // for deterministic assertion: timeout = 300 - 0 - 10 = 290.
   it('should_calculate_child_pipeline_timeout', () => {
-    const result = calculateT2Timeout({
-      budgetSeconds: 300,
-      elapsedSeconds: 0,
-      marginSeconds: 10,
-      createdAt: '2026-06-06T10:00:00.000Z',
-      isChildPipeline: true,
-      childCreatedAt: '2026-06-06T10:01:40.000Z',
-    })
-    expect(result.timeout).toBeGreaterThanOrEqual(30)
-    expect(result.timeout).toBeLessThanOrEqual(290)
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-06-06T10:01:40.000Z'))
+    try {
+      const result = calculateT2Timeout({
+        budgetSeconds: 300,
+        elapsedSeconds: 0,
+        marginSeconds: 10,
+        createdAt: '2026-06-06T10:00:00.000Z',
+        isChildPipeline: true,
+        childCreatedAt: '2026-06-06T10:01:40.000Z',
+      })
+      expect(result.timeout).toBe(290)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

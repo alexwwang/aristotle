@@ -53,7 +53,8 @@ describe('T-8 Implementation Test Writing', () => {
       isOmo: false,
     })
     expect(omoPrompt.length).toBeGreaterThan(0)
-    expect(omoPrompt.length).toBeLessThanOrEqual(nonOmoPrompt.length)
+    expect(omoPrompt.length).toBeLessThan(nonOmoPrompt.length)
+    expect(nonOmoPrompt).toContain('design_plan/phase-5/impl-design.md')
   })
 
   // TC-T8-005

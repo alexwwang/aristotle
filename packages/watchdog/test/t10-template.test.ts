@@ -111,12 +111,14 @@ describe('T-10 Eval Fix', () => {
       severityMap: { 'F-01': 'H' },
     })
     expect(result).toBeDefined()
+    expect(result.decisions).toBeDefined()
+    expect(result.decisions.length).toBeGreaterThan(0)
   })
 
   // TC-T10-006
   it('should_fallback_defer_target_on_invalid_format', () => {
     const result = validateDeferTarget('InvalidFormat', 4)
-    expect(result).toMatch(/^Phase \d+$/)
+    expect(result).toBe('Phase 5')
   })
 
   // TC-T10-007
@@ -125,11 +127,16 @@ describe('T-10 Eval Fix', () => {
       finding_id: 'F-01', decision: 'MODIFY', rationale: 'Fix applied',
       fix_code: 'const x = 1', fix_suggestion: 'Edit /nonexistent/path/file.ts',
     }
-    expect(() => processT10Decisions({
-      decisions: [decision],
-      current_phase: 4,
-      severityMap: { 'F-01': 'H' },
-    })).not.toThrow()
+    const outcomes: Array<ReturnType<typeof processT10Decisions>> = []
+    expect(() => {
+      outcomes.push(processT10Decisions({
+        decisions: [decision],
+        current_phase: 4,
+        severityMap: { 'F-01': 'H' },
+      }))
+    }).not.toThrow()
+    expect(outcomes).toHaveLength(1)
+    expect(outcomes[0].decisions).toBeDefined()
   })
 
   // TC-T10-008
@@ -210,14 +217,9 @@ describe('T-10 Eval Fix', () => {
 
   // TC-T10-011
   it('should_fallback_defer_target_on_out_of_range_values', () => {
-    const result1 = validateDeferTarget('Phase 9', 4)
-    expect(result1).toMatch(/^Phase \d+$/)
-
-    const result2 = validateDeferTarget('Phase 0', 4)
-    expect(result2).toMatch(/^Phase \d+$/)
-
-    const result3 = validateDeferTarget('Phase 5 Round 0', 4)
-    expect(result3).toMatch(/^Phase \d+$/)
+    expect(validateDeferTarget('Phase 9', 4)).toBe('Phase 5')
+    expect(validateDeferTarget('Phase 0', 4)).toBe('Phase 5')
+    expect(validateDeferTarget('Phase 5 Round 0', 4)).toBe('Phase 5')
   })
 
   // TC-T10-012

@@ -27,6 +27,7 @@ describe('T-7b Violation Handling', () => {
       status: 'invalid_test', message: 'Design doc not found: design_plan/phase-5/impl-design.md',
     }, 'REGRESSION', 5)
     expect(result.status).toBe('invalid_test')
+    expect(result.message).toContain('Design doc not found')
   })
 
   // TC-T7B-004

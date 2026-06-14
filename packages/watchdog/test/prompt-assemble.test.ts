@@ -71,6 +71,8 @@ describe('Prompt Assemble MCP Tool', () => {
       isOmo: false,
     })
     expect(result.action).toBe('error')
+    expect(result.error).toBeDefined()
+    expect(typeof result.error).toBe('string')
   })
 
   // TC-MCP-008

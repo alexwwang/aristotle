@@ -7,6 +7,9 @@ describe('Template Independence', () => {
   const builder = new PromptBuilder()
 
   // TC-IND-001
+  // Template-level independence: T-9 and T-2 have distinct id/name/timeout/
+  // subagent_type/instruction_template. Session-level independence (different
+  // session IDs at spawn time) is an integration concern tested elsewhere.
   it('should_use_different_session_for_t9_vs_t2', () => {
     const t2Template = registry.get_template('T-2')
     const t9Template = registry.get_template('T-9')
@@ -14,6 +17,7 @@ describe('Template Independence', () => {
     expect(t2Template.name).toBe('reviewer')
     expect(t9Template.name).toBe('precision_filter')
     expect(t2Template.timeout).not.toBe(t9Template.timeout)
+    expect(t2Template.subagent_type).not.toBe(t9Template.subagent_type)
     expect(t2Template.instruction_template).not.toBe(t9Template.instruction_template)
   })
 

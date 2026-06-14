@@ -9,6 +9,11 @@ describe('T-1 Fact Gather', () => {
   // TC-T1-001
   it('should_accept_empty_code_changes_as_valid', () => {
     const t1 = registry.get_template('T-1')
+    const validation = registry.validate_params('T-1', {
+      phase: 1, round: 1, runId: 'run-1', projectId: 'proj-1', scope: 'full',
+      code_changes: [],
+    })
+    expect(validation.valid).toBe(true)
     const result = builder.build(t1, {
       phase: 1, round: 1, runId: 'run-1', projectId: 'proj-1', scope: 'full',
       code_changes: [],
@@ -25,5 +30,6 @@ describe('T-1 Fact Gather', () => {
     }, true)
     expect(result.prompt.length).toBeGreaterThan(0)
     expect(result.prompt).toContain('full')
+    expect(result.token_estimate).toBeGreaterThanOrEqual(0)
   })
 })
