@@ -56,7 +56,7 @@ describe('transitions - pipeline nesting', () => {
   })
 
   // #54
-  it('should reject invalid preSuspendStatus during corruption recovery', () => {
+  it('should default to active and return valid when preSuspendStatus is invalid during corruption recovery', () => {
     const result = validateNestingTransition('suspended', 'active')
     expect(result.valid).toBe(true)
   })

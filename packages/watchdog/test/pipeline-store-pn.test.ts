@@ -69,7 +69,6 @@ describe('PipelineStore - Pipeline Nesting', () => {
 
   // #1
   it('should push entry to suspended stack when suspending active pipeline', () => {
-    const state = makeNestingState({ currentPhase: 5, depth: 0 })
     mockStateStore.read.mockReturnValue(null)
     const entry = makeSuspendedPipeline()
     store.pushSuspended('proj-1', entry)
@@ -168,8 +167,10 @@ describe('PipelineStore - Pipeline Nesting', () => {
   // #9
   it('should detect orphaned suspend when stack exists but no active pipeline', () => {
     const entry = makeSuspendedPipeline({ depth: 0 })
-    mockStateStore.read.mockReturnValue(makeSuspendedStack([entry]))
-    mockStateStore.read.mockReturnValueOnce(null)
+    mockStateStore.read.mockImplementation((key: string) => {
+      if (key.includes('active')) return null
+      return makeSuspendedStack([entry])
+    })
     const result = store.detectOrphanedSuspend('proj-1')
     expect(result).not.toBeNull()
   })
@@ -271,6 +272,10 @@ describe('PipelineStore - Pipeline Nesting', () => {
       expect.any(String),
       expect.objectContaining({ event: 'pipeline_resume' as any, decision: 'BLOCK' }),
     )
+    // Spec #19: stack NOT popped on rejection — verify entry remains
+    const stack = store.getSuspendedStack('proj-1')
+    expect(stack.entries).toHaveLength(1)
+    expect(stack.entries[0].runId).toBe('run-123')
   })
 
   // #20
@@ -711,6 +716,10 @@ describe('PipelineStore - Pipeline Nesting', () => {
       expect.any(String),
       expect.objectContaining({ event: 'INVALID_PHASE_RECOVERY' as any }),
     )
+    // Spec #116b: A (depth=0) remains on stack untouched
+    const stack = store.getSuspendedStack('proj-1')
+    expect(stack.entries).toHaveLength(2)
+    expect(stack.entries.find(e => e.runId === 'A')).toBeDefined()
   })
 
   // #117

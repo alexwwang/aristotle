@@ -32,7 +32,7 @@ describe('CheckpointHandler - pipeline nesting', () => {
     store.getActiveRun.mockReturnValue({ runId: 'run-123', projectId: 'proj-1' })
     store.suspendActive = vi.fn()
     const result = await handler.handle(
-      'pipeline_suspend' as any,
+      'pipeline_suspend',
       JSON.stringify({ reason: 'test_modification' }),
       { worktree: '/tmp/test', sessionID: 'ses-1' },
     )
@@ -49,7 +49,7 @@ describe('CheckpointHandler - pipeline nesting', () => {
     store.readState.mockReturnValue(state)
     store.resumeSuspended = vi.fn()
     const result = await handler.handle(
-      'pipeline_resume' as any,
+      'pipeline_resume',
       JSON.stringify({ child_run_id: 'child-456' }),
       { worktree: '/tmp/test', sessionID: 'ses-1' },
     )
@@ -65,7 +65,7 @@ describe('CheckpointHandler - pipeline nesting', () => {
     store.readState.mockReturnValue(state)
     store.getActiveRun.mockReturnValue({ runId: 'run-123', projectId: 'proj-1' })
     const result = await handler.handle(
-      'pipeline_suspend' as any,
+      'pipeline_suspend',
       JSON.stringify({}),
       { worktree: '/tmp/test', sessionID: 'ses-1' },
     )
@@ -83,7 +83,7 @@ describe('CheckpointHandler - pipeline nesting', () => {
     store.readState.mockReturnValue(state)
     store.getActiveRun.mockReturnValue({ runId: 'run-123', projectId: 'proj-1' })
     await handler.handle(
-      'pipeline_suspend' as any,
+      'pipeline_suspend',
       JSON.stringify({ reason: 'test_modification' }),
       { worktree: '/tmp/test', sessionID: 'ses-1' },
     )
@@ -120,7 +120,7 @@ describe('CheckpointHandler - pipeline nesting', () => {
     const RAPID_REQUEST_COUNT = 5
     for (let i = 0; i < RAPID_REQUEST_COUNT; i++) {
       const r = await handler.handle(
-        'pipeline_suspend' as any,
+        'pipeline_suspend',
         JSON.stringify({ reason: 'test_modification' }),
         { worktree: '/tmp/test', sessionID: 'ses-1' },
       )
@@ -258,7 +258,7 @@ describe('CheckpointHandler - pipeline nesting', () => {
     store.resumeFromPause = vi.fn()
 
     const pauseResult = await handler.handle(
-      'pipeline_pause' as any,
+      'pipeline_pause',
       JSON.stringify({ reason: 'manual_pause' }),
       { worktree: '/tmp/test', sessionID: 'ses-1' },
     )
@@ -267,7 +267,7 @@ describe('CheckpointHandler - pipeline nesting', () => {
     expect(store.pauseActive).toHaveBeenCalledWith('proj-1')
 
     const unpauseResult = await handler.handle(
-      'pipeline_unpause' as any,
+      'pipeline_unpause',
       JSON.stringify({}),
       { worktree: '/tmp/test', sessionID: 'ses-1' },
     )
@@ -284,7 +284,7 @@ describe('CheckpointHandler - pipeline nesting', () => {
     store.getActiveRun.mockReturnValue({ runId: 'run-123', projectId: 'proj-1' })
 
     const result = await handler.handle(
-      'pipeline_pause' as any,
+      'pipeline_pause',
       JSON.stringify({}),
       { worktree: '/tmp/test', sessionID: 'ses-1' },
     )

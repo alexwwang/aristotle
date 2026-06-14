@@ -136,6 +136,17 @@ export function createMockStore() {
     clearActiveRun: vi.fn(),
     archiveRun: vi.fn(),
     getProjectIds: vi.fn().mockReturnValue([]),
+    // Phase 3: pipeline nesting methods
+    getSuspendedStack: vi.fn().mockReturnValue({ entries: [] }),
+    pushSuspended: vi.fn(),
+    popSuspended: vi.fn().mockReturnValue(null),
+    canSuspend: vi.fn().mockReturnValue(true),
+    suspendActive: vi.fn(),
+    resumeSuspended: vi.fn(),
+    pauseActive: vi.fn(),
+    resumeFromPause: vi.fn(),
+    detectOrphanedSuspend: vi.fn().mockReturnValue(null),
+    setChildRunId: vi.fn(),
     // async — matches production PipelineStore observation methods
     // (async for future StateStore async migration; internal ops currently sync)
     appendObservation: vi.fn().mockResolvedValue(undefined),
