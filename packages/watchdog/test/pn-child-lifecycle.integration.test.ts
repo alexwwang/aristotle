@@ -224,6 +224,9 @@ describe('child lifecycle integration - pipeline nesting', () => {
     expect(output).toMatch(/phase.*3\b/i)
     expect(output).toMatch(/phase.*5\b/i)
     expect(output).toMatch(/phase.*7\b/i)
+    // F-008 (MODIFY H): hierarchy indicator proves parent→child→grandchild lineage rendering.
+    expect(output).toMatch(/→|->|↳/)
+    // TODO(Phase5): add per-level status assertion once SuspendedPipeline.status field lands
   })
 
   // #112
@@ -343,7 +346,8 @@ describe('child lifecycle integration - pipeline nesting', () => {
       expect.any(String),
       expect.objectContaining({
         metadata: expect.objectContaining({
-          interventionType: expect.stringMatching(/PATTERN_CYCLE|FILE_SPLIT_NEEDED|REVIEW_ESCALATION/i),
+          // F-040 (H): anchored regex — fixture uses reason='pattern_cycle', must NOT match FILE_SPLIT_NEEDED.
+          interventionType: expect.stringMatching(/^PATTERN_CYCLE$/i),
         }),
       }),
     )
@@ -373,7 +377,8 @@ describe('child lifecycle integration - pipeline nesting', () => {
       expect.any(String),
       expect.objectContaining({
         metadata: expect.objectContaining({
-          interventionType: expect.stringMatching(/PATTERN_CYCLE|FILE_SPLIT_NEEDED|REVIEW_ESCALATION/i),
+          // F-040 (H): anchored regex — fixture uses violation_type='FILE_SPLIT_NEEDED'.
+          interventionType: expect.stringMatching(/^FILE_SPLIT_NEEDED$/i),
         }),
       }),
     )
@@ -402,7 +407,8 @@ describe('child lifecycle integration - pipeline nesting', () => {
       expect.any(String),
       expect.objectContaining({
         metadata: expect.objectContaining({
-          interventionType: expect.stringMatching(/PATTERN_CYCLE|FILE_SPLIT_NEEDED|REVIEW_ESCALATION/i),
+          // F-040 (H): anchored regex — fixture uses reason='pattern_cycle'.
+          interventionType: expect.stringMatching(/^PATTERN_CYCLE$/i),
         }),
       }),
     )

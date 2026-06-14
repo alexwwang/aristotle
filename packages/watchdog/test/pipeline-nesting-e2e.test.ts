@@ -159,11 +159,19 @@ describe('pipeline nesting - e2e', () => {
   })
 
   // #85
+  // F-006 (H): expand to 3-level fixture — a 1-level fixture cannot exercise
+  // mid-stack crash recovery (only tests orphan detection on a flat stack).
+  // Crash is at depth=1 (child-456). Recovery should preserve depth=0 entry
+  // and clean up the depth=2 orphan (grandchild-789).
   it('should recover from crash during nested execution', () => {
-    const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
+    const entries = [
+      makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' }),
+      makeSuspendedPipeline({ runId: 'child-456', depth: 1, childRunId: 'grandchild-789', parentRunId: 'parent-123' }),
+      makeSuspendedPipeline({ runId: 'grandchild-789', depth: 2, parentRunId: 'child-456' }),
+    ]
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/active')) return null
-      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
+      if (key.endsWith('/suspended-stack')) return makeSuspendedStack(entries)
       return null
     })
     const result = store.detectOrphanedSuspend('proj-1')

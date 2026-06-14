@@ -19,12 +19,13 @@ function createHandler(storeOverrides: Record<string, any> = {}) {
   // F-022: use `satisfies Logger` (not `as any`) — preserves vi.fn() return
   // types while still satisfying the structural contract, no type erasure.
   const loggerMock = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } satisfies Logger
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- F-011 (M): createHandler builds a partial mock; switch to `satisfies PipelineStore` in Green Phase once all methods are stubbed
   const handler = new CheckpointHandler(
     store as any,
     STALE_THRESHOLD_MS,
-    undefined,
-    undefined,
-    undefined,
+    /* observer= */ undefined,
+    /* cache= */ undefined,
+    /* loopConfig= */ undefined,
     loggerMock,
   )
   return { handler, store, loggerMock }
@@ -163,7 +164,7 @@ describe('CheckpointHandler - pipeline nesting', () => {
     expect(allCalls.length).toBeLessThan(RAPID_REQUEST_COUNT)
     expect(allCalls.length).toBeGreaterThan(0)
     expect(loggerMock.warn).toHaveBeenCalledWith(
-      expect.stringContaining('rate'),
+      expect.stringMatching(/rate.?limit|throttl/i),
     )
   })
 
@@ -366,6 +367,9 @@ describe('CheckpointHandler - pipeline nesting', () => {
   })
 
   // #155
+  // F-026 (P): formatPhaseStatus is tested here because CheckpointHandler consumes
+  // it via pause-timeout-enforcer import. Move to pause-timeout-enforcer-pn.test.ts
+  // if/when that file lands its own #155 coverage.
   it('should return correct display strings for new statuses', () => {
     expect(formatPhaseStatus('suspended')).toBe('suspended')
     expect(formatPhaseStatus('paused')).toBe('paused')

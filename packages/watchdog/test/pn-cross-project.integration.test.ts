@@ -123,6 +123,9 @@ describe('cross-project integration - pipeline nesting', () => {
 
   // #65
   // F-028: differentiate from #64 — mock throws ETIMEDOUT (slow I/O timeout).
+  // F-042 (MODIFY M): PARTIAL(#65) — timeout simulated via error throw, not
+  // elapsed-time measurement. True timeout test (fake timers +
+  // CROSS_PROJECT_RESOLUTION_TIMEOUT_MS import) deferred to Green Phase.
   it('should reject resume when cross project resolution times out', () => {
     const entry = makeSuspendedPipeline({
       runId: 'parent-123', depth: 0, childRunId: 'child-456',

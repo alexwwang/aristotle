@@ -98,11 +98,8 @@ describe('crash recovery integration - pipeline nesting', () => {
     expect(mockStateStore.write).toHaveBeenCalled()
   })
 
-  // #68 — merged into #70 (identical fixture: childRunId undefined).
-  // See #70 below for the merged test covering "crash before child started".
-
-  // #68 — F-011: distinct from #70 (childRunId set but child state file missing
-  // vs #70's childRunId never set). Previously merged into #70.
+  // #68 — F-029 (P): distinct from #70: childRunId is set in stack but child state
+  // file is missing (vs #70 where childRunId is undefined). Tests dangling-reference detection.
   it('#68 — should handle childRunId set but child state file missing', () => {
     const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
     mockStateStore.read.mockImplementation((key: string) => {
@@ -331,6 +328,9 @@ describe('crash recovery integration - pipeline nesting', () => {
     expect(existingCounter.reset).toHaveBeenCalledTimes(1)
     expect(existingCounter.reset).toHaveBeenCalledWith()
     expect(store.createRegressionCounter).not.toHaveBeenCalled()
+    // F-043 (M): verify getRegressionCounter was called with the CORRECT runId
+    // (parent-123, the parent being resumed — NOT child-456).
+    expect(store.getRegressionCounter).toHaveBeenCalledWith('parent-123')
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ event: 'pipeline_resume', regression_counter_reset: true }),

@@ -130,9 +130,11 @@ describe('PipelineStore - Pipeline Nesting', () => {
     const activeState = makeNestingState({ depth: 9, phaseStatus: 'ralph_loop' })
     // F-004: explicit /active branch BEFORE catch-all — without it, the catch-all
     // returns makeSuspendedStack for /active keys, causing type confusion.
+    // F-019 (M): scope /state key with runId — generic suffix matching is fragile
+    // when tests use multiple runIds; more-specific keys before generic suffixes.
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/active')) return { runId: 'run-123', projectId: 'proj-1' }
-      if (key.endsWith('/state')) return activeState
+      if (key.endsWith('/run-123/state')) return activeState
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack(entries)
       return null
     })
@@ -158,6 +160,21 @@ describe('PipelineStore - Pipeline Nesting', () => {
     // F-023: stronger than regex-based negative matcher — suspendActive should
     // throw BEFORE any state mutation, so no write should have occurred at all.
     expect(mockStateStore.write).not.toHaveBeenCalled()
+  })
+
+  // F-036 (L): boundary complement to #3/#4 — depth=8 with 8 stack entries is the
+  // last acceptable depth (new_child_depth=9 < MAX_DEPTH=10). Catches off-by-one.
+  it('should accept canSuspend at depth=8 with 8 stack entries (boundary just below MAX_DEPTH)', () => {
+    const entries = Array.from({ length: 8 }, (_, i) => makeSuspendedPipeline({ depth: i }))
+    const activeState = makeNestingState({ depth: 8, phaseStatus: 'ralph_loop' })
+    mockStateStore.read.mockImplementation((key: string) => {
+      if (key.endsWith('/active')) return { runId: 'run-123', projectId: 'proj-1' }
+      if (key.endsWith('/run-123/state')) return activeState
+      if (key.endsWith('/suspended-stack')) return makeSuspendedStack(entries)
+      return null
+    })
+    const result = store.canSuspend('proj-1')
+    expect(result).toBe(true)
   })
 
   // #5
@@ -247,6 +264,13 @@ describe('PipelineStore - Pipeline Nesting', () => {
       expect.any(String),
       expect.objectContaining({ phaseStatus: 'active' }),
     )
+    // F-022 (M): verify recovery audit was emitted — mirrors #24 pattern at L456-461.
+    expect(mockStateStore.appendLog).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        metadata: expect.objectContaining({ code: 'ORPHANED_SUSPEND_RECOVERY' }),
+      }),
+    )
   })
 
   // #10
@@ -289,7 +313,7 @@ describe('PipelineStore - Pipeline Nesting', () => {
   // after state persistence (write). Constructor hook param exists in Red Phase.
   it('should call quarantine hook after state persistence', () => {
     const quarantineHook = vi.fn().mockReturnValue(true)
-    const storeWithHook = new PipelineStore(mockStateStore as any, mockLogger as any, { quarantineHook })
+    const storeWithHook = new PipelineStore(mockStateStore, mockLogger, { quarantineHook })
     const state = makeNestingState()
     mockStateStore.read.mockReturnValue(state)
     storeWithHook.suspendActive('proj-1', 'test_modification')
@@ -573,11 +597,10 @@ describe('PipelineStore - Pipeline Nesting', () => {
     expect(result).not.toBeNull()
   })
 
-  // #32
-  // F-010: set preSuspendStatus:'ralph_loop' explicitly so the assertion on
-  // phaseStatus:'ralph_loop' is self-consistent (not relying on quarantine path).
-  it('should complete state update when quarantineSuccess false during inconsistency', () => {
-    const entry = makeSuspendedPipeline({ quarantineSuccess: false })
+  // F-032 (MODIFY P): shared setup for #32/#32b — asymmetric audit-log assertions
+  // (one asserts WAS called, other NOT called) prevent it.each parameterization.
+  function setupQuarantineInconsistency(quarantineSuccess: boolean) {
+    const entry = makeSuspendedPipeline({ quarantineSuccess })
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/active')) return makeNestingState({ phaseStatus: 'suspended', preSuspendStatus: 'ralph_loop' })
       return makeSuspendedStack([entry])
@@ -587,6 +610,11 @@ describe('PipelineStore - Pipeline Nesting', () => {
       expect.any(String),
       expect.objectContaining({ phaseStatus: 'ralph_loop' }),
     )
+  }
+
+  // #32
+  it('should complete state update when quarantineSuccess false during inconsistency', () => {
+    setupQuarantineInconsistency(false)
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ metadata: expect.objectContaining({ code: 'QUARANTINE_HOOK_FAILED_SUSPEND', phase: expect.any(Number) }) }),
@@ -594,18 +622,8 @@ describe('PipelineStore - Pipeline Nesting', () => {
   })
 
   // #32b
-  // F-010: set preSuspendStatus:'ralph_loop' explicitly (same rationale as #32).
   it('should complete state update when quarantineSuccess true during inconsistency', () => {
-    const entry = makeSuspendedPipeline({ quarantineSuccess: true })
-    mockStateStore.read.mockImplementation((key: string) => {
-      if (key.endsWith('/active')) return makeNestingState({ phaseStatus: 'suspended', preSuspendStatus: 'ralph_loop' })
-      return makeSuspendedStack([entry])
-    })
-    store.detectOrphanedSuspend('proj-1')
-    expect(mockStateStore.write).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({ phaseStatus: 'ralph_loop' }),
-    )
+    setupQuarantineInconsistency(true)
     expect(mockStateStore.appendLog).not.toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ metadata: expect.objectContaining({ code: 'QUARANTINE_HOOK_FAILED_SUSPEND' }) }),
@@ -755,9 +773,11 @@ describe('PipelineStore - Pipeline Nesting', () => {
     expect(mockStateStore.write).toHaveBeenCalledTimes(2)
   })
 
-  // #92
-  // F-052: include metadata count and verify entry count matches stored metadata.
-  it('should validate stack integrity on every read', () => {
+  // #92 — F-014 (M): renamed to reflect actual behavior. Verifies getSuspendedStack
+  // returns entries in insertion order (not sorted). 'Integrity' here means count
+  // metadata matches entries.length; depth-order is NOT validated (LIFO insertion
+  // is tested in popSuspended #2).
+  it('should preserve insertion order of suspended entries on read', () => {
     const entries = [
       makeSuspendedPipeline({ depth: 7 }),
       makeSuspendedPipeline({ depth: 3 }),
@@ -822,6 +842,13 @@ describe('PipelineStore - Pipeline Nesting', () => {
     expect(stateWrite).toBeDefined()
     const writtenState = stateWrite![1]
     expect(writtenState.pending_pause == null).toBe(true)
+    // F-041 (H): verify audit-log fallback was emitted for pending_pause=null.
+    expect(mockStateStore.appendLog).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        metadata: expect.objectContaining({ code: 'PENDING_PAUSE_FALLBACK' }),
+      }),
+    )
   })
 
   // #101 (cont.) — pending_pause=undefined preserved equivalently
@@ -842,6 +869,13 @@ describe('PipelineStore - Pipeline Nesting', () => {
     expect(stateWrite).toBeDefined()
     const writtenState = stateWrite![1]
     expect(writtenState.pending_pause == null).toBe(true)
+    // F-041 (H): verify audit-log fallback emitted equivalently for pending_pause=undefined.
+    expect(mockStateStore.appendLog).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        metadata: expect.objectContaining({ code: 'PENDING_PAUSE_FALLBACK' }),
+      }),
+    )
   })
 
   // #102

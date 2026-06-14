@@ -125,6 +125,9 @@ export function makePhaseRecord(phase: number, overrides: Partial<PhaseRecord> =
 // Observer tests use mockImplementationOnce(() => { throw ... }) for error injection
 // since cache.get() is sync and does not return a Promise.
 
+// F-031 (P): Abstraction boundary — StateStore (low-level) uses appendLog;
+// PipelineStore (high-level) wraps it as appendAudit. Tests should assert
+// appendLog on mockStateStore and appendAudit on store instances.
 export function createMockStore() {
   return {
     // Synchronous methods (match production PipelineStore signatures)
