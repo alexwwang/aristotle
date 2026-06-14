@@ -1,10 +1,14 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { TaskTemplateRegistry } from '../src/registry.js'
 import { PromptBuilder } from '../src/prompt-builder.js'
 
 describe('T-1 Fact Gather', () => {
-  const registry = new TaskTemplateRegistry()
-  const builder = new PromptBuilder()
+  let registry: TaskTemplateRegistry
+  let builder: PromptBuilder
+  beforeEach(() => {
+    registry = new TaskTemplateRegistry()
+    builder = new PromptBuilder()
+  })
 
   // TC-T1-001
   // code_changes is an OUTPUT field (spec L385), not in T-1 input_schema.

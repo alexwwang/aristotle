@@ -1,8 +1,11 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { TaskTemplateRegistry } from '../src/registry.js'
 
 describe('Parameter Naming Convention', () => {
-  const registry = new TaskTemplateRegistry()
+  let registry: TaskTemplateRegistry
+  beforeEach(() => {
+    registry = new TaskTemplateRegistry()
+  })
 
   // TC-PNC-001
   it('should_accept_camelcase_for_t1', () => {

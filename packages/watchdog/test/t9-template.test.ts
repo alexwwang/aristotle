@@ -1,9 +1,12 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { TaskTemplateRegistry } from '../src/registry.js'
 import { runT9PrecisionFilter } from '../src/t9-precision.js'
 
 describe('T-9 Precision Filter', () => {
-  const registry = new TaskTemplateRegistry()
+  let registry: TaskTemplateRegistry
+  beforeEach(() => {
+    registry = new TaskTemplateRegistry()
+  })
 
   // TC-T9-001
   it('should_retrieve_t9_template_with_oracle_subagent', () => {
@@ -29,9 +32,9 @@ describe('T-9 Precision Filter', () => {
   // TC-T9-003
   it('should_require_original_severity_on_downgrade', () => {
     const result = runT9PrecisionFilter({
-      raw_findings: [{ id: 'F-01', severity: 'H', description: 'test', location: 'out-of-scope.ts:1', suggestion: 'fix' }],
-      location_map: {},
-      review_scope: { in_scope: ['src/a.ts'], out_of_scope: ['out-of-scope.ts'] },
+      raw_findings: [{ id: 'F-01', severity: 'H', description: 'test', location: 'src/a.ts:1', suggestion: 'fix' }],
+      location_map: { 'src/a.ts': { exists: false } },
+      review_scope: { in_scope: ['src/a.ts'], out_of_scope: [] },
     })
     const downgraded = result.confirmed_findings.filter(f => f.verdict === 'DOWNGRADE')
     expect(downgraded.length).toBeGreaterThan(0)
@@ -45,7 +48,7 @@ describe('T-9 Precision Filter', () => {
     const result = runT9PrecisionFilter({
       raw_findings: [{ id: 'F-01', severity: 'H', description: 'test', location: 'src/missing.ts:1', suggestion: 'fix' }],
       location_map: {},
-      review_scope: { in_scope: ['src/a.ts'], out_of_scope: [] },
+      review_scope: { in_scope: ['src/a.ts', 'src/missing.ts'], out_of_scope: [] },
     })
     const f = result.confirmed_findings.find(f => f.id === 'F-01')
     expect(f?.verdict).toBe('DOWNGRADE')
@@ -173,5 +176,10 @@ describe('T-9 Precision Filter', () => {
       resultIds.add(f.id)
     }
     expect(result.confirmed_findings.length).toBeLessThanOrEqual(rawFindings.length)
+    expect(resultIds.size).toBe(rawFindings.length)
+    // TODO: batch count and sizes (30+15) cannot be verified through the
+    //  current API — runT9PrecisionFilter doesn't expose batch metadata.
+    //  Precedence rules (REJECT>DOWNGRADE>CONFIRM) require cross-batch
+    //  conflict fixtures once implementation supports them.
   })
 })

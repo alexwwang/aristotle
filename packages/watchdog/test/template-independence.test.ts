@@ -1,16 +1,22 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { PromptBuilder } from '../src/prompt-builder.js'
 import { TaskTemplateRegistry } from '../src/registry.js'
 
 describe('Template Independence', () => {
-  const registry = new TaskTemplateRegistry()
-  const builder = new PromptBuilder()
+  let registry: TaskTemplateRegistry
+  let builder: PromptBuilder
+  beforeEach(() => {
+    registry = new TaskTemplateRegistry()
+    builder = new PromptBuilder()
+  })
 
   // TC-IND-001
   // Template-level independence: T-9 and T-2 have distinct id/name/timeout/
   // subagent_type/instruction_template. Session-level independence (different
   // session IDs at spawn time) is an integration concern tested elsewhere.
-  it('should_use_different_session_for_t9_vs_t2', () => {
+  // Session-level independence (different session IDs at spawn time) is an
+  //  integration concern — this test verifies template-level isolation only.
+  it('should_have_distinct_template_properties_for_t9_vs_t2', () => {
     const t2Template = registry.get_template('T-2')
     const t9Template = registry.get_template('T-9')
     expect(t2Template.id).not.toBe(t9Template.id)

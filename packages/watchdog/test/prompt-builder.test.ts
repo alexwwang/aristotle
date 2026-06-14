@@ -1,17 +1,21 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { PromptBuilder } from '../src/prompt-builder.js'
 import { TaskTemplateRegistry } from '../src/registry.js'
 
 describe('PromptBuilder', () => {
-  const registry = new TaskTemplateRegistry()
-  const builder = new PromptBuilder()
+  let registry: TaskTemplateRegistry
+  let builder: PromptBuilder
+  beforeEach(() => {
+    registry = new TaskTemplateRegistry()
+    builder = new PromptBuilder()
+  })
 
   // TC-PB-001
   it('should_generate_short_prompt_when_omo_detected', () => {
     const template = registry.get_template('T-2')
     const result = builder.build(template, { phase: 1, round: 2, runId: 'run-001', projectId: 'proj-1' }, true)
     expect(result.is_omo).toBe(true)
-    expect(result.token_estimate).toBeLessThanOrEqual(400)
+    expect(result.token_estimate).toBeLessThanOrEqual(330)
     expect(result.prompt).not.toContain('You are a strict code reviewer')
   })
 
@@ -58,5 +62,9 @@ describe('PromptBuilder', () => {
     const template = registry.get_template('T-2')
     const result = builder.build(template, { phase: 4, round: 1, runId: 'run-001', projectId: 'proj-1' }, false)
     expect(result.prompt).toContain('TDD')
+    // Verify TDD protocol-specific terms, not just the acronym.
+    const tddTerms = ['Red', 'Green', 'Refactor']
+    const hasProtocolTerm = tddTerms.some(term => result.prompt.includes(term))
+    expect(hasProtocolTerm).toBe(true)
   })
 })

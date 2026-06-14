@@ -1,10 +1,13 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { TaskTemplateRegistry } from '../src/registry.js'
 import { processT10Decisions, validateDeferTarget } from '../src/t10-eval.js'
 import type { T10Decision } from '../src/t10-eval.js'
 
 describe('T-10 Eval Fix', () => {
-  const registry = new TaskTemplateRegistry()
+  let registry: TaskTemplateRegistry
+  beforeEach(() => {
+    registry = new TaskTemplateRegistry()
+  })
 
   // TC-T10-001
   it('should_retrieve_t10_template_with_build_subagent', () => {
@@ -169,7 +172,11 @@ describe('T-10 Eval Fix', () => {
       severityMap: { 'F-01': 'H' },
     })
     expect(result.decisions[0].decision).toBe('ADOPT')
+    expect(result.status).toBe('timeout')
     expect(typeof result.pending_count).toBe('number')
+    // TODO: input lacks explicit timeout indicator — processT10Decisions API
+    //  may need an is_timeout or status field to distinguish timeout scenarios
+    //  from normal processing.
   })
 
   // TC-T10-010
@@ -231,12 +238,14 @@ describe('T-10 Eval Fix', () => {
   })
 
   // TC-T10-011
-  it('should_fallback_defer_target_on_out_of_range_values', () => {
-    expect(validateDeferTarget('Phase 9', 4)).toBe('Phase 5')
-    expect(validateDeferTarget('Phase 0', 4)).toBe('Phase 5')
-    expect(validateDeferTarget('Phase 5 Round 0', 4)).toBe('Phase 5')
-    expect(validateDeferTarget('Invalid', 8)).toBe('Phase 8')
-    expect(validateDeferTarget('Invalid', 7)).toBe('Phase 8')
+  it.each([
+    ['Phase 9', 4, 'Phase 5'],
+    ['Phase 0', 4, 'Phase 5'],
+    ['Phase 5 Round 0', 4, 'Phase 5'],
+    ['Invalid', 8, 'Phase 8'],
+    ['Invalid', 7, 'Phase 8'],
+  ])('should_fallback_defer_target_on_out_of_range_values(%s, phase=%i)', (target, phase, expected) => {
+    expect(validateDeferTarget(target, phase)).toBe(expected)
   })
 
   // TC-T10-012

@@ -45,10 +45,8 @@ describe('GPAV Schema Validation', () => {
     expect(validateGPAVFindingSeverity(precisionFinding.severity)).toBe(true)
     expect(validateGPAVFindingId(recallFinding.id)).toBe(true)
     expect(validateGPAVFindingSeverity(recallFinding.severity)).toBe(true)
-    // Explicit schema constraint: Precision pass (pass_step=3) uses rejected=true;
-    // Recall pass (pass_step=1) uses rejected=false.
-    expect(precisionFinding.rejected).toBe(true)
-    expect(recallFinding.rejected).toBe(false)
+    // TODO: replace with validateGPAVFindingContext() call once implemented
+    //  to verify rejected=true is only valid at pass_step=3 (Precision pass).
   })
 
   // TC-GPAV-004
@@ -76,9 +74,17 @@ describe('GPAV Schema Validation', () => {
       expect(validActions.has(result)).toBe(true)
       results.add(result)
     }
-    // Strengthened: 6 distinct severity conditions should yield at least 3
-    // distinct actions (downgrade, upgrade, same-severity families).
-    expect(results.size).toBeGreaterThanOrEqual(3)
+    // 6 distinct severity conditions should yield at least 4 distinct actions
+    // (upgrade, downgrade, same-severity, cross-severity families).
+    expect(results.size).toBeGreaterThanOrEqual(4)
+    // Same-severity pairs (C/C, H/H) should produce identical actions.
+    const ccResult = computeContestedIssueNextAction({
+      finding_id: 'F-01', original_severity: 'C', contested_severity: 'C', next_action: 'reject',
+    })
+    const hhResult = computeContestedIssueNextAction({
+      finding_id: 'F-01', original_severity: 'H', contested_severity: 'H', next_action: 'reject',
+    })
+    expect(ccResult).toBe(hhResult)
   })
 
   // TC-GPAV-005
@@ -88,8 +94,8 @@ describe('GPAV Schema Validation', () => {
   it('should_validate_rps_result_action_always_warn', () => {
     const rps: RPSResult = { action: 'WARN', finding_id: 'F-01', details: 'test' }
     expect(validateGPAVFindingId(rps.finding_id)).toBe(true)
-    // Schema constraint: action must be 'WARN' per spec (not FIX/BLOCK/etc.)
-    expect(rps.action).toBe('WARN')
+    // TODO: replace with validateRPSResult() call once implemented to verify
+    //  action must be 'WARN' per spec.
     expect(validateGPAVFindingId('F-1')).toBe(false)
   })
 
@@ -106,14 +112,11 @@ describe('GPAV Schema Validation', () => {
       ],
       pending_count: 3,
     }
-    expect(timeoutResult.status).toBe('timeout')
-    expect(timeoutResult.pending_count).toBe(3)
-    expect(timeoutResult.completed_findings).toHaveLength(2)
+    // TODO: replace with validateT9TimeoutResult() call once implemented to
+    //  verify status, pending_count, completed_findings schema.
     for (const f of timeoutResult.completed_findings) {
       expect(validateGPAVFindingId(f.id)).toBe(true)
     }
-    // Boundary: pending_count > 0 while completed < total
-    expect(timeoutResult.pending_count).toBeGreaterThan(timeoutResult.completed_findings.length)
   })
 
   // TC-GPAV-007
@@ -139,9 +142,8 @@ describe('GPAV Schema Validation', () => {
         contested_issues: [], rps_results: [],
       },
     ]
-    // Verify pass_step progression (structural, not literal echo)
-    const passSteps = events.map(e => e.pass_step)
-    expect(passSteps).toEqual([1, 3, 4])
+    // TODO: replace with validateGPAVEventCorrelation() call once implemented
+    //  to verify same finding.id across Recall→Precision→EvalFix passes.
     for (const evt of events) {
       for (const f of evt.findings) {
         expect(validateGPAVFindingId(f.id)).toBe(true)
@@ -160,15 +162,13 @@ describe('GPAV Schema Validation', () => {
       completed_findings: [] as GPAVFinding[],
       pending_count: totalFindings,
     }
-    expect(timeoutResult.completed_findings).toHaveLength(0)
-    expect(timeoutResult.pending_count).toBe(totalFindings)
-    expect(timeoutResult.pending_count).toBeGreaterThan(timeoutResult.completed_findings.length)
+    // TODO: replace with validateZeroCompletedTimeoutBoundary() call once
+    //  implemented to verify pending_count===total, completed_findings===[].
     const event: GPAVEvent = {
-      round: 1, pass_step: 2, pass_name: 'Precision',
+      round: 1, pass_step: 3, pass_name: 'Precision',
       findings: timeoutResult.completed_findings,
       contested_issues: [], rps_results: [],
     }
-    expect(event.findings).toHaveLength(0)
     expect(validateGPAVFindingId('F-01')).toBe(true)
   })
 })

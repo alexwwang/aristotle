@@ -31,7 +31,9 @@ describe('T-7b Violation Handling', () => {
   })
 
   // TC-T7B-004
-  it('should_search_conventional_locations_when_path_omitted', () => {
+  // processT7BResponse processes pre-completed responses — filesystem search
+  //  behavior is tested in the subagent/orchestrator layer, not here.
+  it('should_process_success_response_without_design_doc_path', () => {
     const result = processT7BResponse({
       status: 'success', test_files: ['tests/found.test.ts'], all_failing: true,
     }, 'REGRESSION', 5)
@@ -50,7 +52,10 @@ describe('T-7b Violation Handling', () => {
   })
 
   // TC-T7B-006
-  it('should_enforce_phase_5_readonly_constraint', () => {
+  // processT7BResponse processes pre-completed responses — read-only
+  //  constraint enforcement happens before the response is generated, not
+  //  during response processing.
+  it('should_process_success_response_at_phase_5', () => {
     const result = processT7BResponse({
       status: 'success', test_files: ['tests/phase5.test.ts'], all_failing: true,
     }, 'REGRESSION', 5)

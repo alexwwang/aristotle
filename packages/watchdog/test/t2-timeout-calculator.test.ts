@@ -37,10 +37,13 @@ describe('T-2 Timeout Calculator', () => {
   })
 
   // TC-T2-004
+  // createdAt=null triggers now() fallback → elapsed recalculated as 0.
+  //  If implementation uses passed elapsedSeconds instead, timeout=240
+  //  and this test would catch the wrong code path.
   it('should_use_current_time_when_createdat_missing', () => {
     const result = calculateT2Timeout({
       budgetSeconds: 300,
-      elapsedSeconds: 0,
+      elapsedSeconds: 50,
       marginSeconds: 10,
       createdAt: null,
     })

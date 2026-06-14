@@ -76,6 +76,10 @@ describe('Prompt Assemble MCP Tool', () => {
   })
 
   // TC-MCP-008
+  // TODO: This test passes fully valid T-1 params but expects action='error'.
+  // After implementation, valid params will succeed — this test needs a
+  // vi.spyOn(PromptBuilder.prototype, 'build') mock to trigger a build
+  // exception. Without the mock, this test will fail post-implementation.
   it('should_return_template_build_failed_error', () => {
     const result = promptAssemble({
       templateId: 'T-1',

@@ -1,8 +1,11 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { TaskTemplateRegistry } from '../src/registry.js'
 
 describe('TaskTemplateRegistry', () => {
-  const registry = new TaskTemplateRegistry()
+  let registry: TaskTemplateRegistry
+  beforeEach(() => {
+    registry = new TaskTemplateRegistry()
+  })
 
   // TC-REG-001
   it('should_retrieve_template_by_valid_id', () => {
