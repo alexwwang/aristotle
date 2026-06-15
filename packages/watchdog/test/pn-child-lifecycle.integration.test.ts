@@ -166,7 +166,7 @@ describe('child lifecycle integration - pipeline nesting', () => {
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
       return null
     })
-    store.resumeSuspended('proj-1', 'child-456')
+    const result81 = store.resumeSuspended('proj-1', 'child-456')
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ event: 'phase_fail' }),
@@ -181,6 +181,7 @@ describe('child lifecycle integration - pipeline nesting', () => {
         failurePhase: 3,
       }),
     )
+    expect(result81.phaseStatus).toBe('ralph_loop')
   })
 
   // (Supplemental — stack entry linkage; NOT #90. See new #90 display test below.)

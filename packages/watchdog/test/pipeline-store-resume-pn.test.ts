@@ -145,6 +145,16 @@ describe('PipelineStore - Resume Flow', () => {
       expect.any(String),
       expect.objectContaining({ childPipelineRunId: 'child-123' }),
     )
+    // P-001: verify childPipelineRunId written BEFORE status restore
+    const childRunWriteIdx = mockStateStore.write.mock.calls.findIndex(
+      ([, v]: [string, unknown]) => (v as Record<string, unknown>)?.childPipelineRunId === 'child-123',
+    )
+    const statusWriteIdx = mockStateStore.write.mock.calls.findIndex(
+      ([, v]: [string, unknown]) => (v as Record<string, unknown>)?.phaseStatus !== undefined,
+    )
+    expect(childRunWriteIdx).toBeGreaterThanOrEqual(0)
+    expect(statusWriteIdx).toBeGreaterThanOrEqual(0)
+    expect(childRunWriteIdx).toBeLessThanOrEqual(statusWriteIdx)
   })
 
   // #23
