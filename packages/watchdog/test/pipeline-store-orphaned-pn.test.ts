@@ -129,7 +129,7 @@ describe('PipelineStore - Orphaned Detection', () => {
   it('should silently pop stale stack entry when childRunId matches active', () => {
     const entry = makeSuspendedPipeline({ childRunId: 'run-active' })
     mockStateStore.read.mockImplementation((key: string) => {
-      if (key.endsWith('/active')) return { runId: 'run-active' }
+      if (key.endsWith('/active')) return { runId: 'run-active', projectId: 'proj-1' }
       // P-001: explicit /suspended-stack branch — catch-all return masks
       // type confusion (returns a SuspendedStack for /state and other keys).
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])

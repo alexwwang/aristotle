@@ -509,9 +509,9 @@ describe('child lifecycle integration - pipeline nesting', () => {
         }),
       }),
     )
-    // F-015: no child was spawned
+    // F-015: no child was spawned — verify no child STATE write (not just any key with 'child-')
     expect(mockStateStore.write).not.toHaveBeenCalledWith(
-      expect.stringContaining('child-'),
+      expect.stringMatching(/child.*\/state/),
       expect.anything(),
     )
   })

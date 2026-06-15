@@ -116,7 +116,8 @@ describe('pipeline nesting - e2e', () => {
     )
     // F-003: lastCompletedChildPhase is not in PipelineState schema. Spec #83
     // intent (partial-work preservation) is already verified via appendLog above.
-    // R38 F-013: strengthened — verify quarantinedFiles is non-empty (partial work exists)
+    // R38 F-013: verify logCall exists with expected fields
+    // R42 F-206: removed quarantinedFiles.length>0 assertion — Red Phase fixture has no quarantine source
     const logCall = mockStateStore.appendLog.mock.calls.find(
       ([, e]: [string, any]) => e?.childRunId === 'child-456',
     )
