@@ -168,14 +168,9 @@ describe('PipelineStore - Resume Flow', () => {
   // R41 F-1: use createMemStoreBridge so write(pop) is reflected in subsequent read
   it('should clear suspended stack entry after successful resume', () => {
     const entry = makeSuspendedPipeline({ childRunId: 'child-123' })
-    const { mockStateStore: bridgedStore } = createMemStoreBridge(mockStateStore)
-    bridgedStore.read.mockImplementation((key: string) => {
-      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
-      return null
-    })
-    const bridgedPipeStore = new PipelineStore(bridgedStore, mockLogger)
-    bridgedPipeStore.resumeSuspended('proj-1', 'child-123')
-    const stack = bridgedPipeStore.getSuspendedStack('proj-1')
+    createMemStoreBridge(mockStateStore, { 'proj-1/suspended-stack': makeSuspendedStack([entry]) })
+    store.resumeSuspended('proj-1', 'child-123')
+    const stack = store.getSuspendedStack('proj-1')
     expect(stack.entries).toHaveLength(0)
   })
   }) // describe('Resume Flow')
