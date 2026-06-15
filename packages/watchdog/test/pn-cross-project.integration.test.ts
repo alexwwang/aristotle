@@ -211,7 +211,7 @@ describe('cross-project integration - pipeline nesting', () => {
     // mismatch between active pointer and state runId.
     const childActiveState = makeNestingState({
       runId: 'child-run',
-      depth: MAX_DEPTH,
+      depth: MAX_DEPTH - 1,
       phaseStatus: 'ralph_loop',
       parentPipelineProjectId: 'proj-Y',
       projectId: 'proj-X',

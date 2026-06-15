@@ -285,7 +285,7 @@ describe('CheckpointHandler - pipeline nesting', () => {
     const state = makeState({ phaseStatus: 'complete' })
     store.readState.mockReturnValue(state)
     store.getActiveRun.mockReturnValue({ runId: 'run-123', projectId: 'proj-1' })
-    store.getSuspendedStack = vi.fn().mockReturnValue({
+    store.getSuspendedStack.mockReturnValue({
       entries: [{
         runId: 'old-run', suspendedAt: '2026-01-01T00:00:00Z', suspendedPhase: 3,
         depth: 0, suspendedReason: 'test_modification', childRunId: 'old-child',

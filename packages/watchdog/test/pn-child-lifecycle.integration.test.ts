@@ -129,12 +129,15 @@ describe('child lifecycle integration - pipeline nesting', () => {
   })
 
   // #80
+  // R45 F-2: add /parent-123/state mock so impl can read parent state during resume
   it('should handle child pipeline failure', () => {
     const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
     const childFailedState = makeNestingState({
       runId: 'child-456', phaseStatus: 'failed', currentPhase: 4,
     })
+    const parentState = makeNestingState({ runId: 'parent-123', phaseStatus: 'suspended', preSuspendStatus: 'ralph_loop' })
     mockStateStore.read.mockImplementation((key: string) => {
+      if (key.endsWith('/parent-123/state')) return parentState
       if (key.endsWith('/child-456/state')) return childFailedState
       if (key.endsWith('/active')) return null
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
@@ -155,13 +158,16 @@ describe('child lifecycle integration - pipeline nesting', () => {
   })
 
   // #81
+  // R45 F-2: add /parent-123/state mock
   it('should handle child partial completion', () => {
     const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
     // F-015: spec #81 says 'child completed some phases before failing' → status is 'failed'.
     const childPartialState = makeNestingState({
       runId: 'child-456', phaseStatus: 'failed', currentPhase: 3,
     })
+    const parentState = makeNestingState({ runId: 'parent-123', phaseStatus: 'suspended', preSuspendStatus: 'ralph_loop' })
     mockStateStore.read.mockImplementation((key: string) => {
+      if (key.endsWith('/parent-123/state')) return parentState
       if (key.endsWith('/child-456/state')) return childPartialState
       if (key.endsWith('/active')) return null
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])

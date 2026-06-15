@@ -107,9 +107,12 @@ describe('crash recovery integration - pipeline nesting', () => {
   })
 
   // #70 (crash before child started, childRunId undefined).
+  // R45 F-1: add /parent-123/state mock so impl can read parent state during recovery
   it('#70 — should detect orphaned suspend when child not yet started', () => {
     const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: undefined })
+    const parentState = makeNestingState({ runId: 'parent-123', phaseStatus: 'suspended' })
     mockStateStore.read.mockImplementation((key: string) => {
+      if (key.endsWith('/parent-123/state')) return parentState
       if (key.endsWith('/active')) return null
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
       return null
