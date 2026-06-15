@@ -200,6 +200,23 @@ describe('PipelineStore - Suspend Flow', () => {
     expect(stack.entries[1].depth).toBe(3)
   })
 
+  // R47 F-2: spec #92 requires metadata.count validation — mismatch test
+  it('should warn when entry count does not match stored metadata', () => {
+    const entries = [
+      makeSuspendedPipeline({ depth: 0 }),
+      makeSuspendedPipeline({ depth: 1 }),
+      makeSuspendedPipeline({ depth: 2 }),
+    ]
+    mockStateStore.read.mockImplementation((key: string) => {
+      if (key.endsWith('/suspended-stack')) return { entries, metadata: { count: 2 } }
+      return null
+    })
+    store.getSuspendedStack('proj-1')
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect.stringMatching(/count.*mismatch|integrity|metadata/i),
+    )
+  })
+
   // #101
   it('should preserve pending_pause=null on PipelineState through suspendActive', () => {
     const state = { ...makeNestingState(), pending_pause: null }

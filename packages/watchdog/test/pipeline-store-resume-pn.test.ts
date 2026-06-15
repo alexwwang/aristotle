@@ -48,15 +48,17 @@ describe('PipelineStore - Resume Flow', () => {
 
   describe('Resume Flow', () => {
   // #18
+  // R47 F-1: explicit /child-456/state mock — catch-all `return state` leaked parent state as child
   it('should restore parent status from preSuspendStatus', () => {
     const state = makeNestingState({ phaseStatus: 'suspended', preSuspendStatus: 'ralph_loop' })
+    const childState = makeNestingState({ runId: 'child-456', phaseStatus: 'complete' })
     const entry = makeSuspendedPipeline({ childRunId: 'child-456' })
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
-      // P-012: explicit /active branch — catch-all return of full PipelineState
-      // for /active masks type confusion (should be {runId, projectId} pointer).
       if (key.endsWith('/active')) return { runId: 'run-123', projectId: 'proj-1' }
-      return state
+      if (key.endsWith('/child-456/state')) return childState
+      if (key.endsWith('/state')) return state
+      return null
     })
     const result = store.resumeSuspended('proj-1', 'child-456')
     expect(result.phaseStatus).toBe('ralph_loop')
