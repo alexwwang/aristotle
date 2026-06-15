@@ -3,42 +3,12 @@ import { PipelineStore } from '../src/pipeline-store.js'
 import type { StateStore } from '@opencode-ai/core/store/state-store'
 import type { Logger } from '@opencode-ai/core/logger'
 import type { SuspendedPipeline, SuspendedStack, PipelineState } from '../src/schema.js'
-import { makeState } from './helpers.js'
+import { makeState, makeSuspendedPipeline, makeSuspendedStack, makeNestingState } from './helpers.js'
 
 // NOTE: Mock-based integration tests (Red Phase). True component-interaction tests deferred to Green Phase.
 // F-001: replaced 5 expect(true).toBe(false) stubs with real SUT invocations.
 
-function makeSuspendedPipeline(overrides?: Partial<SuspendedPipeline>): SuspendedPipeline {
-  return {
-    runId: 'parent-123',
-    suspendedAt: '2026-06-06T12:00:00Z',
-    suspendedPhase: 5,
-    depth: 0,
-    childDepth: undefined,
-    parentRunId: undefined,
-    parentPipelineProjectId: undefined,
-    suspendedReason: 'test_modification',
-    childRunId: undefined,
-    quarantineSuccess: undefined,
-    parentRegressionHistory: [],
-    ...overrides,
-  }
-}
 
-function makeSuspendedStack(entries: SuspendedPipeline[]): SuspendedStack {
-  return { entries }
-}
-
-function makeNestingState(overrides?: Partial<PipelineState>): PipelineState {
-  return makeState({
-    currentPhase: 5,
-    phaseStatus: 'ralph_loop',
-    depth: 0,
-    projectId: 'proj-1',
-    runId: 'parent-123',
-    ...overrides,
-  })
-}
 
 const mockStateStore = {
   read: vi.fn(),

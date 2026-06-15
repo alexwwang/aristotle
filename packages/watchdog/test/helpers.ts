@@ -5,7 +5,7 @@
  */
 import { vi } from 'vitest'
 import { SCHEMA_VERSION } from '../src/schema.js'
-import type { PipelineState, RalphLoopState, PhaseRecord } from '../src/schema.js'
+import type { PipelineState, RalphLoopState, PhaseRecord, SuspendedPipeline, SuspendedStack } from '../src/schema.js'
 import type { FileClassification } from '../src/file-classifier.js'
 
 export { SCHEMA_VERSION } from '../src/schema.js'
@@ -259,4 +259,55 @@ export function makeRalphLoop(overrides: Partial<RalphLoopState> = {}): RalphLoo
     autoValidated: false,
     ...overrides,
   }
+}
+
+// ── Phase 3: Pipeline Nesting factories ────────────────────────────────────
+
+export function makeSuspendedPipeline(overrides?: Partial<SuspendedPipeline>): SuspendedPipeline {
+  return {
+    runId: 'run-123',
+    suspendedAt: '2026-06-06T12:00:00Z',
+    suspendedPhase: 5,
+    depth: 0,
+    childDepth: undefined,
+    parentRunId: undefined,
+    parentPipelineProjectId: undefined,
+    suspendedReason: 'test_modification',
+    childRunId: undefined,
+    quarantineSuccess: undefined,
+    parentRegressionHistory: [],
+    ...overrides,
+  }
+}
+
+export function makeSuspendedStack(entries: SuspendedPipeline[]): SuspendedStack {
+  return { entries }
+}
+
+export function makeNestingState(overrides?: Partial<PipelineState>): PipelineState {
+  return makeState({
+    currentPhase: 5,
+    phaseStatus: 'ralph_loop',
+    depth: 0,
+    runId: 'run-123',
+    suspendedReason: undefined,
+    suspendedAt: undefined,
+    suspendedPhase: undefined,
+    preSuspendStatus: undefined,
+    prePauseStatus: undefined,
+    ...overrides,
+  })
+}
+
+// ── Phase 3: Mock helpers ──────────────────────────────────────────────────
+
+export function createMemStoreBridge(
+  mockStateStore: { write: ReturnType<typeof vi.fn>; read: ReturnType<typeof vi.fn> },
+  seed?: Record<string, unknown>,
+) {
+  const memStore = new Map<string, unknown>()
+  if (seed) for (const [k, v] of Object.entries(seed)) memStore.set(k, v)
+  mockStateStore.write.mockImplementation((k: string, v: unknown) => { memStore.set(k, v); return true })
+  mockStateStore.read.mockImplementation((k: string) => memStore.get(k) ?? null)
+  return memStore
 }
