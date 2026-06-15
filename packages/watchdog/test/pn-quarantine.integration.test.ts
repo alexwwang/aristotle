@@ -119,9 +119,11 @@ describe('quarantine integration - pipeline nesting', () => {
         ]),
       }),
     )
+    // R46 F-1: spec #62 requires BOTH quarantine dir AND git status check
+    expect(mockLogger.info).toHaveBeenCalledWith(
+      expect.stringMatching(/git.status|incomplete.state|partial.quarantine/i),
+    )
   })
-
-  // #103
   it('should enumerate quarantine files via list_quarantine during child failure resume with fallback on I/O error', () => {
     const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
     const childFailedState = makeNestingState({
