@@ -56,9 +56,12 @@ describe('crash recovery integration - pipeline nesting', () => {
   })
 
   // #67
+  // R49 F-3: add /parent-123/state mock for recovery read
   it('should recover suspended stack from crash via getActiveRun', () => {
     const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
+    const parentState = makeNestingState({ runId: 'parent-123', phaseStatus: 'suspended', preSuspendStatus: 'ralph_loop' })
     mockStateStore.read.mockImplementation((key: string) => {
+      if (key.endsWith('/parent-123/state')) return parentState
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
       if (key.endsWith('/active')) return null
       return null
@@ -90,11 +93,11 @@ describe('crash recovery integration - pipeline nesting', () => {
     expect(mockStateStore.read).toHaveBeenCalledWith(expect.stringContaining('child-456'))
   })
 
-  // #69 — R39 F-1: spec says getActiveRun/pipeline_start triggers stale-entry cleanup
+  // #69 — R49 F-1: fix self-referential fixture — childRunId should be child, not parent
   it('should pop stale stack entry if resume crashed after state persist', () => {
-    const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'parent-123' })
+    const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
     mockStateStore.read.mockImplementation((key: string) => {
-      if (key.endsWith('/active')) return { runId: 'parent-123', projectId: 'proj-1' }
+      if (key.endsWith('/active')) return { runId: 'child-456', projectId: 'proj-1' }
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
       return null
     })

@@ -255,7 +255,8 @@ describe('PipelineStore - Resume Flow', () => {
       if (key.endsWith('/active')) return { runId: 'child-456', projectId: 'proj-1' }
       if (key.endsWith('/parent-123/state')) return parentState
       if (key.endsWith('/state')) return makeNestingState({ runId: 'child-456', phaseStatus: 'ralph_loop' })
-      return makeSuspendedStack([entry])
+      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
+      return null
     })
     const result = store.resumeSuspended('proj-1', 'child-456', true)
     expect(result.phaseStatus).toBe('active')
@@ -286,7 +287,8 @@ describe('PipelineStore - Resume Flow', () => {
         pending_pause: { reason: 'pattern_cycle', violation_type: 'REGRESSION', files: ['src/test.ts'] } satisfies PendingPause,
       })
       if (key.endsWith('/state')) return makeNestingState({ runId: 'child-456', phaseStatus: 'ralph_loop' })
-      return makeSuspendedStack([entry])
+      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
+      return null
     })
     store.resumeSuspended('proj-1', 'child-456', true)
     // F-015: filter write calls by parent state key (resilient to write ordering).
