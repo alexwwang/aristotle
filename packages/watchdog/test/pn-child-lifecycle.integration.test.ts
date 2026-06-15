@@ -48,9 +48,9 @@ describe('child lifecycle integration - pipeline nesting', () => {
   })
 
   // #76
-  it('should reject resume when child status is active', () => {
+  it.each(['ralph_loop', 'active'])('should reject resume when child status is %s', (childStatus) => {
     const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
-    const childState = makeNestingState({ runId: 'child-456', phaseStatus: 'ralph_loop' })
+    const childState = makeNestingState({ runId: 'child-456', phaseStatus: childStatus })
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/child-456/state')) return childState
       if (key.endsWith('/active')) return { runId: 'child-456', projectId: 'proj-1' }
@@ -175,7 +175,7 @@ describe('child lifecycle integration - pipeline nesting', () => {
       expect.objectContaining({
         event: 'phase_fail',
         childRunId: 'child-456',
-        failurePhase: expect.any(Number),
+        failurePhase: 3,
       }),
     )
   })
@@ -573,7 +573,7 @@ describe('child lifecycle integration - pipeline nesting', () => {
       expect(mockStateStore.write).not.toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({
-          runId: 'parent-123',
+          runId: 'A',
           phaseStatus: expect.stringMatching(/ralph_loop|active/),
         }),
       )

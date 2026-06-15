@@ -72,7 +72,7 @@ describe('crash recovery integration - pipeline nesting', () => {
     expect(result?.depth).toBe(0)
   })
 
-  // #68 — F-029 (P): distinct from #70: childRunId is set in stack but child state
+  // #68-supplemental — F-029 (P): distinct from #70: childRunId is set in stack but child state
   // file is missing (vs #70 where childRunId is undefined). Tests dangling-reference detection.
   it('#68 — should handle childRunId set but child state file missing', () => {
     const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
@@ -105,7 +105,7 @@ describe('crash recovery integration - pipeline nesting', () => {
     )
   })
 
-  // #70 — covers #68 (crash before child started, childRunId undefined).
+  // #70 — covers #68 (canonical) (crash before child started, childRunId undefined).
   it('#70 — should detect orphaned suspend when child not yet started', () => {
     const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: undefined })
     mockStateStore.read.mockImplementation((key: string) => {

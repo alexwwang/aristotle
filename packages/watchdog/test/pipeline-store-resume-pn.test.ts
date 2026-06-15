@@ -81,6 +81,7 @@ describe('PipelineStore - Resume Flow', () => {
     const stack = store.getSuspendedStack('proj-1')
     expect(stack.entries).toHaveLength(1)
     expect(stack.entries[0].runId).toBe('run-123')
+    expect(mockLogger.error).toHaveBeenCalledWith(expect.stringMatching(/ERROR.*child_run_id|child_run_id.*mismatch|RESUME.*BLOCK/i))
   })
 
   // #20
@@ -100,6 +101,7 @@ describe('PipelineStore - Resume Flow', () => {
       // F-010: wrap metadata in expect.objectContaining so future fields don't break tests.
       expect.objectContaining({ event: 'pipeline_resume', metadata: expect.objectContaining({ code: 'RESUME_GUARD_FAILURE' }) }),
     )
+    expect(mockLogger.error).toHaveBeenCalledWith(expect.stringMatching(/CRITICAL.*RESUME_GUARD_FAILURE|RESUME_GUARD_FAILURE.*CRITICAL/i))
   })
 
   // #21

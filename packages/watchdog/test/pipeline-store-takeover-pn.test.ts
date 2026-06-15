@@ -114,12 +114,43 @@ describe('PipelineStore - Reviewer Takeover Cleanup', () => {
     expect(cleanupWrites).toHaveLength(0)
   })
 
+  // #34b — T-2 completion cleanup path (supplemental to #34)
+  it('should clean up reviewer takeover state when t2 has completed', () => {
+    const entry = makeSuspendedPipeline({ runId: 'A', depth: 0, childRunId: 'child-456' })
+    const mockState = {
+      ...makeNestingState({ phaseStatus: 'suspended' }),
+      reviewerTakeover: {
+        round: 1, interceptAt: 'phase-5', spawnPhase: 't2_complete',
+        t2SessionId: 'ses-t2-done', resultFile: '/tmp/result.json', cleanupToken: 'tok-1',
+      } satisfies ReviewerTakeoverState,
+    }
+    mockStateStore.read.mockImplementation((key: string) => {
+      if (key.endsWith('/state')) return mockState
+      if (key.endsWith('/active')) return { runId: 'child-456', projectId: 'proj-1' }
+      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
+      return null
+    })
+    store.getSessionInfo = vi.fn().mockReturnValue({ status: 'inactive' })
+    store.resumeSuspended('proj-1', 'child-456')
+    expect(mockLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('TAKEOVER_STALE_CLEANUP'),
+    )
+    const cleanupWrites = mockStateStore.write.mock.calls.filter(
+      ([, s]: [string, Record<string, unknown>]) =>
+        s && 'reviewerTakeover' in s && s.reviewerTakeover == null,
+    )
+    expect(cleanupWrites.length).toBeGreaterThan(0)
+  })
+
   // #35
   it('should delete stale reviewer result file during cleanup', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-06-14T12:00:00Z'))
     const entry = makeSuspendedPipeline({ runId: 'A', depth: 0, childRunId: 'child-456' })
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/state')) return {
         ...makeNestingState({ phaseStatus: 'suspended' }),
+        suspendedAt: new Date('2026-06-14T10:00:00Z').toISOString(),
         reviewerTakeover: { round: 1, interceptAt: 'phase-5', t2SessionId: 'ses-t2-done', resultFile: '/tmp/stale-result.json', cleanupToken: 'tok-1', spawnPhase: '5' },
       }
       if (key.endsWith('/active')) return { runId: 'child-456', projectId: 'proj-1' }

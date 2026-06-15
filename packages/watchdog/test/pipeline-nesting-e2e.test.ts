@@ -108,7 +108,7 @@ describe('pipeline nesting - e2e', () => {
       expect.any(String),
       expect.objectContaining({
         childRunId: 'child-456',
-        failurePhase: expect.any(Number),
+        failurePhase: 4,
         failureReason: expect.any(String),
         quarantinedFiles: expect.any(Array),
       }),
@@ -176,6 +176,7 @@ describe('pipeline nesting - e2e', () => {
       expect.any(String),
       expect.objectContaining({ metadata: expect.objectContaining({ code: 'ORPHANED_SUSPEND_RECOVERY' }) }),
     )
+    expect(mockStateStore.write).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ phaseStatus: expect.stringMatching(/ralph_loop|active|idle/i) }))
   })
 
   // #86
@@ -208,5 +209,11 @@ describe('pipeline nesting - e2e', () => {
       expect.stringContaining('/suspended-stack'),
       expect.objectContaining({ entries: [] }),
     )
+    // P-010: verify fresh runId was generated (not reusing orphaned entries)
+    expect(mockStateStore.write).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ runId: expect.not.stringMatching(/orphaned-1|orphaned-2/) }),
+    )
+    expect(store.createRegressionCounter).toHaveBeenCalled()
   })
 })
