@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createDualPassOrchestrator, assembleReviewScope, parseLocationMap, enforceT10Contract } from '../src/dual-pass-gpav.js'
 import type { DualPassOrchestrator, GPAVEvent } from '../src/dual-pass-gpav.js'
+import * as promptAssembleMod from '../src/prompt-assemble.js'
 import { existsSync, readFileSync, unlinkSync } from 'fs'
 import { makeRalphState } from './helpers.js'
 
@@ -77,16 +78,36 @@ describe('Dual-Pass Orchestration', () => {
   // RT-043a
   it('should_spawn_t2_recall_first_in_dual_pass_mode', async () => {
     const state = makeRalphState()
-    const result = await orchestrator.executeRecall(state)
-    expect(result).toBeDefined()
+    // F-8: verify T-2 is spawned first by checking promptAssemble call order
+    const promptSpy = vi.spyOn(promptAssembleMod, 'promptAssemble')
+    try {
+      await orchestrator.executeRecall(state)
+      expect(promptSpy).toHaveBeenCalled()
+      // F-8: first spawn call must use T-2 (recall) template
+      expect(promptSpy.mock.calls[0][0]).toEqual(expect.objectContaining({ templateId: 'T-2' }))
+    } finally {
+      promptSpy.mockRestore()
+    }
   })
 
   // RT-043b
   it('should_pass_location_map_from_recall_to_fact_gather', async () => {
     const state = makeRalphState()
     const locationMap = [{ file: 'src/auth.ts', line: 42 }]
-    const result = await orchestrator.executeFactGather(state, locationMap)
-    expect(result).toBeDefined()
+    // F-8: verify location_map is forwarded to the FG spawn call arguments
+    const promptSpy = vi.spyOn(promptAssembleMod, 'promptAssemble')
+    try {
+      await orchestrator.executeFactGather(state, locationMap)
+      expect(promptSpy).toHaveBeenCalled()
+      const fgCall = promptSpy.mock.calls.find(
+        c => (c[0] as { templateId?: string }).templateId === 'T-9' || (c[0] as { templateId?: string }).templateId === 'FG',
+      )
+      // F-8: at least one call must carry the location_map payload
+      const allCallsText = JSON.stringify(promptSpy.mock.calls)
+      expect(allCallsText).toContain('src/auth.ts')
+    } finally {
+      promptSpy.mockRestore()
+    }
   })
 
   // RT-043c
@@ -94,16 +115,35 @@ describe('Dual-Pass Orchestration', () => {
     const state = makeRalphState()
     const rawFindings = [{ id: 'F-01', severity: 'M', description: 'Issue' }]
     const locationMap = [{ file: 'src/auth.ts', line: 42 }]
-    const result = await orchestrator.executePrecision(state, rawFindings, locationMap)
-    expect(result).toBeDefined()
+    // F-8: verify raw_findings are forwarded to the Precision spawn call
+    const promptSpy = vi.spyOn(promptAssembleMod, 'promptAssemble')
+    try {
+      await orchestrator.executePrecision(state, rawFindings, locationMap)
+      expect(promptSpy).toHaveBeenCalled()
+      // F-8: Precision call must carry the raw_findings payload
+      const allCallsText = JSON.stringify(promptSpy.mock.calls)
+      expect(allCallsText).toContain('F-01')
+    } finally {
+      promptSpy.mockRestore()
+    }
   })
 
   // RT-043d
   it('should_spawn_t10_eval_fix_with_confirmed_findings', async () => {
     const state = makeRalphState()
     const confirmedFindings = [{ id: 'F-01', severity: 'M', description: 'Issue', verdict: 'CONFIRM' }]
-    const result = await orchestrator.executeEvalFix(state, confirmedFindings)
-    expect(result).toBeDefined()
+    // F-8: verify confirmed_findings are forwarded to the EvalFix spawn call
+    const promptSpy = vi.spyOn(promptAssembleMod, 'promptAssemble')
+    try {
+      await orchestrator.executeEvalFix(state, confirmedFindings)
+      expect(promptSpy).toHaveBeenCalled()
+      // F-8: EvalFix call must carry the confirmed_findings payload
+      const allCallsText = JSON.stringify(promptSpy.mock.calls)
+      expect(allCallsText).toContain('F-01')
+      expect(allCallsText).toContain('CONFIRM')
+    } finally {
+      promptSpy.mockRestore()
+    }
   })
 
   // RT-043e — F-014: drive full Dual-Pass pipeline, verify 4 GPAVEvents per round
@@ -222,8 +262,10 @@ describe('Dual-Pass Orchestration', () => {
   // RT-087d
   it('should_clear_intercepted_fields_after_dual_pass_spawn_completes', () => {
     const state = makeRalphState()
+    // F-25: cleanup triggers on dualPassPhase='done', not spawnPhase='t2_running'
     state.reviewerTakeover = {
-      round: 1, interceptAt: new Date().toISOString(), spawnPhase: 't2_running',
+      round: 1, interceptAt: new Date().toISOString(),
+      spawnPhase: 'done', dualPassPhase: 'done',
       interceptedPrompt: 'prompt-data', interceptedDescription: 'desc-data',
     }
     orchestrator.emitGPAVEvent({

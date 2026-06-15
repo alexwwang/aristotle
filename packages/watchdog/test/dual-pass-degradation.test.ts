@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { applyRecallToT10SchemaConversion, convertReviewFindingToGPAVFinding, createDualPassOrchestrator } from '../src/dual-pass-gpav.js'
+import * as promptAssembleMod from '../src/prompt-assemble.js'
 import { makeRalphState } from './helpers.js'
 
 describe('Dual-Pass Degradation', () => {
@@ -7,10 +8,19 @@ describe('Dual-Pass Degradation', () => {
   it('should_degrade_to_pipeline_state_fg_when_recall_fails', async () => {
     const orchestrator = createDualPassOrchestrator()
     const state = makeRalphState()
-    const result = await orchestrator.executeRecall(state)
-    expect(result).toBeDefined()
-    const fgResult = await orchestrator.executeFactGather(state, [])
-    expect(fgResult).toBeDefined()
+    // F-6: mock underlying transport to trigger actual recall failure
+    const promptSpy = vi.spyOn(promptAssembleMod, 'promptAssemble')
+    promptSpy.mockImplementationOnce(() => { throw new Error('T-2 transport crashed') })
+    try {
+      const result = await orchestrator.executeRecall(state)
+      // F-6: assert specific degradation behavior, not just .toBeDefined()
+      expect(result).toBeDefined()
+      expect((result as { degraded?: boolean }).degraded).toBe(true)
+      const fgResult = await orchestrator.executeFactGather(state, [])
+      expect(fgResult).toBeDefined()
+    } finally {
+      promptSpy.mockRestore()
+    }
   })
 
   // RT-046b — emitGPAVEvent is fire-and-forget; should not throw
@@ -45,8 +55,17 @@ describe('Dual-Pass Degradation', () => {
   // RT-047a — graceful degradation, not throw
   it('should_degrade_to_self_review_when_fact_gather_fails', async () => {
     const orchestrator = createDualPassOrchestrator()
-    const result = await orchestrator.executeFactGather(makeRalphState(), [])
-    expect(result).toBeDefined()
+    // F-6: mock underlying transport to trigger actual FG failure
+    const promptSpy = vi.spyOn(promptAssembleMod, 'promptAssemble')
+    promptSpy.mockImplementationOnce(() => { throw new Error('FG transport crashed') })
+    try {
+      const result = await orchestrator.executeFactGather(makeRalphState(), [])
+      // F-6: assert specific degradation marker
+      expect(result).toBeDefined()
+      expect((result as { degraded?: boolean }).degraded).toBe(true)
+    } finally {
+      promptSpy.mockRestore()
+    }
   })
 
   // RT-047b — emitGPAVEvent is fire-and-forget; should not throw
@@ -58,8 +77,17 @@ describe('Dual-Pass Degradation', () => {
   // RT-048a — graceful degradation, not throw
   it('should_degrade_to_recall_only_when_precision_fails', async () => {
     const orchestrator = createDualPassOrchestrator()
-    const result = await orchestrator.executePrecision(makeRalphState(), [], [])
-    expect(result).toBeDefined()
+    // F-6: mock underlying transport to trigger actual Precision failure
+    const promptSpy = vi.spyOn(promptAssembleMod, 'promptAssemble')
+    promptSpy.mockImplementationOnce(() => { throw new Error('T-9 transport crashed') })
+    try {
+      const result = await orchestrator.executePrecision(makeRalphState(), [], [])
+      // F-6: assert specific degradation marker
+      expect(result).toBeDefined()
+      expect((result as { degraded?: boolean }).degraded).toBe(true)
+    } finally {
+      promptSpy.mockRestore()
+    }
   })
 
   // RT-048b — verify conversion field mappings per spec
@@ -114,8 +142,17 @@ describe('Dual-Pass Degradation', () => {
   // RT-049a — graceful degradation, not throw
   it('should_degrade_to_self_review_when_eval_fix_fails', async () => {
     const orchestrator = createDualPassOrchestrator()
-    const result = await orchestrator.executeEvalFix(makeRalphState(), [])
-    expect(result).toBeDefined()
+    // F-6: mock underlying transport to trigger actual EvalFix failure
+    const promptSpy = vi.spyOn(promptAssembleMod, 'promptAssemble')
+    promptSpy.mockImplementationOnce(() => { throw new Error('T-10 transport crashed') })
+    try {
+      const result = await orchestrator.executeEvalFix(makeRalphState(), [])
+      // F-6: assert specific degradation marker
+      expect(result).toBeDefined()
+      expect((result as { degraded?: boolean }).degraded).toBe(true)
+    } finally {
+      promptSpy.mockRestore()
+    }
   })
 
   // RT-049b — partial results used, not throw
@@ -125,27 +162,80 @@ describe('Dual-Pass Degradation', () => {
     expect(result).toBeDefined()
   })
 
-  // RT-081a — audit emission should not throw (GPAVEvent fire-and-forget)
+  // RT-081a — F-7: audit emission must include structured degradation fields
   it('should_emit_dual_pass_degradation_audit_on_recall_failure', () => {
-    const orchestrator = createDualPassOrchestrator()
-    expect(() => orchestrator.emitGPAVEvent({ pass_step: 1, round: 1, dualPassAttempt: 1, timestamp: '', degradation_reason: 'recall_failed' })).not.toThrow()
+    const auditSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    try {
+      const orchestrator = createDualPassOrchestrator()
+      orchestrator.emitGPAVEvent({ pass_step: 1, round: 1, dualPassAttempt: 1, timestamp: '', degradation_reason: 'recall_failed' })
+      const degradationCalls = auditSpy.mock.calls.filter(
+        call => call.some(arg => String(arg).includes('DUAL_PASS_DEGRADATION')),
+      )
+      expect(degradationCalls.length).toBeGreaterThanOrEqual(1)
+      // F-7: verify structured fields {failed_step, degradation_path, fallback}
+      const auditText = degradationCalls.map(c => c.join(' ')).join(' ')
+      expect(auditText).toMatch(/failed_step/)
+      expect(auditText).toMatch(/degradation_path/)
+      expect(auditText).toMatch(/fallback/)
+    } finally {
+      auditSpy.mockRestore()
+    }
   })
 
-  // RT-081b — audit emission should not throw
+  // RT-081b — F-7: audit emission must include structured degradation fields
   it('should_emit_dual_pass_degradation_audit_on_fact_gather_failure', () => {
-    const orchestrator = createDualPassOrchestrator()
-    expect(() => orchestrator.emitGPAVEvent({ pass_step: 2, round: 1, dualPassAttempt: 1, timestamp: '', degradation_reason: 'fact_gather_failed' })).not.toThrow()
+    const auditSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    try {
+      const orchestrator = createDualPassOrchestrator()
+      orchestrator.emitGPAVEvent({ pass_step: 2, round: 1, dualPassAttempt: 1, timestamp: '', degradation_reason: 'fact_gather_failed' })
+      const degradationCalls = auditSpy.mock.calls.filter(
+        call => call.some(arg => String(arg).includes('DUAL_PASS_DEGRADATION')),
+      )
+      expect(degradationCalls.length).toBeGreaterThanOrEqual(1)
+      const auditText = degradationCalls.map(c => c.join(' ')).join(' ')
+      expect(auditText).toMatch(/failed_step/)
+      expect(auditText).toMatch(/degradation_path/)
+      expect(auditText).toMatch(/fallback/)
+    } finally {
+      auditSpy.mockRestore()
+    }
   })
 
-  // RT-081c — audit emission should not throw
+  // RT-081c — F-7: audit emission must include structured degradation fields
   it('should_emit_dual_pass_degradation_audit_on_precision_failure', () => {
-    const orchestrator = createDualPassOrchestrator()
-    expect(() => orchestrator.emitGPAVEvent({ pass_step: 3, round: 1, dualPassAttempt: 1, timestamp: '', degradation_reason: 'precision_failed' })).not.toThrow()
+    const auditSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    try {
+      const orchestrator = createDualPassOrchestrator()
+      orchestrator.emitGPAVEvent({ pass_step: 3, round: 1, dualPassAttempt: 1, timestamp: '', degradation_reason: 'precision_failed' })
+      const degradationCalls = auditSpy.mock.calls.filter(
+        call => call.some(arg => String(arg).includes('DUAL_PASS_DEGRADATION')),
+      )
+      expect(degradationCalls.length).toBeGreaterThanOrEqual(1)
+      const auditText = degradationCalls.map(c => c.join(' ')).join(' ')
+      expect(auditText).toMatch(/failed_step/)
+      expect(auditText).toMatch(/degradation_path/)
+      expect(auditText).toMatch(/fallback/)
+    } finally {
+      auditSpy.mockRestore()
+    }
   })
 
-  // RT-081d — audit emission should not throw
+  // RT-081d — F-7: audit emission must include structured degradation fields
   it('should_emit_dual_pass_degradation_audit_on_eval_fix_failure', () => {
-    const orchestrator = createDualPassOrchestrator()
-    expect(() => orchestrator.emitGPAVEvent({ pass_step: 4, round: 1, dualPassAttempt: 1, timestamp: '', degradation_reason: 'evalfix_failed' })).not.toThrow()
+    const auditSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    try {
+      const orchestrator = createDualPassOrchestrator()
+      orchestrator.emitGPAVEvent({ pass_step: 4, round: 1, dualPassAttempt: 1, timestamp: '', degradation_reason: 'evalfix_failed' })
+      const degradationCalls = auditSpy.mock.calls.filter(
+        call => call.some(arg => String(arg).includes('DUAL_PASS_DEGRADATION')),
+      )
+      expect(degradationCalls.length).toBeGreaterThanOrEqual(1)
+      const auditText = degradationCalls.map(c => c.join(' ')).join(' ')
+      expect(auditText).toMatch(/failed_step/)
+      expect(auditText).toMatch(/degradation_path/)
+      expect(auditText).toMatch(/fallback/)
+    } finally {
+      auditSpy.mockRestore()
+    }
   })
 })

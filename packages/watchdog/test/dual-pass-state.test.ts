@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { validateDualPassTransition, isDualPassPhaseValid } from '../src/dual-pass-supervision.js'
-import type { DualPassPhase } from '../src/reviewer-intercept.js'
+import type { DualPassPhase, SpawnPhase } from '../src/reviewer-intercept.js'
 
 describe('dualPassPhase state machine', () => {
   // RT-044a
@@ -33,5 +33,18 @@ describe('dualPassPhase state machine', () => {
   it('should_use_dual_pass_phase_as_authoritative_when_dual_pass_mode_true', () => {
     const valid = isDualPassPhaseValid('recall_running')
     expect(valid).toBe(true)
+    // F-19: when dualPassMode=true, dualPassPhase is authoritative — spawnPhase stays 'pending'
+    expect(validateDualPassTransition('recall_running', 'recall_done', true)).toBe(true)
+    // F-19: spawnPhase immutability contract — dual-pass transitions must NOT advance spawnPhase
+    const takeover: { spawnPhase: SpawnPhase; dualPassMode: boolean; dualPassPhase: DualPassPhase } = {
+      spawnPhase: 'pending',
+      dualPassMode: true,
+      dualPassPhase: 'recall_running',
+    }
+    // Simulate dualPassPhase advancing; spawnPhase must remain 'pending' until explicit promotion
+    takeover.dualPassPhase = 'recall_done'
+    expect(toverride.spawnPhase).toBe('pending')
+    takeover.dualPassPhase = 'done'
+    expect(toverride.spawnPhase).toBe('pending')
   })
 })

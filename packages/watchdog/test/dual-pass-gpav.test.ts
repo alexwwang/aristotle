@@ -41,15 +41,24 @@ describe('GPAVEvent dedup and retry', () => {
     orchestrator.emitGPAVEvent({ pass_step: 4, round: 3, dualPassAttempt: 1, timestamp: ts })
     const beforeCount = (orchestrator.getEmittedEvents() as GPAVEvent[]).length
     orchestrator.supersedePriorEvents(3, 2)
-    const afterCount = (orchestrator.getEmittedEvents() as GPAVEvent[]).length
+    const afterEvents = orchestrator.getEmittedEvents() as GPAVEvent[]
+    const afterCount = afterEvents.length
     expect(afterCount).toBe(beforeCount)
+    // F-13: prove cache-hit skips dedup by verifying superseded_by is NOT set on any event
+    for (const ev of afterEvents) {
+      expect(ev.superseded_by).toBeUndefined()
+    }
   })
 
   // RT-060d — F-016: filter audit log for REVIEWER_ATTEMPT_SUPERSEDED entries
   it('should_emit_reviewer_attempt_superseded_audit_entries', () => {
     const auditSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const orchestrator = createDualPassOrchestrator()
-    orchestrator.emitGPAVEvent({ pass_step: 1, round: 3, dualPassAttempt: 2, timestamp: '', superseded_by: { round: 3, attempt: 2 } })
+    // F-14: emit normal events first, THEN call supersedePriorEvents to trigger audit
+    const ts = new Date().toISOString()
+    orchestrator.emitGPAVEvent({ pass_step: 1, round: 3, dualPassAttempt: 1, timestamp: ts })
+    orchestrator.emitGPAVEvent({ pass_step: 2, round: 3, dualPassAttempt: 1, timestamp: ts })
+    orchestrator.supersedePriorEvents(3, 2)
     const supersededCalls = auditSpy.mock.calls.filter(
       call => call.some(arg => String(arg).includes('REVIEWER_ATTEMPT_SUPERSEDED')),
     )

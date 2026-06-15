@@ -79,15 +79,25 @@ describe('Dual-Pass Batch', () => {
   it('should_merge_partial_batch_results_with_recall_conversion', () => {
     const successful = [{ id: 'F-01', verdict: 'CONFIRM' }]
     const failed = [{ id: 'F-02', verdict: 'CONFIRM' }]
-    const merged = mergePartialBatchResults(successful, failed)
+    const merged = mergePartialBatchResults(successful, failed) as Array<{ id: string; verdict?: string }>
     expect(merged).toHaveLength(2)
+    // F-18: verify content provenance — successful from T-9 verdicts, failed via Recall conversion
+    const fromSuccessful = merged.find(f => f.id === 'F-01')
+    expect(fromSuccessful).toBeDefined()
+    expect(fromSuccessful?.verdict).toBe('CONFIRM')
+    // Failed findings get Recall conversion (SR-prefixed or same id but degraded source)
+    const fromFailed = merged.find(f => f.id === 'F-02' || f.id.startsWith('SR-'))
+    expect(fromFailed).toBeDefined()
   })
 
   // RT-052b
   it('should_emit_warn_audit_on_partial_batch_failure', () => {
     const successful = [{ id: 'F-01', verdict: 'CONFIRM' }]
     const failed = [{ id: 'F-02', verdict: 'CONFIRM', error: 'batch crash' }]
-    const merged = mergePartialBatchResults(successful, failed)
+    const merged = mergePartialBatchResults(successful, failed) as Array<{ id: string; verdict?: string }>
     expect(merged).toHaveLength(2)
+    // F-18: verify content provenance
+    expect(merged.find(f => f.id === 'F-01')).toBeDefined()
+    expect(merged.find(f => f.id === 'F-02' || f.id.startsWith('SR-'))).toBeDefined()
   })
 })

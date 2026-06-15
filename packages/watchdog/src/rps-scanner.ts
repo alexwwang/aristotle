@@ -1,4 +1,8 @@
-export function scanRPS(text: string, fieldName: 'prompt' | 'description'): { detected: boolean; patterns: string[] } {
+export function scanRPS(
+  text: string,
+  fieldName: 'prompt' | 'description',
+  context?: { rpsConsecutiveFailures: number },
+): { detected: boolean; patterns: string[]; skipped?: boolean } {
   throw new Error('Not implemented: scanRPS')
 }
 

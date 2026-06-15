@@ -1,10 +1,12 @@
 import { describe, it, expect, vi } from 'vitest'
 import { cleanupStaleState, generateCleanupToken, validateCleanupToken, deleteResultFiles } from '../src/reviewer-cleanup.js'
-import { writeFileSync, mkdirSync, existsSync, unlinkSync } from 'fs'
+import { writeFileSync, existsSync, unlinkSync, mkdtempSync, utimesSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
 import { makeRalphState } from './helpers.js'
 
-function makeResultPath(runId: string, round: number): string {
-  return `.aristotle/reviewer-result-${runId}-${round}.json`
+function makeResultPath(baseDir: string, runId: string, round: number): string {
+  return join(baseDir, `reviewer-result-${runId}-${round}.json`)
 }
 
 describe('Reviewer Cleanup', () => {
@@ -21,10 +23,10 @@ describe('Reviewer Cleanup', () => {
 
   // RT-029b
   it('should_delete_result_files_on_suspend_cleanup', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'rt-029b-'))
     const runId = 'run-001'
     const round = 3
-    const resultPath = makeResultPath(runId, round)
-    mkdirSync('.aristotle', { recursive: true })
+    const resultPath = makeResultPath(tmpDir, runId, round)
     writeFileSync(resultPath, JSON.stringify({ status: 'complete' }))
     try {
       expect(existsSync(resultPath)).toBe(true)
@@ -63,10 +65,10 @@ describe('Reviewer Cleanup', () => {
 
   // RT-030b
   it('should_verify_session_id_before_deleting_result_files_on_resume', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'rt-030b-'))
     const runId = 'run-001'
     const round = 3
-    const resultPath = makeResultPath(runId, round)
-    mkdirSync('.aristotle', { recursive: true })
+    const resultPath = makeResultPath(tmpDir, runId, round)
     writeFileSync(resultPath, JSON.stringify({ status: 'complete', sessionId: 'ses-original' }))
     try {
       expect(existsSync(resultPath)).toBe(true)
@@ -79,24 +81,59 @@ describe('Reviewer Cleanup', () => {
 
   // RT-030c
   it('should_delete_stale_result_files_on_resume', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'rt-030c-'))
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const state = makeRalphState()
+    const runId = state.runId
+    const round = 1
+    const resultPath = makeResultPath(tmpDir, runId, round)
     state.reviewerTakeover = {
-      round: 1, interceptAt: new Date().toISOString(), spawnPhase: 't1_done',
+      round, interceptAt: new Date().toISOString(), spawnPhase: 't1_done',
+      t1SessionId: 'ses-current',
     }
-    const result = cleanupStaleState('resume', state)
-    expect(result).toBeDefined()
-    expect(result.reviewerTakeover).toBeNull()
+    writeFileSync(resultPath, JSON.stringify({ status: 'complete', sessionId: 'ses-different' }))
+    try {
+      expect(existsSync(resultPath)).toBe(true)
+      const result = cleanupStaleState('resume', state)
+      expect(result).toBeDefined()
+      expect(existsSync(resultPath)).toBe(false)
+      const staleCalls = logSpy.mock.calls.filter(
+        call => call.some(arg => String(arg).includes('STALE_CLEANUP_DELETE')),
+      )
+      expect(staleCalls.length).toBeGreaterThanOrEqual(1)
+    } finally {
+      if (existsSync(resultPath)) unlinkSync(resultPath)
+      logSpy.mockRestore()
+    }
   })
 
   // RT-030d
   it('should_delete_stale_result_files_older_than_24h_on_resume', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'rt-030d-'))
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const state = makeRalphState()
+    const runId = state.runId
+    const round = 1
+    const resultPath = makeResultPath(tmpDir, runId, round)
     state.reviewerTakeover = {
-      round: 1, interceptAt: new Date(Date.now() - 48 * 3600 * 1000).toISOString(), spawnPhase: 't1_done',
+      round, interceptAt: new Date(Date.now() - 48 * 3600 * 1000).toISOString(), spawnPhase: 't1_done',
     }
-    const result = cleanupStaleState('resume', state)
-    expect(result).toBeDefined()
-    expect(result.reviewerTakeover).toBeNull()
+    writeFileSync(resultPath, JSON.stringify({ status: 'complete', sessionId: 'ses-old' }))
+    const oldTime = (Date.now() - 48 * 3600 * 1000) / 1000
+    utimesSync(resultPath, oldTime, oldTime)
+    try {
+      expect(existsSync(resultPath)).toBe(true)
+      const result = cleanupStaleState('resume', state)
+      expect(result).toBeDefined()
+      expect(existsSync(resultPath)).toBe(false)
+      const staleCalls = logSpy.mock.calls.filter(
+        call => call.some(arg => String(arg).includes('STALE_CLEANUP_DELETE')),
+      )
+      expect(staleCalls.length).toBeGreaterThanOrEqual(1)
+    } finally {
+      if (existsSync(resultPath)) unlinkSync(resultPath)
+      logSpy.mockRestore()
+    }
   })
 
   // RT-030e
@@ -137,10 +174,10 @@ describe('Reviewer Cleanup', () => {
 
   // RT-031b
   it('should_delete_result_files_without_session_check_on_start', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'rt-031b-'))
     const runId = 'run-001'
     const round = 3
-    const resultPath = makeResultPath(runId, round)
-    mkdirSync('.aristotle', { recursive: true })
+    const resultPath = makeResultPath(tmpDir, runId, round)
     writeFileSync(resultPath, JSON.stringify({ status: 'complete', sessionId: 'ses-current' }))
     try {
       expect(existsSync(resultPath)).toBe(true)
@@ -175,24 +212,46 @@ describe('Reviewer Cleanup', () => {
 
   // RT-031b-2
   it('should_cleanup_result_files_on_phase_complete', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'rt-031b2-'))
     const state = makeRalphState()
+    const runId = state.runId
+    const round = 1
+    const resultPath = makeResultPath(tmpDir, runId, round)
     state.reviewerTakeover = {
-      round: 1, interceptAt: new Date().toISOString(), spawnPhase: 'done',
+      round, interceptAt: new Date().toISOString(), spawnPhase: 'done',
     }
-    const result = cleanupStaleState('phase_complete', state)
-    expect(result).toBeDefined()
-    expect(result.reviewerTakeover).toBeNull()
+    writeFileSync(resultPath, JSON.stringify({ status: 'complete' }))
+    try {
+      expect(existsSync(resultPath)).toBe(true)
+      const result = cleanupStaleState('phase_complete', state)
+      expect(result).toBeDefined()
+      expect(result.reviewerTakeover).toBeNull()
+      expect(existsSync(resultPath)).toBe(false)
+    } finally {
+      if (existsSync(resultPath)) unlinkSync(resultPath)
+    }
   })
 
   // RT-031b-3
   it('should_cleanup_result_files_on_ralph_terminate', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'rt-031b3-'))
     const state = makeRalphState()
+    const runId = state.runId
+    const round = 1
+    const resultPath = makeResultPath(tmpDir, runId, round)
     state.reviewerTakeover = {
-      round: 1, interceptAt: new Date().toISOString(), spawnPhase: 'done',
+      round, interceptAt: new Date().toISOString(), spawnPhase: 'done',
     }
-    const result = cleanupStaleState('ralph_terminate', state)
-    expect(result).toBeDefined()
-    expect(result.reviewerTakeover).toBeNull()
+    writeFileSync(resultPath, JSON.stringify({ status: 'complete' }))
+    try {
+      expect(existsSync(resultPath)).toBe(true)
+      const result = cleanupStaleState('ralph_terminate', state)
+      expect(result).toBeDefined()
+      expect(result.reviewerTakeover).toBeNull()
+      expect(existsSync(resultPath)).toBe(false)
+    } finally {
+      if (existsSync(resultPath)) unlinkSync(resultPath)
+    }
   })
 
   // RT-032a

@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createReviewerInterceptRule } from '../src/reviewer-intercept.js'
-import { writeFileSync, mkdirSync, existsSync, unlinkSync } from 'fs'
+import { writeFileSync, existsSync, unlinkSync, mkdtempSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
 import { makeRalphState } from './helpers.js'
 
 describe('ReviewerInterceptRule', () => {
@@ -75,6 +77,13 @@ describe('ReviewerInterceptRule', () => {
     // RT-006
     it('should_not_intercept_t1_or_t2_subagent_calls', () => {
       const state = makeRalphState()
+      state.reviewerTakeover = {
+        round: 1,
+        interceptAt: new Date().toISOString(),
+        spawnPhase: 't1_running',
+        t1SessionId: 'ses-t1-001',
+        t2SessionId: 'ses-t2-001',
+      }
       const resultT1 = rule.evaluate('Task', { subagent_type: 'oracle', prompt: 'Review', description: 'Review' }, state, 'ses-t1-001')
       expect(resultT1.blocked).toBe(false)
       const resultT2 = rule.evaluate('Task', { subagent_type: 'oracle', prompt: 'Review', description: 'Review' }, state, 'ses-t2-001')
@@ -142,11 +151,11 @@ describe('ReviewerInterceptRule', () => {
 
     // RT-009c
     it('should_return_cached_block_message_when_result_file_exists', () => {
+      const tmpDir = mkdtempSync(join(tmpdir(), 'rt-009c-'))
       const state = makeRalphState()
       rule.evaluate('Task', { subagent_type: 'oracle', prompt: 'Review', description: 'Review' }, state, 'ses-main-001')
       const round = state.ralph?.round ? state.ralph.round + 1 : 2
-      const resultPath = `.aristotle/reviewer-result-${round}.json`
-      mkdirSync('.aristotle', { recursive: true })
+      const resultPath = join(tmpDir, `reviewer-result-${round}.json`)
       writeFileSync(resultPath, JSON.stringify({ status: 'complete', round, sessionId: 'ses-main-001', findings: [] }))
       try {
         const result = rule.evaluate('Task', { subagent_type: 'oracle', prompt: 'Review', description: 'Review' }, state, 'ses-main-001')
@@ -171,7 +180,10 @@ describe('ReviewerInterceptRule', () => {
       rule.evaluate('Task', { subagent_type: 'oracle', prompt: 'Review', description: 'Review' }, state, 'ses-main-001')
       const result = rule.evaluate('Task', { subagent_type: 'oracle', prompt: 'Review', description: 'Review' }, state, 'ses-main-001')
       expect(result.blocked).toBe(true)
-      expect(debugSpy).toHaveBeenCalled()
+      const cachedCalls = debugSpy.mock.calls.filter(
+        call => call.some(arg => String(arg).toLowerCase().includes('cached')),
+      )
+      expect(cachedCalls.length).toBeGreaterThanOrEqual(1)
       debugSpy.mockRestore()
     })
   })
@@ -183,7 +195,13 @@ describe('ReviewerInterceptRule', () => {
       const state = makeRalphState()
       const result = rule.evaluate('Task', { subagent_type: 'oracle', prompt: 'Review', description: 'Review' }, state, 'ses-main-001')
       expect(result.blocked).toBe(true)
-      expect(auditSpy).toHaveBeenCalled()
+      const interceptCalls = auditSpy.mock.calls.filter(
+        call => call.some(arg => {
+          const s = String(arg)
+          return s.includes('INTERCEPT') && s.includes('reviewer_takeover')
+        }),
+      )
+      expect(interceptCalls.length).toBeGreaterThanOrEqual(1)
       auditSpy.mockRestore()
     })
   })
