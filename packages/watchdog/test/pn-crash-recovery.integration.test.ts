@@ -122,9 +122,9 @@ describe('crash recovery integration - pipeline nesting', () => {
     expect(mockLogger.info).toHaveBeenCalledWith(
       expect.stringContaining('orphaned'),
     )
+    // R48 F-4: spec #70 requires auto-recovery — verify state write and stack cleanup
+    expect(mockStateStore.write).toHaveBeenCalled()
   })
-
-  // #71
   it('should handle crash during resume state persisted but stack not popped', () => {
     const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
     const state = makeNestingState({ runId: 'parent-123', phaseStatus: 'ralph_loop' })

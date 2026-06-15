@@ -679,9 +679,10 @@ describe('child lifecycle integration - pipeline nesting', () => {
       }),
     )
     // F-032: parent and child pending_pause remains undefined, status suspended
+    // R48 F-1: use endsWith to avoid substring match — 'child' matches 'grandchild'
     for (const runId of ['parent', 'child']) {
       const writes = mockStateStore.write.mock.calls.filter(
-        ([key]) => key.includes(runId)
+        ([key]) => key.includes(`/${runId}/state`) || key.includes(`/${runId}/suspended`)
       )
       // F-007: length guard — see #142 above. forEach over [] is vacuous.
       expect(writes.length).toBeGreaterThan(0)
