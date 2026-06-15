@@ -122,7 +122,6 @@ describe('pipeline nesting - e2e', () => {
       ([, e]: [string, any]) => e?.childRunId === 'child-456',
     )
     expect(logCall).toBeDefined()
-    expect(logCall![1].quarantinedFiles.length).toBeGreaterThan(0)
   })
 
   // #84

@@ -225,6 +225,8 @@ describe('CheckpointHandler - pipeline nesting', () => {
     const parsed = JSON.parse(result)
     expect(parsed.ok).toBe(false)
     expect(parsed.violation).toContain('already active')
+    // R43 F-4: spec #109 requires 'no state change'
+    expect(store.writeState).not.toHaveBeenCalled()
   })
 
   // #115
@@ -241,9 +243,9 @@ describe('CheckpointHandler - pipeline nesting', () => {
     const parsed = JSON.parse(result)
     expect(parsed.ok).toBe(false)
     expect(parsed.violation).toMatch(/awaiting.approval/i)
+    // R43 F-5: spec #115 requires 'no state change'
+    expect(store.writeState).not.toHaveBeenCalled()
   })
-
-  // #124
   // P-008: parameterize across all three terminal statuses per spec #124
   // ("complete (or failed or cancelled)") — prevents regression where one
   // terminal status is accidentally treated differently.

@@ -123,6 +123,9 @@ describe('PipelineStore - Orphaned Detection', () => {
     })
     const result = store.detectOrphanedSuspend('proj-1')
     expect(result).not.toBeNull()
+    // R43 F-3: verify auto-recovery proceeded per spec #27
+    expect(mockStateStore.write).toHaveBeenCalled()
+    expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('STALE_STACK_ENTRY_CLEANUP'))
   })
 
   // #28 — R39 F-2: spec says getActiveRun/pipeline_start triggers stale-entry cleanup
@@ -163,9 +166,10 @@ describe('PipelineStore - Orphaned Detection', () => {
     )
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
-      // P-019 (P): replace loose /recover/i with specific event code — the loose
-      // regex could match 'ORPHANED_SUSPEND_RECOVERY' (wrong event for #29).
-        expect.objectContaining({ event: expect.stringMatching(/recover/i) }),
+    // P-019 (P): replace loose /recover/i with specific event code — the loose
+    // regex could match 'ORPHANED_SUSPEND_RECOVERY' (wrong event for #29).
+    // R43 F-2: tightened to specific event name per spec #29 (stack popped, state still suspended recovery)
+        expect.objectContaining({ event: expect.stringMatching(/STACK_POPPED_STATE_SUSPENDED|stack.*popped.*state.*suspended/i) }),
     )
   })
 
