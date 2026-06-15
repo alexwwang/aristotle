@@ -210,6 +210,7 @@ describe('child lifecycle integration - pipeline nesting', () => {
       makeSuspendedPipeline({ runId: 'C', depth: 2, parentRunId: 'B', childRunId: 'child-C', suspendedPhase: 7 }),
     ]
     mockStateStore.read.mockImplementation((key: string) => {
+      if (key.endsWith('/active')) return { runId: 'C', projectId: 'proj-1' }
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack(entries)
       return null
     })
@@ -423,6 +424,7 @@ describe('child lifecycle integration - pipeline nesting', () => {
         }),
       }),
     )
+    expect(mockStateStore.write).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ pending_pause: undefined }))
   })
 
   // #142
@@ -613,6 +615,7 @@ describe('child lifecycle integration - pipeline nesting', () => {
         metadata: expect.objectContaining({ code: 'CHILD_CANCELLED' }),
       }),
     )
+    expect(mockStateStore.write).toHaveBeenCalledWith(expect.stringMatching(/suspended-stack/), expect.objectContaining({ entries: expect.any(Array) }))
   })
 
   // #159

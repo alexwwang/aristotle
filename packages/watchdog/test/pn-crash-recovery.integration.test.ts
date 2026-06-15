@@ -56,14 +56,14 @@ describe('crash recovery integration - pipeline nesting', () => {
   })
 
   // #67
-  it('should recover suspended stack from crash', () => {
+  it('should recover suspended stack from crash via getActiveRun', () => {
     const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
       if (key.endsWith('/active')) return null
       return null
     })
-    const result = store.detectOrphanedSuspend('proj-1')
+    const result = store.getActiveRun('proj-1')
     expect(result).not.toBeNull()
     expect(mockStateStore.write).toHaveBeenCalled()
     // P-006 (M): field-level assertions — verify recovered state matches
@@ -105,7 +105,7 @@ describe('crash recovery integration - pipeline nesting', () => {
     )
   })
 
-  // #70 — covers #68 (canonical) (crash before child started, childRunId undefined).
+  // #70 (crash before child started, childRunId undefined).
   it('#70 — should detect orphaned suspend when child not yet started', () => {
     const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: undefined })
     mockStateStore.read.mockImplementation((key: string) => {
@@ -517,7 +517,7 @@ describe('crash recovery integration - pipeline nesting', () => {
     )
   })
 
-  // (formerly annotated as #149) — covers canSuspend divergence detection (NOT
+  // canSuspend depth divergence test — covers canSuspend divergence detection (NOT
   // crash-recovery stack_length authoritative depth required by #149).
   it('canSuspend detects depth metric divergence during crash recovery', () => {
     const entries: SuspendedPipeline[] = []

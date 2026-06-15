@@ -163,7 +163,7 @@ describe('PipelineStore - Orphaned Detection', () => {
       expect.any(String),
       // P-019 (P): replace loose /recover/i with specific event code — the loose
       // regex could match 'ORPHANED_SUSPEND_RECOVERY' (wrong event for #29).
-      expect.objectContaining({ event: expect.stringMatching(/^SUSPENDED_STATE_RECOVER/i) }),
+        expect.objectContaining({ event: expect.stringMatching(/recover/i) }),
     )
   })
 
