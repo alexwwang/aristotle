@@ -101,6 +101,7 @@ describe('quarantine integration - pipeline nesting', () => {
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
       return null
     })
+    mockStateStore.list.mockReturnValue(['quarantine/in-progress.json'])
     const result = store.detectOrphanedSuspend('proj-1')
     expect(result).not.toBeNull()
     // F-008: quarantineSuccess is on the stack entry, not PipelineState.

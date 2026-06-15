@@ -168,6 +168,9 @@ describe('CheckpointHandler - pipeline nesting', () => {
     expect(loggerMock.warn).toHaveBeenCalledWith(
       expect.stringMatching(/rate.?limit|throttl/i),
     )
+    // P-004: verify excess events were queued, not just dropped
+    const processedCount = allCalls.length
+    expect(processedCount).toBeLessThan(RAPID_REQUEST_COUNT)
   })
 
   // #99

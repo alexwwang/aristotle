@@ -117,11 +117,16 @@ describe('PipelineStore - Resume Flow', () => {
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
       // F-004: tightened — audit entry must include childStatus and depth
+      // P-001: #89 — consistent schema for resume (mirror #89 suspend schema)
       expect.objectContaining({
         event: 'pipeline_resume',
         decision: 'PASS',
         childStatus: expect.any(String),
         depth: expect.any(Number),
+        timestamp: expect.any(String),
+        runId: expect.any(String),
+        phase: expect.any(Number),
+        metadata: expect.any(Object),
       }),
     )
   })

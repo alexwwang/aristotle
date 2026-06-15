@@ -575,6 +575,13 @@ describe('child lifecycle integration - pipeline nesting', () => {
           expect.objectContaining({ runId: 'A' }),
         ]) }),
       )
+      // P-003: verify B was removed — not just A present
+      expect(mockStateStore.write).not.toHaveBeenCalledWith(
+        expect.stringMatching(/suspended-stack/),
+        expect.objectContaining({ entries: expect.arrayContaining([
+          expect.objectContaining({ runId: 'B' }),
+        ]) }),
+      )
       // F-008: parent must NOT be auto-resumed after child cleanup — verify no
       // write transitions parent back to ralph_loop/active (would cause double-exec).
       expect(mockStateStore.write).not.toHaveBeenCalledWith(
