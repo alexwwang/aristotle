@@ -167,7 +167,10 @@ describe('pipeline nesting - e2e', () => {
   // mid-stack crash recovery (only tests orphan detection on a flat stack).
   // Crash is at depth=1 (child-456). Recovery should preserve depth=0 entry
   // and clean up the depth=2 orphan (grandchild-789).
-  it('should recover from crash during nested execution', () => {
+  // P-015 (M): rename — test body only calls detectOrphanedSuspend with
+  // pre-seeded stack (no crash simulation or process restart). Original name
+  // 'should recover from crash during nested execution' was misleading.
+  it('should detect orphaned suspend at topmost stack entry and emit recovery write', () => {
     const entries = [
       makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' }),
       makeSuspendedPipeline({ runId: 'child-456', depth: 1, childRunId: 'grandchild-789', parentRunId: 'parent-123' }),

@@ -96,6 +96,10 @@ describe('crash recovery integration - pipeline nesting', () => {
     const result = store.detectOrphanedSuspend('proj-1')
     expect(result).not.toBeNull()
     expect(mockStateStore.write).toHaveBeenCalled()
+    // P-006 (M): field-level assertions — verify recovered state matches
+    // the persisted stack entry (runId, depth, phaseStatus).
+    expect(result?.runId).toBe('parent-123')
+    expect(result?.depth).toBe(0)
   })
 
   // #68 — F-029 (P): distinct from #70: childRunId is set in stack but child state
@@ -428,15 +432,24 @@ describe('crash recovery integration - pipeline nesting', () => {
     expect(mockLogger.warn).toHaveBeenCalledWith(
       expect.stringContaining('missing metadata'),
     )
+    // P-018 (M): verify matched metadata (hash1/child-456) was preserved —
+    // the impl should NOT warn about entries that match stack runIds.
+    expect(mockLogger.warn).not.toHaveBeenCalledWith(
+      expect.stringContaining('child-456'),
+    )
     // P-010 (M-13): removed quarantineSuccess:true write assertion — spec #123
     // only specifies metadata matching + WARN logging. Over-specifying risks
     // false failures if the impl doesn't write quarantineSuccess in this path.
   })
 
   // #130
+  // P-005 (H): use fake timers + deterministic timestamp — wall-clock
+  // dependence makes this test flaky under CI stalls.
   it('should resume child pause timer from stored timestamp when <30 min elapsed after crash', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-06-14T12:00:00Z'))
     const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
-    const recentTimestamp = new Date(Date.now() - 10 * 60 * 1000).toISOString()
+    const recentTimestamp = new Date('2026-06-14T11:50:00Z').toISOString()
     const state = {
       ...makeNestingState({ runId: 'parent-123', phaseStatus: 'suspended' }),
       child_pause_timer_started_at: recentTimestamp,
@@ -486,11 +499,16 @@ describe('crash recovery integration - pipeline nesting', () => {
     expect(store.createRegressionCounter).not.toHaveBeenCalledWith('abandoned-run')
   })
 
-  // F-006: originally annotated as #147, but the test body only covers the
-  // depth-divergence / corrupted-stack detection path — NOT pipeline_start with
-  // force=false (which is the real #147 spec). #147 annotation dropped to avoid
-  // misleading coverage claims. Full #147 coverage deferred to Green Phase.
-  // TODO: #147 full spec coverage (pipeline_start with force=false)
+  // P-004 (H): spec #147 and #149 dropped without replacement. Adding it.todo
+  // stubs so coverage tracking shows the gap and Green Phase has explicit hooks.
+  // #147: should allow fresh pipeline_start after orphaned recovery discards corrupted stack
+  it.todo('#147 — should allow fresh pipeline_start after orphaned recovery discards corrupted stack')
+
+  // #149: should use stack_length as authoritative depth during crash recovery when depth_field_diverges
+  it.todo('#149 — should use stack_length as authoritative depth during crash recovery when depth_field_diverges')
+
+  // (formerly annotated as #147) — covers corrupted-stack detection only (NOT the
+  // fresh pipeline_start continuation required by #147).
   it('[unit] orphaned recovery detects corrupted stack and logs CRITICAL', () => {
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/active')) return null
@@ -503,11 +521,8 @@ describe('crash recovery integration - pipeline nesting', () => {
     )
   })
 
-  // F-014: originally annotated as #149, but the test body calls
-  // detectOrphanedSuspend before clearAllMocks (no-op), then asserts on
-  // canSuspend depth divergence — not orphan recovery. #149 annotation dropped
-  // and no-op detectOrphanedSuspend call removed so the test name reflects
-  // what is actually asserted (canSuspend divergence detection).
+  // (formerly annotated as #149) — covers canSuspend divergence detection (NOT
+  // crash-recovery stack_length authoritative depth required by #149).
   it('canSuspend detects depth metric divergence during crash recovery', () => {
     const entries: SuspendedPipeline[] = []
     for (let i = 0; i < 9; i++) {

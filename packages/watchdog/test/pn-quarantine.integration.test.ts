@@ -79,9 +79,12 @@ describe('quarantine integration - pipeline nesting', () => {
       if (key.endsWith('/active')) return { runId: 'parent-123', projectId: 'proj-1' }
       return null
     })
-    const storeFail = new PipelineStore(mockStateStore, mockLogger, {
-      quarantineHook: vi.fn().mockImplementation(() => { throw new Error('hook failed') }),
-    })
+    // P-001 (H): PipelineStore constructor only accepts (stateStore, logger) — the
+    // 3rd `{ quarantineHook }` arg is silently ignored at runtime, so the hook would
+    // never fire when Phase 5 implements suspendActive. Inject via test-only side
+    // channel so the hook is actually reachable.
+    const storeFail = new PipelineStore(mockStateStore, mockLogger)
+    ;(storeFail as any).__testQuarantineHook = vi.fn().mockImplementation(() => { throw new Error('hook failed') })
     storeFail.suspendActive('proj-1', 'test_modification')
     // F-008: quarantineSuccess lives on SuspendedPipeline entries (inside the stack),
     // not on top-level PipelineState (schema L286 vs L29-85).
@@ -169,9 +172,9 @@ describe('quarantine integration - pipeline nesting', () => {
       if (key.endsWith('/parent-123/state')) return state
       return null
     })
-    const storeCrash = new PipelineStore(mockStateStore, mockLogger, {
-      quarantineHook: vi.fn().mockReturnValue(undefined),
-    })
+    // P-001 (H): inject hook via test-only side channel — see #60 above.
+    const storeCrash = new PipelineStore(mockStateStore, mockLogger)
+    ;(storeCrash as any).__testQuarantineHook = vi.fn().mockReturnValue(undefined)
     storeCrash.suspendActive('proj-1', 'test_modification')
     const stackWrite = mockStateStore.write.mock.calls.find(
       ([key]: [string]) => key.endsWith('/suspended-stack')

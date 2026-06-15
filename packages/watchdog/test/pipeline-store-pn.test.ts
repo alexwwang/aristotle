@@ -327,9 +327,11 @@ describe('PipelineStore - Pipeline Nesting', () => {
   // #13
   // F-011: pass quarantine hook via constructor and verify hook is called
   // after state persistence (write). Constructor hook param exists in Red Phase.
+  // P-001 (H): constructor ignores 3rd arg — inject hook via test-only side channel.
   it('should call quarantine hook after state persistence', () => {
     const quarantineHook = vi.fn().mockReturnValue(true)
-    const storeWithHook = new PipelineStore(mockStateStore, mockLogger, { quarantineHook })
+    const storeWithHook = new PipelineStore(mockStateStore, mockLogger)
+    ;(storeWithHook as any).__testQuarantineHook = quarantineHook
     const state = makeNestingState()
     mockStateStore.read.mockReturnValue(state)
     storeWithHook.suspendActive('proj-1', 'test_modification')
@@ -491,11 +493,14 @@ describe('PipelineStore - Pipeline Nesting', () => {
     const entry = makeSuspendedPipeline({ runId: 'run-001', depth: 0 })
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/active')) return null
+      // P-007 (M): explicit /state branch — was catch-all return of stack.
       if (key.endsWith('/state')) return makeNestingState({
+        runId: 'run-001',
         phaseStatus: 'suspended',
         preSuspendStatus: 'ralph_loop',
       })
-      return makeSuspendedStack([entry])
+      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
+      return null
     })
     store.detectOrphanedSuspend('proj-1')
     expect(mockStateStore.write).toHaveBeenCalledWith(
@@ -515,7 +520,8 @@ describe('PipelineStore - Pipeline Nesting', () => {
     const entry = makeSuspendedPipeline({ childRunId: 'child-123' })
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/active')) return null
-      return makeSuspendedStack([entry])
+      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
+      return null
     })
     store.detectOrphanedSuspend('proj-1')
     expect(mockStateStore.write).toHaveBeenCalledWith(
@@ -529,7 +535,8 @@ describe('PipelineStore - Pipeline Nesting', () => {
     const entry = makeSuspendedPipeline({ runId: 'A', depth: 0 })
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/active')) return null
-      return makeSuspendedStack([entry])
+      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
+      return null
     })
     mockStateStore.list.mockReturnValue(['quarantine/metadata-abc.json'])
     const result = store.detectOrphanedSuspend('proj-1')
@@ -550,7 +557,8 @@ describe('PipelineStore - Pipeline Nesting', () => {
     const entry = makeSuspendedPipeline({ childRunId: undefined })
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/active')) return null
-      return makeSuspendedStack([entry])
+      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
+      return null
     })
     const result = store.detectOrphanedSuspend('proj-1')
     expect(result).not.toBeNull()
@@ -594,7 +602,9 @@ describe('PipelineStore - Pipeline Nesting', () => {
     )
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ event: expect.stringMatching(/recover/i) }),
+      // P-019 (P): replace loose /recover/i with specific event code — the loose
+      // regex could match 'ORPHANED_SUSPEND_RECOVERY' (wrong event for #29).
+      expect.objectContaining({ event: expect.stringMatching(/^SUSPENDED_STATE_RECOVER/i) }),
     )
   })
 
@@ -624,9 +634,11 @@ describe('PipelineStore - Pipeline Nesting', () => {
   // #31
   it('should treat quarantineSuccess undefined as orphaned during suspend inconsistency', () => {
     const entry = makeSuspendedPipeline({ quarantineSuccess: undefined })
+    // P-007 (M): explicit /suspended-stack branch — was catch-all return of stack.
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/active')) return null
-      return makeSuspendedStack([entry])
+      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
+      return null
     })
     const result = store.detectOrphanedSuspend('proj-1')
     expect(result).not.toBeNull()
@@ -638,9 +650,12 @@ describe('PipelineStore - Pipeline Nesting', () => {
   // at the specific test, not at the helper (better debuggability).
   function setupQuarantineInconsistency(quarantineSuccess: boolean) {
     const entry = makeSuspendedPipeline({ quarantineSuccess })
+    // P-007 (M): explicit /state and /suspended-stack branches — was catch-all.
     mockStateStore.read.mockImplementation((key: string) => {
-      if (key.endsWith('/active')) return makeNestingState({ phaseStatus: 'suspended', preSuspendStatus: 'ralph_loop' })
-      return makeSuspendedStack([entry])
+      if (key.endsWith('/active')) return null
+      if (key.endsWith('/state')) return makeNestingState({ phaseStatus: 'suspended', preSuspendStatus: 'ralph_loop' })
+      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
+      return null
     })
     store.detectOrphanedSuspend('proj-1')
   }
@@ -686,7 +701,13 @@ describe('PipelineStore - Pipeline Nesting', () => {
         cleanupToken: 'tok-1', spawnPhase: 't2_running',
       } satisfies ReviewerTakeoverState,
     }
-    mockStateStore.read.mockReturnValue(state)
+    // P-007 (M): explicit branches — was catch-all mockReturnValue(state)
+    // which returns full PipelineState for /active keys (type confusion).
+    mockStateStore.read.mockImplementation((key: string) => {
+      if (key.endsWith('/active')) return { runId: 'run-123', projectId: 'proj-1' }
+      if (key.endsWith('/state')) return state
+      return null
+    })
     store.suspendActive('proj-1', 'test_modification')
     expect(mockLogger.info).toHaveBeenCalledWith(
       expect.stringContaining('TAKEOVER_STALE_CLEANUP'),
@@ -779,7 +800,12 @@ describe('PipelineStore - Pipeline Nesting', () => {
     )
     // P-003: verify cleanup continued after race detection — write should
     // have been called (cleanup not silently aborted after the race warning).
-    expect(mockStateStore.write).toHaveBeenCalled()
+    // P-021 (P): filter to /state or /suspended-stack writes — any write counts
+    // was too loose (audit/preliminary writes could pass vacuously).
+    const substantiveWrite = mockStateStore.write.mock.calls.find(
+      ([k]: [string]) => typeof k === 'string' && (k.endsWith('/state') || k.endsWith('/suspended-stack')),
+    )
+    expect(substantiveWrite).toBeDefined()
   })
   }) // describe('Reviewer Takeover Cleanup')
 
@@ -902,7 +928,12 @@ describe('PipelineStore - Pipeline Nesting', () => {
   // #101
   it('should preserve pending_pause=null on PipelineState through suspendActive', () => {
     const state = { ...makeNestingState(), pending_pause: null }
-    mockStateStore.read.mockReturnValue(state)
+    // P-007 (M): explicit branches — was catch-all mockReturnValue(state).
+    mockStateStore.read.mockImplementation((key: string) => {
+      if (key.endsWith('/active')) return { runId: 'run-123', projectId: 'proj-1' }
+      if (key.endsWith('/state')) return state
+      return null
+    })
     store.suspendActive('proj-1', 'test_modification')
     // F-006: key-filtered lookup — resilient to preliminary writes (audit log, etc.)
     const stateWrite = mockStateStore.write.mock.calls.find(
@@ -929,7 +960,12 @@ describe('PipelineStore - Pipeline Nesting', () => {
   // Behavioral assertion (== null) is sufficient and still fails in Red Phase.
   it('should preserve pending_pause=undefined on PipelineState through suspendActive', () => {
     const state = { ...makeNestingState(), pending_pause: undefined }
-    mockStateStore.read.mockReturnValue(state)
+    // P-007 (M): explicit branches — was catch-all mockReturnValue(state).
+    mockStateStore.read.mockImplementation((key: string) => {
+      if (key.endsWith('/active')) return { runId: 'run-123', projectId: 'proj-1' }
+      if (key.endsWith('/state')) return state
+      return null
+    })
     store.suspendActive('proj-1', 'test_modification')
     // F-006: key-filtered lookup — same pattern as null variant above.
     const stateWrite = mockStateStore.write.mock.calls.find(
@@ -1249,7 +1285,11 @@ describe('PipelineStore - Pipeline Nesting', () => {
   // #128b — direct PipelineStore-level guard (supplements transitions-pn.test.ts:133 proxy).
   it('should reject resumeFromPause when status is not paused', () => {
     const state = makeNestingState({ phaseStatus: 'ralph_loop' })
-    mockStateStore.read.mockReturnValue(state)
+    // P-007 (M): explicit /state branch — was catch-all mockReturnValue(state).
+    mockStateStore.read.mockImplementation((key: string) => {
+      if (key.endsWith('/state')) return state
+      return null
+    })
     expect(() => store.resumeFromPause('proj-1')).toThrow(/not paused/i)
     // P-010: verify no partial state change before rejection.
     expect(mockStateStore.write).not.toHaveBeenCalled()

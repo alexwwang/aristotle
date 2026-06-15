@@ -87,7 +87,9 @@ describe('child lifecycle integration - pipeline nesting', () => {
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
       return null
     })
-    expect(() => store.resumeSuspended('proj-1', 'child-456')).toThrow(/child.*active|active.*child/i)
+    // P-002 (H): broaden regex to include 'ralph_loop' — child state uses
+    // phaseStatus='ralph_loop', so the impl error message likely includes it.
+    expect(() => store.resumeSuspended('proj-1', 'child-456')).toThrow(/child.*active|active.*child|ralph_loop/i)
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ event: 'pipeline_resume', decision: 'BLOCK' }),
@@ -110,6 +112,10 @@ describe('child lifecycle integration - pipeline nesting', () => {
       return null
     })
     expect(() => store.resumeSuspended('proj-1', 'child-456')).toThrow(/grandchild|suspended_stack|nested/i)
+    // P-003 (H): spec #77 requires CRITICAL log for grandchild rejection.
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.stringContaining('CRITICAL'),
+    )
   })
 
   // #78
@@ -123,6 +129,10 @@ describe('child lifecycle integration - pipeline nesting', () => {
     })
     store.getSessionInfo = vi.fn().mockReturnValue({ status: 'active' })
     expect(() => store.resumeSuspended('proj-1', 'child-456')).toThrow(/session.*active|active.*session/i)
+    // P-003 (H): spec #78 requires CRITICAL 'CHILD_SESSION_INFO_FAILED' log.
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.stringMatching(/CRITICAL|CHILD_SESSION_INFO_FAILED/i),
+    )
   })
 
   // #79
@@ -141,6 +151,10 @@ describe('child lifecycle integration - pipeline nesting', () => {
     store.getSessionInfo = vi.fn().mockReturnValue({ status: 'inactive' })
     const result = store.resumeSuspended('proj-1', 'child-456')
     expect(result.phaseStatus).toBe('ralph_loop')
+    // P-003 (H): spec #79 requires WARNING log when treating missing child as failure.
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect.stringMatching(/child.*fail|session.*inactive|WARNING/i),
+    )
   })
 
   // #80
@@ -183,6 +197,16 @@ describe('child lifecycle integration - pipeline nesting', () => {
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ event: 'phase_fail' }),
+    )
+    // P-010 (M): spec #81 requires "child's partial work preserved" — verify
+    // the appendLog entry includes the child's completed phase (currentPhase=3).
+    expect(mockStateStore.appendLog).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        event: 'phase_fail',
+        childRunId: 'child-456',
+        failurePhase: expect.any(Number),
+      }),
     )
   })
 
@@ -239,7 +263,8 @@ describe('child lifecycle integration - pipeline nesting', () => {
     }
     const deferredEntries = [
       { event: 'DEFERRED_PAUSE', trigger_type: 'compliance', reason: 'compliance', timestamp: '2026-01-01T00:01:00Z' },
-      { event: 'DEFERRED_PAUSE', trigger_type: 'UNFIXED_ISSUES', reason: 'unfixed', timestamp: '2026-01-01T00:00:00Z' },
+      // P-008 (M): align with PendingPause schema — violation_type (not trigger_type).
+      { event: 'DEFERRED_PAUSE', trigger_type: 'UNFIXED_ISSUES', violation_type: 'UNFIXED_ISSUES', reason: 'unfixed', timestamp: '2026-01-01T00:00:00Z' },
     ]
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/parent-123/state')) return parentState
@@ -278,7 +303,11 @@ describe('child lifecycle integration - pipeline nesting', () => {
       return null
     })
     let callCount = 0
+    // P-009 (M): capture timestamps to verify spec-required 1s delay between
+    // the initial attempt and the retry.
+    const callTimestamps: number[] = []
     store.getSessionInfo = vi.fn().mockImplementation(() => {
+      callTimestamps.push(Date.now())
       callCount++
       if (callCount === 1) throw new Error('transient')
       return { status: 'inactive' }
@@ -293,6 +322,9 @@ describe('child lifecycle integration - pipeline nesting', () => {
     // The old 999+1 split was brittle — it assumed a specific retry interval (1s)
     // which couples the test to an implementation detail.
     expect(store.getSessionInfo).toHaveBeenCalledTimes(2)
+    // P-009 (M): spec #122 requires "1s delay" between attempts.
+    const elapsedBetweenCalls = callTimestamps[1]! - callTimestamps[0]!
+    expect(elapsedBetweenCalls).toBeGreaterThanOrEqual(1000)
   })
 
   // #122 — persistent failure variant

@@ -160,10 +160,11 @@ describe('CheckpointHandler - pipeline nesting', () => {
       )
     }
     const allCalls = store.suspendActive.mock.calls
-    // F-026: tighten from '< RAPID_REQUEST_COUNT' to '< 80%' — a rate limiter
-    // that only blocks 1 of 50 requests is functionally broken. 80% threshold
-    // ensures meaningful throttling without over-specifying the exact ratio.
-    expect(allCalls.length).toBeLessThan(RAPID_REQUEST_COUNT * 0.8)
+    // P-011 (M): tighten from '< RAPID_REQUEST_COUNT * 0.8' to '< 50%' —
+    // a rate limiter that processes >50% of 50 rapid requests is functionally
+    // broken. 50% threshold ensures meaningful throttling with margin for
+    // implementation-specific windowing strategies.
+    expect(allCalls.length).toBeLessThan(RAPID_REQUEST_COUNT * 0.5)
     expect(allCalls.length).toBeGreaterThan(0)
     expect(loggerMock.warn).toHaveBeenCalledWith(
       expect.stringMatching(/rate.?limit|throttl/i),
@@ -262,6 +263,19 @@ describe('CheckpointHandler - pipeline nesting', () => {
       )
       const parsed = JSON.parse(result)
       expect(parsed.ok).toBe(true)
+      // P-012 (M): mirror #143 assertions — verify fresh state at depth=0 with
+      // a new runId (not the old active run).
+      expect(store.writeState).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ depth: 0 }),
+      )
+      const stateWriteCall = store.writeState.mock.calls.find(
+        ([k]: [string]) => typeof k === 'string' && k.endsWith('/state'),
+      )
+      expect(stateWriteCall).toBeDefined()
+      const writtenState = stateWriteCall![1]
+      expect(writtenState.runId).not.toBe('run-123')
+      expect(store.createRegressionCounter).toHaveBeenCalled()
     },
   )
 
@@ -316,7 +330,13 @@ describe('CheckpointHandler - pipeline nesting', () => {
     const parsed = JSON.parse(result)
     expect(parsed.ok).toBe(true)
     expect(store.writeState).toHaveBeenCalled()
-    const writtenState = store.writeState.mock.calls[0][1]
+    // P-020 (P): use .find() for write-call indexing — consistent with #143 pattern.
+    // The old `[0]` index was fragile (assumed writeState was the first call).
+    const stateWriteCall = store.writeState.mock.calls.find(
+      ([k]: [string]) => typeof k === 'string' && k.endsWith('/state'),
+    )
+    expect(stateWriteCall).toBeDefined()
+    const writtenState = stateWriteCall![1]
     expect(writtenState.runId).not.toBe('run-old')
     expect(store.createRegressionCounter).toHaveBeenCalled()
     const newRunId = writtenState.runId
@@ -341,6 +361,15 @@ describe('CheckpointHandler - pipeline nesting', () => {
     const pauseParsed = JSON.parse(pauseResult)
     expect(pauseParsed.ok).toBe(true)
     expect(store.pauseActive).toHaveBeenCalledWith('proj-1')
+    // P-014 (M): mirror #58 audit assertion — routed events must emit audit entry.
+    expect(store.appendAudit).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(String),
+      expect.objectContaining({
+        event: 'pipeline_pause',
+        decision: 'PASS',
+      }),
+    )
   })
 
   // #145b
@@ -361,6 +390,15 @@ describe('CheckpointHandler - pipeline nesting', () => {
     const unpauseParsed = JSON.parse(unpauseResult)
     expect(unpauseParsed.ok).toBe(true)
     expect(store.resumeFromPause).toHaveBeenCalledWith('proj-1')
+    // P-014 (M): mirror #58 audit assertion — routed events must emit audit entry.
+    expect(store.appendAudit).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(String),
+      expect.objectContaining({
+        event: 'pipeline_unpause',
+        decision: 'PASS',
+      }),
+    )
   })
 
   // #153
@@ -378,6 +416,9 @@ describe('CheckpointHandler - pipeline nesting', () => {
     const parsed = JSON.parse(result)
     expect(parsed.ok).toBe(false)
     expect(parsed.violation).toMatch(/reason|payload/i)
+    // P-013 (M): mirror #57 negative assertion — verify pauseActive was NOT
+    // called for an invalid payload (compare to #57 L93 suspendActive pattern).
+    expect(store.pauseActive).not.toHaveBeenCalled()
   })
 
   // #155
