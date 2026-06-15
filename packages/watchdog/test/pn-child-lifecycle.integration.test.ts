@@ -428,7 +428,9 @@ describe('child lifecycle integration - pipeline nesting', () => {
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
       return null
     })
-    store.handleConcurrentPauseTrigger('proj-1', 'concurrent_trigger')
+    // P-014: spec #142 says "PATTERN_CYCLE violation fires on C" — use the
+    // spec-defined trigger type, not a generic placeholder.
+    store.handleConcurrentPauseTrigger('proj-1', 'PATTERN_CYCLE')
     expect(mockStateStore.write).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ runId: 'child-456', phaseStatus: 'paused' }),
@@ -469,7 +471,9 @@ describe('child lifecycle integration - pipeline nesting', () => {
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack([])
       return null
     })
-    store.handleConcurrentPauseTrigger('proj-1', 'pause_trigger')
+    // P-015: spec #151 says "PATTERN_CYCLE violation fires" — use the
+    // spec-defined trigger type, not a generic placeholder.
+    store.handleConcurrentPauseTrigger('proj-1', 'PATTERN_CYCLE')
     expect(mockStateStore.write).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({
@@ -617,7 +621,9 @@ describe('child lifecycle integration - pipeline nesting', () => {
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack(entries)
       return null
     })
-    store.handleConcurrentPauseTrigger('proj-1', 'recursive_trigger')
+    // P-016: spec uses PATTERN_CYCLE as the canonical trigger type for
+    // concurrent pause scenarios — use it instead of a generic placeholder.
+    store.handleConcurrentPauseTrigger('proj-1', 'PATTERN_CYCLE')
     expect(mockStateStore.write).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ runId: 'grandchild', phaseStatus: 'paused' }),

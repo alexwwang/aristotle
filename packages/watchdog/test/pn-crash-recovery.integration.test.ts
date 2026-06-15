@@ -344,7 +344,17 @@ describe('crash recovery integration - pipeline nesting', () => {
   it('should reset regression counter per_cycle on pipeline unpause', () => {
     const state = makeNestingState({ runId: 'parent-123', phaseStatus: 'paused', prePauseStatus: 'ralph_loop' })
     mockStateStore.read.mockReturnValue(state)
+    // P-013: verify the actual counter reset, not just the audit log entry.
+    // Mirrors #118's pattern — mock getRegressionCounter so the test proves
+    // reset() was invoked, not merely that the log entry was written.
+    const existingCounter = { per_cycle_count: 3, reset: vi.fn() }
+    store.getRegressionCounter = vi.fn().mockReturnValue(existingCounter)
+    store.createRegressionCounter = vi.fn()
     store.resumeFromPause('proj-1')
+    expect(existingCounter.reset).toHaveBeenCalledTimes(1)
+    expect(existingCounter.reset).toHaveBeenCalledWith()
+    expect(store.createRegressionCounter).not.toHaveBeenCalled()
+    expect(store.getRegressionCounter).toHaveBeenCalledWith('parent-123')
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ event: 'pipeline_unpause', regression_counter_reset: true }),

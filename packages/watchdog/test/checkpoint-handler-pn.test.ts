@@ -23,9 +23,9 @@ function createHandler(storeOverrides: Record<string, any> = {}) {
   const handler = new CheckpointHandler(
     store as any,
     STALE_THRESHOLD_MS,
-    /* observer= */ undefined,
-    /* cache= */ undefined,
     /* loopConfig= */ undefined,
+    /* cache= */ undefined,
+    /* observer= */ undefined,
     loggerMock,
   )
   return { handler, store, loggerMock }
@@ -245,19 +245,25 @@ describe('CheckpointHandler - pipeline nesting', () => {
   })
 
   // #124
-  it('should allow pipeline start when active status is terminal', async () => {
-    const { handler, store } = createHandler()
-    const state = makeState({ phaseStatus: 'complete' })
-    store.readState.mockReturnValue(state)
-    store.getActiveRun.mockReturnValue({ runId: 'run-123', projectId: 'proj-1' })
-    const result = await handler.handle(
-      'pipeline_start',
-      JSON.stringify({ description: 'fresh pipeline' }),
-      { worktree: '/tmp/test', sessionID: 'ses-1' },
-    )
-    const parsed = JSON.parse(result)
-    expect(parsed.ok).toBe(true)
-  })
+  // P-008: parameterize across all three terminal statuses per spec #124
+  // ("complete (or failed or cancelled)") — prevents regression where one
+  // terminal status is accidentally treated differently.
+  it.each(['complete', 'failed', 'cancelled'])(
+    'should allow pipeline start when active status is terminal (%s)',
+    async (terminalStatus) => {
+      const { handler, store } = createHandler()
+      const state = makeState({ phaseStatus: terminalStatus as 'complete' | 'failed' | 'cancelled' })
+      store.readState.mockReturnValue(state)
+      store.getActiveRun.mockReturnValue({ runId: 'run-123', projectId: 'proj-1' })
+      const result = await handler.handle(
+        'pipeline_start',
+        JSON.stringify({ description: 'fresh pipeline' }),
+        { worktree: '/tmp/test', sessionID: 'ses-1' },
+      )
+      const parsed = JSON.parse(result)
+      expect(parsed.ok).toBe(true)
+    },
+  )
 
   // #143
   it('should check terminal status before suspended stack when starting pipeline', async () => {

@@ -401,6 +401,9 @@ describe('PipelineStore - Pipeline Nesting', () => {
     const entry = makeSuspendedPipeline({ childRunId: 'child-456' })
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
+      // P-012: explicit /active branch — catch-all return of full PipelineState
+      // for /active masks type confusion (should be {runId, projectId} pointer).
+      if (key.endsWith('/active')) return { runId: 'run-123', projectId: 'proj-1' }
       return state
     })
     const result = store.resumeSuspended('proj-1', 'child-456')
@@ -567,6 +570,11 @@ describe('PipelineStore - Pipeline Nesting', () => {
     expect(mockLogger.info).toHaveBeenCalledWith(
       expect.stringContaining('STALE_STACK_ENTRY_CLEANUP'),
     )
+    // P-005: verify stack was actually popped (entry removed), not just logged.
+    expect(mockStateStore.write).toHaveBeenCalledWith(
+      expect.stringContaining('/suspended-stack'),
+      expect.objectContaining({ entries: [] }),
+    )
   })
 
   // #29
@@ -698,8 +706,10 @@ describe('PipelineStore - Pipeline Nesting', () => {
     const mockState = {
       ...makeNestingState({ phaseStatus: 'suspended' }),
       // F-011: typed as ReviewerTakeoverState — no `as any`.
+      // P-001: add required `spawnPhase` field — schema.ts marks it as required
+      // (no `?`), so `satisfies ReviewerTakeoverState` would fail compilation.
       reviewerTakeover: {
-        round: 1, interceptAt: 'phase-5',
+        round: 1, interceptAt: 'phase-5', spawnPhase: 't2_running',
         t2SessionId: 'ses-t2-001', resultFile: '/tmp/result.json', cleanupToken: 'tok-1',
       } satisfies ReviewerTakeoverState,
     }
@@ -730,7 +740,7 @@ describe('PipelineStore - Pipeline Nesting', () => {
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/state')) return {
         ...makeNestingState({ phaseStatus: 'suspended' }),
-        reviewerTakeover: { t2SessionId: 'ses-t2-done', resultFile: '/tmp/stale-result.json', cleanupToken: 'tok-1', spawnPhase: '5' },
+        reviewerTakeover: { round: 1, interceptAt: 'phase-5', t2SessionId: 'ses-t2-done', resultFile: '/tmp/stale-result.json', cleanupToken: 'tok-1', spawnPhase: '5' },
       }
       return makeSuspendedStack([entry])
     })
@@ -752,7 +762,7 @@ describe('PipelineStore - Pipeline Nesting', () => {
       if (key.endsWith('/state')) {
         const takeover = {
           ...makeNestingState({ phaseStatus: 'suspended' }),
-          reviewerTakeover: { t2SessionId: 'ses-t2-done', resultFile: '/tmp/gone-result.json', cleanupToken: 'tok-1' },
+          reviewerTakeover: { round: 1, interceptAt: 'phase-5', spawnPhase: '5', t2SessionId: 'ses-t2-done', resultFile: '/tmp/gone-result.json', cleanupToken: 'tok-1' },
         }
         if (!detectionDone) {
           detectionDone = true
@@ -856,6 +866,8 @@ describe('PipelineStore - Pipeline Nesting', () => {
   it('should reject suspendActive when no active pipeline exists', () => {
     mockStateStore.read.mockReturnValue(null)
     expect(() => store.suspendActive('proj-1', 'test_modification')).toThrow(/no active pipeline/i)
+    // P-006: verify no stack modification — spec #97 requires "no stack modification".
+    expect(mockStateStore.write).not.toHaveBeenCalled()
   })
 
   // #100
@@ -944,11 +956,14 @@ describe('PipelineStore - Pipeline Nesting', () => {
       currentPhase: 4,
     })
     // F-030: mock only at mockStateStore.read level — no double-mocking via store.readState.
+    // P-009: explicit /suspended-stack branch — catch-all return of makeSuspendedStack
+    // masks type confusion (returns a stack for /audit, /observations, etc.).
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/child-456/state')) return childFailedState
       if (key.endsWith('/active')) return null
       if (key.endsWith('/state')) return makeNestingState({ runId: 'parent-123', phaseStatus: 'suspended' })
-      return makeSuspendedStack([entry])
+      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
+      return null
     })
     store.resumeSuspended('proj-1', 'child-456')
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
@@ -1207,6 +1222,11 @@ describe('PipelineStore - Pipeline Nesting', () => {
     mockStateStore.read.mockReturnValue(state)
     expect(() => store.suspendActive('proj-1', 'test_modification')).toThrow(/paused/i)
     expect(mockStateStore.write).not.toHaveBeenCalled()
+    // P-007: spec #144 requires "audit entry logged" on paused rejection.
+    expect(mockStateStore.appendLog).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ event: expect.stringMatching(/pause/i) }),
+    )
   })
 
   // #146
@@ -1231,6 +1251,8 @@ describe('PipelineStore - Pipeline Nesting', () => {
     const state = makeNestingState({ phaseStatus: 'ralph_loop' })
     mockStateStore.read.mockReturnValue(state)
     expect(() => store.resumeFromPause('proj-1')).toThrow(/not paused/i)
+    // P-010: verify no partial state change before rejection.
+    expect(mockStateStore.write).not.toHaveBeenCalled()
   })
 
   // #150

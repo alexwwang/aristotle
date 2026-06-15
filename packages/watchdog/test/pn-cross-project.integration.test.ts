@@ -98,6 +98,45 @@ describe('cross-project integration - pipeline nesting', () => {
     expect(stack.entries[0].childRunId).toBe('child-456')
     // Verify parent project's stack was actually read (cross-project resolution occurred)
     expect(mockStateStore.read).toHaveBeenCalledWith(expect.stringContaining('proj-Y'))
+
+    // P-011: extend per spec #63 — actually call resumeSuspended and verify
+    // the cross-project chain walk (proj-X → proj-Y stack consultation).
+    // Spec #63: "When pipeline_resume called from project X. Then load
+    // B.parentPipelineProjectId, access Y's stack, verify B.runId matches
+    // A.childRunId."
+    const childState = makeNestingState({
+      runId: 'child-456',
+      projectId: 'proj-X',
+      parentPipelineProjectId: 'proj-Y',
+      parentRunId: 'parent-123',
+      phaseStatus: 'complete',
+    })
+    const parentState = makeNestingState({
+      runId: 'parent-123',
+      projectId: 'proj-Y',
+      phaseStatus: 'suspended',
+      preSuspendStatus: 'ralph_loop',
+    })
+    mockStateStore.read.mockImplementation((key: string) => {
+      if (key === 'proj-Y/suspended-stack' || key.endsWith('/proj-Y/suspended-stack')) {
+        return makeSuspendedStack([parentEntry])
+      }
+      if (key === 'proj-X/suspended-stack' || key.endsWith('/proj-X/suspended-stack')) {
+        return makeSuspendedStack([])
+      }
+      if (key.endsWith('/child-456/state')) return childState
+      if (key.endsWith('/parent-123/state')) return parentState
+      return null
+    })
+    mockStateStore.read.mockClear()
+    store.resumeSuspended('proj-X', 'child-456')
+    // Verify cross-project chain walk: proj-Y's stack was consulted during resume
+    expect(mockStateStore.read).toHaveBeenCalledWith(expect.stringContaining('proj-Y'))
+    // Verify parent restoration write occurred in proj-Y's key space
+    expect(mockStateStore.write).toHaveBeenCalledWith(
+      expect.stringContaining('proj-Y'),
+      expect.objectContaining({ phaseStatus: 'ralph_loop' }),
+    )
   })
 
   // #64
