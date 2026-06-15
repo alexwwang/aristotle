@@ -624,4 +624,8 @@ export class PipelineStore {
     throw new Error('Not implemented: removeRegressionCounter')
   }
 
+  handleConcurrentPauseTrigger(projectId: string, triggerType: string): void {
+    throw new Error('Not implemented: handleConcurrentPauseTrigger')
+  }
+
 }
