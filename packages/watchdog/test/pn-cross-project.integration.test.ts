@@ -166,6 +166,11 @@ describe('cross-project integration - pipeline nesting', () => {
         metadata: expect.objectContaining({ code: expect.stringMatching(/CRITICAL|RESOLUTION_FAILURE/i) }),
       }),
     )
+    // P-007: spec #64 — DO NOT pop stack on resolution failure
+    expect(mockStateStore.write).not.toHaveBeenCalledWith(
+      expect.stringContaining('/suspended-stack'),
+      expect.objectContaining({ entries: [] }),
+    )
   })
 
   // #65
@@ -209,6 +214,15 @@ describe('cross-project integration - pipeline nesting', () => {
     expect(mockStateStore.write).toHaveBeenCalledWith(
       expect.stringContaining('proj-parent'),
       expect.objectContaining({ parentPipelineProjectId: 'proj-parent' }),
+    )
+    // P-010: spec #66 — verify child state creation with cross-project references
+    expect(mockStateStore.write).toHaveBeenCalledWith(
+      expect.stringMatching(/child.*state/i),
+      expect.objectContaining({
+        parentPipelineProjectId: 'proj-parent',
+        parentRunId: 'parent-123',
+        depth: 1,
+      }),
     )
   })
 

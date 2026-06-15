@@ -181,6 +181,13 @@ describe('crash recovery integration - pipeline nesting', () => {
       expect.any(String),
       expect.objectContaining({ phaseStatus: 'ralph_loop' }),
     )
+    // P-002: spec #72 requires recovery event logged for audit trail
+    expect(mockStateStore.appendLog).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        event: expect.stringMatching(/recovery|resume|crash.*recovery|STACK_POPPED/i),
+      }),
+    )
   })
 
   // #73
@@ -207,6 +214,10 @@ describe('crash recovery integration - pipeline nesting', () => {
     expect(mockStateStore.write).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ entries: expect.any(Array) }),
+    )
+    // P-003: distinguish recovery path — CRITICAL must NOT be logged
+    expect(mockLogger.error).not.toHaveBeenCalledWith(
+      expect.stringMatching(/CRITICAL/i),
     )
   })
 
@@ -312,6 +323,11 @@ describe('crash recovery integration - pipeline nesting', () => {
       expect.any(String),
       expect.objectContaining({ event: 'pause_timeout_escalation', metadata: expect.objectContaining({ code: 'ESCALATION_FIRED' }) }),
     )
+    // P-004: verify timer was PRESERVED through recovery in the paused-state write
+    expect(mockStateStore.write).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ phaseStatus: 'paused', child_pause_timer_started_at: oldTimestamp }),
+    )
   })
 
   // #118
@@ -413,7 +429,7 @@ describe('crash recovery integration - pipeline nesting', () => {
         makeSuspendedPipeline({ runId: 'parent-456' }),
       ])
       if (key.includes('metadata')) {
-        if (key.includes('hash1')) return { runId: 'child-456', data: 'matched' }
+        if (key.includes('hash1')) return { runId: 'parent-123', data: 'matched' }
         if (key.includes('hash2')) return { runId: 'orphan-789', data: 'unmatched' }
         if (key.includes('hash3')) return { runId: 'ghost-000', data: 'no-stack' }
       }
@@ -434,8 +450,8 @@ describe('crash recovery integration - pipeline nesting', () => {
     )
     // P-018 (M): verify matched metadata (hash1/child-456) was preserved —
     // the impl should NOT warn about entries that match stack runIds.
-    expect(mockLogger.warn).not.toHaveBeenCalledWith(
-      expect.stringContaining('child-456'),
+      expect(mockLogger.warn).not.toHaveBeenCalledWith(
+  expect.stringContaining('parent-123'),
     )
     // P-010 (M-13): removed quarantineSuccess:true write assertion — spec #123
     // only specifies metadata matching + WARN logging. Over-specifying risks
@@ -464,6 +480,11 @@ describe('crash recovery integration - pipeline nesting', () => {
     expect(mockStateStore.write).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ child_pause_timer_started_at: recentTimestamp }),
+    )
+    // P-006: spec #130 — escalation must NOT fire when <30 min elapsed
+    expect(mockStateStore.appendLog).not.toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ event: 'pause_timeout_escalation' }),
     )
   })
 

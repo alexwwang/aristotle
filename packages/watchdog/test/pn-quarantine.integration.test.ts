@@ -96,9 +96,11 @@ describe('quarantine integration - pipeline nesting', () => {
         ]),
       }),
     )
+    // P-008: spec #60 — log QUARANTINE_HOOK_FAILED_SUSPEND
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect.stringMatching(/QUARANTINE_HOOK_FAILED_SUSPEND|quarantine.*hook.*fail/i),
+    )
   })
-
-  // #61
   it('should proceed with resume when quarantineSuccess false', () => {
     const entry = makeSuspendedPipeline({
       runId: 'parent-123', depth: 0, childRunId: 'child-456', quarantineSuccess: false,
@@ -136,7 +138,7 @@ describe('quarantine integration - pipeline nesting', () => {
       expect.stringContaining('/suspended-stack'),
       expect.objectContaining({
         entries: expect.arrayContaining([
-          expect.objectContaining({ quarantineSuccess: expect.any(Boolean) }),
+          expect.objectContaining({ quarantineSuccess: false }),
         ]),
       }),
     )

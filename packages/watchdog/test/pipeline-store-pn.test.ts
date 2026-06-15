@@ -1295,7 +1295,7 @@ describe('PipelineStore - Pipeline Nesting', () => {
     // P-007: spec #144 requires "audit entry logged" on paused rejection.
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ event: expect.stringMatching(/pause/i) }),
+      expect.objectContaining({ event: expect.stringMatching(/^(?!.*unpause)(?!.*escalat).*pause/i) }),
     )
   })
 
