@@ -122,8 +122,9 @@ describe('child lifecycle integration - pipeline nesting', () => {
     const result = store.resumeSuspended('proj-1', 'child-456')
     expect(result.phaseStatus).toBe('ralph_loop')
     // P-003 (H): spec #79 requires WARNING log when treating missing child as failure.
+    // R44 F-2: tightened regex — removed catch-all /WARNING/i, require specific child-fail content
     expect(mockLogger.warn).toHaveBeenCalledWith(
-      expect.stringMatching(/child.*fail|session.*inactive|WARNING/i),
+      expect.stringMatching(/child.*fail|session.*inactive|child.*miss/i),
     )
   })
 
