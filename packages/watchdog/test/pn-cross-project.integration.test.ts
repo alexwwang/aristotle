@@ -225,7 +225,11 @@ describe('cross-project integration - pipeline nesting', () => {
       parentEntries.push(makeSuspendedPipeline({ runId: `parent-run-${i}`, depth: i }))
     }
     // Child project (proj-X) active state — references proj-Y as parent
+    // F-129 (L): runId must match the /active pointer at L238 ('child-run') —
+    // was defaulting to 'parent-123' from makeNestingState, causing fixture
+    // mismatch between active pointer and state runId.
     const childActiveState = makeNestingState({
+      runId: 'child-run',
       depth: MAX_DEPTH,
       phaseStatus: 'ralph_loop',
       parentPipelineProjectId: 'proj-Y',

@@ -134,4 +134,12 @@ describe('transitions - pipeline nesting', () => {
     const result = validateNestingTransition('suspended', 'bogus_status')
     expect(result.valid).toBe(false)
   })
+
+  // #128
+  // F-128 (M): transition-level mirror of #128b in pipeline-store. Rejects
+  // resume_from_pause when the from-status is not 'paused'.
+  it('#128 — should reject resume_from_pause when not paused', () => {
+    const result = validateNestingTransition('ralph_loop', 'resume_from_pause')
+    expect(result.valid).toBe(false)
+  })
 })

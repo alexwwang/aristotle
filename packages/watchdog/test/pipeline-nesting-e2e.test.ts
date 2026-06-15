@@ -45,14 +45,16 @@ function makeNestingState(overrides?: Partial<PipelineState>): PipelineState {
   })
 }
 
-const mockStateStore: StateStore = {
+// F-082 (H): use `satisfies StateStore` (not `: StateStore`) to preserve
+// vi.fn() return types — matches F-043 pattern in pipeline-store-pn.test.ts.
+const mockStateStore = {
   read: vi.fn(),
   write: vi.fn(),
   appendLog: vi.fn(),
   readLog: vi.fn().mockReturnValue([]),
   readLogSafe: vi.fn().mockReturnValue([]),
   list: vi.fn().mockReturnValue([]),
-}
+} satisfies StateStore
 
 const mockLogger: Logger = {
   debug: vi.fn(),
@@ -76,23 +78,29 @@ describe('pipeline nesting - e2e', () => {
   // F-023: mutable `resumed` flag switches all reads at once. Acceptable in
   // Red Phase (methods throw on first read). Green Phase should use
   // mockImplementationOnce for sequential read control.
+  // F-082 (H): replaced mutable `resumed` flag with in-memory Map bridge.
+  // The flag returned an empty stack at line 91 (resumed was still false),
+  // contradicting the toHaveLength(1) assertion at line 92. Writes now
+  // persist through the bridge so suspendActive's /suspended-stack write
+  // is observable by the subsequent getSuspendedStack read. Same pattern
+  // as the P-005 fix for #14 in pipeline-store-pn.test.ts.
   it('should complete full nested pipeline flow suspend child resume', () => {
     const parentActive = makeNestingState({ runId: 'parent-123', phaseStatus: 'ralph_loop', depth: 0, currentPhase: 5 })
+    // parentSuspended documents the expected post-suspend shape; the Map bridge
+    // lets suspendActive produce this naturally in Green Phase.
     const parentSuspended = makeNestingState({ runId: 'parent-123', phaseStatus: 'suspended', preSuspendStatus: 'ralph_loop', depth: 0, currentPhase: 5 })
+    void parentSuspended // referenced for documentary intent; bridge makes it emergent
     const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
-    let resumed = false
-    mockStateStore.read.mockImplementation((key: string) => {
-      if (key.endsWith('/parent-123/state')) return resumed ? parentSuspended : parentActive
-      if (key.endsWith('/active')) return resumed ? null : { runId: 'parent-123', projectId: 'proj-1' }
-      if (key.endsWith('/suspended-stack')) return resumed ? makeSuspendedStack([entry]) : makeSuspendedStack([])
-      return null
-    })
+    const memStore = new Map<string, unknown>()
+    memStore.set('proj-1/parent-123/state', parentActive)
+    memStore.set('proj-1/active', { runId: 'parent-123', projectId: 'proj-1' })
+    mockStateStore.read.mockImplementation((key: string) => memStore.get(key) ?? null)
+    mockStateStore.write.mockImplementation((k: string, v: unknown) => { memStore.set(k, v); return true })
     store.suspendActive('proj-1', 'child_nesting')
     const stack = store.getSuspendedStack('proj-1')
     expect(stack.entries).toHaveLength(1)
     expect(stack.entries[0].runId).toBe('parent-123')
     store.setChildRunId('proj-1', 'parent-123', 'child-456')
-    resumed = true
     const result = store.resumeSuspended('proj-1', 'child-456')
     expect(result.phaseStatus).toBe('ralph_loop')
     expect(result.depth).toBe(0)

@@ -262,7 +262,9 @@ describe('child lifecycle integration - pipeline nesting', () => {
       ...makeNestingState({ runId: 'parent-123', phaseStatus: 'suspended', suspendedAt: '2025-12-31T23:59:00Z' }),
     }
     const deferredEntries = [
-      { event: 'DEFERRED_PAUSE', trigger_type: 'compliance', reason: 'compliance', timestamp: '2026-01-01T00:01:00Z' },
+      // F-112 (L): add violation_type to entry 1 for symmetry with entry 2 —
+      // PendingPause schema requires violation_type on all entries.
+      { event: 'DEFERRED_PAUSE', trigger_type: 'compliance', violation_type: 'compliance', reason: 'compliance', timestamp: '2026-01-01T00:01:00Z' },
       // P-008 (M): align with PendingPause schema — violation_type (not trigger_type).
       { event: 'DEFERRED_PAUSE', trigger_type: 'UNFIXED_ISSUES', violation_type: 'UNFIXED_ISSUES', reason: 'unfixed', timestamp: '2026-01-01T00:00:00Z' },
     ]
@@ -328,7 +330,10 @@ describe('child lifecycle integration - pipeline nesting', () => {
   })
 
   // #122 — persistent failure variant
-  it('#122 — child failure path when session check fails persistently', () => {
+  // F-122b (M): apply F-013 async-handling pattern from first #122 variant
+  // (L295-328) — Green Phase may implement resumeSuspended as async, which
+  // would deadlock with frozen fake timers unless we branch on Promise result.
+  it('#122 — child failure path when session check fails persistently', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-06-14T12:00:00Z'))
     const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
@@ -342,8 +347,12 @@ describe('child lifecycle integration - pipeline nesting', () => {
     store.getSessionInfo = vi.fn().mockImplementation(() => { throw new Error('persistent') })
     // F-001: invoke the SUT so getSessionInfo mock and warn fire — without this
     // call the mock is dead code and the test fails for the wrong reason.
-    store.resumeSuspended('proj-1', 'child-456')
-    vi.advanceTimersByTime(2000)
+    const result = store.resumeSuspended('proj-1', 'child-456')
+    if (result instanceof Promise) {
+      await vi.advanceTimersByTimeAsync(2000)
+    } else {
+      vi.advanceTimersByTime(2000)
+    }
     expect(mockLogger.warn).toHaveBeenCalledWith(
       expect.stringMatching(/child.*fail|session.*unknown|treat.*child/i),
     )

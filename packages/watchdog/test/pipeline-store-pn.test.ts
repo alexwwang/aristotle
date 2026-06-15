@@ -294,7 +294,11 @@ describe('PipelineStore - Pipeline Nesting', () => {
     const entry = makeSuspendedPipeline({ depth: 0 })
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/active')) return { runId: 'run-123', projectId: 'proj-1' }
-      return makeSuspendedStack([entry])
+      // F-010 (M): explicit /suspended-stack branch — was catch-all return of
+      // makeSuspendedStack, which also returned a stack for /state, /audit, etc.
+      // Same fix pattern as #28 (L270-273 above).
+      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
+      return null
     })
     const result = store.detectOrphanedSuspend('proj-1')
     expect(result).toBeNull()
@@ -418,7 +422,12 @@ describe('PipelineStore - Pipeline Nesting', () => {
   // #19
   it('should verify child runId matches topmost entry', () => {
     const entry = makeSuspendedPipeline({ childRunId: 'child-123' })
-    mockStateStore.read.mockReturnValue(makeSuspendedStack([entry]))
+    // F-019 (M): explicit branches — was mockReturnValue(makeSuspendedStack),
+    // which returned a stack for ALL reads including /state and /active.
+    mockStateStore.read.mockImplementation((key: string) => {
+      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
+      return null
+    })
     expect(() => store.resumeSuspended('proj-1', 'wrong-id')).toThrow(/child_run_id/i)
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
@@ -452,7 +461,12 @@ describe('PipelineStore - Pipeline Nesting', () => {
   // #21
   it('should emit pipeline_resume audit entry on success', () => {
     const entry = makeSuspendedPipeline({ childRunId: 'child-123' })
-    mockStateStore.read.mockReturnValue(makeSuspendedStack([entry]))
+    // F-020-023 (M): explicit /suspended-stack branch — blanket mockReturnValue
+    // returned a stack for ALL reads including /state and /active.
+    mockStateStore.read.mockImplementation((key: string) => {
+      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
+      return null
+    })
     store.resumeSuspended('proj-1', 'child-123')
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
@@ -469,7 +483,12 @@ describe('PipelineStore - Pipeline Nesting', () => {
   // #22
   it('should set childPipelineRunId on parent state before restore', () => {
     const entry = makeSuspendedPipeline({ childRunId: 'child-123' })
-    mockStateStore.read.mockReturnValue(makeSuspendedStack([entry]))
+    // F-020-023 (M): explicit /suspended-stack branch — blanket mockReturnValue
+    // returned a stack for ALL reads including /state and /active.
+    mockStateStore.read.mockImplementation((key: string) => {
+      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
+      return null
+    })
     store.resumeSuspended('proj-1', 'child-123')
     expect(mockStateStore.write).toHaveBeenCalledWith(
       expect.any(String),
@@ -480,7 +499,12 @@ describe('PipelineStore - Pipeline Nesting', () => {
   // #23
   it('should clear suspended stack entry after successful resume', () => {
     const entry = makeSuspendedPipeline({ childRunId: 'child-123' })
-    mockStateStore.read.mockReturnValue(makeSuspendedStack([entry]))
+    // F-020-023 (M): explicit /suspended-stack branch — blanket mockReturnValue
+    // returned a stack for ALL reads including /state and /active.
+    mockStateStore.read.mockImplementation((key: string) => {
+      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
+      return null
+    })
     store.resumeSuspended('proj-1', 'child-123')
     const stack = store.getSuspendedStack('proj-1')
     expect(stack.entries).toHaveLength(0)
@@ -1098,7 +1122,10 @@ describe('PipelineStore - Pipeline Nesting', () => {
     )
     expect(parentWrite).toBeDefined()
     const writtenState = parentWrite![1]
-    expect('pending_pause' in writtenState).toBe(true)
+    // F-111 (M): removed `expect('pending_pause' in writtenState).toBe(true)` —
+    // same over-specification removed at L981 for the null variant. JSON
+    // serialization treats undefined and absent identically; the behavioral
+    // assertion below (toBeUndefined) is sufficient.
     expect(writtenState.pending_pause).toBeUndefined()
     // F-035: verify no pause applied — phaseStatus should not be 'paused'
     expect(writtenState.phaseStatus).not.toBe('paused')
