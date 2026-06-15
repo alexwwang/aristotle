@@ -77,8 +77,10 @@ describe('PipelineStore - Orphaned Detection', () => {
   // #25
   it('should clear childPipelineRunId during orphaned resume', () => {
     const entry = makeSuspendedPipeline({ childRunId: 'child-123' })
+    const state = makeNestingState({ phaseStatus: 'suspended', childPipelineRunId: 'child-123' })
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/active')) return null
+      if (key.endsWith('/state')) return state
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
       return null
     })
