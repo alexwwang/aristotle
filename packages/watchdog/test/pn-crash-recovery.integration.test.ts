@@ -140,7 +140,7 @@ describe('crash recovery integration - pipeline nesting', () => {
 
   // #72
   it('should handle crash during resume stack popped but state not persisted', () => {
-    const state = makeNestingState({ runId: 'parent-123', phaseStatus: 'suspended' })
+    const state = makeNestingState({ runId: 'parent-123', phaseStatus: 'suspended', preSuspendStatus: 'ralph_loop' })
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/parent-123/state')) return state
       if (key.endsWith('/active')) return null

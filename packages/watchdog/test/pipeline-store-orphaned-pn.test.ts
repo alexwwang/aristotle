@@ -343,7 +343,7 @@ describe('PipelineStore - Orphaned Detection', () => {
       .map((call: unknown[]) => (typeof call?.[0] === 'string' ? call[0] : ''))
       .join('\n')
     expect(warnCalls).toMatch(/TERMINAL_STATUS_RECOVERY_DEFAULT/)
-    expect(warnCalls).toMatch(/failed/)
+    expect(warnCalls).toMatch(new RegExp(terminalStatus))
   })
 
 })
