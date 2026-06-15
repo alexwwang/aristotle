@@ -337,6 +337,11 @@ describe('child lifecycle integration - pipeline nesting', () => {
     // F-013: enforce 'retry once' contract — max 2 getSessionInfo calls
     // (1 initial check + 1 retry). Implementation must not retry indefinitely.
     expect(store.getSessionInfo).toHaveBeenCalledTimes(2)
+    // P-003: verify parent resumes with child-failure assumption
+    expect(mockStateStore.write).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ phaseStatus: 'ralph_loop' }),
+    )
   })
 
   // #126
@@ -638,9 +643,8 @@ describe('child lifecycle integration - pipeline nesting', () => {
   // stack entries — otherwise fixture is self-contradictory.
   it('should recurse through suspended chain to pause active grandchild', () => {
     const entries = [
-      makeSuspendedPipeline({ runId: 'grandparent', depth: 0 }),
-      makeSuspendedPipeline({ runId: 'parent', depth: 1, parentRunId: 'grandparent', childRunId: 'child' }),
-      makeSuspendedPipeline({ runId: 'child', depth: 2, parentRunId: 'parent', childRunId: 'grandchild' }),
+      makeSuspendedPipeline({ runId: 'parent', depth: 0, childRunId: 'child' }),
+      makeSuspendedPipeline({ runId: 'child', depth: 1, parentRunId: 'parent', childRunId: 'grandchild' }),
     ]
     // F-003: grandchild must not appear as a stack entry — it is the active runner.
     expect(entries.some(e => e.runId === 'grandchild')).toBe(false)

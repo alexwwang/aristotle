@@ -216,9 +216,9 @@ describe('CheckpointHandler - pipeline nesting', () => {
   })
 
   // #109
-  it('should block pipeline_start when active status is active and already running', async () => {
+  it.each(['ralph_loop', 'active'])('should block pipeline_start when active status is %s and already running', async (activeStatus) => {
     const { handler, store } = createHandler()
-    const state = makeState({ phaseStatus: 'ralph_loop' })
+    const state = makeState({ phaseStatus: activeStatus as 'ralph_loop' | 'active' })
     store.readState.mockReturnValue(state)
     store.getActiveRun.mockReturnValue({ runId: 'run-123', projectId: 'proj-1' })
     const result = await handler.handle(
