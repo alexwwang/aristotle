@@ -320,13 +320,13 @@ describe('PipelineStore - Orphaned Detection', () => {
   })
 
   // #117
-  it('should default to active when preSuspendStatus is terminal status during orphaned recovery', () => {
+  it.each(['failed', 'cancelled'])('should default to active when preSuspendStatus is %s during orphaned recovery', (terminalStatus) => {
     const entry = makeSuspendedPipeline({ runId: 'A', depth: 0 })
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/active')) return null
       if (key.endsWith('/state')) return makeNestingState({
         phaseStatus: 'suspended',
-        preSuspendStatus: 'failed',
+        preSuspendStatus: terminalStatus as 'failed' | 'cancelled',
       })
       return makeSuspendedStack([entry])
     })

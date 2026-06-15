@@ -92,7 +92,7 @@ describe('crash recovery integration - pipeline nesting', () => {
 
   // #69
   it('should pop stale stack entry if resume crashed after state persist', () => {
-    const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
+    const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'parent-123' })
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/active')) return { runId: 'parent-123', projectId: 'proj-1' }
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
@@ -162,7 +162,11 @@ describe('crash recovery integration - pipeline nesting', () => {
 
   // #73
   it('should handle no parent state found at all after crash', () => {
-    mockStateStore.read.mockReturnValue(null)
+    const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0 })
+    mockStateStore.read.mockImplementation((key: string) => {
+      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
+      return null
+    })
     const result = store.detectOrphanedSuspend('proj-1')
     expect(result).toBeNull()
     expect(mockLogger.error).toHaveBeenCalledWith(
@@ -193,11 +197,11 @@ describe('crash recovery integration - pipeline nesting', () => {
 
   // #75
   it('should handle crash between stack push and state persist', () => {
-    const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
+    const activeState = makeNestingState({ runId: 'parent-123', phaseStatus: 'ralph_loop' })
     mockStateStore.read.mockImplementation((key: string) => {
-      if (key.endsWith('/parent-123/state')) return null
-      if (key.endsWith('/active')) return null
-      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
+      if (key.endsWith('/active')) return { runId: 'parent-123', projectId: 'proj-1' }
+      if (key.endsWith('/parent-123/state')) return activeState
+      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([])
       return null
     })
     const result = store.detectOrphanedSuspend('proj-1')

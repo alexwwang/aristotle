@@ -135,6 +135,12 @@ describe('transitions - pipeline nesting', () => {
     expect(result.valid).toBe(false)
   })
 
+  // #54 — should default to 'active', returns valid with warning
+  it('#54 — should default preSuspendStatus to active when invalid during recovery', () => {
+    const result = validateNestingTransition(undefined as string, 'active')
+    expect(result.valid).toBe(true)
+  })
+
   // #128
   // F-128 (M): transition-level mirror of #128b in pipeline-store. Rejects
   // resume_from_pause when the from-status is not 'paused'.
