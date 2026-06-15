@@ -638,7 +638,8 @@ describe('child lifecycle integration - pipeline nesting', () => {
         metadata: expect.objectContaining({ code: 'CHILD_CANCELLED' }),
       }),
     )
-    expect(mockStateStore.write).toHaveBeenCalledWith(expect.stringMatching(/suspended-stack/), expect.objectContaining({ entries: expect.any(Array) }))
+    // R46 F-5: spec #156 requires stack cleanup — verify stack is popped (empty after parent fails)
+    expect(mockStateStore.write).toHaveBeenCalledWith(expect.stringMatching(/suspended-stack/), expect.objectContaining({ entries: [] }))
   })
 
   // #159

@@ -101,7 +101,9 @@ describe('pipeline nesting - e2e', () => {
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
       return null
     })
-    store.resumeSuspended('proj-1', 'child-456')
+    const result83 = store.resumeSuspended('proj-1', 'child-456')
+    // R46 F-2: spec #83 requires parent resumes with restored status
+    expect(result83.phaseStatus).toMatch(/ralph_loop|active/)
     const postStack = store.getSuspendedStack('proj-1')
     expect(postStack.entries).toHaveLength(0)
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
