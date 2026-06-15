@@ -327,6 +327,7 @@ describe('child lifecycle integration - pipeline nesting', () => {
     // P-009 (M): spec #122 requires "1s delay" between attempts.
     const elapsedBetweenCalls = callTimestamps[1]! - callTimestamps[0]!
     expect(elapsedBetweenCalls).toBeGreaterThanOrEqual(1000)
+    expect(elapsedBetweenCalls).toBeLessThanOrEqual(2000)
   })
 
   // #122 — persistent failure variant
@@ -581,8 +582,8 @@ describe('child lifecycle integration - pipeline nesting', () => {
     'should clean up suspended stack when pipeline transitions to %s',
     (terminalStatus) => {
       const entries = [
-        makeSuspendedPipeline({ runId: 'A', depth: 0 }),
-        makeSuspendedPipeline({ runId: 'B', depth: 1 }),
+        makeSuspendedPipeline({ runId: 'A', depth: 0, childRunId: 'B' }),
+        makeSuspendedPipeline({ runId: 'B', depth: 1, childRunId: 'child-456' }),
       ]
       const state = makeNestingState({ runId: 'child-456', phaseStatus: terminalStatus })
       mockStateStore.read.mockImplementation((key: string) => {
@@ -593,7 +594,9 @@ describe('child lifecycle integration - pipeline nesting', () => {
       store.handlePhaseFail('proj-1', 'child-456')
       expect(mockStateStore.write).toHaveBeenCalledWith(
         expect.stringMatching(/suspended-stack/),
-        expect.objectContaining({ entries: expect.any(Array) }),
+        expect.objectContaining({ entries: expect.arrayContaining([
+          expect.objectContaining({ runId: 'A' }),
+        ]) }),
       )
       // F-008: parent must NOT be auto-resumed after child cleanup — verify no
       // write transitions parent back to ralph_loop/active (would cause double-exec).
@@ -620,7 +623,7 @@ describe('child lifecycle integration - pipeline nesting', () => {
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
       return null
     })
-    store.handlePhaseFail('proj-1', 'child-456')
+    store.handlePhaseFail('proj-1', 'parent-123')
     expect(mockStateStore.write).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ runId: 'child-456', phaseStatus: 'cancelled' }),

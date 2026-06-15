@@ -422,12 +422,13 @@ describe('PipelineStore - Pipeline Nesting', () => {
   // #19
   it('should verify child runId matches topmost entry', () => {
     const entry = makeSuspendedPipeline({ childRunId: 'child-123' })
-    // F-019 (M): explicit branches — was mockReturnValue(makeSuspendedStack),
-    // which returned a stack for ALL reads including /state and /active.
-    mockStateStore.read.mockImplementation((key: string) => {
-      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
-      return null
-    })
+    // P-002 (M): in-memory Map bridge so popSuspended writes persist —
+    // without this, getSuspendedStack re-reads the same mock fixture
+    // and the "stack NOT popped" assertion at L437-439 is vacuous.
+    const memStore = new Map<string, unknown>()
+    memStore.set('proj-1/suspended-stack', makeSuspendedStack([entry]))
+    mockStateStore.write.mockImplementation((k: string, v: unknown) => { memStore.set(k, v); return true })
+    mockStateStore.read.mockImplementation((k: string) => memStore.get(k) ?? null)
     expect(() => store.resumeSuspended('proj-1', 'wrong-id')).toThrow(/child_run_id/i)
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
@@ -760,7 +761,9 @@ describe('PipelineStore - Pipeline Nesting', () => {
     }
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/state')) return mockState
-      return makeSuspendedStack([entry])
+      if (key.endsWith('/active')) return { runId: 'child-456', projectId: 'proj-1' }
+      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
+      return null
     })
     // F-003: direct vi.fn() assignment (not vi.spyOn) — getSessionInfo has no
     // source stub in Red Phase; spyOn on a non-existent method throws at setup.
@@ -787,7 +790,9 @@ describe('PipelineStore - Pipeline Nesting', () => {
         ...makeNestingState({ phaseStatus: 'suspended' }),
         reviewerTakeover: { round: 1, interceptAt: 'phase-5', t2SessionId: 'ses-t2-done', resultFile: '/tmp/stale-result.json', cleanupToken: 'tok-1', spawnPhase: '5' },
       }
-      return makeSuspendedStack([entry])
+      if (key.endsWith('/active')) return { runId: 'child-456', projectId: 'proj-1' }
+      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
+      return null
     })
     store.resumeSuspended('proj-1', 'child-456')
     expect(mockLogger.info).toHaveBeenCalledWith(
@@ -815,7 +820,9 @@ describe('PipelineStore - Pipeline Nesting', () => {
         }
         return { ...takeover, reviewerTakeover: null }
       }
-      return makeSuspendedStack([entry])
+      if (key.endsWith('/active')) return { runId: 'child-456', projectId: 'proj-1' }
+      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
+      return null
     })
     // F-029: explicit no-throw guarantee — cleanup continues despite race condition.
     expect(() => store.resumeSuspended('proj-1', 'child-456')).not.toThrow()

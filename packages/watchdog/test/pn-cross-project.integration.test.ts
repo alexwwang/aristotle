@@ -196,17 +196,16 @@ describe('cross-project integration - pipeline nesting', () => {
   })
 
   // #66
-  // F-016: strengthen assertion — verify parentPipelineProjectId field, not just any Object.
+  // P-004 (M): spec #66 tests child state creation via suspendActive, not resume.
   it('should use parent projectId for cross project child pipelines', () => {
-    const entry = makeSuspendedPipeline({
-      runId: 'parent-123', depth: 0, childRunId: 'child-456',
-      parentPipelineProjectId: 'proj-parent',
-    })
+    const activeState = makeNestingState({ runId: 'parent-123', projectId: 'proj-parent', phaseStatus: 'ralph_loop' })
     mockStateStore.read.mockImplementation((key: string) => {
-      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
+      if (key.endsWith('/active')) return { runId: 'parent-123', projectId: 'proj-parent' }
+      if (key.endsWith('/parent-123/state')) return activeState
+      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([])
       return null
     })
-    store.resumeSuspended('proj-parent', 'child-456')
+    store.suspendActive('proj-parent', 'cross_project_child')
     expect(mockStateStore.write).toHaveBeenCalledWith(
       expect.stringContaining('proj-parent'),
       expect.objectContaining({ parentPipelineProjectId: 'proj-parent' }),
