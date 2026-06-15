@@ -70,6 +70,11 @@ describe('quarantine integration - pipeline nesting', () => {
     expect(mockLogger.warn).toHaveBeenCalledWith(
       expect.stringMatching(/QUARANTINE_HOOK_FAILED_SUSPEND|quarantine.*hook.*fail/i),
     )
+    // R39 F-12: spec #60 — "child start proceeds (not blocked by quarantine failure)"
+    expect(mockStateStore.write).toHaveBeenCalledWith(
+      expect.stringContaining('/parent-123/state'),
+      expect.objectContaining({ phaseStatus: 'suspended' }),
+    )
   })
   // #61
   it('should proceed with resume when quarantineSuccess false', () => {
@@ -159,6 +164,11 @@ describe('quarantine integration - pipeline nesting', () => {
     expect(stackEntry.quarantineSuccess).toBeUndefined()
     expect(mockLogger.warn).toHaveBeenCalledWith(
       expect.stringContaining('quarantine'),
+    )
+    // R39 F-13: spec #148 — "child pipeline start still succeeds (not blocked)"
+    expect(mockStateStore.write).toHaveBeenCalledWith(
+      expect.stringContaining('/parent-123/state'),
+      expect.objectContaining({ phaseStatus: 'suspended' }),
     )
   })
 

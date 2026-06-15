@@ -125,7 +125,7 @@ describe('PipelineStore - Orphaned Detection', () => {
     expect(result).not.toBeNull()
   })
 
-  // #28
+  // #28 — R39 F-2: spec says getActiveRun/pipeline_start triggers stale-entry cleanup
   it('should silently pop stale stack entry when childRunId matches active', () => {
     const entry = makeSuspendedPipeline({ childRunId: 'run-active' })
     mockStateStore.read.mockImplementation((key: string) => {
@@ -135,7 +135,7 @@ describe('PipelineStore - Orphaned Detection', () => {
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
       return null
     })
-    store.detectOrphanedSuspend('proj-1')
+    store.getActiveRun('proj-1')
     expect(mockLogger.info).toHaveBeenCalledWith(
       expect.stringContaining('STALE_STACK_ENTRY_CLEANUP'),
     )

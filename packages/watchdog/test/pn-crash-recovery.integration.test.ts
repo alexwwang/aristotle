@@ -90,7 +90,7 @@ describe('crash recovery integration - pipeline nesting', () => {
     expect(mockStateStore.read).toHaveBeenCalledWith(expect.stringContaining('child-456'))
   })
 
-  // #69
+  // #69 — R39 F-1: spec says getActiveRun/pipeline_start triggers stale-entry cleanup
   it('should pop stale stack entry if resume crashed after state persist', () => {
     const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'parent-123' })
     mockStateStore.read.mockImplementation((key: string) => {
@@ -98,7 +98,7 @@ describe('crash recovery integration - pipeline nesting', () => {
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
       return null
     })
-    store.detectOrphanedSuspend('proj-1')
+    store.getActiveRun('proj-1')
     expect(mockStateStore.write).toHaveBeenCalledWith(
       expect.stringMatching(/suspended-stack/),
       expect.objectContaining({ entries: expect.any(Array) }),
@@ -512,8 +512,9 @@ describe('crash recovery integration - pipeline nesting', () => {
     expect(mockLogger.error).toHaveBeenCalledWith(expect.stringContaining('CRITICAL'))
   })
 
-  // #149: should use stack_length as authoritative depth during crash recovery when depth_field_diverges
+  // #149: should use stack.length as authoritative depth during crash recovery when depth_field_diverges
   // R38 F-001: converted from it.todo to genuine failing test per Phase 4 TDD requirement.
+  // R39 F-7: removed fabricated stack_length field (not in PipelineState schema).
   it('#149 — should use stack_length as authoritative depth during crash recovery when depth_field_diverges', () => {
     const entries: SuspendedPipeline[] = []
     for (let i = 0; i < 5; i++) {
@@ -522,7 +523,7 @@ describe('crash recovery integration - pipeline nesting', () => {
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/active')) return null
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack(entries)
-      if (key.endsWith('/state')) return { ...makeNestingState({ depth: 99 }), stack_length: 5 }
+      if (key.endsWith('/state')) return makeNestingState({ depth: 99 })
       return null
     })
     const result = store.canSuspend('proj-1')
