@@ -149,6 +149,8 @@ describe('child lifecycle integration - pipeline nesting', () => {
         quarantinedFiles: expect.any(Array),
         violationTypes: expect.any(Array),
       }),
+    )
+  })
 
   // #81
   it('should handle child partial completion', () => {

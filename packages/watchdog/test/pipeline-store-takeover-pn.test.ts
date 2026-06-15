@@ -155,7 +155,7 @@ describe('PipelineStore - Reviewer Takeover Cleanup', () => {
       if (key.endsWith('/state')) return {
         ...makeNestingState({ phaseStatus: 'suspended' }),
         suspendedAt: new Date('2026-06-14T10:00:00Z').toISOString(),
-        reviewerTakeover: { round: 1, interceptAt: 'phase-5', t2SessionId: 'ses-t2-done', resultFile: '/tmp/stale-result.json', cleanupToken: 'tok-1', spawnPhase: '5' },
+        reviewerTakeover: { round: 1, interceptAt: 'phase-5', t2SessionId: 'ses-t2-done', resultFile: '/tmp/stale-result.json', cleanupToken: 'tok-1', spawnPhase: 't2_complete' },
       }
       if (key.endsWith('/active')) return { runId: 'child-456', projectId: 'proj-1' }
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
@@ -179,7 +179,7 @@ describe('PipelineStore - Reviewer Takeover Cleanup', () => {
       if (key.endsWith('/state')) {
         const takeover = {
           ...makeNestingState({ phaseStatus: 'suspended' }),
-          reviewerTakeover: { round: 1, interceptAt: 'phase-5', spawnPhase: '5', t2SessionId: 'ses-t2-done', resultFile: '/tmp/gone-result.json', cleanupToken: 'tok-1' },
+          reviewerTakeover: { round: 1, interceptAt: 'phase-5', spawnPhase: 't2_complete', t2SessionId: 'ses-t2-done', resultFile: '/tmp/gone-result.json', cleanupToken: 'tok-1' },
         }
         if (!detectionDone) {
           detectionDone = true

@@ -261,7 +261,11 @@ describe('PipelineStore - Stack Operations', () => {
   // #96
   it('should reject suspendActive when pipeline status is already suspended with error message', () => {
     const state = makeNestingState({ phaseStatus: 'suspended' })
-    mockStateStore.read.mockReturnValue(state)
+    mockStateStore.read.mockImplementation((key: string) => {
+      if (key.endsWith('/active')) return { runId: 'run-123', projectId: 'proj-1' }
+      if (key.endsWith('/state')) return state
+      return null
+    })
     expect(() => store.suspendActive('proj-1', 'test_modification')).toThrow(/already suspended/i)
     expect(mockStateStore.write).not.toHaveBeenCalled()
   })

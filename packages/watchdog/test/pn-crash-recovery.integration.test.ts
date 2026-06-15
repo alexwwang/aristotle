@@ -525,7 +525,6 @@ describe('crash recovery integration - pipeline nesting', () => {
       entries.push(makeSuspendedPipeline({ runId: `run-${i}`, depth: i }))
     }
     entries.push(makeSuspendedPipeline({ runId: 'run-corrupt', depth: 5 }))
-    vi.clearAllMocks()
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/active')) return null
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack(entries)

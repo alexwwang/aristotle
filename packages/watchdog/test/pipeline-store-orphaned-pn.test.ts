@@ -253,7 +253,9 @@ describe('PipelineStore - Orphaned Detection', () => {
     const entry = makeSuspendedPipeline({ suspendedPhase: invalidPhase })
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/active')) return null
-      return makeSuspendedStack([entry])
+      if (key.endsWith('/state')) return makeNestingState({ phaseStatus: 'suspended' })
+      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
+      return null
     })
     // F-010: call detectOrphanedSuspend exactly once — multiple invocations
     // cause side effects (appendLog) to fire twice, making log assertions ambiguous.

@@ -10,9 +10,8 @@ import type { Logger } from '@opencode-ai/core/logger'
 import { createMockStore, makeState } from './helpers.js'
 
 
-function createHandler(storeOverrides: Record<string, any> = {}) {
+function createHandler() {
   const store = createMockStore()
-  Object.assign(store, storeOverrides)
   // F-019/F-023: expose logger mock so tests can verify warn calls and ordering.
   // F-005: include debug method — Logger interface requires all four levels.
   // Without it, any CheckpointHandler call to logger.debug throws TypeError.
