@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { checkPausedTimeout } from '../src/pause-timeout-enforcer.js'
+import { checkPausedTimeout, formatPhaseStatus } from '../src/pause-timeout-enforcer.js'
 import { PAUSE_TIMEOUT_MS } from '../src/constants.js'
 import { makeState } from './helpers.js'
 
@@ -64,5 +64,14 @@ describe('PauseTimeoutEnforcer', () => {
     expect(result.elapsedMs).toBeGreaterThan(PAUSE_TIMEOUT_MS)
     expect(result.pausedAt).toBeDefined()
     expect(result.runId).toBe('run-123')
+  })
+
+  // #155 — R38 F-006: moved from checkpoint-handler-pn.test.ts
+  it('should return correct display strings for new statuses', () => {
+    expect(formatPhaseStatus('suspended')).toBe('suspended')
+    expect(formatPhaseStatus('paused')).toBe('paused')
+    expect(formatPhaseStatus('failed')).toBe('failed')
+    expect(formatPhaseStatus('cancelled')).toBe('cancelled')
+    expect(formatPhaseStatus('unknown_status')).toBe('unknown_status')
   })
 })

@@ -596,4 +596,32 @@ export class PipelineStore {
     throw new Error('Not implemented: formatOrphanedRecoveryNotification')
   }
 
+  // ------------------------------------------------------------------
+  // Phase 3: Pipeline nesting stubs — methods called by tests (R38 F-003)
+  // ------------------------------------------------------------------
+
+  getSessionInfo(sessionId: string): { status: string; runId?: string } {
+    throw new Error('Not implemented: getSessionInfo')
+  }
+
+  formatNestedStatus(projectId: string): string {
+    throw new Error('Not implemented: formatNestedStatus')
+  }
+
+  handlePhaseFail(projectId: string, runId: string): void {
+    throw new Error('Not implemented: handlePhaseFail')
+  }
+
+  getRegressionCounter(projectId: string): { count: number; lastResetAt?: string } | null {
+    throw new Error('Not implemented: getRegressionCounter')
+  }
+
+  createRegressionCounter(projectId: string): { count: number; lastResetAt?: string } {
+    throw new Error('Not implemented: createRegressionCounter')
+  }
+
+  removeRegressionCounter(projectId: string): void {
+    throw new Error('Not implemented: removeRegressionCounter')
+  }
+
 }

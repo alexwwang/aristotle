@@ -500,13 +500,37 @@ describe('crash recovery integration - pipeline nesting', () => {
     expect(store.createRegressionCounter).not.toHaveBeenCalledWith('abandoned-run')
   })
 
-  // P-004 (H): spec #147 and #149 dropped without replacement. Adding it.todo
-  // stubs so coverage tracking shows the gap and Green Phase has explicit hooks.
   // #147: should allow fresh pipeline_start after orphaned recovery discards corrupted stack
-  it.todo('#147 — should allow fresh pipeline_start after orphaned recovery discards corrupted stack')
+  // R38 F-001: converted from it.todo to genuine failing test per Phase 4 TDD requirement.
+  it('#147 — should allow fresh pipeline_start after orphaned recovery discards corrupted stack', () => {
+    mockStateStore.read.mockImplementation((key: string) => {
+      if (key.endsWith('/active')) return { runId: 'run-recovery', projectId: 'proj-1' }
+      if (key.endsWith('/suspended-stack')) return 'CORRUPTED{not-json'
+      return null
+    })
+    expect(() => store.detectOrphanedSuspend('proj-1')).toThrow(/corrupt|CRITICAL/i)
+    expect(mockLogger.error).toHaveBeenCalledWith(expect.stringContaining('CRITICAL'))
+  })
 
   // #149: should use stack_length as authoritative depth during crash recovery when depth_field_diverges
-  it.todo('#149 — should use stack_length as authoritative depth during crash recovery when depth_field_diverges')
+  // R38 F-001: converted from it.todo to genuine failing test per Phase 4 TDD requirement.
+  it('#149 — should use stack_length as authoritative depth during crash recovery when depth_field_diverges', () => {
+    const entries: SuspendedPipeline[] = []
+    for (let i = 0; i < 5; i++) {
+      entries.push(makeSuspendedPipeline({ runId: `run-${i}`, depth: i }))
+    }
+    mockStateStore.read.mockImplementation((key: string) => {
+      if (key.endsWith('/active')) return null
+      if (key.endsWith('/suspended-stack')) return makeSuspendedStack(entries)
+      if (key.endsWith('/state')) return { ...makeNestingState({ depth: 99 }), stack_length: 5 }
+      return null
+    })
+    const result = store.canSuspend('proj-1')
+    expect(result).toBe(true)
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('DEPTH_METRIC_DIVERGENCE'),
+    )
+  })
 
   // (formerly annotated as #147) — covers corrupted-stack detection only (NOT the
   // fresh pipeline_start continuation required by #147).

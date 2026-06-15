@@ -71,6 +71,7 @@ describe('quarantine integration - pipeline nesting', () => {
       expect.stringMatching(/QUARANTINE_HOOK_FAILED_SUSPEND|quarantine.*hook.*fail/i),
     )
   })
+  // #61
   it('should proceed with resume when quarantineSuccess false', () => {
     const entry = makeSuspendedPipeline({
       runId: 'parent-123', depth: 0, childRunId: 'child-456', quarantineSuccess: false,

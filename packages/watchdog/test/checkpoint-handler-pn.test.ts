@@ -1,9 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { CheckpointHandler } from '../src/checkpoint.js'
-// formatPhaseStatus here is the PUBLIC export from pause-timeout-enforcer.ts, NOT the
-// private same-named function in checkpoint.ts:650. The latter is only covered indirectly
-// via stale-pipeline recovery message tests.
-import { formatPhaseStatus } from '../src/pause-timeout-enforcer.js'
 import { STALE_THRESHOLD_MS } from '../src/constants.js'
 import type { CheckpointEvent } from '../src/schema.js'
 import type { Logger } from '@opencode-ai/core/logger'
@@ -421,18 +417,6 @@ describe('CheckpointHandler - pipeline nesting', () => {
     // P-013 (M): mirror #57 negative assertion — verify pauseActive was NOT
     // called for an invalid payload (compare to #57 L93 suspendActive pattern).
     expect(store.pauseActive).not.toHaveBeenCalled()
-  })
-
-  // #155
-  // F-026 (P): formatPhaseStatus is tested here because CheckpointHandler consumes
-  // it via pause-timeout-enforcer import. Move to pause-timeout-enforcer-pn.test.ts
-  // if/when that file lands its own #155 coverage.
-  it('should return correct display strings for new statuses', () => {
-    expect(formatPhaseStatus('suspended')).toBe('suspended')
-    expect(formatPhaseStatus('paused')).toBe('paused')
-    expect(formatPhaseStatus('failed')).toBe('failed')
-    expect(formatPhaseStatus('cancelled')).toBe('cancelled')
-    expect(formatPhaseStatus('unknown_status')).toBe('unknown_status')
   })
 
   // #157

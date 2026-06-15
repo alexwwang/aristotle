@@ -87,13 +87,18 @@ describe('PipelineStore - Resume Flow', () => {
   // #20
   // F-003: added entry C(d=2) above B so B is intermediate and the rejection
   // triggers for the correct reason (entry above the matching one).
+  // R38 F-010: replaced blanket mockReturnValue with per-key mockImplementation
+  // to prevent type confusion on /state and /active reads.
   it('should reject resume when intermediate pipelines exist', () => {
     const entries = [
       makeSuspendedPipeline({ runId: 'A', depth: 0 }),
       makeSuspendedPipeline({ runId: 'B', depth: 1, childRunId: 'child-456' }),
       makeSuspendedPipeline({ runId: 'C', depth: 2, childRunId: 'child-789' }),
     ]
-    mockStateStore.read.mockReturnValue(makeSuspendedStack(entries))
+    mockStateStore.read.mockImplementation((key: string) => {
+      if (key.endsWith('/suspended-stack')) return makeSuspendedStack(entries)
+      return null
+    })
     expect(() => store.resumeSuspended('proj-1', 'child-456')).toThrow(/intermediate pipelines exist/i)
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
@@ -109,8 +114,10 @@ describe('PipelineStore - Resume Flow', () => {
     const entry = makeSuspendedPipeline({ childRunId: 'child-123' })
     // F-020-023 (M): explicit /suspended-stack branch — blanket mockReturnValue
     // returned a stack for ALL reads including /state and /active.
+    // R38 F-011: added /child-123/state mock so childStatus assertion is consistent.
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
+      if (key.endsWith('/child-123/state')) return { runId: 'child-123', phaseStatus: 'complete' }
       return null
     })
     store.resumeSuspended('proj-1', 'child-123')
