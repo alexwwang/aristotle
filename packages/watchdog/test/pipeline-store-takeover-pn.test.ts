@@ -79,6 +79,7 @@ describe('PipelineStore - Reviewer Takeover Cleanup', () => {
       ([, s]: [string, Record<string, unknown>]) =>
         s && s.reviewerTakeover !== undefined && s.reviewerTakeover !== null)
     expect(hasSubstantiveTakeover).toBe(false)
+    expect(mockLogger.info).toHaveBeenCalledWith(expect.stringMatching(/cleanupToken|token/i))
   })
 
   // #34
@@ -169,6 +170,8 @@ describe('PipelineStore - Reviewer Takeover Cleanup', () => {
     expect(mockLogger.info).toHaveBeenCalledWith(
       expect.stringContaining('/tmp/stale-result.json'),
     )
+    // P-001: verify resultFile path was logged in cleanup context
+    expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('resultFile'))
   })
 
   // #36

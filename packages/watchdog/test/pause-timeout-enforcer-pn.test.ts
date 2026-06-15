@@ -39,7 +39,8 @@ describe('PauseTimeoutEnforcer', () => {
   })
 
   // #39
-  it('should not auto resume pipeline awaiting approval when timeout exceeded', () => {
+  // P-006: spec #39 also requires getActiveRun-level warning and no-auto-resume — integration test deferred
+  it('should not flag timeout for awaiting_approval status (unit)', () => {
     const past = new Date(Date.now() - PAUSE_TIMEOUT_MS - BUFFER_MS).toISOString()
     // pausedAt intentionally set; verifier ignores it when status != paused
     const state = makeState({

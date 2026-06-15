@@ -139,6 +139,7 @@ describe('transitions - pipeline nesting', () => {
   it('#54 — should default preSuspendStatus to active when invalid during recovery', () => {
     const result = validateNestingTransition(undefined as string, 'active')
     expect(result.valid).toBe(true)
+    expect(result.warning ?? result.reason).toMatch(/default|invalid|presuspend/i)
   })
 
   // #128

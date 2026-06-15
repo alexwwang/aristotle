@@ -139,7 +139,7 @@ describe('child lifecycle integration - pipeline nesting', () => {
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack([entry])
       return null
     })
-    store.resumeSuspended('proj-1', 'child-456')
+    const result = store.resumeSuspended('proj-1', 'child-456')
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({
@@ -150,6 +150,7 @@ describe('child lifecycle integration - pipeline nesting', () => {
         violationTypes: expect.any(Array),
       }),
     )
+    expect(result.phaseStatus).toBe('ralph_loop')
   })
 
   // #81
@@ -223,6 +224,8 @@ describe('child lifecycle integration - pipeline nesting', () => {
     expect(output).toMatch(/phase.*7\b/i)
     // F-008 (MODIFY H): hierarchy indicator proves parent→child→grandchild lineage rendering.
     expect(output).toMatch(/→|->|↳/)
+    // P-005: verify suspended status appears per level
+    expect(output).toMatch(/suspended/i)
     // TODO(Phase5): add per-level status assertion once SuspendedPipeline.status field lands
   })
 

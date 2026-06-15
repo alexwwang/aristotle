@@ -86,7 +86,7 @@ describe('pipeline nesting - e2e', () => {
   })
 
   // #83
-  it('should handle child pipeline failure during nested execution', () => {
+  it('should handle child pipeline failure (partial work commit deferred per F-003)', () => {
     const entry = makeSuspendedPipeline({ runId: 'parent-123', depth: 0, childRunId: 'child-456' })
     const childFailedState = makeNestingState({
       runId: 'child-456', phaseStatus: 'failed', currentPhase: 4,

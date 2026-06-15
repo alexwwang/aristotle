@@ -103,6 +103,7 @@ describe('crash recovery integration - pipeline nesting', () => {
       expect.stringMatching(/suspended-stack/),
       expect.objectContaining({ entries: expect.any(Array) }),
     )
+    expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('STALE_STACK_ENTRY_CLEANUP'))
   })
 
   // #70 (crash before child started, childRunId undefined).
