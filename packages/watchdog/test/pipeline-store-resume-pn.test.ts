@@ -292,7 +292,7 @@ describe('PipelineStore - Resume Flow', () => {
     const parentState = {
       ...makeNestingState({ phaseStatus: 'suspended' }),
       pending_pause: {
-        reason: 'PATTERN_CYCLE',
+        reason: 'pattern_cycle',
         violation_type: 'REGRESSION',
         files: ['src/a.ts'],
       } satisfies PendingPause,

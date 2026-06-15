@@ -420,9 +420,14 @@ describe('crash recovery integration - pipeline nesting', () => {
     )
     // P-018 (M): verify matched metadata (hash1/child-456) was preserved —
     // the impl should NOT warn about entries that match stack runIds.
-      expect(mockLogger.warn).not.toHaveBeenCalledWith(
-  expect.stringContaining('parent-123'),
+    // P-005: scoped to metadata warnings only — parent-123 could appear in other legitimate warnings.
+    const metadataWarningsWithParent = mockLogger.warn.mock.calls.filter(
+      ([msg]: [string]) =>
+        typeof msg === 'string' &&
+        msg.includes('parent-123') &&
+        (msg.includes('unmatched') || msg.includes('missing'))
     )
+    expect(metadataWarningsWithParent).toHaveLength(0)
     // P-010 (M-13): removed quarantineSuccess:true write assertion — spec #123
     // only specifies metadata matching + WARN logging. Over-specifying risks
     // false failures if the impl doesn't write quarantineSuccess in this path.

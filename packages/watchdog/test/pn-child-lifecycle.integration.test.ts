@@ -146,9 +146,9 @@ describe('child lifecycle integration - pipeline nesting', () => {
         childRunId: 'child-456',
         failurePhase: expect.any(Number),
         failureReason: expect.any(String),
+        quarantinedFiles: expect.any(Array),
+        violationTypes: expect.any(Array),
       }),
-    )
-  })
 
   // #81
   it('should handle child partial completion', () => {
@@ -549,7 +549,7 @@ describe('child lifecycle integration - pipeline nesting', () => {
   // F-023: handlePhaseFail argument aligned with fixture runId ('child-456').
   // F-014: REMOVED `store.handlePhaseFail = vi.fn()` override — see #142.
   it.each(['failed', 'cancelled'])(
-    'should clean up suspended stack when pipeline transitions to %s',
+    'should clean up suspended stack when pipeline has reached %s status',
     (terminalStatus) => {
       const entries = [
         makeSuspendedPipeline({ runId: 'A', depth: 0, childRunId: 'B' }),

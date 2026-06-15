@@ -111,6 +111,7 @@ describe('pipeline nesting - e2e', () => {
         failurePhase: 4,
         failureReason: expect.any(String),
         quarantinedFiles: expect.any(Array),
+        violationTypes: expect.any(Array),
       }),
     )
     // F-003: lastCompletedChildPhase is not in PipelineState schema. Spec #83

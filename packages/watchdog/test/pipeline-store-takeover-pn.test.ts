@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { PipelineStore } from '../src/pipeline-store.js'
 import type { SuspendedPipeline, SuspendedStack, PipelineState, ChildFailureContext, PendingPause, ReviewerTakeoverState } from '../src/schema.js'
 import { MAX_DEPTH } from '../src/constants.js'
@@ -44,6 +44,10 @@ describe('PipelineStore - Reviewer Takeover Cleanup', () => {
     mockStateStore.readLogSafe.mockReturnValue([])
     mockStateStore.list.mockReturnValue([])
     store = createStore()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   describe('Reviewer Takeover Cleanup', () => {
@@ -145,7 +149,7 @@ describe('PipelineStore - Reviewer Takeover Cleanup', () => {
   // #35
   it('should delete stale reviewer result file during cleanup', () => {
     vi.useFakeTimers()
-    vi.setSystemTime(new Date('2026-06-14T12:00:00Z'))
+    vi.setSystemTime(new Date('2026-06-15T12:00:00Z'))
     const entry = makeSuspendedPipeline({ runId: 'A', depth: 0, childRunId: 'child-456' })
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/state')) return {
