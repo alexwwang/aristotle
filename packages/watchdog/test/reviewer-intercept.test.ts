@@ -1,8 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createReviewerInterceptRule } from '../src/reviewer-intercept.js'
-import { writeFileSync, existsSync, unlinkSync, mkdtempSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
 import { makeRalphState } from './helpers.js'
 
 describe('ReviewerInterceptRule', () => {
@@ -150,19 +147,17 @@ describe('ReviewerInterceptRule', () => {
     })
 
     // RT-009c
-    it('should_return_cached_block_message_when_result_file_exists', () => {
-      const tmpDir = mkdtempSync(join(tmpdir(), 'rt-009c-'))
+    // F-4: original test wrote to `tmpDir/reviewer-result-${round}.json` but the
+    // production rule reads from `.aristotle/`, so file existence could never be
+    // observed by the rule. The cached-state path is what actually drives the
+    // second intercept's behavior — takeover state is already set from the first
+    // evaluate() call. Renamed to reflect what the test actually verifies.
+    it('should_return_cached_block_message_when_takeover_state_already_set', () => {
       const state = makeRalphState()
       rule.evaluate('Task', { subagent_type: 'oracle', prompt: 'Review', description: 'Review' }, state, 'ses-main-001')
-      const round = state.ralph?.round ? state.ralph.round + 1 : 2
-      const resultPath = join(tmpDir, `reviewer-result-${round}.json`)
-      writeFileSync(resultPath, JSON.stringify({ status: 'complete', round, sessionId: 'ses-main-001', findings: [] }))
-      try {
-        const result = rule.evaluate('Task', { subagent_type: 'oracle', prompt: 'Review', description: 'Review' }, state, 'ses-main-001')
-        expect(result.blocked).toBe(true)
-      } finally {
-        if (existsSync(resultPath)) unlinkSync(resultPath)
-      }
+      const result = rule.evaluate('Task', { subagent_type: 'oracle', prompt: 'Review', description: 'Review' }, state, 'ses-main-001')
+      expect(result.blocked).toBe(true)
+      expect(state.reviewerTakeover).toBeDefined()
     })
 
     // RT-009d

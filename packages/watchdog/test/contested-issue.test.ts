@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import {
   resolveContestedIssue,
   removeContestedIssue,
@@ -7,8 +7,6 @@ import {
   normalizeGroundsForComparison,
 } from '../src/contested-issue.js'
 import type { ContestedIssueState } from '../src/contested-issue.js'
-// F-3: import as namespace so vi.spyOn can target the real module exports
-import * as contestedModule from '../src/contested-issue.js'
 
 describe('ContestedIssue', () => {
   const baseIssue: ContestedIssueState = {
@@ -111,6 +109,14 @@ describe('ContestedIssue', () => {
     // F-21: verify InterventionResult.userMessage is derived from dossier summary.
     // The escalation layer formats dossier into a user-facing message containing
     // the finding id and severity so users can triage without reading the raw dossier.
+    //
+    // F-11 (Red Phase): the userMessage formatter itself does not exist yet
+    // (lives in the intervention-coordinator layer, not in contested-issue).
+    // We manually construct the expected format pattern here to pin down the
+    // contract — "Escalation <id> [<severity>]: <recommendation>" — so the
+    // Green Phase implementation has a concrete shape to satisfy. This is
+    // acceptable for Red Phase; replace with a real formatter call once the
+    // intervention-coordinator stub is implemented.
     const userMessage = `Escalation ${dossier.finding.id} [${dossier.finding.severity}]: ${dossier.recommendation}`
     expect(userMessage).toContain(dossier.finding.id)
     expect(userMessage).toContain(dossier.finding.severity)
@@ -135,24 +141,26 @@ describe('ContestedIssue', () => {
     expect(remaining[0].issue_id).toBe('M-2')
   })
 
-  // RT-057b — F-048: verify accept path does NOT call incrementDisputeRounds
+  // RT-057b — F-048/F-12: verify accept path does NOT increment dispute_rounds.
+  // F-12: the original spy on incrementDisputeRounds was vacuous because
+  // removeContestedIssue never calls it — a passing "not called" assertion
+  // proves nothing about the accept path. The real invariant: the
+  // dispute_rounds value on REMAINING issues must be unchanged after
+  // accepting a different issue. If the accept path incorrectly bumped
+  // counters on siblings, this assertion would fail.
   it('should_not_increment_dispute_rounds_on_accept', () => {
-    // F-3: spy on the real module export, not an anonymous object copy
-    const incrementSpy = vi.spyOn(contestedModule, 'incrementDisputeRounds')
-    try {
-      const issues = [
-        { ...baseIssue, issue_id: 'M-1', dispute_rounds: 2 },
-        { ...baseIssue, issue_id: 'M-2', dispute_rounds: 1 },
-      ]
-      const acceptedIssue = issues.find(i => i.issue_id === 'M-1')
-      expect(acceptedIssue?.dispute_rounds).toBe(2)
-      const remaining = removeContestedIssue(issues, 'M-1')
-      expect(incrementSpy).not.toHaveBeenCalled()
-      expect(remaining).toHaveLength(1)
-      expect(remaining[0].dispute_rounds).toBe(1)
-    } finally {
-      incrementSpy.mockRestore()
-    }
+    const issues = [
+      { ...baseIssue, issue_id: 'M-1', dispute_rounds: 2 },
+      { ...baseIssue, issue_id: 'M-2', dispute_rounds: 1 },
+    ]
+    const m2Before = issues.find(i => i.issue_id === 'M-2')!.dispute_rounds
+    const acceptedIssue = issues.find(i => i.issue_id === 'M-1')
+    expect(acceptedIssue?.dispute_rounds).toBe(2)
+    const remaining = removeContestedIssue(issues, 'M-1')
+    expect(remaining).toHaveLength(1)
+    const m2After = remaining.find(i => i.issue_id === 'M-2')
+    expect(m2After).toBeDefined()
+    expect(m2After!.dispute_rounds).toBe(m2Before)
   })
 
   // RT-057c

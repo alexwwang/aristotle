@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createReviewerSpawnHandler } from '../src/reviewer-spawn.js'
 import type { ReviewerSpawnResult } from '../src/reviewer-spawn.js'
+import type { PipelineState } from '../src/schema.js'
 import { existsSync, readFileSync, unlinkSync, mkdirSync } from 'fs'
 import * as promptAssembleMod from '../src/prompt-assemble.js'
 import { makeRalphState } from './helpers.js'
@@ -31,10 +32,13 @@ describe('ReviewerSpawnHandler', () => {
   it('should_call_prompt_assemble_for_t1', async () => {
     const state = makeRalphState()
     const spy = vi.spyOn(promptAssembleMod, 'promptAssemble')
-    const sessionId = await handler.spawnT1(state)
-    expect(sessionId).toMatch(/^ses-/)
-    expect(spy).toHaveBeenCalledWith(expect.objectContaining({ templateId: 'T-1' }))
-    spy.mockRestore()
+    try {
+      const sessionId = await handler.spawnT1(state)
+      expect(sessionId).toMatch(/^ses-/)
+      expect(spy).toHaveBeenCalledWith(expect.objectContaining({ templateId: 'T-1' }))
+    } finally {
+      spy.mockRestore()
+    }
   })
 
   // RT-019d
@@ -62,10 +66,13 @@ describe('ReviewerSpawnHandler', () => {
   it('should_call_prompt_assemble_for_t2_with_fact_context', async () => {
     const state = makeRalphState()
     const spy = vi.spyOn(promptAssembleMod, 'promptAssemble')
-    const sessionId = await handler.spawnT2(state, '.aristotle/fact-context-1.json')
-    expect(sessionId).toMatch(/^ses-/)
-    expect(spy).toHaveBeenCalledWith(expect.objectContaining({ templateId: 'T-2' }))
-    spy.mockRestore()
+    try {
+      const sessionId = await handler.spawnT2(state, '.aristotle/fact-context-1.json')
+      expect(sessionId).toMatch(/^ses-/)
+      expect(spy).toHaveBeenCalledWith(expect.objectContaining({ templateId: 'T-2' }))
+    } finally {
+      spy.mockRestore()
+    }
   })
 
   // RT-019h
@@ -116,13 +123,16 @@ describe('ReviewerSpawnHandler', () => {
   // RT-019m
   it('should_log_reviewer_spawn_phase_audit_on_each_transition', async () => {
     const auditSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-    const state = makeRalphState()
-    await handler.onIdle(state)
-    const phaseAuditCalls = auditSpy.mock.calls.filter(
-      call => call.some(arg => String(arg).includes('REVIEWER_SPAWN_PHASE')),
-    )
-    expect(phaseAuditCalls.length).toBe(4)
-    auditSpy.mockRestore()
+    try {
+      const state = makeRalphState()
+      await handler.onIdle(state)
+      const phaseAuditCalls = auditSpy.mock.calls.filter(
+        call => call.some(arg => String(arg).includes('REVIEWER_SPAWN_PHASE')),
+      )
+      expect(phaseAuditCalls.length).toBe(4)
+    } finally {
+      auditSpy.mockRestore()
+    }
   })
 
   // RT-020a
@@ -155,17 +165,20 @@ describe('ReviewerSpawnHandler', () => {
   // RT-020d
   it('should_log_t1_degraded_audit_event_when_t1_fails', async () => {
     const auditSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-    const state = makeRalphState()
-    // F-9: mock underlying transport so real spawnT1 runs and triggers degradation audit
-    vi.spyOn(promptAssembleMod, 'promptAssemble').mockImplementationOnce(() => {
-      throw new Error('T-1 crashed')
-    })
-    await handler.onIdle(state)
-    const degradedCalls = auditSpy.mock.calls.filter(
-      call => call.some(arg => String(arg).includes('REVIEWER_T1_DEGRADED')),
-    )
-    expect(degradedCalls.length).toBeGreaterThanOrEqual(1)
-    auditSpy.mockRestore()
+    try {
+      const state = makeRalphState()
+      // F-9: mock underlying transport so real spawnT1 runs and triggers degradation audit
+      vi.spyOn(promptAssembleMod, 'promptAssemble').mockImplementationOnce(() => {
+        throw new Error('T-1 crashed')
+      })
+      await handler.onIdle(state)
+      const degradedCalls = auditSpy.mock.calls.filter(
+        call => call.some(arg => String(arg).includes('REVIEWER_T1_DEGRADED')),
+      )
+      expect(degradedCalls.length).toBeGreaterThanOrEqual(1)
+    } finally {
+      auditSpy.mockRestore()
+    }
   })
 
   // RT-021a
@@ -187,13 +200,16 @@ describe('ReviewerSpawnHandler', () => {
   // RT-021b
   it('should_log_reviewer_failure_audit_on_t2_crash', () => {
     const auditSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-    const state = makeRalphState()
-    handler.writeFailedResultFile(state, 'T-2 crashed')
-    const failureCalls = auditSpy.mock.calls.filter(
-      call => call.some(arg => String(arg).includes('REVIEWER_FAILURE')),
-    )
-    expect(failureCalls.length).toBeGreaterThanOrEqual(1)
-    auditSpy.mockRestore()
+    try {
+      const state = makeRalphState()
+      handler.writeFailedResultFile(state, 'T-2 crashed')
+      const failureCalls = auditSpy.mock.calls.filter(
+        call => call.some(arg => String(arg).includes('REVIEWER_FAILURE')),
+      )
+      expect(failureCalls.length).toBeGreaterThanOrEqual(1)
+    } finally {
+      auditSpy.mockRestore()
+    }
   })
 
   // RT-022a
@@ -215,12 +231,12 @@ describe('ReviewerSpawnHandler', () => {
 
   // RT-022b
   it('should_log_t1_timeout_in_audit_log', async () => {
-    // F-28: use fake timers + mocked transport for deterministic timeout, not real transport
-    vi.useFakeTimers()
+    // F-10: fake timers removed — the transport mock throws synchronously,
+    // so there is no real timer to advance. The audit log fires on the
+    // caught rejection path, not on a timer tick.
+    const auditSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     try {
-      const auditSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
       const state = makeRalphState()
-      // F-9/F-28: mock underlying transport to throw timeout; real spawnT1 runs
       vi.spyOn(promptAssembleMod, 'promptAssemble').mockImplementationOnce(() => {
         throw new Error('T-1 timeout after 55s')
       })
@@ -231,9 +247,8 @@ describe('ReviewerSpawnHandler', () => {
         call => call.some(arg => String(arg).includes('T1_TIMEOUT')),
       )
       expect(timeoutCalls.length).toBeGreaterThanOrEqual(1)
-      auditSpy.mockRestore()
     } finally {
-      vi.useRealTimers()
+      auditSpy.mockRestore()
     }
   })
 
@@ -270,10 +285,9 @@ describe('ReviewerSpawnHandler', () => {
 
   // RT-023b
   it('should_log_t2_timeout_in_audit_log', async () => {
-    // F-28: use fake timers + mocked transport for deterministic timeout
-    vi.useFakeTimers()
+    // F-10: fake timers removed — the transport mock throws synchronously.
+    const auditSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     try {
-      const auditSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
       const state = makeRalphState()
       vi.spyOn(promptAssembleMod, 'promptAssemble').mockImplementationOnce(() => {
         throw new Error('T-2 timeout after 90s')
@@ -285,40 +299,65 @@ describe('ReviewerSpawnHandler', () => {
         call => call.some(arg => String(arg).includes('T2_TIMEOUT')),
       )
       expect(timeoutCalls.length).toBeGreaterThanOrEqual(1)
-      auditSpy.mockRestore()
     } finally {
-      vi.useRealTimers()
+      auditSpy.mockRestore()
     }
   })
 
   // RT-023c
   it('should_compute_t2_dynamic_timeout_from_pipeline_created_at', async () => {
     const state = makeRalphState()
-    const sessionId = await handler.spawnT2(state, '.aristotle/fact-context-1.json')
-    expect(sessionId).toMatch(/^ses-/)
-    expect(state.reviewerTakeover?.t2SessionId).toBe(sessionId)
-    // F-5: spec formula is dynamic_timeout = max(30000, 300000 - elapsed_ms - 10000).
-    // Verify the spec invariant: floor is 30000ms and ceiling is 300000ms.
-    // For elapsed_ms=0 (fresh pipeline), expected = max(30000, 290000) = 290000.
-    // For elapsed_ms=270000 (4.5min), expected = max(30000, 20000) = 30000 (floor).
-    const specMinTimeoutMs = 30000
-    const specPipelineBudgetMs = 300000
-    const specSafetyMarginMs = 10000
-    const freshElapsed = 0
-    const staleElapsed = 270000
-    const freshExpected = Math.max(specMinTimeoutMs, specPipelineBudgetMs - freshElapsed - specSafetyMarginMs)
-    const staleExpected = Math.max(specMinTimeoutMs, specPipelineBudgetMs - staleElapsed - specSafetyMarginMs)
-    expect(freshExpected).toBe(290000)
-    expect(staleExpected).toBe(specMinTimeoutMs)
-    expect(specMinTimeoutMs).toBeLessThanOrEqual(specPipelineBudgetMs)
+    // F-8: spy on promptAssemble to capture the actual timeout_ms the handler
+    // passes to T-2, rather than just recomputing Math.max locally (which only
+    // tests the spec formula in isolation, not handler wiring).
+    const spy = vi.spyOn(promptAssembleMod, 'promptAssemble')
+    try {
+      const sessionId = await handler.spawnT2(state, '.aristotle/fact-context-1.json')
+      expect(sessionId).toMatch(/^ses-/)
+      expect(state.reviewerTakeover?.t2SessionId).toBe(sessionId)
+      expect(spy).toHaveBeenCalled()
+      const t2Call = spy.mock.calls.find(
+        call => call[0]?.templateId === 'T-2',
+      )
+      expect(t2Call).toBeDefined()
+      // F-5/F-8: spec formula is dynamic_timeout = max(30000, 300000 - elapsed_ms - 10000).
+      const specMinTimeoutMs = 30000
+      const specPipelineBudgetMs = 300000
+      // timeout_ms is a Red Phase contract field not yet on the promptAssemble arg type.
+      const t2Arg = t2Call?.[0] as { templateId: string; timeout_ms?: number } | undefined
+      const passedTimeoutMs = t2Arg?.timeout_ms
+      // For a fresh pipeline (elapsed≈0), the handler-computed value must fall
+      // within [specMinTimeoutMs, specPipelineBudgetMs - specSafetyMarginMs].
+      expect(passedTimeoutMs).toBeGreaterThanOrEqual(specMinTimeoutMs)
+      expect(passedTimeoutMs).toBeLessThanOrEqual(specPipelineBudgetMs - 10000)
+    } finally {
+      spy.mockRestore()
+    }
   })
 
   // RT-023d
   it('should_use_current_time_when_created_at_missing', async () => {
-    const state = makeRalphState()
-    const sessionId = await handler.spawnT2(state, '.aristotle/fact-context-1.json')
-    expect(sessionId).toMatch(/^ses-/)
-    expect(state.reviewerTakeover?.t2SessionId).toBe(sessionId)
+    // F-9: when createdAt is missing the handler must fall back to current time
+    // AND emit a warning audit event so operators can detect schema drift.
+    const auditSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    try {
+      const state = makeRalphState()
+      // Simulate missing createdAt. delete + cast because PipelineState.startedAt
+      // is typed as string, but the handler must defensively handle absence.
+      delete (state as Partial<PipelineState>).startedAt
+      const sessionId = await handler.spawnT2(state, '.aristotle/fact-context-1.json')
+      expect(sessionId).toMatch(/^ses-/)
+      expect(state.reviewerTakeover?.t2SessionId).toBe(sessionId)
+      const warningCalls = auditSpy.mock.calls.filter(
+        call => call.some(arg => {
+          const s = String(arg)
+          return s.includes('WARNING') && (s.includes('created_at') || s.includes('createdAt') || s.includes('CREATED_AT_MISSING'))
+        }),
+      )
+      expect(warningCalls.length).toBeGreaterThanOrEqual(1)
+    } finally {
+      auditSpy.mockRestore()
+    }
   })
 
   // RT-024
@@ -363,13 +402,20 @@ describe('ReviewerSpawnHandler', () => {
   })
 
   // RT-025c
-  it('should_prevent_partial_migration_state', async () => {
-    const state = makeRalphState()
-    const result = await handler.onIdle(state)
-    expect(result).toBeDefined()
-    expect(result.success).toBe(true)
-    const t1Defined = result.t1SessionId !== undefined
-    const t2Defined = result.t2SessionId !== undefined
-    expect(t1Defined).toBe(t2Defined)
+  // F-6: original test called handler.onIdle(state) and checked t1/t2 session IDs
+  // — unrelated to the spec's "prevent partial migration state" contract for
+  // legacy action conversion. The real behavior: convertLegacyAction must return
+  // a single object where BOTH pipelineAction AND action are set atomically
+  // (no partial migration). Verify both fields on the same returned object.
+  it('should_prevent_partial_migration_state', () => {
+    const legacySuspended = { action: 'suspended' } as { action: string }
+    const convertedSuspended = handler.convertLegacyAction(legacySuspended) as ReviewerSpawnResult & { pipelineAction?: string }
+    expect(convertedSuspended.pipelineAction).toBeDefined()
+    expect(convertedSuspended.action).toBeDefined()
+
+    const legacyResumed = { action: 'resumed' } as { action: string }
+    const convertedResumed = handler.convertLegacyAction(legacyResumed) as ReviewerSpawnResult & { pipelineAction?: string }
+    expect(convertedResumed.pipelineAction).toBeDefined()
+    expect(convertedResumed.action).toBeDefined()
   })
 })

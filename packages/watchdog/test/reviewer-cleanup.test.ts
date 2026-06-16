@@ -1,12 +1,14 @@
 import { describe, it, expect, vi } from 'vitest'
 import { cleanupStaleState, generateCleanupToken, validateCleanupToken, deleteResultFiles } from '../src/reviewer-cleanup.js'
+import type { PipelineState } from '../src/schema.js'
 import { writeFileSync, existsSync, unlinkSync, mkdtempSync, utimesSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { makeRalphState } from './helpers.js'
 
-function makeResultPath(baseDir: string, runId: string, round: number): string {
-  return join(baseDir, `reviewer-result-${runId}-${round}.json`)
+// F-3: spec production path is `.aristotle/reviewer-result-${round}.json` (no runId).
+function makeResultPath(baseDir: string, _runId: string, round: number): string {
+  return join(baseDir, `reviewer-result-${round}.json`)
 }
 
 describe('Reviewer Cleanup', () => {
@@ -144,21 +146,35 @@ describe('Reviewer Cleanup', () => {
     }
     const result = cleanupStaleState('resume', state)
     expect(result).toBeDefined()
+    // F-5: cleanupStaleState is synchronous and cannot async-wait.
+    // The deferral contract is observable via: reviewerTakeover is preserved
+    // (NOT cleared) and a `deferred: true` marker is set so the caller knows
+    // to re-enter the cleanup later. Asserting both proves the non-stale path.
+    // Cast accesses the Red Phase contract field not yet on PipelineState.
+    expect(result.reviewerTakeover).not.toBeNull()
+    expect((result as PipelineState & { deferred?: boolean }).deferred).toBe(true)
   })
 
   // RT-030f
   it('should_log_warning_if_t2_exceeds_wait_on_resume', () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-    const state = makeRalphState()
-    state.reviewerTakeover = {
-      round: 1, interceptAt: new Date().toISOString(), spawnPhase: 't2_running',
+    try {
+      const state = makeRalphState()
+      state.reviewerTakeover = {
+        round: 1, interceptAt: new Date().toISOString(), spawnPhase: 't2_running',
+      }
+      const result = cleanupStaleState('resume', state)
+      // F-5: prove deferral happened before asserting the warning audit,
+      // so the test does not pass on a stale-clearing path that also logs.
+      expect((result as PipelineState & { deferred?: boolean }).deferred).toBe(true)
+      expect(result.reviewerTakeover).not.toBeNull()
+      const warningCalls = logSpy.mock.calls.filter(
+        call => call.some(arg => String(arg).includes('WARNING') || String(arg).includes('T2_WAIT')),
+      )
+      expect(warningCalls.length).toBeGreaterThanOrEqual(1)
+    } finally {
+      logSpy.mockRestore()
     }
-    cleanupStaleState('resume', state)
-    const warningCalls = logSpy.mock.calls.filter(
-      call => call.some(arg => String(arg).includes('WARNING') || String(arg).includes('T2_WAIT')),
-    )
-    expect(warningCalls.length).toBeGreaterThanOrEqual(1)
-    logSpy.mockRestore()
   })
 
   // RT-031a
@@ -323,7 +339,11 @@ describe('Reviewer Cleanup', () => {
     }
     const result = cleanupStaleState('resume', state)
     expect(result).toBeDefined()
-    expect(result.runId).toBe(state.runId)
+    // F-7: avoid trivial identity (result.runId === state.runId). The real
+    // non-stale contract is: when t2SessionId was set (T-2 ran), the takeover
+    // state must be preserved, proving we did NOT treat it as stale.
+    expect(result.reviewerTakeover).not.toBeNull()
+    expect(result.reviewerTakeover?.t2SessionId).toBe('ses-t2-001')
   })
 
   // RT-037 — simulate race: first token wins, second defers
