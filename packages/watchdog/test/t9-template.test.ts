@@ -70,7 +70,9 @@ describe('T-9 Precision Filter', () => {
       review_scope: { in_scope: ['src/a.ts'], out_of_scope: ['vendor/lib.ts'] },
     })
     const f = result.confirmed_findings.find(f => f.id === 'F-01')
-    expect(['REJECT', 'DOWNGRADE']).toContain(f?.verdict)
+    // ST-R4 F-1: REJECT verdicts should NOT appear in confirmed_findings per TC-T9-011 contract.
+    // Either the finding is absent (REJECT) or present as DOWNGRADE. Accept both.
+    expect(f === undefined || f?.verdict === 'DOWNGRADE').toBe(true)
   })
 
   // TC-T9-006
