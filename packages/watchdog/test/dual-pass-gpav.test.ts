@@ -32,6 +32,11 @@ describe('GPAVEvent dedup and retry', () => {
   })
 
   // RT-060c — F-016: cache-hit: no new GPAVEvents added
+  // F-3: Red Phase — the cache-hit precondition cannot be fully simulated here
+  // because the orchestrator stub has no cache state. The test only verifies
+  // the post-condition (superseded_by undefined). TODO(Green Phase): set up a
+  // real cache-hit state on the orchestrator before calling supersedePriorEvents
+  // so the no-op path is driven by an actual cache lookup.
   it('should_skip_dedup_on_cache_hit', () => {
     const orchestrator = createDualPassOrchestrator()
     const ts = new Date().toISOString()

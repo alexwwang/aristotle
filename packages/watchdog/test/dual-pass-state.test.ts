@@ -30,6 +30,11 @@ describe('dualPassPhase state machine', () => {
   })
 
   // RT-044c
+  // F-6: Red Phase — the local object mutation below is a placeholder. Mutating
+  // a local `takeover` object and re-reading it is tautological. Green Phase
+  // should drive the spawnPhase immutability contract through
+  // validateDualPassTransition, asserting that advancing dualPassPhase leaves
+  // spawnPhase at 'pending' as observed via the production state machine.
   it('should_use_dual_pass_phase_as_authoritative_when_dual_pass_mode_true', () => {
     const valid = isDualPassPhaseValid('recall_running')
     expect(valid).toBe(true)

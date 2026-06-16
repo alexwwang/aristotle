@@ -91,6 +91,9 @@ describe('Dual-Pass Orchestration', () => {
   })
 
   // RT-043b
+  // F-4: Red Phase — the JSON.stringify string-containment assertion below is an
+  // approximation. Green Phase should instead locate the FG spawn call args on
+  // promptAssemble.mock.calls and assert structured access on location_map.
   it('should_pass_location_map_from_recall_to_fact_gather', async () => {
     const state = makeRalphState()
     const locationMap = [{ file: 'src/auth.ts', line: 42 }]
@@ -111,6 +114,8 @@ describe('Dual-Pass Orchestration', () => {
   })
 
   // RT-043c
+  // F-4: Red Phase — string-containment on JSON.stringify is an approximation.
+  // Green Phase should verify structured parameter access on promptAssemble call args.
   it('should_spawn_t9_precision_with_raw_findings_from_recall', async () => {
     const state = makeRalphState()
     const rawFindings = [{ id: 'F-01', severity: 'M', description: 'Issue' }]
@@ -129,6 +134,8 @@ describe('Dual-Pass Orchestration', () => {
   })
 
   // RT-043d
+  // F-4: Red Phase — string-containment on JSON.stringify is an approximation.
+  // Green Phase should verify structured parameter access on promptAssemble call args.
   it('should_spawn_t10_eval_fix_with_confirmed_findings', async () => {
     const state = makeRalphState()
     const confirmedFindings = [{ id: 'F-01', severity: 'M', description: 'Issue', verdict: 'CONFIRM' }]

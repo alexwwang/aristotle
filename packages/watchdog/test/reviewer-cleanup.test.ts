@@ -66,6 +66,12 @@ describe('Reviewer Cleanup', () => {
   })
 
   // RT-030b
+  // F-5: Red Phase — this test covers only the sessionId-MISMATCH deletion path.
+  // The spec also requires verifying the sessionId-MATCH preservation path
+  // (file NOT deleted when sessionId matches the current session). TODO(Green
+  // Phase): add a companion test that seeds a result file with a sessionId
+  // matching the current state, then asserts existsSync(path) === true after
+  // deleteResultFiles, exercising the retention branch.
   it('should_verify_session_id_before_deleting_result_files_on_resume', () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'rt-030b-'))
     const runId = 'run-001'
