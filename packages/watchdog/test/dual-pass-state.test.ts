@@ -43,8 +43,8 @@ describe('dualPassPhase state machine', () => {
     }
     // Simulate dualPassPhase advancing; spawnPhase must remain 'pending' until explicit promotion
     takeover.dualPassPhase = 'recall_done'
-    expect(toverride.spawnPhase).toBe('pending')
+    expect(takeover.spawnPhase).toBe('pending')
     takeover.dualPassPhase = 'done'
-    expect(toverride.spawnPhase).toBe('pending')
+    expect(takeover.spawnPhase).toBe('pending')
   })
 })
