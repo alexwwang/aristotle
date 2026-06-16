@@ -35,6 +35,7 @@ describe('T-3 Status Variants', () => {
       status: 'tests_failed', new_files: ['a.ts'], tests_pass: false, rolled_back: true,
     })
     expect(result.status).toBe('tests_failed')
+    expect(result.tests_pass).toBe(false)
     expect(result.rolled_back).toBe(true)
   })
 
