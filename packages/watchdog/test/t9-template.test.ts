@@ -117,7 +117,9 @@ describe('T-9 Precision Filter', () => {
     })
     const f = result.confirmed_findings.find(f => f.id === 'F-01')
     expect(f?.verdict).toBe('DOWNGRADE')
-    expect(f?.verdict_reason).toContain('location not provided')
+    // ST-R3 F-6: spec says note field, not verdict_reason; also add severity check
+    expect(f?.adjusted_severity).toBe('I')
+    expect(f?.note).toContain('location not provided')
   })
 
   // TC-T9-009
