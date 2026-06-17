@@ -172,6 +172,12 @@ class QuarantineEngine:
                     logger.warning("File skipped: %s (reason=not found)", file_path)
                     continue
 
+                # Detect re-quarantine: metadata + quarantine file exist but workspace
+                # content differs (file was manually re-added, not restored).
+                # After restore(), workspace content matches quarantine content, so
+                # re-quarantine is treated as a normal quarantine (Q-070/Q-071).
+                is_re_quarantine = self._has_existing_metadata(file_path, run_id)
+
                 # Resolve quarantine file path (handle conflicts)
                 q_path, meta_filename = self._resolve_quarantine_path(
                     quarantine_dir, file_path
@@ -218,9 +224,16 @@ class QuarantineEngine:
                     failed_files.append(f"{file_path}:metadata_write_failed")
                     continue
 
-                files_affected.append(file_path)
-                quarantine_paths.append(str(q_path.relative_to(self.repo_root)))
-                original_paths.append(file_path)
+                if is_re_quarantine:
+                    q_rel = str(q_path.relative_to(self.repo_root))
+                    files_affected.append(q_rel)
+                    quarantine_paths.append(q_rel)
+                    original_paths.append(file_path)
+                    failed_files.append(f"{file_path}:re_quarantine")
+                else:
+                    files_affected.append(file_path)
+                    quarantine_paths.append(str(q_path.relative_to(self.repo_root)))
+                    original_paths.append(file_path)
 
             except subprocess.TimeoutExpired:
                 failed_files.append(f"{file_path}:git_timeout")
@@ -875,6 +888,57 @@ class QuarantineEngine:
                     return True
 
         return False
+
+    def _has_existing_metadata(self, file_path: str, run_id: str) -> bool:
+        """Detect re-quarantine: metadata + quarantine file exist AND workspace
+        content differs from quarantine copy. Returns False after restore()
+        (content matches) or when no prior quarantine exists."""
+        full_path = Path(self.repo_root) / file_path
+        if not full_path.exists():
+            return False
+
+        base_hash = self._compute_filename_hash(file_path)
+        run_base = self._quarantine_base / run_id
+        if not run_base.exists():
+            return False
+
+        workspace_bytes = full_path.read_bytes()
+
+        for phase_dir in run_base.iterdir():
+            if not phase_dir.is_dir() or not phase_dir.name.startswith("phase"):
+                continue
+
+            base_meta = phase_dir / f"metadata-{base_hash}.json"
+            if self._metadata_and_content_differs(base_meta, file_path, workspace_bytes):
+                return True
+
+            for i in range(2, MAX_SUFFIX_RETRY + 2):
+                suffixed = phase_dir / f"metadata-{base_hash}-{i}.json"
+                if self._metadata_and_content_differs(suffixed, file_path, workspace_bytes):
+                    return True
+
+        return False
+
+    def _metadata_and_content_differs(
+        self, meta_file: Path, original_path: str, workspace_bytes: bytes
+    ) -> bool:
+        """Check metadata matches original_path, quarantine file exists, and
+        workspace content differs from quarantine content."""
+        if not meta_file.exists():
+            return False
+        try:
+            meta_data = json.loads(meta_file.read_text())
+            if meta_data.get("original_path") != original_path:
+                return False
+            q_path = meta_data.get("quarantine_path", "")
+            if not q_path:
+                return False
+            full_q = Path(self.repo_root) / q_path
+            if not full_q.exists():
+                return False
+            return full_q.read_bytes() != workspace_bytes
+        except (json.JSONDecodeError, KeyError, OSError):
+            return False
 
     def _read_meta_quarantine_path(self, meta_file: Path) -> str:
         """Read quarantine_path from metadata file. Returns empty string on error."""
