@@ -102,13 +102,10 @@ _GLOBAL_KI_DOC = None
 
 
 class CommitGuard:
-    _commit_failures: Dict[str, int] = {}
 
     def __init__(self, project_root: str = ""):
         self.project_root = project_root
-        if not hasattr(self.__class__, "_commit_failures_initialized"):
-            self.__class__._commit_failures = {}
-            self.__class__._commit_failures_initialized = True
+        self._commit_failures: Dict[str, int] = {}
 
     def _key(self, run_id: str, phase: int) -> str:
         return f"{run_id}:{phase}"
@@ -142,7 +139,7 @@ class CommitGuard:
         key = self._key(run_id, phase if phase is not None else 0)
 
         if not self.project_root or not Path(self.project_root).exists():
-            self.__class__._commit_failures[key] = self.__class__._commit_failures.get(key, 0) + 1
+            self._commit_failures[key] = self._commit_failures.get(key, 0) + 1
             return CommitResult(success=False, committed=False)
 
         has_commits = self._has_commits()
@@ -158,20 +155,20 @@ class CommitGuard:
                         text=True,
                     )
                 except (subprocess.SubprocessError, FileNotFoundError, OSError):
-                    self.__class__._commit_failures[key] = self.__class__._commit_failures.get(key, 0) + 1
+                    self._commit_failures[key] = self._commit_failures.get(key, 0) + 1
                     return CommitResult(success=False, committed=False)
 
                 if commit_result.returncode != 0:
-                    self.__class__._commit_failures[key] = self.__class__._commit_failures.get(key, 0) + 1
+                    self._commit_failures[key] = self._commit_failures.get(key, 0) + 1
                     return CommitResult(success=False, committed=False)
 
-                self.__class__._commit_failures[key] = 0
+                self._commit_failures[key] = 0
                 return CommitResult(success=True, committed=True)
             elif not has_commits:
-                self.__class__._commit_failures[key] = self.__class__._commit_failures.get(key, 0) + 1
+                self._commit_failures[key] = self._commit_failures.get(key, 0) + 1
                 return CommitResult(success=False, committed=False)
             else:
-                self.__class__._commit_failures[key] = 0
+                self._commit_failures[key] = 0
                 return CommitResult(success=True, committed=False, reason="clean_tree")
 
         msg = self._build_message(phase=phase, run_id=run_id, review_round=review_round)
@@ -184,11 +181,11 @@ class CommitGuard:
                 text=True,
             )
         except (subprocess.SubprocessError, FileNotFoundError, OSError):
-            self.__class__._commit_failures[key] = self.__class__._commit_failures.get(key, 0) + 1
+            self._commit_failures[key] = self._commit_failures.get(key, 0) + 1
             return CommitResult(success=False, committed=False, reason="add subprocess failed")
 
         if add_result.returncode != 0:
-            self.__class__._commit_failures[key] = self.__class__._commit_failures.get(key, 0) + 1
+            self._commit_failures[key] = self._commit_failures.get(key, 0) + 1
             return CommitResult(
                 success=False,
                 committed=False,
@@ -203,18 +200,18 @@ class CommitGuard:
                 text=True,
             )
         except (subprocess.SubprocessError, FileNotFoundError, OSError):
-            self.__class__._commit_failures[key] = self.__class__._commit_failures.get(key, 0) + 1
+            self._commit_failures[key] = self._commit_failures.get(key, 0) + 1
             return CommitResult(success=False, committed=False, reason="commit subprocess failed")
 
         if commit_result.returncode != 0:
-            self.__class__._commit_failures[key] = self.__class__._commit_failures.get(key, 0) + 1
+            self._commit_failures[key] = self._commit_failures.get(key, 0) + 1
             return CommitResult(
                 success=False,
                 committed=False,
                 reason=f"commit failed: {commit_result.stderr}",
             )
 
-        self.__class__._commit_failures[key] = 0
+        self._commit_failures[key] = 0
         return CommitResult(success=True, committed=True)
 
     def _build_message(self, phase=None, run_id="", review_round=None):
@@ -229,7 +226,7 @@ class CommitGuard:
         return "auto-commit"
 
     def failure_count(self, run_id: str, phase: int) -> int:
-        return self.__class__._commit_failures.get(self._key(run_id, phase), 0)
+        return self._commit_failures.get(self._key(run_id, phase), 0)
 
 
 def compute_assessment_from_violations(violations, phase=4):
@@ -354,17 +351,16 @@ class KiDocManager:
 
 
 class InterventionCoordinator:
-    _phase_violations: Dict[tuple, List[ViolationEvent]] = {}
 
     def __init__(self, context=None):
-        self.__class__._phase_violations = {}
+        self._phase_violations: Dict[tuple, List[ViolationEvent]] = {}
         self.context = context
 
     def _get_violations_for_phase(self, run_id, phase):
-        return list(self.__class__._phase_violations.get((run_id, phase), []))
+        return list(self._phase_violations.get((run_id, phase), []))
 
     def _clear_phase_violations(self, run_id, phase):
-        self.__class__._phase_violations[(run_id, phase)] = []
+        self._phase_violations[(run_id, phase)] = []
 
 
 def _get_coordinator(context=None):
