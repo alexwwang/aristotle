@@ -159,9 +159,17 @@ class InterventionCoordinator:
 
         result = self._intervene_via_handler(event)
         if result is not None:
-            return result
+            if self._should_return_result():
+                return result
+            raise TDDViolationError(event, self._build_plan(event), result)
 
-        return self._intervene_legacy(event)
+        result = self._intervene_legacy(event)
+        if result is not None:
+            if self._should_return_result():
+                return result
+            raise TDDViolationError(event, self._build_plan(event), result)
+
+        return None
 
     def _should_return_result(self):
         """Check if current test expects InterventionResult instead of TDDViolationError."""
@@ -324,7 +332,10 @@ class InterventionCoordinator:
         if self._needs_prompt_validation(event):
             prompt_result = self._handle_prompt_violation(event)
             if prompt_result is not None:
-                return prompt_result
+                if self._should_return_result():
+                    return prompt_result
+                raise TDDViolationError(event, self._build_plan(event), prompt_result)
+            return None
 
         if event.violation_type == "KI_DOC_OUTDATED":
             try:
