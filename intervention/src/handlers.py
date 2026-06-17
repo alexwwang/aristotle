@@ -17,6 +17,8 @@ class InterventionResult:
     violation_code: str = ""
     parent_run_id: Optional[str] = None
     cumulative_rounds: Optional[int] = None
+    committed: bool = False
+    ki_doc_updated: bool = False
 
 
 def _get_files(event: Any) -> List[str]:
