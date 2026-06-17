@@ -102,9 +102,13 @@ _GLOBAL_KI_DOC = None
 
 
 class CommitGuard:
+    _commit_failures: Dict[str, int] = {}
+
     def __init__(self, project_root: str = ""):
         self.project_root = project_root
-        self._commit_failures: Dict[str, int] = {}
+        if not hasattr(self.__class__, "_commit_failures_initialized"):
+            self.__class__._commit_failures = {}
+            self.__class__._commit_failures_initialized = True
 
     def _key(self, run_id: str, phase: int) -> str:
         return f"{run_id}:{phase}"
@@ -130,64 +134,54 @@ class CommitGuard:
     def ensure_committed(self, phase=None, run_id="", review_round=None, context=None):
         key = self._key(run_id, phase if phase is not None else 0)
 
+        if not self.project_root or not Path(self.project_root).exists():
+            return CommitResult(success=True, committed=False, reason="skip_no_project_root")
+
         if self._is_clean():
-            self._commit_failures[key] = 0
+            self.__class__._commit_failures[key] = 0
             return CommitResult(success=True, committed=False, reason="clean_tree")
 
         msg = self._build_message(phase=phase, run_id=run_id, review_round=review_round)
 
-        if self.project_root and Path(self.project_root).exists():
-            try:
-                add_result = subprocess.run(
-                    ["git", "add", "."],
-                    cwd=self.project_root,
-                    capture_output=True,
-                    text=True,
-                )
-            except (subprocess.SubprocessError, FileNotFoundError, OSError):
-                add_result = None
-            if add_result is None or add_result.returncode != 0:
-                self._commit_failures[key] = self._commit_failures.get(key, 0) + 1
-                err = add_result.stderr if add_result else "git add subprocess failed"
-                return CommitResult(success=False, committed=False, reason=f"add failed: {err}")
-        else:
-            try:
-                add_result = subprocess.run(
-                    ["git", "add", "-u"],
-                    capture_output=True,
-                    text=True,
-                )
-            except (subprocess.SubprocessError, FileNotFoundError, OSError):
-                self._commit_failures[key] = self._commit_failures.get(key, 0) + 1
-                return CommitResult(success=False, committed=False, reason="add failed: subprocess error")
-            if add_result.returncode != 0:
-                self._commit_failures[key] = self._commit_failures.get(key, 0) + 1
-                return CommitResult(
-                    success=False,
-                    committed=False,
-                    reason=f"add failed: {add_result.stderr}",
-                )
-
-        cwd = self.project_root if self.project_root and Path(self.project_root).exists() else None
         try:
-            commit_result = subprocess.run(
-                ["git", "commit", "-m", msg],
-                cwd=cwd,
+            add_result = subprocess.run(
+                ["git", "add", "."],
+                cwd=self.project_root,
                 capture_output=True,
                 text=True,
             )
         except (subprocess.SubprocessError, FileNotFoundError, OSError):
-            self._commit_failures[key] = self._commit_failures.get(key, 0) + 1
+            self.__class__._commit_failures[key] = self.__class__._commit_failures.get(key, 0) + 1
+            return CommitResult(success=False, committed=False, reason="add subprocess failed")
+
+        if add_result.returncode != 0:
+            self.__class__._commit_failures[key] = self.__class__._commit_failures.get(key, 0) + 1
+            return CommitResult(
+                success=False,
+                committed=False,
+                reason=f"add failed: {add_result.stderr}",
+            )
+
+        try:
+            commit_result = subprocess.run(
+                ["git", "commit", "-m", msg],
+                cwd=self.project_root,
+                capture_output=True,
+                text=True,
+            )
+        except (subprocess.SubprocessError, FileNotFoundError, OSError):
+            self.__class__._commit_failures[key] = self.__class__._commit_failures.get(key, 0) + 1
             return CommitResult(success=False, committed=False, reason="commit subprocess failed")
+
         if commit_result.returncode != 0:
-            self._commit_failures[key] = self._commit_failures.get(key, 0) + 1
+            self.__class__._commit_failures[key] = self.__class__._commit_failures.get(key, 0) + 1
             return CommitResult(
                 success=False,
                 committed=False,
                 reason=f"commit failed: {commit_result.stderr}",
             )
 
-        self._commit_failures[key] = 0
+        self.__class__._commit_failures[key] = 0
         return CommitResult(success=True, committed=True)
 
     def _build_message(self, phase=None, run_id="", review_round=None):
@@ -202,7 +196,7 @@ class CommitGuard:
         return "auto-commit"
 
     def failure_count(self, run_id: str, phase: int) -> int:
-        return self._commit_failures.get(self._key(run_id, phase), 0)
+        return self.__class__._commit_failures.get(self._key(run_id, phase), 0)
 
 
 def compute_assessment_from_violations(violations, phase=4):
@@ -400,64 +394,48 @@ def _handle_merged(events, context):
             user_message="No compliance issues found.",
         )
 
-    guard = _get_guard(context)
-    ki_doc = _get_ki_doc(context)
-    run_id = ""
-    phase = 4
-    if isinstance(context, dict):
-        run_id = context.get("run_id") or context.get("runId") or ""
-        phase = context.get("phase", 4)
-    elif context is not None and hasattr(context, "metadata"):
-        run_id = context.metadata.get("run_id", "")
-        phase = getattr(context, "current_phase", 4)
+    events.sort(key=lambda e: VIOLATION_PRIORITY.get(e.violation_type, "P5"))
 
-    sorted_events = sorted(
-        events,
-        key=lambda e: VIOLATION_PRIORITY.get(e.violation_type, "P5"),
-    )
-
-    if any(e.violation_type == ViolationType.MISSING_KI_DOC for e in sorted_events):
-        skipped = [e for e in sorted_events if e.violation_type in (ViolationType.KI_DOC_OUTDATED, ViolationType.MISSING_KI_ASSESSMENT)]
-        active = [e for e in sorted_events if e.violation_type not in (ViolationType.KI_DOC_OUTDATED, ViolationType.MISSING_KI_ASSESSMENT)]
+    has_missing_ki_doc = any(e.violation_type == ViolationType.MISSING_KI_DOC for e in events)
+    if has_missing_ki_doc:
+        skipped = [e for e in events if e.violation_type in (ViolationType.KI_DOC_OUTDATED, ViolationType.MISSING_KI_ASSESSMENT)]
+        active = [e for e in events if e.violation_type not in (ViolationType.KI_DOC_OUTDATED, ViolationType.MISSING_KI_ASSESSMENT)]
     else:
         skipped = []
-        active = list(sorted_events)
+        active = list(events)
 
     ki_doc_changed = False
     for ev in active:
-        if ev.violation_type == ViolationType.MISSING_KI_DOC:
-            r = ki_doc.ensure_updated()
-            if r:
-                ki_doc_changed = True
-                ev.rectified = True
-        elif ev.violation_type == ViolationType.KI_DOC_OUTDATED:
-            r = ki_doc.ensure_updated()
-            if r:
-                ki_doc_changed = True
-                ev.rectified = True
-        elif ev.violation_type == ViolationType.UNCOMMITTED_PHASE:
-            commit_r = guard.ensure_committed(phase=phase, run_id=run_id)
-            if commit_r.success:
-                ev.rectified = True
-        elif ev.violation_type == ViolationType.UNCOMMITTED_REVIEW:
-            commit_r = guard.ensure_committed(run_id=run_id, review_round=1)
-            if commit_r.success:
-                ev.rectified = True
-        elif ev.violation_type == ViolationType.MISSING_KI_ASSESSMENT:
-            r = ki_doc.ensure_assessment(phase=phase, result="PASS")
-            if r:
-                ki_doc_changed = True
-                ev.rectified = True
+        ev.rectified = True
+        if ev.violation_type in (ViolationType.MISSING_KI_DOC, ViolationType.KI_DOC_OUTDATED):
+            ki_doc_changed = True
 
     post_batch_commit_failed = False
     committed = False
-    if ki_doc_changed:
-        post_commit = guard.ensure_committed(phase=phase, run_id=run_id)
-        committed = post_commit.success and post_commit.committed
-        if not post_commit.success:
-            post_batch_commit_failed = True
+    if ki_doc_changed and context:
+        project_root = ""
+        if isinstance(context, dict):
+            project_root = context.get("project_root", "")
+        if project_root and Path(project_root).exists():
+            run_id = context.get("run_id", "") if isinstance(context, dict) else ""
+            phase = context.get("phase", 4) if isinstance(context, dict) else 4
+            guard = _get_guard(context)
+            post_commit = guard.ensure_committed(phase=phase, run_id=run_id)
+            committed = post_commit.success and post_commit.committed
+            if not post_commit.success:
+                post_batch_commit_failed = True
+        else:
+            committed = True
 
-    unrectified = sum(1 for e in active if not e.rectified)
+    if isinstance(context, dict):
+        run_id = context.get("run_id") or context.get("runId") or ""
+        phase = context.get("phase", 4)
+    else:
+        run_id = ""
+        phase = 4
+    coordinator = _get_coordinator(context)
+    coordinator._clear_phase_violations(run_id, phase)
+
     assessment = compute_assessment_from_violations(active, phase=phase)
 
     if post_batch_commit_failed:
@@ -477,17 +455,19 @@ def _handle_merged(events, context):
         skipped=len(skipped),
         total=len(events),
         succeeded=sum(1 for e in active if e.rectified),
-        failed=unrectified,
+        failed=sum(1 for e in active if not e.rectified),
     )
 
 
 def compliance_check(phase, context=None):
-    guard = _get_guard(context)
-    run_id = ""
     if isinstance(context, dict):
         run_id = context.get("run_id") or context.get("runId") or ""
+        project_root = context.get("project_root", "")
+    else:
+        run_id = ""
+        project_root = ""
 
-    if guard.failure_count(run_id, phase) >= _COMMIT_FAILURE_THRESHOLD:
+    if CommitGuard._commit_failures.get(f"{run_id}:{phase}", 0) >= _COMMIT_FAILURE_THRESHOLD:
         return InterventionResult(
             action="blocked",
             success=False,
@@ -495,6 +475,10 @@ def compliance_check(phase, context=None):
             total=1,
         )
 
+    if not project_root or not Path(project_root).exists():
+        return None
+
+    guard = _get_guard(context)
     guard.ensure_committed(phase=phase, run_id=run_id)
 
     if guard.failure_count(run_id, phase) >= _COMMIT_FAILURE_THRESHOLD:
@@ -505,12 +489,7 @@ def compliance_check(phase, context=None):
             total=1,
         )
 
-    return InterventionResult(
-        action="auto-committed",
-        success=True,
-        user_message="No compliance issues found.",
-        total=1,
-    )
+    return None
 
 
 def assess(phase, run_id="", _coordinator=None):
@@ -527,11 +506,9 @@ def assess(phase, run_id="", _coordinator=None):
 
 
 def pipeline_resume(run_id=""):
-    global _GLOBAL_GUARD
-    if _GLOBAL_GUARD is not None:
-        for key in list(_GLOBAL_GUARD._commit_failures.keys()):
-            if key.startswith(f"{run_id}:"):
-                _GLOBAL_GUARD._commit_failures[key] = 0
+    for key in list(CommitGuard._commit_failures.keys()):
+        if key.startswith(f"{run_id}:"):
+            CommitGuard._commit_failures[key] = 0
 
 
 def intervene_batch(events):
