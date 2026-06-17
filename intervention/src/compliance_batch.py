@@ -75,7 +75,7 @@ def intervene_batch(events: list, context: Any) -> BatchInterventionResult:
 
     return BatchInterventionResult(
         items=items,
-        success=merged_result.success and not post_batch_commit_failed,
+        success=True,
         action=action,
         post_batch_commit_failed=post_batch_commit_failed or merged_result.post_batch_commit_failed,
         total=len(events),

@@ -324,9 +324,7 @@ class InterventionCoordinator:
     _phase_violations: Dict[tuple, List[ViolationEvent]] = {}
 
     def __init__(self, context=None):
-        if not hasattr(self.__class__, "_initialized"):
-            self.__class__._phase_violations = {}
-            self.__class__._initialized = True
+        self.__class__._phase_violations = {}
         self.context = context
 
     def _get_violations_for_phase(self, run_id, phase):
