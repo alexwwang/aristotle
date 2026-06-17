@@ -321,15 +321,19 @@ class KiDocManager:
 
 
 class InterventionCoordinator:
+    _phase_violations: Dict[tuple, List[ViolationEvent]] = {}
+
     def __init__(self, context=None):
-        self._phase_violations: Dict[tuple, List[ViolationEvent]] = {}
+        if not hasattr(self.__class__, "_initialized"):
+            self.__class__._phase_violations = {}
+            self.__class__._initialized = True
         self.context = context
 
     def _get_violations_for_phase(self, run_id, phase):
-        return list(self._phase_violations.get((run_id, phase), []))
+        return list(self.__class__._phase_violations.get((run_id, phase), []))
 
     def _clear_phase_violations(self, run_id, phase):
-        self._phase_violations[(run_id, phase)] = []
+        self.__class__._phase_violations[(run_id, phase)] = []
 
 
 def _get_coordinator(context=None):
@@ -397,7 +401,8 @@ def _handle_merged(events, context):
     events.sort(key=lambda e: VIOLATION_PRIORITY.get(e.violation_type, "P5"))
 
     has_missing_ki_doc = any(e.violation_type == ViolationType.MISSING_KI_DOC for e in events)
-    if has_missing_ki_doc:
+    has_ki_doc_outdated = any(e.violation_type == ViolationType.KI_DOC_OUTDATED for e in events)
+    if has_missing_ki_doc and has_ki_doc_outdated:
         skipped = [e for e in events if e.violation_type in (ViolationType.KI_DOC_OUTDATED, ViolationType.MISSING_KI_ASSESSMENT)]
         active = [e for e in events if e.violation_type not in (ViolationType.KI_DOC_OUTDATED, ViolationType.MISSING_KI_ASSESSMENT)]
     else:
@@ -425,7 +430,8 @@ def _handle_merged(events, context):
             if not post_commit.success:
                 post_batch_commit_failed = True
         else:
-            committed = True
+            committed = False
+            post_batch_commit_failed = True
 
     if isinstance(context, dict):
         run_id = context.get("run_id") or context.get("runId") or ""
