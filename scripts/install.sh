@@ -32,7 +32,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SKILL_SRC="$SCRIPT_DIR"
+SKILL_SRC="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # OpenCode discovers skills via skills.paths in opencode.json (~/.config/opencode/skills/).
 OPENCODE_CONFIG="${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}"
