@@ -114,6 +114,10 @@ class InterventionResult:
 
     violation_code: str = ""
     violation_type: str = ""
+    action: str = ""
+    pipeline_action: Optional[str] = None
+    user_message: str = ""
+    success: bool = False
     target_phase: int = 0
     auto_fix_applied: bool = False
     auto_fix_details: str = ""
