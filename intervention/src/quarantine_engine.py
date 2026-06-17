@@ -148,6 +148,7 @@ class QuarantineEngine:
 
         quarantine_dir = self._quarantine_base / run_id / f"phase{phase}"
         quarantine_dir.mkdir(parents=True, exist_ok=True)
+        self._ensure_gitignore()
 
         # Resolve boundary_commit
         resolved_commit, commit_valid = self._resolve_boundary_commit(boundary_commit)
@@ -781,6 +782,20 @@ class QuarantineEngine:
                 pass
             return False
 
+    def _ensure_gitignore(self):
+        """Ensure local-assets/ is excluded via .git/info/exclude."""
+        exclude_file = Path(self.repo_root) / ".git" / "info" / "exclude"
+        try:
+            existing = exclude_file.read_text() if exclude_file.exists() else ""
+            if "local-assets/" not in existing:
+                exclude_file.parent.mkdir(parents=True, exist_ok=True)
+                with open(exclude_file, "a") as f:
+                    if existing and not existing.endswith("\n"):
+                        f.write("\n")
+                    f.write("local-assets/\n")
+        except OSError:
+            pass
+
     def _git_commit_quarantine(self, elapsed: float) -> tuple:
         """Stage + commit quarantine dir. Returns (success, elapsed)."""
         try:
@@ -836,15 +851,8 @@ class QuarantineEngine:
                     except subprocess.TimeoutExpired:
                         pass
 
-        try:
-            if self._quarantine_base.exists():
-                shutil.rmtree(str(self._quarantine_base))
-        except OSError:
-            pass
-
     def _is_already_quarantined(self, file_path: str, run_id: str) -> bool:
         """Check if file is already quarantined for this run_id (across all phases)."""
-        # If original file still exists at its path, re-quarantine should proceed
         full_path = Path(self.repo_root) / file_path
         if full_path.exists():
             return False
@@ -854,12 +862,10 @@ class QuarantineEngine:
         if not run_base.exists():
             return False
 
-        # Search all phase subdirectories
         for phase_dir in run_base.iterdir():
             if not phase_dir.is_dir() or not phase_dir.name.startswith("phase"):
                 continue
 
-            # Check base metadata + suffixed variants
             base_meta = phase_dir / f"metadata-{base_hash}.json"
             if self._metadata_matches_and_file_exists(base_meta, file_path):
                 return True
@@ -870,6 +876,16 @@ class QuarantineEngine:
                     return True
 
         return False
+
+    def _read_meta_quarantine_path(self, meta_file: Path) -> str:
+        """Read quarantine_path from metadata file. Returns empty string on error."""
+        if not meta_file.exists():
+            return ""
+        try:
+            meta_data = json.loads(meta_file.read_text())
+            return meta_data.get("quarantine_path", "")
+        except (json.JSONDecodeError, KeyError, OSError):
+            return ""
 
     def _metadata_matches_and_file_exists(self, meta_file: Path, original_path: str) -> bool:
         """Check if metadata file matches original_path AND quarantine copy exists."""

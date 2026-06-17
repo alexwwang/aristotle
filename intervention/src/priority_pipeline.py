@@ -11,16 +11,24 @@ _SUSPEND_TRIGGER_TYPES = {"MODIFIED_TEST", "MISSING_TEST"}
 
 class ValidityEliminator:
     def eliminate(self, pending: List[ViolationEvent], applied: ViolationEvent) -> List[ViolationEvent]:
+        return self.eliminate_with_result(pending, applied, None)
+
+    def eliminate_with_result(self, pending: List[ViolationEvent], applied_event: ViolationEvent,
+                              applied_result: Any = None) -> List[ViolationEvent]:
         if not pending:
             return []
 
-        applied_type = applied.violation_type
+        applied_type = applied_event.violation_type
         applied_files = set(
-            applied.affected_file_paths
-            or ([applied.affected_file_path] if applied.affected_file_path else [])
+            applied_event.affected_file_paths
+            or ([applied_event.affected_file_path] if applied_event.affected_file_path else [])
         )
 
         triggers_suspend = applied_type in _SUSPEND_TRIGGER_TYPES
+        if applied_result is not None:
+            pa = getattr(applied_result, "pipeline_action", None)
+            if pa is not None and pa not in ("suspended", "suspend"):
+                triggers_suspend = False
 
         result = []
         for ev in pending:
@@ -59,11 +67,37 @@ class PriorityPipeline:
 
         remaining = deque(ordered)
         results: List[InterventionResult] = []
+        first_event = True
+        suspend_elimination_done = False
         while remaining:
             current = remaining.popleft()
             result = self._dispatch(current)
             results.append(result)
-            remaining = deque(self.eliminator.eliminate(list(remaining), current))
+
+            is_suspend_trigger = current.violation_type in _SUSPEND_TRIGGER_TYPES
+            effective_suspend = (
+                is_suspend_trigger and first_event and not suspend_elimination_done
+            )
+            if effective_suspend:
+                suspend_elimination_done = True
+            first_event = False
+
+            new_remaining = []
+            applied_files = set(
+                current.affected_file_paths
+                or ([current.affected_file_path] if current.affected_file_path else [])
+            )
+            for ev in list(remaining):
+                ev_files = set(
+                    ev.affected_file_paths
+                    or ([ev.affected_file_path] if ev.affected_file_path else [])
+                )
+                if effective_suspend and ev.violation_type in _P2_TYPES:
+                    continue
+                if applied_files and ev_files and applied_files & ev_files:
+                    continue
+                new_remaining.append(ev)
+            remaining = deque(new_remaining)
 
         return results
 
