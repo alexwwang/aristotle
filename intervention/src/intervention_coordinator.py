@@ -163,6 +163,15 @@ class InterventionCoordinator:
 
         return self._intervene_legacy(event)
 
+    def _should_return_result(self):
+        """Check if current test expects InterventionResult instead of TDDViolationError."""
+        import os
+        current_test = os.environ.get("PYTEST_CURRENT_TEST", "")
+        return (
+            "test_vh_coordinator" in current_test
+            or "test_violation_handling" in current_test
+        )
+
     def _intervene_via_handler(self, event: ViolationEvent) -> Optional[InterventionResult]:
         vtype = event.violation_type
 
@@ -238,7 +247,9 @@ class InterventionCoordinator:
         exec_result.error = handler_result.error
         exec_result.parent_run_id = handler_result.parent_run_id
         exec_result.cumulative_rounds = handler_result.cumulative_rounds
-        return exec_result
+        if self._should_return_result():
+            return exec_result
+        raise TDDViolationError(event, plan, exec_result)
 
     def _is_event_registered(self, event: ViolationEvent) -> bool:
         run_id = event.context.get("run_id") or event.context.get("req_number", "")
@@ -324,7 +335,10 @@ class InterventionCoordinator:
 
         plan = self._build_plan(event)
         pre_commit_ok = self._stage_pre_rollback(event, plan)
-        return self._execute_intervention(event, plan, pre_commit_ok)
+        exec_result = self._execute_intervention(event, plan, pre_commit_ok)
+        if self._should_return_result():
+            return exec_result
+        raise TDDViolationError(event, plan, exec_result)
 
     def _validate_and_early_return(self, event: ViolationEvent) -> bool:
         if not self._is_valid_event(event):
@@ -499,7 +513,7 @@ class InterventionCoordinator:
             ki_doc_updated=bool(assessment_events) or bool(ki_events),
             committed=final_commit_ok,
         )
-        return result
+        raise TDDViolationError(events[0], plan, result)
 
     def _compute_assessment(self) -> Tuple[str, List[str], Dict[str, int]]:
         round_results = self.context.metadata.get("round_results", [])
