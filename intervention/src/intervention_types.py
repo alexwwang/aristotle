@@ -113,6 +113,7 @@ class InterventionResult:
     """Final outcome produced after processing a violation through the intervention pipeline."""
 
     violation_code: str = ""
+    violation_type: str = ""
     target_phase: int = 0
     auto_fix_applied: bool = False
     auto_fix_details: str = ""

@@ -1,9 +1,11 @@
 """SignalMapper — maps detection signals to violation types.
 
-Phase 4 TDD Stub: All methods raise NotImplementedError.
+Classifies regular detection signals (→ ViolationType), special detection signals
+(→ SpecialViolationType), and rejects protocol signals (handled by separate dispatch).
 """
 
 from typing import Dict, Any
+
 
 # Regular detection signals → ViolationType
 SIGNAL_TO_TYPE: Dict[str, str] = {
@@ -41,10 +43,31 @@ PROTOCOL_SIGNALS: Dict[str, str] = {
 
 class SignalMapper:
     def classify(self, signal: str) -> str:
-        raise NotImplementedError
+        """Classify a detection signal into a violation type.
+
+        Returns the ViolationType or SpecialViolationType string.
+        Raises ValueError for unknown signals (including protocol signals,
+        which must be intercepted before this method is called).
+        """
+        if signal in SIGNAL_TO_TYPE:
+            return SIGNAL_TO_TYPE[signal]
+        if signal in SPECIAL_SIGNAL_TO_TYPE:
+            return SPECIAL_SIGNAL_TO_TYPE[signal]
+        raise ValueError(f"Unknown detection signal: {signal}")
 
     def resolve_run_id(self, context: Dict[str, Any]) -> str:
-        raise NotImplementedError
+        """Resolve run_id from context, accepting snake_case or camelCase."""
+        run_id = context.get('run_id') or context.get('runId') or context.get('req_number')
+        if not run_id:
+            raise ValueError("Missing run_id/runId/req_number in context")
+        return run_id
 
     def validate_context(self, context: Dict[str, Any]) -> None:
-        raise NotImplementedError
+        """Validate context dict has required phase field in valid range (1-8)."""
+        phase = context.get('phase')
+        if phase is None:
+            raise ValueError("Missing context.phase")
+        if not isinstance(phase, int) or isinstance(phase, bool):
+            raise ValueError(f"Invalid context.phase type: {type(phase).__name__}")
+        if phase < 1 or phase > 8:
+            raise ValueError(f"Invalid context.phase value: {phase} (valid range: 1-8)")
