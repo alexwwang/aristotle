@@ -165,6 +165,17 @@ class InterventionCoordinator:
 
     def _intervene_via_handler(self, event: ViolationEvent) -> Optional[InterventionResult]:
         vtype = event.violation_type
+
+        # UNFIXED_ISSUES handler requires signal; default to violation-gate-block
+        # when intervene() is called directly without one (e.g. from watchdog).
+        if vtype == "UNFIXED_ISSUES" and not event.context.get("signal"):
+            event.context["signal"] = "violation-gate-block"
+
+        # INVALID_REVIEW_PROMPT must go through legacy path which calls
+        # prompt_validator; the handler does not validate.
+        if vtype == "INVALID_REVIEW_PROMPT":
+            return None
+
         handler_method = None
         if vtype == "MODIFIED_TEST":
             handler_method = self._handlers.handle_modified_test
@@ -180,8 +191,6 @@ class InterventionCoordinator:
             handler_method = self._handlers.handle_insufficient_review
         elif vtype == "UNFIXED_ISSUES":
             handler_method = self._handlers.handle_unfixed_issues
-        elif vtype == "INVALID_REVIEW_PROMPT":
-            handler_method = self._handlers.handle_invalid_review_prompt
         elif vtype == "UNCOMMITTED_PHASE":
             handler_method = self._handlers.handle_compliance
 
@@ -192,23 +201,33 @@ class InterventionCoordinator:
 
         try:
             if vtype == "UNCOMMITTED_PHASE":
-                result = handler_method([event], self.context)
+                handler_result = handler_method([event], self.context)
             else:
-                result = handler_method(event, self.context)
-            if result is not None:
-                if not getattr(result, "violation_code", ""):
-                    result.violation_code = vtype
-                if not getattr(result, "violation_type", ""):
-                    result.violation_type = vtype
-                if is_registered and result.success and result.action not in ("blocked", "paused", "spawn_subagent"):
-                    event.rectified = True
-                return result
+                handler_result = handler_method(event, self.context)
         except ValueError:
             raise
         except Exception as e:
             logger.warning("handler failed: %s", e)
+            return None
 
-        return None
+        if handler_result is None:
+            return None
+
+        if not getattr(handler_result, "violation_code", ""):
+            handler_result.violation_code = vtype
+        if not getattr(handler_result, "violation_type", ""):
+            handler_result.violation_type = vtype
+
+        if is_registered and handler_result.success and handler_result.action not in (
+            "blocked",
+            "paused",
+            "spawn_subagent",
+        ):
+            event.rectified = True
+
+        plan = self._build_plan(event)
+        pre_commit_ok = self._stage_pre_rollback(event, plan)
+        return self._execute_intervention(event, plan, pre_commit_ok)
 
     def _is_event_registered(self, event: ViolationEvent) -> bool:
         run_id = event.context.get("run_id") or event.context.get("req_number", "")
