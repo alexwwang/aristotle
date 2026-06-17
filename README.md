@@ -4,7 +4,7 @@
 [![Release](https://img.shields.io/github/v/release/alexwwang/aristotle?include_prereleases)](https://github.com/alexwwang/aristotle/releases)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
-[![Tests](https://img.shields.io/badge/tests-1008%20total-brightgreen)](./docs/testing.md)
+[![Tests](https://img.shields.io/badge/tests-2840%20total-brightgreen)](./docs/testing.md)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19660780.svg)](https://doi.org/10.5281/zenodo.19660780)
 
 English | [中文](./README.zh-CN.md)
@@ -28,9 +28,9 @@ Activate with `/aristotle` to spawn an isolated subagent that analyzes your sess
 - **Two-Tier Output** — User-level rules (`~/.config/opencode/aristotle-learnings.md`) apply globally; project-level rules (`.opencode/aristotle-project-learnings.md`) apply per-project
 - **Auto-Suggestion** — Skill description includes error-correction keywords; when detected in conversation, the AI can suggest running `/aristotle` (automatic, no configuration needed)
 - **Plugin** — Assembles the Core library and Aristotle role into an OpenCode plugin entry point (`plugin/index.ts`). Provides async polling-based reflection, idle detection, and `/undo` support.
-- **Dual-Package Architecture** — Phase 0 extracted a shared `packages/core/` library (logger, config, workflow store, plugin registration) and a role-specific `packages/aristotle/` package (idle handler, snapshot extractor). The plugin composes both via `assemblePlugin()`, enabling reuse across other OpenCode skills without coupling to Aristotle-specific logic.
+- **Dual-Package Architecture** — Phase 0 extracted a shared `packages/core/` library (logger, config, workflow store, plugin registration) and a role-specific `packages/aristotle/` package (idle handler, snapshot extractor). The plugin composes both via `assemblePlugin()`, enabling reuse across other OpenCode skills without coupling to Aristotle-specific logic. The Watchdog-Intervention Bridge adds `packages/watchdog/` (TypeScript TDD enforcement) paired with `intervention/` (Python MCP-internal violation response).
 - **State-Machine-Guarded TDD Pipeline** — When paired with the [tdd-pipeline skill](https://github.com/opencode-ai/opencode) (≥ v0.17.0), Aristotle's watchdog state machine enforces Red-Green-Refactor discipline across multi-phase project delivery. The pipeline covers Product Design → Technical Solution → Test Plan → Test Code → Business Code → Pre-Release Testing → System Quality Audit → Functional Acceptance. Given clear requirements, it can produce high-quality, fully-tested deliverables with minimal human intervention — the state machine gates each phase transition, preventing quality regressions.
-- **Watchdog Intervention System** — Detects 13 TDD violation types (process, behavioral, regression, compliance) and executes SYNC-mode blocking interventions with automatic rollback, git commit safety, and KI document tracking. Includes bilingual (EN/ZH) Ralph Loop prompt validation.
+- **Watchdog-Intervention Bridge** — Connects a TypeScript Watchdog (`packages/watchdog/`) that intercepts LLM tool calls via `onToolBefore`/`onIdle` hooks with a Python Intervention engine (`intervention/`) that enforces violation responses via MCP server tools. The Bridge adds 4 capabilities: signal translation (21 detection signal types), pipeline state machine (suspended-stack with MAX_DEPTH=10 nesting), MCP prompt assembly (T-1..T-10 + T-7b subagent templates with Dual-Pass Review), and quarantine engine (file-level quarantine with git-backed metadata). Detects 14 violation types (process, behavioral, regression, compliance) across 53 acceptance criteria. Includes bilingual (EN/ZH) Ralph Loop prompt validation, GPAV (Guarded Pipeline Authority Verification), RPS (Review Prompt Scanner) with 12 prohibited patterns, and Dual-Pass Review (Recall → Fact-Gather → Precision → Eval-Fix).
 
 ## Installation
 
@@ -482,7 +482,8 @@ The full protocol specification — state machine, frontmatter schema, Δ decisi
 | Suite | Command | Count |
 |-------|---------|-------|
 | Static | `bash scripts/test.sh` | 103 |
-| Unit/Integration (Python) | `uv run pytest tests/ -v` | 405 |
+| Unit/Integration (Python — MCP + Intervention) | `uv run pytest tests/ intervention/tests/ -v` | 979 |
+| Watchdog Package (TypeScript) | `cd packages/watchdog && bunx vitest run` | 1258 |
 | Core Package (TypeScript) | `cd packages/core && bunx vitest run` | 150 |
 | Aristotle Package (TypeScript) | `cd packages/reflection && bunx vitest run` | 115 |
 | Legacy Bridge (archived) (TypeScript) | `cd plugins/aristotle-bridge && bunx vitest run` | 162 |
@@ -506,6 +507,7 @@ The full protocol specification — state machine, frontmatter schema, Δ decisi
 | **v1.2.0 Review UX** | **382** | **103** | — | **9 + 162 vitest** |
 | **v1.3.0 Per-Rec Isolation** | **395** | **103** | — | **80 pytest + 162 vitest** |
 | **Phase 0 Core Extraction** | **405** | **103** | **150 core + 115 aristotle** | **9 + 162 bridge + 64 regression** |
+| **Watchdog-Intervention Bridge** | **979** | **103** | **1258 watchdog + 150 core + 115 aristotle + 162 bridge** | **9 + 64 regression** |
 
 ## Project Structure
 
@@ -547,27 +549,46 @@ The full protocol specification — state machine, frontmatter schema, Δ decisi
 │   ├── _orch_event.py    # orchestrate_on_event tool
 │   └── _orch_review.py   # orchestrate_review_action tool
 │   └── tests/              # MCP server unit tests
-├── intervention/           # Watchdog Intervention System v0.1.0 (243 tests)
+├── intervention/           # Watchdog Intervention System v0.2.0 (574 tests)
 │   ├── src/
-│   │   ├── intervention_coordinator.py  # Central hub: intervene(), batch, assessment
-│   │   ├── intervention_types.py        # 13 dataclasses + VIOLATION_PRIORITY
-│   │   ├── watchdog.py                  # ViolationFilter (Phase 4-5)
+│   │   ├── intervention_coordinator.py  # Central hub: intervene(), batch, assessment, signal dispatch
+│   │   ├── intervention_types.py        # Dataclasses, VIOLATION_PRIORITY, PipelineContext
+│   │   ├── handlers.py                  # 12 violation-type handlers (skip_red_phase, modified_test, etc.)
+│   │   ├── signal_mapper.py             # 21 detection signal → violation type mapping
+│   │   ├── priority_pipeline.py         # Priority-sorted violation processing + validity elimination
+│   │   ├── special_handler.py           # FILE_SPLIT_NEEDED, PROMPT_INJECTION_BLOCKED, PATTERN_CYCLE
+│   │   ├── compliance.py                # Auto-commit, KI doc lifecycle, assessment, CommitGuard
+│   │   ├── compliance_batch.py          # Batch compliance processing with short-circuit logic
+│   │   ├── quarantine_engine.py         # File-level quarantine with git-backed metadata
+│   │   ├── ki_doc_manager.py            # KI document CRUD + assessment computation
 │   │   ├── rollback_engine.py           # Git-based rollback
-│   │   ├── ki_doc_manager.py            # KI document CRUD
-│   │   ├── prompt_validator.py          # Bilingual forbidden pattern detection
-│   │   ├── rule_generator.py            # Violation-type-specific templates
+│   │   ├── commit_guard.py              # Phase/loop auto-commit with failure tracking
 │   │   ├── committer.py                 # Frontmatter schema validation
-│   │   ├── commit_guard.py              # Phase/loop auto-commit
+│   │   ├── prompt_validator.py          # Bilingual forbidden pattern detection (FP-1..FP-7)
+│   │   ├── rule_generator.py            # Violation-type-specific instruction templates
+│   │   ├── rps_scanner.py               # Review Prompt Scanner — 12 prohibited patterns
+│   │   ├── gpav_validator.py            # GPAV submission validation (5 ordered steps)
+│   │   ├── proposal_recorder.py         # GPAV proposal recording + location parsing
+│   │   ├── regression_counter.py        # Per-pipeline regression tracking
+│   │   ├── pattern_cycle_detector.py    # Sliding-window cycle detection (3-in-10)
+│   │   ├── main_agent_tracker.py        # Consecutive main-agent failure tracking
+│   │   ├── pending_subagent_tracker.py  # Pending subagent lifecycle (spawned/done/failed)
+│   │   ├── subagent_retry_handler.py    # Retry chain (1+3) + degradation cascade
+│   │   ├── checkpoint_bounded_counter.py # Bounded counter for spreading violations
+│   │   ├── watchdog.py                  # ViolationFilter (Phase 4-5 behavioral checks)
 │   │   └── reflector.py                 # Auto-reflection stub
-│   ├── tests/                           # 243 pytest cases
+│   ├── tests/                           # 574 pytest cases
 │   └── docs/                            # Requirements, test plans, KI docs
 ├── packages/
 │   ├── core/              # Core library — shared mechanism (logger, config, workflow-store, executor, plugin registration)
 │   │   ├── src/           # 10 modules
 │   │   └── test/          # 150 vitest cases
-│   └── aristotle/         # Aristotle role — idle-handler, tools, snapshot-extractor, config
-│       ├── src/           # 6 modules
-│       └── test/          # 115 vitest cases
+│   ├── aristotle/         # Aristotle role — idle-handler, tools, snapshot-extractor, config
+│   │   ├── src/           # 6 modules
+│   │   └── test/          # 115 vitest cases
+│   └── watchdog/          # Watchdog-Intervention Bridge (TypeScript) — TDD pipeline enforcement
+│       ├── src/           # 42 modules: pipeline-store, checkpoint, interceptor, observer, reviewer, dual-pass
+│       └── test/          # 72 test files, 1258 vitest cases
 ├── plugin/
 │   ├── index.ts           # Plugin entry — assemblePlugin + createAristotleRole
 │   └── dist/              # Built output (deployed to opencode plugin path)
@@ -586,9 +607,7 @@ The full protocol specification — state machine, frontmatter schema, Δ decisi
 │   ├── regression/
 │   │   └── regression_b1_checks.sh  # Deploy verification (64 assertions)
 │   └── test_e2e_bridge_integration.py  # Bridge↔MCP integration (9 pytest)
-└── intervention/
-    ├── src/                           # Core intervention library
-    └── tests/                         # 243 pytest cases
+└── intervention/                        # (detailed above)
 ```
 
 ## Architecture: Progressive Disclosure
@@ -614,6 +633,7 @@ PRs welcome! Here are areas that need improvement:
 - **Command parameter parsing** — `last`, `session ses_xxx`, `recent N`, and `--focus <hint>` are documented but not yet implemented. Currently `/aristotle` always reflects on the current session with `focus: "last"`. See `design_plan/pending-params-implementation.md` for the implementation plan.
 - **Reflector model configuration** — The Reflector currently uses the host's default model. Adding a `reflector_model` config option in `aristotle-config.json` (with the same priority chain as `prompt_mode`) would allow users to optimize for cost or quality.
 - **Subagent `session_read` access** — The Reflector subagent previously required `session_read()` to read session content, which some model/provider combinations don't expose. **Mitigated by Bridge Plugin**: the PRE-RESOLVE snapshot extractor captures error context in the main session (which has access) and passes it to the Reflector via `session_file`. Full graceful degradation (fallback to `session_list` + `session_info`) remains a nice-to-have for non-Bridge paths.
+- **Intervention module dual type systems** — `compliance.py` and `intervention_types.py` define parallel type hierarchies (ViolationEvent, InterventionResult, KiDocManager, VIOLATION_PRIORITY) that should be consolidated into a single canonical source. Currently functionally isolated but creates maintenance burden. See Phase 7 audit findings 7B-1 through 7B-9.
 
 ### Nice to Have
 

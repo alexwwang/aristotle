@@ -4,7 +4,7 @@
 [![Release](https://img.shields.io/github/v/release/alexwwang/aristotle?include_prereleases)](https://github.com/alexwwang/aristotle/releases)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
-[![Tests](https://img.shields.io/badge/tests-1008%20total-brightgreen)](./docs/testing.zh-CN.md)
+[![Tests](https://img.shields.io/badge/tests-2840%20total-brightgreen)](./docs/testing.zh-CN.md)
 
 **[English](./README.md)** | 中文
 
@@ -27,8 +27,9 @@
 - **双层输出** — 用户级规则（`~/.config/opencode/aristotle-learnings.md`）全局生效；项目级规则（`.opencode/aristotle-project-learnings.md`）按项目生效
 - **自动建议** — 技能描述中包含错误纠正关键词；当对话中出现这些模式时，AI 会自动建议运行 `/aristotle`（无需配置）
 - **Plugin** — 将 Core 库和 Aristotle 角色组装为 OpenCode 插件入口（`plugin/index.ts`）。提供异步轮询式反思、空闲检测和 `/undo` 支持。
-- **双包架构** — Phase 0 抽取了共享的 `packages/core/` 库（logger、config、workflow store、plugin registration）和角色专用的 `packages/aristotle/` 包（idle handler、snapshot extractor）。插件通过 `assemblePlugin()` 组合两者，使其他 OpenCode 技能可复用核心机制而不耦合 Aristotle 特有逻辑。
-- **状态机守护的 TDD 管线** — 搭配 [tdd-pipeline 技能](https://github.com/opencode-ai/opencode)，Aristotle 的 watchdog 状态机在整个多阶段项目交付中强制执行 Red-Green-Refactor 纪律。管线覆盖产品设计 → 技术方案 → 测试计划 → 测试代码 → 业务代码 → 预发布测试 → 系统质量审计。给定清晰需求后，可在极少人工干预的前提下产出高质量、全测试覆盖的交付物——状态机在每个阶段转换时设卡，防止质量回退。
+- **双包架构** — Phase 0 抽取了共享的 `packages/core/` 库（logger、config、workflow store、plugin registration）和角色专用的 `packages/aristotle/` 包（idle handler、snapshot extractor）。插件通过 `assemblePlugin()` 组合两者，使其他 OpenCode 技能可复用核心机制而不耦合 Aristotle 特有逻辑。Watchdog-Intervention Bridge 新增 `packages/watchdog/`（TypeScript TDD 执行层）与 `intervention/`（Python MCP 内部违规响应层）配对。
+- **状态机守护的 TDD 管线** — 搭配 [tdd-pipeline 技能](https://github.com/opencode-ai/opencode)，Aristotle 的 watchdog 状态机在整个多阶段项目交付中强制执行 Red-Green-Refactor 纪律。管线覆盖产品设计 → 技术方案 → 测试计划 → 测试代码 → 业务代码 → 预发布测试 → 系统质量审计 → 功能验收。给定清晰需求后，可在极少人工干预的前提下产出高质量、全测试覆盖的交付物——状态机在每个阶段转换时设卡，防止质量回退。
+- **Watchdog-Intervention Bridge** — 连接 TypeScript Watchdog（`packages/watchdog/`，通过 `onToolBefore`/`onIdle` hook 拦截 LLM 工具调用）与 Python Intervention 引擎（`intervention/`，通过 MCP server 工具执行违规响应）。Bridge 新增 4 大能力：信号翻译（21 种检测信号类型）、管线状态机（挂起栈 + MAX_DEPTH=10 嵌套深度）、MCP prompt 组装（T-1..T-10 + T-7b 子代理模板 + Dual-Pass Review）、隔离引擎（文件级隔离 + git 元数据）。检测 14 种违规类型（流程、行为、回归、合规），覆盖 53 条验收标准。包含双语（中/英）Ralph Loop prompt 校验、GPAV（受管管线权威验证）、RPS（审查 prompt 扫描器，12 种禁止模式）和 Dual-Pass Review（Recall → Fact-Gather → Precision → Eval-Fix）。
 
 ## 安装
 
@@ -462,7 +463,8 @@ GEAR 协议操作映射到 Aristotle 的 MCP 工具：`produce` → `write_rule`
 | 套件 | 命令 | 数量 |
 |------|------|------|
 | 静态测试 | `bash scripts/test.sh` | 103 |
-| 单元/集成测试 (Python) | `uv run pytest tests/ -v` | 405 |
+| 单元/集成测试 (Python — MCP + Intervention) | `uv run pytest tests/ intervention/tests/ -v` | 979 |
+| Watchdog Package (TypeScript) | `cd packages/watchdog && bunx vitest run` | 1258 |
 | Core Package (TypeScript) | `cd packages/core && bunx vitest run` | 150 |
 | Aristotle Package (TypeScript) | `cd packages/reflection && bunx vitest run` | 115 |
 | Legacy Bridge（已归档）(TypeScript) | `cd plugins/aristotle-bridge && bunx vitest run` | 162 |
@@ -486,6 +488,7 @@ GEAR 协议操作映射到 Aristotle 的 MCP 工具：`produce` → `write_rule`
 | **v1.2.0 Review 流程增强** | **382** | **103** | — | **9 + 162 vitest** |
 | **v1.3.0 Per-Rec Isolation** | **395** | **103** | — | **80 pytest + 162 vitest** |
 | **Phase 0 Core Extraction** | **405** | **103** | **150 core + 115 aristotle** | **9 + 162 bridge + 64 regression** |
+| **Watchdog-Intervention Bridge** | **979** | **103** | **1258 watchdog + 150 core + 115 aristotle + 162 bridge** | **9 + 64 regression** |
 
 ## 项目结构
 
@@ -531,9 +534,12 @@ GEAR 协议操作映射到 Aristotle 的 MCP 工具：`produce` → `write_rule`
 │   ├── core/             # 核心库 — 共享机制（logger、config、workflow-store、executor、plugin registration）
 │   │   ├── src/          # 10 个模块
 │   │   └── test/         # 150 vitest 用例
-│   └── aristotle/        # Aristotle 角色 — idle-handler、tools、snapshot-extractor、config
-│       ├── src/          # 6 个模块
-│       └── test/         # 115 vitest 用例
+│   ├── aristotle/        # Aristotle 角色 — idle-handler、tools、snapshot-extractor、config
+│   │   ├── src/          # 6 个模块
+│   │   └── test/         # 115 vitest 用例
+│   └── watchdog/         # Watchdog-Intervention Bridge（TypeScript）— TDD 管线执行层
+│       ├── src/          # 42 个模块：pipeline-store、checkpoint、interceptor、observer、reviewer、dual-pass
+│       └── test/         # 72 个测试文件，1258 vitest 用例
 ├── plugin/
 │   ├── index.ts          # 插件入口 — assemblePlugin + createAristotleRole
 │   └── dist/             # 构建输出（部署到 opencode 插件路径）
@@ -550,9 +556,36 @@ GEAR 协议操作映射到 Aristotle 的 MCP 工具：`produce` → `write_rule`
 │   ├── regression/
 │   │   └── regression_b1_checks.sh  # 部署验证（64 断言）
 │   └── test_e2e_bridge_integration.py  # Bridge↔MCP 集成测试（9 pytest）
-└── intervention/                    # Watchdog Intervention System v0.1.0
-    ├── src/                           # 核心干预库
-    └── tests/                         # 243 pytest 用例
+├── intervention/           # Watchdog 干预系统 v0.2.0（574 pytest 用例）
+│   ├── src/
+│   │   ├── intervention_coordinator.py  # 中枢：intervene()、批量处理、评估、信号分发
+│   │   ├── intervention_types.py        # 数据类、VIOLATION_PRIORITY、PipelineContext
+│   │   ├── handlers.py                  # 12 个违规类型处理器（skip_red_phase、modified_test 等）
+│   │   ├── signal_mapper.py             # 21 种检测信号 → 违规类型映射
+│   │   ├── priority_pipeline.py         # 优先级排序的违规处理 + 有效性消除
+│   │   ├── special_handler.py           # FILE_SPLIT_NEEDED、PROMPT_INJECTION_BLOCKED、PATTERN_CYCLE
+│   │   ├── compliance.py                # 自动提交、KI 文档生命周期、评估、CommitGuard
+│   │   ├── compliance_batch.py          # 批量合规处理（含短路逻辑）
+│   │   ├── quarantine_engine.py         # 文件级隔离（git 元数据）
+│   │   ├── ki_doc_manager.py            # KI 文档 CRUD + 评估计算
+│   │   ├── rollback_engine.py           # 基于 git 的回滚
+│   │   ├── commit_guard.py              # 阶段/循环自动提交 + 失败追踪
+│   │   ├── committer.py                 # Frontmatter schema 校验
+│   │   ├── prompt_validator.py          # 双语禁止模式检测（FP-1..FP-7）
+│   │   ├── rule_generator.py            # 违规类型专属指令模板
+│   │   ├── rps_scanner.py               # 审查 prompt 扫描器 — 12 种禁止模式
+│   │   ├── gpav_validator.py            # GPAV 提交校验（5 步有序校验）
+│   │   ├── proposal_recorder.py         # GPAV 提议记录 + 位置解析
+│   │   ├── regression_counter.py        # 每管线回归追踪
+│   │   ├── pattern_cycle_detector.py    # 滑动窗口循环检测（3-in-10）
+│   │   ├── main_agent_tracker.py        # 连续主代理失败追踪
+│   │   ├── pending_subagent_tracker.py  # 待处理子代理生命周期（spawned/done/failed）
+│   │   ├── subagent_retry_handler.py    # 重试链（1+3）+ 级联降级
+│   │   ├── checkpoint_bounded_counter.py # 扩散违规的有界计数器
+│   │   ├── watchdog.py                  # ViolationFilter（Phase 4-5 行为检查）
+│   │   └── reflector.py                 # 自动反思桩
+│   ├── tests/                           # 574 pytest 用例
+│   └── docs/                            # 需求、测试计划、KI 文档
 ```
 
 ## 架构：渐进披露
