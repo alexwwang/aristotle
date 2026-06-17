@@ -131,6 +131,16 @@ _PLAN_MAP = {
 }
 
 
+from handlers import Handlers as _Handlers
+from signal_mapper import (
+    SignalMapper,
+    SIGNAL_TO_TYPE as _SIGNAL_TO_TYPE,
+    SPECIAL_SIGNAL_TO_TYPE as _SPECIAL_SIGNAL_TO_TYPE,
+    PROTOCOL_SIGNALS as _PROTOCOL_SIGNALS,
+)
+from special_handler import SpecialHandler as _SpecialHandler
+
+
 class InterventionCoordinator:
     def __init__(self, context: PipelineContext) -> None:
         self.context = context
@@ -138,8 +148,128 @@ class InterventionCoordinator:
         self.rollback_engine = RollbackEngine()
         self.ki_doc = KiDocManager(context.ki_doc_path)
         self.commit_guard = CommitGuard()
+        self._handlers = _Handlers()
+        self._special_handler = _SpecialHandler()
+        self._signal_mapper = SignalMapper()
+        self._phase_violations: Dict[Tuple[str, int], List[ViolationEvent]] = {}
 
-    def intervene(self, event: ViolationEvent) -> None:
+    def intervene(self, event: ViolationEvent) -> Optional[InterventionResult]:
+        if self._validate_and_early_return(event):
+            return None
+
+        if event.violation_type == "INVALID_REVIEW_PROMPT":
+            return self._intervene_via_handler(event)
+
+        if event.violation_type == "KI_DOC_OUTDATED":
+            try:
+                if self.ki_doc.ensure_updated(event.timestamp):
+                    return None
+            except (IOError, OSError) as e:
+                logger.warning("ensure_updated failed, falling through to violation path: %s", e)
+
+        return self._intervene_legacy(event)
+
+    def _intervene_via_handler(self, event: ViolationEvent) -> InterventionResult:
+        vtype = event.violation_type
+        handler_method = None
+        if vtype == "MODIFIED_TEST":
+            handler_method = self._handlers.handle_modified_test
+        elif vtype == "MISSING_TEST":
+            handler_method = self._handlers.handle_missing_test
+        elif vtype == "REGRESSION":
+            handler_method = self._handlers.handle_regression
+        elif vtype == "SKIP_RED_PHASE":
+            handler_method = self._handlers.handle_skip_red_phase
+        elif vtype == "SKIP_REVIEW":
+            handler_method = self._handlers.handle_skip_review
+        elif vtype == "INSUFFICIENT_REVIEW":
+            handler_method = self._handlers.handle_insufficient_review
+        elif vtype == "UNFIXED_ISSUES":
+            handler_method = self._handlers.handle_unfixed_issues
+        elif vtype == "INVALID_REVIEW_PROMPT":
+            handler_method = self._handlers.handle_invalid_review_prompt
+        elif vtype in ("UNCOMMITTED_PHASE", "MISSING_KI_DOC", "KI_DOC_OUTDATED",
+                       "MISSING_KI_ASSESSMENT", "UNCOMMITTED_REVIEW"):
+            return self._intervene_legacy(event)
+
+        if handler_method is None:
+            return self._intervene_legacy(event)
+
+        try:
+            result = handler_method(event, self.context)
+            if result is not None:
+                result.violation_code = result.violation_code or vtype
+                result.violation_type = result.violation_type or vtype
+                self._register_phase_violation(event)
+                if result.success and result.action not in ("blocked", "paused", "spawn_subagent"):
+                    event.rectified = True
+                return result
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.warning("handler failed: %s", e)
+
+        return self._intervene_legacy(event)
+
+    def _register_phase_violation(self, event: ViolationEvent) -> None:
+        run_id = event.context.get("run_id") or event.context.get("req_number", "")
+        phase = event.context.get("phase", self.context.current_phase)
+        key = (run_id, phase)
+        if key not in self._phase_violations:
+            self._phase_violations[key] = []
+        if not any(e is event for e in self._phase_violations[key]):
+            self._phase_violations[key].append(event)
+
+    def intervene_from_signal(self, signal: str, context: dict) -> InterventionResult:
+        if signal in _PROTOCOL_SIGNALS:
+            return self._handle_protocol_signal(signal, context)
+
+        if signal in _SIGNAL_TO_TYPE:
+            vtype = _SIGNAL_TO_TYPE[signal]
+            event = self._build_event_from_signal(vtype, context, signal)
+            result = self.intervene(event)
+            if result is None:
+                result = InterventionResult(violation_code=vtype, violation_type=vtype)
+            return result
+
+        if signal in _SPECIAL_SIGNAL_TO_TYPE:
+            special_type = _SPECIAL_SIGNAL_TO_TYPE[signal]
+            special_result = self._special_handler.handle_special(special_type, context)
+            return InterventionResult(
+                violation_code=special_type,
+                violation_type=special_type,
+                action=getattr(special_result, "action", ""),
+                success=getattr(special_result, "success", True),
+            )
+
+        raise ValueError(f"Unknown detection signal: {signal}")
+
+    def _build_event_from_signal(self, vtype: str, context: dict, signal: str = None) -> ViolationEvent:
+        run_id = context.get("run_id") or context.get("runId") or context.get("req_number", "")
+        phase = context.get("phase", self.context.current_phase)
+        files = context.get("files", [])
+        event = ViolationEvent(
+            violation_type=vtype,
+            affected_file_path=files[0] if files else "",
+            timestamp=__import__("datetime").datetime.now().isoformat(),
+            context={**context, "phase": phase, "signal": signal} if signal else {**context, "phase": phase},
+            affected_file_paths=files,
+            rectified=False,
+        )
+        return event
+
+    def _handle_protocol_signal(self, signal: str, context: dict) -> InterventionResult:
+        handler_name = _PROTOCOL_SIGNALS[signal]
+        pseudo_type = handler_name.replace("_handle_", "").upper()
+        return InterventionResult(
+            violation_code=pseudo_type,
+            violation_type=pseudo_type,
+            action="recorded",
+            success=True,
+            user_message=f"Protocol signal {signal} processed.",
+        )
+
+    def _intervene_legacy(self, event: ViolationEvent) -> Optional[InterventionResult]:
         if self._validate_and_early_return(event):
             return None
 
@@ -156,7 +286,7 @@ class InterventionCoordinator:
 
         plan = self._build_plan(event)
         pre_commit_ok = self._stage_pre_rollback(event, plan)
-        self._execute_intervention(event, plan, pre_commit_ok)
+        return self._execute_intervention(event, plan, pre_commit_ok)
 
     def _validate_and_early_return(self, event: ViolationEvent) -> bool:
         if not self._is_valid_event(event):
@@ -214,7 +344,7 @@ class InterventionCoordinator:
             pre_commit_ok = pre_commit_result.success if pre_commit_result else True
         return pre_commit_ok
 
-    def _execute_intervention(self, event: ViolationEvent, plan: InterventionPlan, pre_commit_ok: bool) -> None:
+    def _execute_intervention(self, event: ViolationEvent, plan: InterventionPlan, pre_commit_ok: bool) -> InterventionResult:
         rollback_result = None
         if plan.auto_fix and plan.needs_rollback:
             rollback_result = self.rollback_engine.rollback(event, plan, self.context)
@@ -227,6 +357,7 @@ class InterventionCoordinator:
 
         result = InterventionResult(
             violation_code=event.violation_type,
+            violation_type=event.violation_type,
             target_phase=plan.target_phase,
             auto_fix_applied=rollback_result.success if rollback_result else False,
             auto_fix_details=rollback_result.action if rollback_result else "",
