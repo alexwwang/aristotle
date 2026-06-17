@@ -172,7 +172,7 @@ class CommitGuard:
                 return CommitResult(success=False, committed=False)
             else:
                 self.__class__._commit_failures[key] = 0
-                return CommitResult(success=True, committed=True, reason="clean_tree")
+                return CommitResult(success=True, committed=False, reason="clean_tree")
 
         msg = self._build_message(phase=phase, run_id=run_id, review_round=review_round)
 
@@ -463,7 +463,7 @@ def _handle_merged(events, context):
             phase = context.get("phase", 4) if isinstance(context, dict) else 4
             guard = _get_guard(context)
             post_commit = guard.ensure_committed(phase=phase, run_id=run_id)
-            committed = post_commit.success and post_commit.committed
+            committed = post_commit.success
             if not post_commit.success:
                 post_batch_commit_failed = True
         else:
