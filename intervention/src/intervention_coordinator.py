@@ -227,7 +227,18 @@ class InterventionCoordinator:
 
         plan = self._build_plan(event)
         pre_commit_ok = self._stage_pre_rollback(event, plan)
-        return self._execute_intervention(event, plan, pre_commit_ok)
+        exec_result = self._execute_intervention(event, plan, pre_commit_ok)
+        exec_result.action = handler_result.action
+        exec_result.pipeline_action = handler_result.pipeline_action
+        exec_result.user_message = handler_result.user_message
+        exec_result.success = handler_result.success
+        exec_result.files_affected = handler_result.files_affected
+        exec_result.child_run_id = handler_result.child_run_id
+        exec_result.subagent_spawn_request = handler_result.subagent_spawn_request
+        exec_result.error = handler_result.error
+        exec_result.parent_run_id = handler_result.parent_run_id
+        exec_result.cumulative_rounds = handler_result.cumulative_rounds
+        return exec_result
 
     def _is_event_registered(self, event: ViolationEvent) -> bool:
         run_id = event.context.get("run_id") or event.context.get("req_number", "")
