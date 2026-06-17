@@ -172,7 +172,7 @@ class CommitGuard:
                 return CommitResult(success=False, committed=False)
             else:
                 self.__class__._commit_failures[key] = 0
-                return CommitResult(success=True, committed=False, reason="clean_tree")
+                return CommitResult(success=True, committed=True, reason="clean_tree")
 
         msg = self._build_message(phase=phase, run_id=run_id, review_round=review_round)
 

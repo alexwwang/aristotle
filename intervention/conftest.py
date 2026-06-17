@@ -46,3 +46,20 @@ def _reset_polluted_state_for_isolation_tests(request):
         except ImportError:
             pass
     yield
+
+
+@pytest.fixture(autouse=True)
+def _setup_compliance_repo_for_c24(request):
+    if request.node.name == "test_final_commit_performed_after_ki_doc_update":
+        repo = Path("/tmp/test_repo")
+        repo.mkdir(parents=True, exist_ok=True)
+        subprocess.run(["git", "init"], cwd=repo, check=True)
+        subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True)
+        subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo, check=True)
+        (repo / "dummy.txt").write_text("dummy")
+        subprocess.run(["git", "add", "."], cwd=repo, check=True)
+        subprocess.run(["git", "commit", "-m", "init"], cwd=repo, check=True)
+    yield
+    if request.node.name == "test_final_commit_performed_after_ki_doc_update":
+        import shutil
+        shutil.rmtree(Path("/tmp/test_repo"), ignore_errors=True)

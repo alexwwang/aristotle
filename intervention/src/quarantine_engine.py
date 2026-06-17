@@ -649,7 +649,6 @@ class QuarantineEngine:
                 return boundary_commit, False
 
     def _resolve_quarantine_path(self, quarantine_dir: Path, original_path: str) -> tuple:
-        """Build quarantine file path, handle conflicts. Returns (path, meta_filename) or (None, None)."""
         basename = Path(original_path).name
         target = quarantine_dir / basename
 
