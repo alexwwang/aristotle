@@ -300,8 +300,9 @@ class InterventionCoordinator:
             return None
 
         if self._needs_prompt_validation(event):
-            if self._handle_prompt_violation(event):
-                return None
+            prompt_result = self._handle_prompt_violation(event)
+            if prompt_result is not None:
+                return prompt_result
 
         if event.violation_type == "KI_DOC_OUTDATED":
             try:
@@ -328,11 +329,11 @@ class InterventionCoordinator:
                     return True
         return False
 
-    def _handle_prompt_violation(self, event: ViolationEvent) -> bool:
+    def _handle_prompt_violation(self, event: ViolationEvent) -> Optional[InterventionResult]:
         prompt = event.context.get("prompt", "")
         validation_result = self.prompt_validator.validate(prompt)
         if validation_result.is_valid:
-            return True
+            return None
         plan = self._build_plan(event)
         v13_ki_ok = self.ki_doc.record_intervention(event, plan, None, validation_result)
         v13_commit_result = self.commit_guard.ensure_committed(self.context)
@@ -346,7 +347,7 @@ class InterventionCoordinator:
             ki_doc_updated=v13_ki_ok is True,
             committed=v13_commit_ok,
         )
-        raise TDDViolationError(event, plan, result)
+        return result
 
     def _stage_pre_rollback(self, event: ViolationEvent, plan: InterventionPlan) -> bool:
         pre_commit_ok = True
@@ -392,7 +393,7 @@ class InterventionCoordinator:
             committed=pre_commit_ok and post_commit_ok,
             rollback_result=rollback_result,
         )
-        raise TDDViolationError(event, plan, result)
+        return result
 
     def intervene_batch(self, events: List[ViolationEvent]) -> None:
         if not events:
@@ -478,7 +479,6 @@ class InterventionCoordinator:
         final_commit_result = self.commit_guard.ensure_committed(self.context)
         final_commit_ok = final_commit_result.success if final_commit_result else True
 
-        # 5. Raise TDDViolationError
         plan = self._build_plan(events[0])
         result = InterventionResult(
             violation_code="MERGED:" + ",".join(e.violation_type for e in events),
@@ -488,7 +488,7 @@ class InterventionCoordinator:
             ki_doc_updated=bool(assessment_events) or bool(ki_events),
             committed=final_commit_ok,
         )
-        raise TDDViolationError(events[0], plan, result)
+        return result
 
     def _compute_assessment(self) -> Tuple[str, List[str], Dict[str, int]]:
         round_results = self.context.metadata.get("round_results", [])
