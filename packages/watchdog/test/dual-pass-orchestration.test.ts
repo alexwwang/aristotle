@@ -170,7 +170,8 @@ describe('Dual-Pass Orchestration', () => {
   it('should_write_result_file_after_eval_fix_completes', async () => {
     const state = makeRalphState()
     await orchestrator.executeEvalFix(state, [])
-    const path = orchestrator.getResultFilePath(3)
+    const round = state.ralph?.round ?? 1
+    const path = orchestrator.getResultFilePath(round)
     expect(path).toContain('reviewer-result-')
     try {
       const content = JSON.parse(readFileSync(path, 'utf-8'))
@@ -267,7 +268,7 @@ describe('Dual-Pass Orchestration', () => {
   })
 
   // RT-087d
-  it('should_clear_intercepted_fields_after_dual_pass_spawn_completes', () => {
+  it('should_clear_intercepted_fields_after_dual_pass_spawn_completes', async () => {
     const state = makeRalphState()
     // F-25: cleanup triggers on dualPassPhase='done', not spawnPhase='t2_running'
     state.reviewerTakeover = {
@@ -275,6 +276,8 @@ describe('Dual-Pass Orchestration', () => {
       spawnPhase: 'done', dualPassPhase: 'done',
       interceptedPrompt: 'prompt-data', interceptedDescription: 'desc-data',
     }
+    // Establish state reference in orchestrator before emitting event
+    await orchestrator.executeEvalFix(state, [])
     orchestrator.emitGPAVEvent({
       pass_step: 4, round: state.ralph?.round ?? 1, dualPassAttempt: 1,
       timestamp: new Date().toISOString(),

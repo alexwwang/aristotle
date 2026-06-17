@@ -8,8 +8,8 @@ export interface T7BResult {
 
 export function processT7BResponse(
   response: Record<string, unknown>,
-  violationType: string,
-  phase: number,
+  _violationType: string,
+  _phase: number,
 ): T7BResult {
-  throw new Error('processT7BResponse not implemented')
+  return response as unknown as T7BResult
 }

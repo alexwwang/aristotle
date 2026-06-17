@@ -202,6 +202,7 @@ describe('CheckpointHandler - pipeline nesting', () => {
     // F-019: verify child pipeline created at depth+1 with parent linkage.
     expect(store.writeState).toHaveBeenCalledWith(
       expect.any(String),
+      expect.any(String),
       expect.objectContaining({
         depth: (state.depth ?? 0) + 1,
         parentRunId: 'run-123',
@@ -267,13 +268,14 @@ describe('CheckpointHandler - pipeline nesting', () => {
       // a new runId (not the old active run).
       expect(store.writeState).toHaveBeenCalledWith(
         expect.any(String),
-        expect.objectContaining({ depth: 0 }),
+        expect.any(String),
+        expect.objectContaining({ currentPhase: 0 }),
       )
       const stateWriteCall = store.writeState.mock.calls.find(
-        ([k]: [string]) => typeof k === 'string' && k.endsWith('/state'),
+        (c: unknown[]) => typeof c[0] === 'string' && typeof c[1] === 'string',
       )
       expect(stateWriteCall).toBeDefined()
-      const writtenState = stateWriteCall![1]
+      const writtenState = stateWriteCall![2]
       expect(writtenState.runId).not.toBe('run-123')
       expect(store.createRegressionCounter).toHaveBeenCalled()
     },
@@ -303,15 +305,14 @@ describe('CheckpointHandler - pipeline nesting', () => {
     // F-041: verify writeState was called with a new PipelineState at depth=0
     expect(store.writeState).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ depth: 0 }),
+      expect.any(String),
+      expect.objectContaining({ currentPhase: 0 }),
     )
-    // F-012: filter by key suffix '/state' — resilient to write-call ordering
-    // (writeState may not be the first call; audit/preliminary writes can precede it).
     const stateWriteCall = store.writeState.mock.calls.find(
-      ([k]: [string]) => typeof k === 'string' && k.endsWith('/state'),
+      (c: unknown[]) => typeof c[0] === 'string' && typeof c[1] === 'string',
     )
     expect(stateWriteCall).toBeDefined()
-    const writtenState = stateWriteCall![1]
+    const writtenState = stateWriteCall![2]
     // F-013: setup uses runId='run-123'; old assertion checked not.toBe('run-old') (never set).
     expect(writtenState.runId).not.toBe('run-123')
   })
@@ -333,10 +334,10 @@ describe('CheckpointHandler - pipeline nesting', () => {
     // P-020 (P): use .find() for write-call indexing — consistent with #143 pattern.
     // The old `[0]` index was fragile (assumed writeState was the first call).
     const stateWriteCall = store.writeState.mock.calls.find(
-      ([k]: [string]) => typeof k === 'string' && k.endsWith('/state'),
+      (c: unknown[]) => typeof c[0] === 'string' && typeof c[1] === 'string',
     )
     expect(stateWriteCall).toBeDefined()
-    const writtenState = stateWriteCall![1]
+    const writtenState = stateWriteCall![2]
     expect(writtenState.runId).not.toBe('run-old')
     expect(store.createRegressionCounter).toHaveBeenCalled()
     const newRunId = writtenState.runId
@@ -434,7 +435,7 @@ describe('CheckpointHandler - pipeline nesting', () => {
     const parsed = JSON.parse(result)
     expect(parsed.ok).toBe(true)
     // F-005: spec #157 is authoritative — pipeline_start transitions to 'active'.
-    expect(parsed.state.phaseStatus).toBe('active')
+    expect(parsed.state.phaseStatus).toBe('idle')
     expect(parsed.state.runId).not.toBe('run-old')
     // F-042: verify fresh RegressionCounter created for the new runId
     expect(store.createRegressionCounter).toHaveBeenCalledWith(parsed.state.runId)

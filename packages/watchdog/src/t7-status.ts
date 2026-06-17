@@ -7,5 +7,5 @@ export interface T7Result {
 }
 
 export function processT7Response(response: Record<string, unknown>): T7Result {
-  throw new Error('processT7Response not implemented')
+  return response as unknown as T7Result
 }

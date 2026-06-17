@@ -114,6 +114,6 @@ describe('detectMultiAgent', () => {
     mockFs.readFileSync.mockReturnValue(JSON.stringify({
       plugin: ['file:///path/to/oh-my-opencode/index.js'],
     }))
-    expect(detectMultiAgent({})).toBe(true)
+    expect(detectMultiAgent({ directory: '.' })).toBe(true)
   })
 })

@@ -51,6 +51,7 @@ import type {
   PipelineStateSummary,
   AuditLogEntry,
   PhaseRecord,
+  ActiveRun,
 } from './schema.js'
 import { hasOwner } from './schema.js'
 import { validateTransition, applyTransition, NO_ACTIVE_RUN } from './transitions.js'
@@ -66,6 +67,9 @@ import type { LoopConfigResult } from './loop-config.js'
 export class CheckpointHandler {
   private articulationFailures = new Map<number, number>()
   private readonly _applyTransition: typeof applyTransition
+  private _pnRateLimit = new Map<string, number[]>()
+  private static readonly PN_RATE_WINDOW_MS = 5000
+  private static readonly PN_RATE_MAX_IN_WINDOW = 10
 
   constructor(
     private store: PipelineStore,
@@ -246,25 +250,44 @@ export class CheckpointHandler {
           guidance: 'Ensure the session context provides a valid sessionID.',
         })
       }
-      // C-2: single-pipeline constraint
-      //      Non-stale: reject unconditionally. Stale: only owner may restart.
-      //      Corrupted/missing state: fail-closed — reject (cannot verify ownership).
+      // C-2: single-pipeline constraint with PN-aware status checks
       if (activeRun && currentState) {
-        if (!isStale(currentState.lastCheckpointAt, this.staleThresholdMs)) {
-          // Non-stale active pipeline — reject any new pipeline_start
+        const status = currentState.phaseStatus
+        const TERMINAL_STATUSES = new Set(['complete', 'failed', 'cancelled'])
+        if (status === 'paused') {
           return JSON.stringify({
             ok: false,
-            violation: 'A pipeline is already active for this project.',
-            guidance: 'Only one pipeline per project is allowed. Complete or cancel the current pipeline first.',
+            violation: 'Pipeline is paused. Call pipeline_unpause to resumeFromPause before starting a new pipeline.',
+            guidance: 'Use pipeline_unpause to resume the paused pipeline, or wait for auto-resume.',
           })
         }
-        // Stale pipeline — only the owner may restart
-        if (hasOwner(currentState) && currentState.ownerSessionId !== sessionId) {
+        if (status === 'awaiting_approval') {
           return JSON.stringify({
             ok: false,
-            violation: 'A stale pipeline exists but belongs to another session.',
-            guidance: 'Only the orchestrator can restart a stale pipeline. Sub-agents cannot create new pipelines.',
+            violation: 'Pipeline is awaiting_approval. Complete the current phase approval before starting a new pipeline.',
+            guidance: 'Use user_approval to approve the current phase first.',
           })
+        }
+        if (status === 'suspended') {
+          payload._parentRunId = activeRun.runId
+          payload._parentDepth = currentState.depth ?? 0
+          payload._parentProjectId = projectId
+        } else if (TERMINAL_STATUSES.has(status) || (status === 'idle' && !hasOwner(currentState)) || payload.force) {
+        } else {
+          if (!isStale(currentState.lastCheckpointAt, this.staleThresholdMs)) {
+            return JSON.stringify({
+              ok: false,
+              violation: 'A pipeline is already active for this project.',
+              guidance: 'Only one pipeline per project is allowed. Complete or cancel the current pipeline first.',
+            })
+          }
+          if (hasOwner(currentState) && currentState.ownerSessionId !== sessionId) {
+            return JSON.stringify({
+              ok: false,
+              violation: 'A stale pipeline exists but belongs to another session.',
+              guidance: 'Only the orchestrator can restart a stale pipeline. Sub-agents cannot create new pipelines.',
+            })
+          }
         }
       }
       if (activeRun && !currentState) {
@@ -287,6 +310,42 @@ export class CheckpointHandler {
       payload._maxPhase = this.loopConfig?.maxPhase
     }
     payload._now = now
+    payload._sessionId = sessionId
+
+    // ── 7a. Unknown event detection ────────────────────────────────
+    const KNOWN_EVENTS = new Set<CheckpointEvent | 'TEST_RUN_COMPLETE'>([
+      'pipeline_start', 'phase_enter', 'ralph_loop_start', 'ralph_round_complete',
+      'ralph_round_finding', 'ralph_terminate', 'test_evidence', 'user_approval',
+      'phase_complete', 'why_articulation',
+      'pipeline_suspend', 'pipeline_resume', 'pipeline_pause', 'pipeline_unpause',
+      'd2_complete', 'phase_fail', 'TEST_RUN_COMPLETE',
+    ])
+    if (!KNOWN_EVENTS.has(event as CheckpointEvent | 'TEST_RUN_COMPLETE')) {
+      this.logger?.warn(`unsupported/unknown checkpoint event: ${event}`)
+      return JSON.stringify({
+        ok: false,
+        violation: `unsupported/unknown event: ${event}`,
+        guidance: `Event '${event}' is not a recognized checkpoint event.`,
+      } satisfies CheckpointViolation)
+    }
+
+    // ── 7b. Rate-limit PN events ───────────────────────────────────
+    const PN_RATE_EVENTS = new Set(['pipeline_suspend', 'pipeline_resume', 'pipeline_pause', 'pipeline_unpause'])
+    if (PN_RATE_EVENTS.has(event)) {
+      const now2 = Date.now()
+      const timestamps = this._pnRateLimit.get(projectId) ?? []
+      const recent = timestamps.filter(t => now2 - t < CheckpointHandler.PN_RATE_WINDOW_MS)
+      if (recent.length >= CheckpointHandler.PN_RATE_MAX_IN_WINDOW) {
+        this.logger?.warn(`rate-limit throttling for project ${projectId}: too many PN events in window`)
+        return JSON.stringify({ ok: true, throttled: true })
+      }
+      recent.push(now2)
+      this._pnRateLimit.set(projectId, recent)
+    }
+
+    // ── 7c. Route PN (pipeline nesting) events before validateTransition ──
+    const pnResult = this._routePNEvent(event, payload, projectId, activeRun)
+    if (pnResult !== null) return pnResult
 
     // ── 8. Normalize severities (Phase 2.3) ──────────────────────────
     normalizeSeverities(event, payload)
@@ -513,7 +572,16 @@ export class CheckpointHandler {
       this.articulationFailures.clear()
     }
 
-    // ── 11b. Pre-write invariant: ownerSessionId MUST-PRESERVE (R6 M-2) ──
+    // ── 11b. pipeline_start PN-aware post-processing ──
+    if (event === 'pipeline_start') {
+      if (payload._parentRunId) {
+        newState.depth = ((payload._parentDepth as number) ?? 0) + 1
+        newState.parentRunId = payload._parentRunId as string
+        newState.parentPipelineProjectId = payload._parentProjectId as string
+      }
+    }
+
+    // ── 11c. Pre-write invariant: ownerSessionId MUST-PRESERVE (R6 M-2) ──
     // If the current state has an owner, the new state MUST also have one.
     // This assertion fires BEFORE writeState to prevent disk contamination.
     if (hasOwner(currentState) && !hasOwner(newState)) {
@@ -524,17 +592,21 @@ export class CheckpointHandler {
       )
     }
 
-    // Write state FIRST (M10: before setActiveRun to avoid partial-write window)
     this.store.writeState(projectId, runId, newState)
     this.cache?.update(newState)
 
     // For pipeline_start: register active run AFTER state is persisted
     if (event === 'pipeline_start') {
+      if (activeRun && payload.force) {
+        this.store.removeRegressionCounter?.(activeRun.runId)
+        while (this.store.popSuspended(projectId)) { /* drain orphaned stack */ }
+      }
       this.store.setActiveRun(projectId, {
         runId,
         projectId,
         startedAt: now,
       })
+      this.store.createRegressionCounter?.(runId)
     }
 
     // Audit — PASS unless articulation was violated
@@ -600,6 +672,93 @@ export class CheckpointHandler {
     } satisfies CheckpointOk)
   }
 
+  private _routePNEvent(
+    event: string,
+    payload: Record<string, unknown>,
+    projectId: string,
+    activeRun: ActiveRun | null,
+  ): string | null {
+    const PN_EVENTS = new Set(['pipeline_suspend', 'pipeline_resume', 'pipeline_pause', 'pipeline_unpause'])
+    if (!PN_EVENTS.has(event)) return null
+
+    const now = payload._now as string
+    const effectiveProjectId = activeRun?.projectId ?? projectId
+
+    if (event === 'pipeline_suspend') {
+      const reason = payload.reason as string | undefined
+      if (!reason || reason.length === 0) {
+        if (activeRun) {
+          this.store.appendAudit(effectiveProjectId, activeRun.runId, {
+            timestamp: now, runId: activeRun.runId, projectId: effectiveProjectId,
+            sessionId: (payload._sessionId as string) || '',
+            event: 'pipeline_suspend', phase: 0, decision: 'BLOCK',
+            violation: 'Missing required field: reason',
+          })
+        }
+        return JSON.stringify({ ok: false, violation: 'Missing required field: reason in payload' })
+      }
+      this.store.suspendActive(effectiveProjectId, reason)
+      const runId = activeRun?.runId ?? ''
+      this.store.appendAudit(effectiveProjectId, runId, {
+        timestamp: now, runId, projectId: effectiveProjectId,
+        sessionId: (payload._sessionId as string) || '',
+        event: 'pipeline_suspend', phase: 0, decision: 'PASS',
+      })
+      return JSON.stringify({ ok: true })
+    }
+
+    if (event === 'pipeline_resume') {
+      const childRunId = (payload.child_run_id ?? payload.childRunId) as string | undefined
+      if (!childRunId) {
+        return JSON.stringify({ ok: false, violation: 'Missing required field: child_run_id in payload' })
+      }
+      this.store.resumeSuspended(effectiveProjectId, childRunId)
+      const runId = activeRun?.runId ?? ''
+      this.store.appendAudit(effectiveProjectId, runId, {
+        timestamp: now, runId, projectId: effectiveProjectId,
+        sessionId: (payload._sessionId as string) || '',
+        event: 'pipeline_resume', phase: 0, decision: 'PASS',
+      })
+      return JSON.stringify({ ok: true })
+    }
+
+    if (event === 'pipeline_pause') {
+      const reason = payload.reason as string | undefined
+      if (!reason || reason.length === 0) {
+        if (activeRun) {
+          this.store.appendAudit(effectiveProjectId, activeRun.runId, {
+            timestamp: now, runId: activeRun.runId, projectId: effectiveProjectId,
+            sessionId: (payload._sessionId as string) || '',
+            event: 'pipeline_pause', phase: 0, decision: 'BLOCK',
+            violation: 'Missing required field: reason',
+          })
+        }
+        return JSON.stringify({ ok: false, violation: 'Missing required field: reason in payload' })
+      }
+      this.store.pauseActive(effectiveProjectId)
+      const runId = activeRun?.runId ?? ''
+      this.store.appendAudit(effectiveProjectId, runId, {
+        timestamp: now, runId, projectId: effectiveProjectId,
+        sessionId: (payload._sessionId as string) || '',
+        event: 'pipeline_pause', phase: 0, decision: 'PASS',
+      })
+      return JSON.stringify({ ok: true })
+    }
+
+    if (event === 'pipeline_unpause') {
+      this.store.resumeFromPause(effectiveProjectId)
+      const runId = activeRun?.runId ?? ''
+      this.store.appendAudit(effectiveProjectId, runId, {
+        timestamp: now, runId, projectId: effectiveProjectId,
+        sessionId: (payload._sessionId as string) || '',
+        event: 'pipeline_unpause', phase: 0, decision: 'PASS',
+      })
+      return JSON.stringify({ ok: true })
+    }
+
+    return null
+  }
+
   private getFailureCount(phase: number, currentState: PipelineState | null): number {
     let count = this.articulationFailures.get(phase)
     if (count === undefined) {
@@ -654,6 +813,10 @@ function formatPhaseStatus(status: string): string {
     ralph_loop: 'Ralph loop',
     awaiting_approval: 'awaiting approval',
     complete: 'complete',
+    suspended: 'suspended (child pipeline running)',
+    paused: 'paused (awaiting intervention)',
+    failed: 'failed',
+    cancelled: 'cancelled',
   }
   return map[status] ?? status
 }

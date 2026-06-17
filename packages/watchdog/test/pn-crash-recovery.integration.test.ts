@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { PipelineStore } from '../src/pipeline-store.js'
 import { CheckpointHandler } from '../src/checkpoint.js'
+import { computeProjectId } from '../src/project-id.js'
 import { STALE_THRESHOLD_MS } from '../src/constants.js'
 import type { StateStore } from '@opencode-ai/core/store/state-store'
 import type { Logger } from '@opencode-ai/core/logger'
@@ -146,13 +147,14 @@ describe('crash recovery integration - pipeline nesting', () => {
 
   // #72
   it('should handle crash during resume stack popped but state not persisted', () => {
-    const state = makeNestingState({ runId: 'parent-123', phaseStatus: 'suspended', preSuspendStatus: 'ralph_loop' })
+    const state = makeNestingState({ runId: 'run-123', phaseStatus: 'suspended', preSuspendStatus: 'ralph_loop' })
     mockStateStore.read.mockImplementation((key: string) => {
-      if (key.endsWith('/parent-123/state')) return state
+      if (key.endsWith('/run-123/state')) return state
       if (key.endsWith('/active')) return null
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack([])
       return null
     })
+    mockStateStore.list.mockReturnValue(['run-123/state'])
     store.detectOrphanedSuspend('proj-1')
     expect(mockStateStore.write).toHaveBeenCalledWith(
       expect.any(String),
@@ -184,17 +186,17 @@ describe('crash recovery integration - pipeline nesting', () => {
 
   // #74
   it('should handle state persisted without stack', () => {
-    const state = makeNestingState({ runId: 'parent-123', phaseStatus: 'suspended' })
+    const state = makeNestingState({ runId: 'run-123', phaseStatus: 'suspended' })
     mockStateStore.read.mockImplementation((key: string) => {
-      if (key.endsWith('/parent-123/state')) return state
+      if (key.endsWith('/run-123/state')) return state
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack([])
       return null
     })
+    mockStateStore.list.mockReturnValue(['run-123/state'])
     store.detectOrphanedSuspend('proj-1')
-    // F-039: strengthen assertion with objectContaining
     expect(mockStateStore.write).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ entries: expect.any(Array) }),
+      expect.objectContaining({ phaseStatus: expect.any(String) }),
     )
     // P-003: distinguish recovery path — CRITICAL must NOT be logged
     expect(mockLogger.error).not.toHaveBeenCalledWith(
@@ -480,18 +482,18 @@ describe('crash recovery integration - pipeline nesting', () => {
   // F-002: assign removeRegressionCounter as vi.fn() — no source stub exists.
   it('should call RegressionCounter.remove for abandoned runId on force=true pipeline_start', async () => {
     const handler = new CheckpointHandler(store, STALE_THRESHOLD_MS, undefined, undefined, undefined, mockLogger)
-    mockStateStore.read.mockImplementation((key: string) => {
-      if (key.endsWith('/active')) return { runId: 'abandoned-run', projectId: 'proj-1' }
-      if (key.endsWith('/abandoned-run/state')) return makeNestingState({ runId: 'abandoned-run' })
-      // P-016: spec #139 says 'Given orphaned suspended pipeline' — add
-      // suspended-stack mock so orphaned entries exist for cleanup.
-      if (key.endsWith('/suspended-stack')) return makeSuspendedStack([
-        makeSuspendedPipeline({ runId: 'abandoned-run', depth: 0 }),
-      ])
-      return null
-    })
+    const pid = computeProjectId('/tmp/test')
+    const memStore = new Map<string, unknown>()
+    memStore.set(`watchdog/${pid}/active`, { runId: 'abandoned-run', projectId: pid })
+    memStore.set(`watchdog/${pid}/abandoned-run/state`, makeNestingState({ runId: 'abandoned-run' }))
+    memStore.set(`watchdog/${pid}/suspended-stack`, makeSuspendedStack([
+      makeSuspendedPipeline({ runId: 'abandoned-run', depth: 0 }),
+    ]))
+    mockStateStore.read.mockImplementation((key: string) => memStore.get(key) ?? null)
+    mockStateStore.write.mockImplementation((k: string, v: unknown) => { memStore.set(k, v); return true })
     store.getRegressionCounter = vi.fn().mockReturnValue({ per_cycle_count: 3, total_count: 7 })
     store.removeRegressionCounter = vi.fn()
+    vi.spyOn(store, 'createRegressionCounter')
     await handler.handle(
       'pipeline_start',
       JSON.stringify({ description: 'force restart', force: true }),

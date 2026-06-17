@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { createReviewerInterceptRule } from '../src/reviewer-intercept.js'
+import { createReviewerInterceptRule, logInterceptAudit } from '../src/reviewer-intercept.js'
 import { makeRalphState } from './helpers.js'
 
 describe('ReviewerInterceptRule', () => {
@@ -94,6 +94,7 @@ describe('ReviewerInterceptRule', () => {
       const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
       const state = makeRalphState()
       const result = rule.evaluate('Task', { subagent_type: 'oracle', prompt: 'Review', description: 'Review' }, state)
+      logInterceptAudit(result)
       expect(result.blocked).toBe(false)
       const sessionCalls = errorSpy.mock.calls.filter(
         call => call.some(arg => String(arg).includes('calling_session_id')),
@@ -174,6 +175,7 @@ describe('ReviewerInterceptRule', () => {
       const state = makeRalphState()
       rule.evaluate('Task', { subagent_type: 'oracle', prompt: 'Review', description: 'Review' }, state, 'ses-main-001')
       const result = rule.evaluate('Task', { subagent_type: 'oracle', prompt: 'Review', description: 'Review' }, state, 'ses-main-001')
+      logInterceptAudit(result)
       expect(result.blocked).toBe(true)
       const cachedCalls = debugSpy.mock.calls.filter(
         call => call.some(arg => String(arg).toLowerCase().includes('cached')),
@@ -189,6 +191,7 @@ describe('ReviewerInterceptRule', () => {
       const auditSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
       const state = makeRalphState()
       const result = rule.evaluate('Task', { subagent_type: 'oracle', prompt: 'Review', description: 'Review' }, state, 'ses-main-001')
+      logInterceptAudit(result)
       expect(result.blocked).toBe(true)
       const interceptCalls = auditSpy.mock.calls.filter(
         call => call.some(arg => {

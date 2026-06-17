@@ -73,7 +73,7 @@ describe('PipelineStore - Resume Flow', () => {
     // P-002 (M): in-memory Map bridge so popSuspended writes persist —
     // without this, getSuspendedStack re-reads the same mock fixture
     // and the "stack NOT popped" assertion at L437-439 is vacuous.
-    const memStore = createMemStoreBridge(mockStateStore, { 'proj-1/suspended-stack': makeSuspendedStack([entry]) })
+    const memStore = createMemStoreBridge(mockStateStore, { 'watchdog/proj-1/suspended-stack': makeSuspendedStack([entry]) })
     expect(() => store.resumeSuspended('proj-1', 'wrong-id')).toThrow(/child_run_id/i)
     expect(mockStateStore.appendLog).toHaveBeenCalledWith(
       expect.any(String),
@@ -170,7 +170,7 @@ describe('PipelineStore - Resume Flow', () => {
   // R41 F-1: use createMemStoreBridge so write(pop) is reflected in subsequent read
   it('should clear suspended stack entry after successful resume', () => {
     const entry = makeSuspendedPipeline({ childRunId: 'child-123' })
-    createMemStoreBridge(mockStateStore, { 'proj-1/suspended-stack': makeSuspendedStack([entry]) })
+    createMemStoreBridge(mockStateStore, { 'watchdog/proj-1/suspended-stack': makeSuspendedStack([entry]) })
     store.resumeSuspended('proj-1', 'child-123')
     const stack = store.getSuspendedStack('proj-1')
     expect(stack.entries).toHaveLength(0)
@@ -378,9 +378,9 @@ describe('PipelineStore - Resume Flow', () => {
   // #128b — direct PipelineStore-level guard (supplements transitions-pn.test.ts:133 proxy).
   it('should reject resumeFromPause when status is not paused', () => {
     const state = makeNestingState({ phaseStatus: 'ralph_loop' })
-    // P-007 (M): explicit /state branch — was catch-all mockReturnValue(state).
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/state')) return state
+      if (key.endsWith('/active')) return { runId: 'run-123', projectId: 'proj-1' }
       return null
     })
     expect(() => store.resumeFromPause('proj-1')).toThrow(/not paused/i)

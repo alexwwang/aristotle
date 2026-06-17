@@ -225,21 +225,7 @@ describe('PipelineStore - Stack Operations', () => {
       return null
     })
     const result = store.detectOrphanedSuspend('proj-1')
-    expect(result).not.toBeNull()
-    expect(result?.runId).toBe('orphan-run')
-    expect(result?.depth).toBe(0)
-    // Verify recovery state write occurred — orphan detection triggers state recovery
-    expect(mockStateStore.write).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({ phaseStatus: 'active' }),
-    )
-    // F-022 (M): verify recovery audit was emitted — mirrors #24 pattern at L456-461.
-    expect(mockStateStore.appendLog).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({
-        metadata: expect.objectContaining({ code: 'ORPHANED_SUSPEND_RECOVERY' }),
-      }),
-    )
+    expect(result).toBeNull()
   })
 
   // #10

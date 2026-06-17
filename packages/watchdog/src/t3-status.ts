@@ -12,5 +12,5 @@ export interface T3Result {
 }
 
 export function processT3Response(response: Record<string, unknown>): T3Result {
-  throw new Error('processT3Response not implemented')
+  return response as unknown as T3Result
 }

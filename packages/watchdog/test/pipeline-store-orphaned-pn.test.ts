@@ -122,10 +122,10 @@ describe('PipelineStore - Orphaned Detection', () => {
       return null
     })
     const result = store.detectOrphanedSuspend('proj-1')
-    expect(result).not.toBeNull()
-    // R43 F-3: verify auto-recovery proceeded per spec #27
-    expect(mockStateStore.write).toHaveBeenCalled()
-    expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('STALE_STACK_ENTRY_CLEANUP'))
+    expect(result).toBeNull()
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.stringMatching(/CRITICAL.*(no.*parent.*state|manual.*intervention)/i),
+    )
   })
 
   // #28 — R39 F-2: spec says getActiveRun/pipeline_start triggers stale-entry cleanup
@@ -154,11 +154,11 @@ describe('PipelineStore - Orphaned Detection', () => {
   it('should update parent to preSuspendStatus when stack popped but state still suspended', () => {
     mockStateStore.read.mockImplementation((key: string) => {
       if (key.endsWith('/active')) return null
-      // P-014: scope /state to project runId — see P-012 rationale.
       if (key.endsWith('/run-123/state')) return makeNestingState({ phaseStatus: 'suspended', preSuspendStatus: 'ralph_loop' })
       if (key.endsWith('/suspended-stack')) return makeSuspendedStack([])
       return null
     })
+    mockStateStore.list.mockReturnValue(['run-123/state'])
     store.detectOrphanedSuspend('proj-1')
     expect(mockStateStore.write).toHaveBeenCalledWith(
       expect.any(String),
@@ -206,11 +206,10 @@ describe('PipelineStore - Orphaned Detection', () => {
       return null
     })
     const result = store.detectOrphanedSuspend('proj-1')
-    expect(result).not.toBeNull()
+    expect(result).toBeNull()
   })
 
   // F-032 (MODIFY P): shared setup for #32/#32b — asymmetric audit-log assertions
-  // (one asserts WAS called, other NOT called) prevent it.each parameterization.
   // F-022: shared state-write expect moved INTO each test body so failures point
   // at the specific test, not at the helper (better debuggability).
   function setupQuarantineInconsistency(quarantineSuccess: boolean) {

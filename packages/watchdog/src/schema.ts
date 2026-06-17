@@ -77,11 +77,12 @@ export interface PipelineState {
 
   // Phase 3: reviewer-takeover fields (type-only — implementations in Phase 5)
   activeSubagentSession?: string
-  reviewerTakeover?: ReviewerTakeoverState
+  reviewerTakeover?: ReviewerTakeoverState | null
   cleanupToken?: string
   dualPassAttempt?: number
   d2TimeoutCycleCount?: number
   rpsConsecutiveFailures?: number
+  deferred?: boolean
 }
 
 /** Phase 2+ pipeline state with guaranteed ownerSessionId. */
@@ -179,6 +180,7 @@ export interface ActiveRun {
   runId: string
   projectId: string
   startedAt: string
+  depth?: number
 }
 
 /** Project index — tracks all projects that have ever had watchdog data */

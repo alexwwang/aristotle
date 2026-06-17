@@ -23,6 +23,7 @@ import {
 
 export interface TransitionResult {
   valid: true
+  warning?: string
 }
 
 export interface TransitionViolation {
@@ -1179,9 +1180,54 @@ export function applyTransition(
 }
 
 // Phase 3: pipeline nesting transition validation
+//
+// Valid transition table for pipeline nesting state machine.
+// The table encodes which (fromStatus, toStatus) pairs are legal.
+// States: idle, active, ralph_loop, awaiting_approval, complete, suspended, paused, failed, cancelled.
+//
+// Key semantics:
+// - active/ralph_loop/awaiting_approval can transition to suspended (child pipeline)
+// - active/ralph_loop can transition to paused (user intervention)
+// - suspended can resume to preSuspendStatus (active or ralph_loop)
+// - paused can resume to prePauseStatus (active or ralph_loop)
+// - ralph_loop/active/awaiting_approval/suspended can fail (phase_fail)
+// - active/ralph_loop/suspended can be cancelled
+// - idle/complete/paused CANNOT be cancelled (no active work to cancel, or paused needs user first)
+const NESTING_TRANSITIONS: Record<string, ReadonlySet<string>> = {
+  active: new Set(['suspended', 'paused', 'failed', 'cancelled']),
+  ralph_loop: new Set(['suspended', 'paused', 'failed', 'cancelled']),
+  awaiting_approval: new Set(['suspended', 'failed']),
+  suspended: new Set(['active', 'ralph_loop', 'failed', 'cancelled']),
+  paused: new Set(['active', 'ralph_loop']),
+}
+
 export function validateNestingTransition(
   fromStatus: string,
   toStatus: string,
 ): ValidationResult {
-  throw new Error('Not implemented: validateNestingTransition')
+  // #54 special case: undefined/invalid fromStatus → 'active' is a recovery
+  // scenario where preSuspendStatus is missing or corrupt. Default to 'active'
+  // with a warning so callers can log the recovery.
+  if (fromStatus === undefined || fromStatus === null) {
+    if (toStatus === 'active' || toStatus === 'ralph_loop') {
+      return {
+        valid: true,
+        warning: 'preSuspendStatus invalid or missing, defaulting to active',
+      }
+    }
+    return fail(
+      'Invalid source status',
+      `Cannot transition from undefined to ${toStatus}.`,
+    )
+  }
+
+  const allowed = NESTING_TRANSITIONS[fromStatus]
+  if (allowed && allowed.has(toStatus)) {
+    return ok()
+  }
+
+  return fail(
+    'Invalid nesting transition',
+    `Cannot transition from '${fromStatus}' to '${toStatus}'.`,
+  )
 }

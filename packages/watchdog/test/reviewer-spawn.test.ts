@@ -23,9 +23,18 @@ describe('ReviewerSpawnHandler', () => {
   // RT-019b
   it('should_set_spawnPhase_t1_running_before_t1_spawn', async () => {
     const state = makeRalphState()
-    const sessionId = await handler.spawnT1(state)
-    expect(sessionId).toMatch(/^ses-/)
-    expect(state.reviewerTakeover?.spawnPhase).toBe('t1_running')
+    const spy = vi.spyOn(promptAssembleMod, 'promptAssemble')
+    spy.mockImplementationOnce(() => {
+      expect(state.reviewerTakeover?.spawnPhase).toBe('t1_running')
+      return { action: 'execute_internal' } as any
+    })
+    try {
+      const sessionId = await handler.spawnT1(state)
+      expect(sessionId).toMatch(/^ses-/)
+      expect(spy).toHaveBeenCalled()
+    } finally {
+      spy.mockRestore()
+    }
   })
 
   // RT-019c

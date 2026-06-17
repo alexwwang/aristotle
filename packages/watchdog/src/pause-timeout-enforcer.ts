@@ -4,15 +4,31 @@ import { PAUSE_TIMEOUT_MS } from './constants.js'
 export interface PauseTimeoutResult {
   timedOut: boolean
   elapsedMs: number
-  // Phase 3 diagnostic fields (F-010): expose context for caller logging.
   pausedAt?: string
   runId?: string
 }
 
 export function checkPausedTimeout(state: PipelineState): PauseTimeoutResult {
-  throw new Error('Not implemented: checkPausedTimeout')
+  if (state.phaseStatus !== 'paused' || !state.pausedAt) {
+    return { timedOut: false, elapsedMs: 0 }
+  }
+
+  const now = Date.now()
+  const pausedTime = new Date(state.pausedAt).getTime()
+  const elapsedMs = now - pausedTime
+
+  if (elapsedMs > PAUSE_TIMEOUT_MS) {
+    return {
+      timedOut: true,
+      elapsedMs,
+      pausedAt: state.pausedAt,
+      runId: state.runId,
+    }
+  }
+
+  return { timedOut: false, elapsedMs }
 }
 
 export function formatPhaseStatus(status: string): string {
-  throw new Error('Not implemented: formatPhaseStatus')
+  return status
 }
