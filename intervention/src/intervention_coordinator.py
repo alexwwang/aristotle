@@ -182,19 +182,25 @@ class InterventionCoordinator:
             handler_method = self._handlers.handle_unfixed_issues
         elif vtype == "INVALID_REVIEW_PROMPT":
             handler_method = self._handlers.handle_invalid_review_prompt
+        elif vtype == "UNCOMMITTED_PHASE":
+            handler_method = self._handlers.handle_compliance
 
         if handler_method is None:
             return None
 
+        is_registered = self._is_event_registered(event)
+
         try:
-            result = handler_method(event, self.context)
+            if vtype == "UNCOMMITTED_PHASE":
+                result = handler_method([event], self.context)
+            else:
+                result = handler_method(event, self.context)
             if result is not None:
                 if not getattr(result, "violation_code", ""):
                     result.violation_code = vtype
                 if not getattr(result, "violation_type", ""):
                     result.violation_type = vtype
-                self._register_phase_violation(event)
-                if result.success and result.action not in ("blocked", "paused", "spawn_subagent"):
+                if is_registered and result.success and result.action not in ("blocked", "paused", "spawn_subagent"):
                     event.rectified = True
                 return result
         except ValueError:
@@ -203,6 +209,13 @@ class InterventionCoordinator:
             logger.warning("handler failed: %s", e)
 
         return None
+
+    def _is_event_registered(self, event: ViolationEvent) -> bool:
+        run_id = event.context.get("run_id") or event.context.get("req_number", "")
+        phase = event.context.get("phase", self.context.current_phase)
+        key = (run_id, phase)
+        registered = self._phase_violations.get(key, [])
+        return any(e is event for e in registered)
 
     def _register_phase_violation(self, event: ViolationEvent) -> None:
         run_id = event.context.get("run_id") or event.context.get("req_number", "")
