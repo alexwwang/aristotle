@@ -38,11 +38,11 @@ def _seed_initial_commit_for_clean_tree_tests(request):
 
 @pytest.fixture(autouse=True)
 def _reset_polluted_state_for_isolation_tests(request):
-    # C-22 expects clean global state; counter leaks from earlier tests (C-06 → C-21).
     if request.node.name == "test_returns_none_when_no_compliance_issues":
         try:
-            from compliance import CommitGuard
-            CommitGuard._commit_failures.clear()
+            from compliance import _GLOBAL_GUARD
+            if _GLOBAL_GUARD is not None:
+                _GLOBAL_GUARD._commit_failures.clear()
         except ImportError:
             pass
     yield

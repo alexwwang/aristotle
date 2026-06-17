@@ -106,6 +106,8 @@ class CommitGuard:
     def __init__(self, project_root: str = ""):
         self.project_root = project_root
         self._commit_failures: Dict[str, int] = {}
+        global _GLOBAL_GUARD
+        _GLOBAL_GUARD = self
 
     def _key(self, run_id: str, phase: int) -> str:
         return f"{run_id}:{phase}"
@@ -506,7 +508,8 @@ def compliance_check(phase, context=None):
         run_id = ""
         project_root = ""
 
-    if CommitGuard._commit_failures.get(f"{run_id}:{phase}", 0) >= _COMMIT_FAILURE_THRESHOLD:
+    guard = _get_guard(context)
+    if guard.failure_count(run_id, phase) >= _COMMIT_FAILURE_THRESHOLD:
         return InterventionResult(
             action="blocked",
             success=False,
@@ -545,9 +548,10 @@ def assess(phase, run_id="", _coordinator=None):
 
 
 def pipeline_resume(run_id=""):
-    for key in list(CommitGuard._commit_failures.keys()):
+    guard = _get_guard()
+    for key in list(guard._commit_failures.keys()):
         if key.startswith(f"{run_id}:"):
-            CommitGuard._commit_failures[key] = 0
+            guard._commit_failures[key] = 0
 
 
 def intervene_batch(events):
