@@ -231,8 +231,9 @@ class InterventionCoordinator:
             return InterventionResult(
                 violation_code=special_type,
                 violation_type=special_type,
-                action=getattr(special_result, "action", ""),
-                success=getattr(special_result, "success", True),
+                action="instructed",
+                success=True,
+                user_message=getattr(special_result, "user_message", ""),
             )
 
         raise ValueError(f"Unknown detection signal: {signal}")
