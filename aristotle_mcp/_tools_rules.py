@@ -9,7 +9,10 @@ def get_audit_decision(file_path: str) -> dict:
 
 
 def init_repo_tool() -> dict:
-    raise NotImplementedError("Phase 4 stub")
+    from aristotle_mcp.config import resolve_repo_dir
+    from aristotle_mcp.migration import init_repo
+    repo_dir = resolve_repo_dir()
+    return init_repo(repo_dir)
 
 
 def write_rule(

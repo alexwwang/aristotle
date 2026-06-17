@@ -66,6 +66,8 @@ def init_repo(repo_path: Path) -> dict:
     if not git_check["success"]:
         return git_check
 
+    already_initialized = (repo_path / ".git").is_dir()
+
     repo_path.mkdir(parents=True, exist_ok=True)
 
     for subdir in REPO_DIR_STRUCTURE:
@@ -77,6 +79,9 @@ def init_repo(repo_path: Path) -> dict:
     init_result = git_init(repo_path)
     if not init_result["success"]:
         return init_result
+
+    if already_initialized:
+        return {"success": True, "message": "Repository already initialized.", "commit_hash": None}
 
     return git_add_and_commit(repo_path, ".gitignore", "chore: initialize aristotle rule repository")
 
