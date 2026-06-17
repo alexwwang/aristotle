@@ -135,7 +135,8 @@ class CommitGuard:
         key = self._key(run_id, phase if phase is not None else 0)
 
         if not self.project_root or not Path(self.project_root).exists():
-            return CommitResult(success=True, committed=False, reason="skip_no_project_root")
+            self.__class__._commit_failures[key] = self.__class__._commit_failures.get(key, 0) + 1
+            return CommitResult(success=False, committed=False, reason="project_root unavailable")
 
         if self._is_clean():
             self.__class__._commit_failures[key] = 0
@@ -364,6 +365,12 @@ def _get_ki_doc(context=None):
 
 
 def _handle_compliance(guard, run_id, phase):
+    if guard.failure_count(run_id, phase) >= _COMMIT_FAILURE_THRESHOLD:
+        return InterventionResult(
+            action="blocked",
+            success=False,
+            user_message="Auto-commit failed 3 times. Commit manually and continue.",
+        )
     commit_result = guard.ensure_committed(phase=phase, run_id=run_id)
     if guard.failure_count(run_id, phase) >= _COMMIT_FAILURE_THRESHOLD:
         return InterventionResult(
