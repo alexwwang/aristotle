@@ -157,19 +157,13 @@ class InterventionCoordinator:
         if self._validate_and_early_return(event):
             return None
 
-        if event.violation_type == "INVALID_REVIEW_PROMPT":
-            return self._intervene_via_handler(event)
-
-        if event.violation_type == "KI_DOC_OUTDATED":
-            try:
-                if self.ki_doc.ensure_updated(event.timestamp):
-                    return None
-            except (IOError, OSError) as e:
-                logger.warning("ensure_updated failed, falling through to violation path: %s", e)
+        result = self._intervene_via_handler(event)
+        if result is not None:
+            return result
 
         return self._intervene_legacy(event)
 
-    def _intervene_via_handler(self, event: ViolationEvent) -> InterventionResult:
+    def _intervene_via_handler(self, event: ViolationEvent) -> Optional[InterventionResult]:
         vtype = event.violation_type
         handler_method = None
         if vtype == "MODIFIED_TEST":
@@ -188,18 +182,17 @@ class InterventionCoordinator:
             handler_method = self._handlers.handle_unfixed_issues
         elif vtype == "INVALID_REVIEW_PROMPT":
             handler_method = self._handlers.handle_invalid_review_prompt
-        elif vtype in ("UNCOMMITTED_PHASE", "MISSING_KI_DOC", "KI_DOC_OUTDATED",
-                       "MISSING_KI_ASSESSMENT", "UNCOMMITTED_REVIEW"):
-            return self._intervene_legacy(event)
 
         if handler_method is None:
-            return self._intervene_legacy(event)
+            return None
 
         try:
             result = handler_method(event, self.context)
             if result is not None:
-                result.violation_code = result.violation_code or vtype
-                result.violation_type = result.violation_type or vtype
+                if not getattr(result, "violation_code", ""):
+                    result.violation_code = vtype
+                if not getattr(result, "violation_type", ""):
+                    result.violation_type = vtype
                 self._register_phase_violation(event)
                 if result.success and result.action not in ("blocked", "paused", "spawn_subagent"):
                     event.rectified = True
@@ -209,7 +202,7 @@ class InterventionCoordinator:
         except Exception as e:
             logger.warning("handler failed: %s", e)
 
-        return self._intervene_legacy(event)
+        return None
 
     def _register_phase_violation(self, event: ViolationEvent) -> None:
         run_id = event.context.get("run_id") or event.context.get("req_number", "")
