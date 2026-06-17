@@ -20,3 +20,17 @@ def repo_root(tmp_path):
     subprocess.run(["git", "config", "user.email", f"test-{ts}@example.com"], cwd=git_dir, check=True)
     subprocess.run(["git", "config", "user.name", f"Test User {ts}"], cwd=git_dir, check=True)
     return str(git_dir)
+
+
+@pytest.fixture(autouse=True)
+def _seed_initial_commit_for_clean_tree_tests(request):
+    # Pre-seed a file for tests whose setup does `git add . && git commit -m init`
+    # (fails on empty repo with no files to commit).
+    test_name = request.node.name
+    if test_name in (
+        "test_ensure_committed_skips_when_tree_clean",
+        "test_failure_counter_resets_on_clean_tree",
+    ):
+        repo_root = request.getfixturevalue("repo_root")
+        (Path(repo_root) / ".gitignore").write_text("")
+    yield
