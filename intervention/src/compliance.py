@@ -357,6 +357,8 @@ class InterventionCoordinator:
     def __init__(self, context=None):
         self._phase_violations: Dict[tuple, List[ViolationEvent]] = {}
         self.context = context
+        global _GLOBAL_COORDINATOR
+        _GLOBAL_COORDINATOR = self
 
     def _get_violations_for_phase(self, run_id, phase):
         return list(self._phase_violations.get((run_id, phase), []))
