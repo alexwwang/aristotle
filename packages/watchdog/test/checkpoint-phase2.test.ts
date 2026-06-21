@@ -1036,7 +1036,7 @@ describe('CheckpointHandler Phase 2', () => {
       localStore.readState.mockImplementation((pid: string, rid: string) => states.get(`${pid}/${rid}`) ?? null)
       localStore.writeState.mockImplementation((pid: string, rid: string, state: any) => states.set(`${pid}/${rid}`, state))
 
-      const localHandler = new CheckpointHandler(localStore as any, STALE_THRESHOLD_MS, undefined, localCache as any, localObserver as any, undefined, buggyApplyTransition)
+      const localHandler = new CheckpointHandler(localStore as any, STALE_THRESHOLD_MS, undefined, localCache as any, localObserver as any, undefined, undefined, buggyApplyTransition)
 
       // Owner creates pipeline
       const ownerCtx = { worktree: WORKTREE, sessionID: 'sess-owner' }

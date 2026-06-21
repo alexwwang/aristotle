@@ -63,6 +63,7 @@ import type { PipelineStateCache } from './state-cache.js'
 import type { Observer } from './observer.js'
 import type { Logger } from '@opencode-ai/core/logger'
 import type { LoopConfigResult } from './loop-config.js'
+import { callIntervention, type InterventionBatchPayload, type InterventionBatchResult } from './intervention-bridge.js'
 
 export class CheckpointHandler {
   private articulationFailures = new Map<number, number>()
@@ -78,6 +79,7 @@ export class CheckpointHandler {
     private cache?: PipelineStateCache,
     private observer?: Observer,
     private logger?: Logger,
+    private mcpProjectDir?: string,
     transitionFn?: typeof applyTransition,
   ) {
     this._applyTransition = transitionFn ?? applyTransition
@@ -550,6 +552,62 @@ export class CheckpointHandler {
       }
     }
 
+    // ── 10b. TS→Python intervention bridge (v0.2.0) ────────────────────
+    //    After the §10a hard-gate passes, dispatch a best-effort advisory
+    //    call to the Python intervention engine for phase_complete and
+    //    ralph_round_complete events. Python may surface additional context
+    //    (KI doc state, compliance signals) the TS watchdog cannot see.
+    //    GUARDED: only fires when mcpProjectDir is non-empty.
+    //    FAULT-TOLERANT: any error → interventionResult stays null.
+    let interventionResult: InterventionBatchResult | null = null
+    if (
+      (event === 'phase_complete' || event === 'ralph_round_complete') &&
+      activeRun &&
+      this.mcpProjectDir &&
+      currentState
+    ) {
+      const gateStore10b = this.store as Phase1Store
+      const allViolations = typeof gateStore10b.getUnresolvedViolations === 'function'
+        ? gateStore10b.getUnresolvedViolations(projectId, activeRun.runId)
+        : []
+      if (allViolations.length > 0) {
+        const phaseNow = currentState.currentPhase ?? 0
+        const bridgePayload: InterventionBatchPayload = {
+          context: {
+            project_id: projectId,
+            run_id: activeRun.runId,
+            phase: phaseNow,
+            current_phase: phaseNow,
+          },
+          violations: allViolations.map(v => ({
+            signal: 'violation-gate-block',
+            context: {
+              phase: phaseNow,
+              run_id: activeRun.runId,
+              description: v.violation,
+              severity: v.severity,
+            },
+            affected_file_paths: [],
+          })),
+        }
+        this.logger?.debug('intervention-bridge: dispatching %d violations', allViolations.length)
+        const bridgeResponse = await callIntervention(bridgePayload, this.mcpProjectDir)
+        if (bridgeResponse.error) {
+          this.logger?.debug('intervention-bridge: returned error: %s', bridgeResponse.error)
+        } else if (
+          bridgeResponse.failed > 0 ||
+          bridgeResponse.results.some(r => r.action === 'blocked')
+        ) {
+          this.logger?.debug(
+            'intervention-bridge: %d failed, %d blocked',
+            bridgeResponse.failed,
+            bridgeResponse.results.filter(r => r.action === 'blocked').length,
+          )
+          interventionResult = bridgeResponse
+        }
+      }
+    }
+
     // ── 11. Apply transition (M3: defensive try/catch) ─────────────────
     let newState: PipelineState
     try {
@@ -664,6 +722,15 @@ export class CheckpointHandler {
         violation: `Articulation incomplete: ${missing} missing.`,
         guidance: `Your articulation must cover all three dimensions: what_it_protects, key_risks, why_approach_works. Missing: ${missing}.`,
       } satisfies CheckpointViolation)
+    }
+
+    if (interventionResult) {
+      const augmented: { ok: true; state: PipelineStateSummary; intervention_result: InterventionBatchResult } = {
+        ok: true,
+        state: summarizeState(newState),
+        intervention_result: interventionResult,
+      }
+      return JSON.stringify(augmented)
     }
 
     return JSON.stringify({

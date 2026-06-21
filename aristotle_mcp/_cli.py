@@ -32,6 +32,9 @@ def main():
             # arg = command type: "learn", "reflect", "review"
             command = sys.argv[2] if len(sys.argv) > 2 else "reflect"
             result = orchestrate_start(command, data_json)
+        elif subcommand == "intervene_batch":
+            from aristotle_mcp._intervention_bridge import run_intervene_batch
+            result = run_intervene_batch(data_json)
         else:
             # Default: orchestrate_on_event with event_type
             result = orchestrate_on_event(subcommand, data_json)

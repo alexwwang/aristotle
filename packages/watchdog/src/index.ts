@@ -58,6 +58,12 @@ export async function createWatchdogRole(ctx: any): Promise<RoleRegistration | n
     ?? DEFAULT_SESSIONS_DIR
   mkdirSync(sessionsDir, { recursive: true })
 
+  // 1b. Resolve mcpProjectDir (same pattern as packages/reflection/src/config.ts)
+  const mcpProjectDir: string =
+    ctx.config?.aristotleBridge?.mcpDir
+    ?? process.env.ARISTOTLE_MCP_DIR
+    ?? join(homedir(), '.config', 'opencode', 'aristotle')
+
   // 2. Resolve worktree root for path normalization
   const worktreeRoot: string = ctx.worktree ?? process.cwd()
 
@@ -92,8 +98,8 @@ export async function createWatchdogRole(ctx: any): Promise<RoleRegistration | n
   // Until then, degradation detection tests use createPhase1Observer with explicit initContext.
   const observer = new Observer(cache, sessionBuffer, store, logger)
 
-  // 8. Create checkpoint handler (wires loopConfig + cache + observer)
-  const checkpointHandler = new CheckpointHandler(store, STALE_THRESHOLD_MS, watchdogConfig.loopConfig, cache, observer, logger)
+  // 8. Create checkpoint handler (wires loopConfig + cache + observer + mcpProjectDir)
+  const checkpointHandler = new CheckpointHandler(store, STALE_THRESHOLD_MS, watchdogConfig.loopConfig, cache, observer, logger, mcpProjectDir)
 
   // 9. Crash recovery — informational scan
   try {
