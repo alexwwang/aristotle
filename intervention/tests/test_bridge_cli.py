@@ -66,15 +66,6 @@ class TestRunInterveneBatch:
             pipeline_action=None,
         )
 
-        with patch(
-            "aristotle_mcp._intervention_bridge.InterventionCoordinator",
-            create=True,
-        ) as mock_cls:
-            # The bridge does `from intervention_coordinator import InterventionCoordinator`
-            # so we patch the symbol actually imported into the bridge module namespace.
-            pass
-
-        # Patch at the source import location (the bridge re-imports each call)
         with patch("intervention_coordinator.InterventionCoordinator") as mock_cls:
             mock_cls.return_value = mock_coordinator
             result = run_intervene_batch(json.dumps(base_payload))
@@ -138,3 +129,81 @@ class TestRunInterveneBatch:
         assert result["failed"] == 0
         assert result["error"] is not None
         assert "json" in result["error"].lower() or "invalid" in result["error"].lower()
+
+    def test_tdd_violation_error_extracts_result_and_counts_by_success(self, base_payload):
+        """Production code path: behavioral violations raise TDDViolationError.
+        Bridge must extract .result and count based on result.success (not hardcoded failed)."""
+        from aristotle_mcp._intervention_bridge import run_intervene_batch
+        from intervention_coordinator import TDDViolationError
+
+        base_payload["violations"] = [
+            {"signal": "skip-red-phase", "context": {"phase": 4, "run_id": "r1"}},
+        ]
+
+        mock_coordinator = MagicMock()
+        successful_result = MagicMock(
+            violation_type="SKIP_RED_PHASE",
+            action="rolled_back",
+            success=True,
+            user_message="implementation rolled back",
+            files_affected=["src/app.py"],
+            pipeline_action="suspended",
+        )
+        mock_coordinator.intervene_from_signal.side_effect = TDDViolationError(
+            event=MagicMock(), plan=MagicMock(), result=successful_result,
+        )
+
+        with patch("intervention_coordinator.InterventionCoordinator") as mock_cls:
+            mock_cls.return_value = mock_coordinator
+            result = run_intervene_batch(json.dumps(base_payload))
+
+        assert result["total"] == 1
+        assert result["succeeded"] == 1
+        assert result["failed"] == 0
+        assert result["results"][0]["success"] is True
+        assert result["results"][0]["action"] == "rolled_back"
+        assert result["results"][0]["files_affected"] == ["src/app.py"]
+
+    def test_tdd_violation_error_without_result_counts_as_failed(self, base_payload):
+        """TDDViolationError without .result attribute → bridge records as failed."""
+        from aristotle_mcp._intervention_bridge import run_intervene_batch
+        from intervention_coordinator import TDDViolationError
+
+        base_payload["violations"] = [
+            {"signal": "modified-test", "context": {"phase": 5, "run_id": "r1"}},
+        ]
+
+        mock_coordinator = MagicMock()
+        mock_coordinator.intervene_from_signal.side_effect = TDDViolationError(
+            event=MagicMock(), plan=MagicMock(), result=None,
+        )
+
+        with patch("intervention_coordinator.InterventionCoordinator") as mock_cls:
+            mock_cls.return_value = mock_coordinator
+            result = run_intervene_batch(json.dumps(base_payload))
+
+        assert result["total"] == 1
+        assert result["succeeded"] == 0
+        assert result["failed"] == 1
+        assert result["results"][0]["success"] is False
+        assert result["results"][0]["action"] == "blocked"
+
+    def test_unknown_signal_records_value_error(self, base_payload):
+        """Unknown signal → ValueError → recorded as failed, batch continues."""
+        from aristotle_mcp._intervention_bridge import run_intervene_batch
+
+        base_payload["violations"] = [
+            {"signal": "completely-unknown-signal", "context": {"phase": 5, "run_id": "r1"}},
+        ]
+
+        mock_coordinator = MagicMock()
+        mock_coordinator.intervene_from_signal.side_effect = ValueError("Unknown signal: completely-unknown-signal")
+
+        with patch("intervention_coordinator.InterventionCoordinator") as mock_cls:
+            mock_cls.return_value = mock_coordinator
+            result = run_intervene_batch(json.dumps(base_payload))
+
+        assert result["total"] == 1
+        assert result["failed"] == 1
+        assert result["results"][0]["action"] == "skipped"
+        assert "ValueError" in result["results"][0]["user_message"]

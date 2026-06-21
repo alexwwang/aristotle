@@ -61,7 +61,7 @@ _INTERVENTION_SRC = os.path.join(
     "src",
 )
 if _INTERVENTION_SRC not in sys.path:
-    sys.path.insert(0, _INTERVENTION_SRC)
+    sys.path.append(_INTERVENTION_SRC)
 
 
 def _empty_result(error: Any = None) -> Dict[str, Any]:
@@ -82,22 +82,20 @@ def _build_context(context_in: Dict[str, Any]):
     if not isinstance(current_phase, int) or isinstance(current_phase, bool):
         current_phase = 0
 
-    req_number = context_in.get("run_id") or context_in.get("req_number") or ""
-    ki_doc_path = context_in.get("ki_doc_path") or "./.ki-docs/"
+    req_number = context_in.get("run_id")
+    if req_number is None:
+        req_number = context_in.get("req_number", "")
+    ki_doc_path = context_in.get("ki_doc_path")
+    if not ki_doc_path:
+        ki_doc_path = os.path.join(
+            os.path.dirname(_INTERVENTION_SRC), ".ki-docs"
+        )
 
     return PipelineContext(
         current_phase=current_phase,
         req_number=str(req_number),
         ki_doc_path=ki_doc_path,
     )
-
-
-def _coerce_int(value: Any, default: int = 0) -> int:
-    if isinstance(value, bool):
-        return default
-    if isinstance(value, int):
-        return value
-    return default
 
 
 def _result_to_dict(result: Any) -> Dict[str, Any]:
@@ -257,8 +255,10 @@ def run_intervene_batch(data_json: str) -> Dict[str, Any]:
                     "pipeline_action": None,
                 }
             results.append(result_dict)
-            # TDDViolationError represents a real violation → counts as failed
-            failed += 1
+            if result_dict["success"]:
+                succeeded += 1
+            else:
+                failed += 1
         except ValueError as e:
             # Unknown signal or invalid context — record but continue
             results.append({
