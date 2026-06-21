@@ -122,6 +122,12 @@ def run_intervene_batch(data_json: str) -> Dict[str, Any]:
     InterventionCoordinator.intervene_from_signal, and returns a structured
     result dict.
 
+    NOTE: Despite the similar name, this does NOT call
+    InterventionCoordinator.intervene_batch(). The coordinator's
+    intervene_batch() applies priority-sort + first-non-mergeable-only
+    semantics. This bridge function iterates ALL violations individually
+    via intervene_from_signal() so the TS watchdog sees every result.
+
     Fault tolerance: returns an empty-result envelope on any error rather
     than raising, so the TS watchdog can never be crashed by Python.
     """
