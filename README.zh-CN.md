@@ -4,7 +4,7 @@
 [![Release](https://img.shields.io/github/v/release/alexwwang/aristotle?include_prereleases)](https://github.com/alexwwang/aristotle/releases)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
-[![Tests](https://img.shields.io/badge/tests-2840%20total-brightgreen)](./docs/testing.zh-CN.md)
+[![Tests](https://img.shields.io/badge/tests-2854%20total-brightgreen)](./docs/testing.zh-CN.md)
 
 **[English](./README.md)** | 中文
 
@@ -29,7 +29,7 @@
 - **Plugin** — 将 Core 库和 Aristotle 角色组装为 OpenCode 插件入口（`plugin/index.ts`）。提供异步轮询式反思、空闲检测和 `/undo` 支持。
 - **双包架构** — Phase 0 抽取了共享的 `packages/core/` 库（logger、config、workflow store、plugin registration）和角色专用的 `packages/aristotle/` 包（idle handler、snapshot extractor）。插件通过 `assemblePlugin()` 组合两者，使其他 OpenCode 技能可复用核心机制而不耦合 Aristotle 特有逻辑。Watchdog-Intervention Bridge 新增 `packages/watchdog/`（TypeScript TDD 执行层）与 `intervention/`（Python MCP 内部违规响应层）配对。
 - **状态机守护的 TDD 管线** — 搭配 [tdd-pipeline 技能](https://github.com/opencode-ai/opencode)，Aristotle 的 watchdog 状态机在整个多阶段项目交付中强制执行 Red-Green-Refactor 纪律。管线覆盖产品设计 → 技术方案 → 测试计划 → 测试代码 → 业务代码 → 预发布测试 → 系统质量审计 → 功能验收。给定清晰需求后，可在极少人工干预的前提下产出高质量、全测试覆盖的交付物——状态机在每个阶段转换时设卡，防止质量回退。
-- **Watchdog-Intervention Bridge** — 连接 TypeScript Watchdog（`packages/watchdog/`，通过 `onToolBefore`/`onIdle` hook 拦截 LLM 工具调用）与 Python Intervention 引擎（`intervention/`，通过 MCP server 工具执行违规响应）。Bridge 新增 4 大能力：信号翻译（21 种检测信号类型）、管线状态机（挂起栈 + MAX_DEPTH=10 嵌套深度）、MCP prompt 组装（T-1..T-10 + T-7b 子代理模板 + Dual-Pass Review）、隔离引擎（文件级隔离 + git 元数据）。检测 14 种违规类型（流程、行为、回归、合规），覆盖 53 条验收标准。包含双语（中/英）Ralph Loop prompt 校验、GPAV（受管管线权威验证）、RPS（审查 prompt 扫描器，12 种禁止模式）和 Dual-Pass Review（Recall → Fact-Gather → Precision → Eval-Fix）。
+- **Watchdog-Intervention Bridge** — 连接 TypeScript Watchdog（`packages/watchdog/`，通过 `onToolBefore`/`onIdle` hook 拦截 LLM 工具调用）与 Python Intervention 引擎（`intervention/`，通过 MCP server 工具执行违规响应）。Bridge 新增 4 大能力：信号翻译（21 种检测信号类型）、管线状态机（挂起栈 + MAX_DEPTH=10 嵌套深度）、MCP prompt 组装（T-1..T-10 + T-7b 子代理模板 + Dual-Pass Review）、隔离引擎（文件级隔离 + git 元数据）。检测 14 种违规类型（流程、行为、回归、合规），覆盖 53 条验收标准。包含双语（中/英）Ralph Loop prompt 校验、GPAV（受管管线权威验证）、RPS（审查 prompt 扫描器，12 种禁止模式）和 Dual-Pass Review（Recall → Fact-Gather → Precision → Eval-Fix）。Bridge 现包含运行时子进程层，通过每个检查点边界处的批量 MCP 调用，将 TypeScript 检测连接至 Python 执行。
 
 ## 安装
 
@@ -105,7 +105,7 @@ Install the Aristotle skill with MCP server from https://github.com/alexwwang/ar
 3. Verify: run `bash scripts/test.sh` — all assertions must pass
 4. Add MCP config to opencode.json: { "mcp": { "aristotle": { "type": "local", "command": ["uv", "run", "--project", "$HOME/.config/opencode/aristotle", "python", "-m", "aristotle_mcp.server"], "enabled": true } } }
 5. Register Plugin: add `"file://$HOME/.config/opencode/aristotle-bridge/index.js"` to the `"plugin"` array in opencode.json
-6. Verify MCP: run `uv run --project $HOME/.config/opencode/aristotle python -c "from aristotle_mcp.server import mcp; print(len(mcp._tool_manager._tools), 'tools loaded')"` — should print "20 tools loaded"
+6. Verify MCP: run `uv run --project $HOME/.config/opencode/aristotle python -c "from aristotle_mcp.server import mcp; print(len(mcp._tool_manager._tools), 'tools loaded')"` — should print "25 tools loaded"
 ```
 
 > **提示：** 你也可以通过 `opencode.json` 免克隆安装 skill。将仓库 URL 添加到 `skills.urls`：
@@ -348,7 +348,7 @@ _rule()      │
 verified rejected/  （保留 scope 和元数据）
 ```
 
-### 20 个 MCP 工具
+### 25 个 MCP 工具
 
 | 工具 | 用途 |
 |------|------|
@@ -463,8 +463,8 @@ GEAR 协议操作映射到 Aristotle 的 MCP 工具：`produce` → `write_rule`
 | 套件 | 命令 | 数量 |
 |------|------|------|
 | 静态测试 | `bash scripts/test.sh` | 103 |
-| 单元/集成测试 (Python — MCP + Intervention) | `uv run pytest tests/ intervention/tests/ -v` | 979 |
-| Watchdog Package (TypeScript) | `cd packages/watchdog && bunx vitest run` | 1258 |
+| 单元/集成测试 (Python — MCP + Intervention) | `uv run pytest tests/ intervention/tests/ -v` | 986 |
+| Watchdog Package (TypeScript) | `cd packages/watchdog && bunx vitest run` | 1262 |
 | Core Package (TypeScript) | `cd packages/core && bunx vitest run` | 150 |
 | Aristotle Package (TypeScript) | `cd packages/reflection && bunx vitest run` | 115 |
 | Legacy Bridge（已归档）(TypeScript) | `cd plugins/aristotle-bridge && bunx vitest run` | 162 |
@@ -488,7 +488,7 @@ GEAR 协议操作映射到 Aristotle 的 MCP 工具：`produce` → `write_rule`
 | **v1.2.0 Review 流程增强** | **382** | **103** | — | **9 + 162 vitest** |
 | **v1.3.0 Per-Rec Isolation** | **395** | **103** | — | **80 pytest + 162 vitest** |
 | **Phase 0 Core Extraction** | **405** | **103** | **150 core + 115 aristotle** | **9 + 162 bridge + 64 regression** |
-| **Watchdog-Intervention Bridge** | **979** | **103** | **1258 watchdog + 150 core + 115 aristotle + 162 bridge** | **9 + 64 regression** |
+| **Watchdog-Intervention Bridge** | **986** | **103** | **1262 watchdog + 150 core + 115 aristotle + 162 bridge** | **9 + 64 regression** |
 
 ## 项目结构
 
@@ -529,6 +529,7 @@ GEAR 协议操作映射到 Aristotle 的 MCP 工具：`produce` → `write_rule`
 │   ├── _orch_start.py    # orchestrate_start 工具（session_file + use_bridge）
 │   ├── _orch_event.py    # orchestrate_on_event 工具
 │   └── _orch_review.py   # orchestrate_review_action 工具
+│   ├── _intervention_bridge.py   # TS→Python 干预子进程桥接器
 │   └── tests/              # MCP server 单元测试
 ├── packages/
 │   ├── core/             # 核心库 — 共享机制（logger、config、workflow-store、executor、plugin registration）
@@ -539,6 +540,7 @@ GEAR 协议操作映射到 Aristotle 的 MCP 工具：`produce` → `write_rule`
 │   │   └── test/         # 115 vitest 用例
 │   └── watchdog/         # Watchdog-Intervention Bridge（TypeScript）— TDD 管线执行层
 │       ├── src/          # 42 个模块：pipeline-store、checkpoint、interceptor、observer、reviewer、dual-pass
+│       │   └── intervention-bridge.ts   # 通向 Python 干预引擎的子进程桥接器
 │       └── test/         # 72 个测试文件，1258 vitest 用例
 ├── plugin/
 │   ├── index.ts          # 插件入口 — assemblePlugin + createAristotleRole
