@@ -1,5 +1,6 @@
 {
   "name": "@opencode-ai/agent-platform-plugin",
+  "version": "1.6.0",
   "private": true,
   "type": "module",
   "main": "dist/index.js",

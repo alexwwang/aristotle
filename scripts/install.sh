@@ -60,7 +60,7 @@ echo ""
 # ═══════════════════════════════════════════════════
 # Step 0: Pre-flight checks
 # ═══════════════════════════════════════════════════
-echo -e "${BLUE}[0/8]${NC} Running pre-flight checks..."
+echo -e "${BLUE}[0/10]${NC} Running pre-flight checks..."
 
 ERRORS=0
 WARNINGS=0
@@ -157,39 +157,39 @@ BACKUP_DIR="$OPENCODE_CONFIG/aristotle-backup-$(date +%Y%m%d_%H%M%S)"
 BACKUP_CREATED=false
 
 if [ "$EXISTING_INSTALL" = true ]; then
-  echo -e "${BLUE}[2/8]${NC} Backing up existing installation to $BACKUP_DIR..."
+  echo -e "${BLUE}[2/10]${NC} Backing up existing installation to $BACKUP_DIR..."
   mkdir -p "$BACKUP_DIR"
-  
+
   if [ -d "$SKILL_DEST" ]; then
     cp -r "$SKILL_DEST" "$BACKUP_DIR/skills-aristotle"
     echo -e "  ${GREEN}✓${NC} Backed up skill files"
   fi
-  
+
   if [ -d "$MCP_DEST" ]; then
     cp -r "$MCP_DEST" "$BACKUP_DIR/aristotle-mcp"
     echo -e "  ${GREEN}✓${NC} Backed up MCP server"
   fi
-  
+
   if [ -d "$PLUGIN_DEST" ]; then
     cp -r "$PLUGIN_DEST" "$BACKUP_DIR/aristotle-bridge"
     echo -e "  ${GREEN}✓${NC} Backed up plugin"
   fi
-  
+
   if [ -f "$CONFIG_FILE" ]; then
     cp "$CONFIG_FILE" "$BACKUP_DIR/aristotle-config.json"
     echo -e "  ${GREEN}✓${NC} Backed up config"
   fi
-  
+
   BACKUP_CREATED=true
   echo -e "${GREEN}✓${NC} Backup complete."
 else
-  echo -e "${BLUE}[2/8]${NC} No existing installation found — fresh install."
+  echo -e "${BLUE}[2/10]${NC} No existing installation found — fresh install."
 fi
 
 # ═══════════════════════════════════════════════════
 # Step 3: Install skill files (SKILL.md + docs)
 # ═══════════════════════════════════════════════════
-echo -e "${BLUE}[3/8]${NC} Installing Aristotle skill to $SKILL_DEST..."
+echo -e "${BLUE}[3/10]${NC} Installing Aristotle skill to $SKILL_DEST..."
 
 mkdir -p "$SKILL_DEST"
 cp "$SKILL_SRC/skill/SKILL.md" "$SKILL_DEST/SKILL.md"
@@ -206,7 +206,7 @@ echo -e "${GREEN}✓${NC} Skill files installed."
 # ═══════════════════════════════════════════════════
 # Step 4: Deploy MCP server files
 # ═══════════════════════════════════════════════════
-echo -e "${BLUE}[4/8]${NC} Deploying MCP server to $MCP_DEST..."
+echo -e "${BLUE}[4/10]${NC} Deploying MCP server to $MCP_DEST..."
 
 mkdir -p "$MCP_DEST/aristotle_mcp"
 cp -r "$SKILL_SRC/aristotle_mcp/"* "$MCP_DEST/aristotle_mcp/"
@@ -217,10 +217,50 @@ cd "$MCP_DEST" && uv sync
 echo -e "${GREEN}✓${NC} MCP server deployed."
 
 # ═══════════════════════════════════════════════════
-# Step 5: Initialize the learnings file
+# Step 5: Detect and optionally install tdd-pipeline skill
+# ═══════════════════════════════════════════════════
+echo -e "${BLUE}[5/10]${NC} Checking for tdd-pipeline skill..."
+TDD_DEST="${TDD_DEST:-"$OPENCODE_CONFIG/skills/tdd-pipeline"}"
+
+if [ -d "$TDD_DEST" ]; then
+  echo -e "${GREEN}✓${NC} tdd-pipeline skill detected."
+else
+  echo -e "${YELLOW}⚠${NC} tdd-pipeline skill not detected."
+  echo "The tdd-pipeline skill provides a 7-phase TDD development workflow (Product Design → Technical Solution → Test Plan → Test Code → Business Code → Pre-Release Testing → Acceptance Testing). Aristotle's Watchdog-Intervention Bridge integrates with it to enforce Red-Green-Refactor discipline at each phase boundary."
+
+  if [ "$FORCE" = true ]; then
+    echo "⏭ Skipping tdd-pipeline skill (non-interactive mode). You can install it later via skills.urls in opencode.json."
+  else
+    read -r -p "Install tdd-pipeline skill now? [y/N] " reply
+    if [[ "$reply" =~ ^[Yy]$ ]]; then
+      mkdir -p "$TDD_DEST"
+      TDD_URL="https://raw.githubusercontent.com/opencode-ai/opencode/main/skills/tdd-pipeline"
+      TDD_DOWNLOADED=0
+
+      for file in SKILL.md phase-1.md phase-2.md phase-3.md phase-4.md phase-5.md phase-6.md phase-7.md ralph-review-loop.md dual-pass-review.md; do
+        if curl -sL --fail --connect-timeout 10 "$TDD_URL/$file" -o "$TDD_DEST/$file" 2>/dev/null; then
+          TDD_DOWNLOADED=$((TDD_DOWNLOADED+1))
+        else
+          echo -e "${YELLOW}⚠${NC} Failed to download $file"
+        fi
+      done
+
+      if [ -f "$TDD_DEST/SKILL.md" ]; then
+        echo -e "${GREEN}✓${NC} tdd-pipeline skill installed ($TDD_DOWNLOADED files downloaded)."
+      else
+        echo -e "${RED}✗${NC} tdd-pipeline skill installation failed — SKILL.md not found."
+      fi
+    else
+      echo "⏭ Skipping tdd-pipeline skill. You can install it later via skills.urls in opencode.json."
+    fi
+  fi
+fi
+
+# ═══════════════════════════════════════════════════
+# Step 6: Initialize the learnings file
 # ═══════════════════════════════════════════════════
 if [ ! -f "$LEARNINGS_FILE" ]; then
-  echo -e "${BLUE}[5/8]${NC} Initializing learnings file at $LEARNINGS_FILE..."
+  echo -e "${BLUE}[6/10]${NC} Initializing learnings file at $LEARNINGS_FILE..."
   cat > "$LEARNINGS_FILE" << 'LEARNINGS_INIT'
 # Aristotle Learnings (User-Level)
 
@@ -230,13 +270,13 @@ if [ ! -f "$LEARNINGS_FILE" ]; then
 LEARNINGS_INIT
   echo -e "${GREEN}✓${NC} Learnings file created."
 else
-  echo -e "${BLUE}[5/8]${NC} Learnings file already exists at $LEARNINGS_FILE — preserving."
+  echo -e "${BLUE}[6/10]${NC} Learnings file already exists at $LEARNINGS_FILE — preserving."
 fi
 
 # ═══════════════════════════════════════════════════
-# Step 6: Verify installation
+# Step 7: Verify installation
 # ═══════════════════════════════════════════════════
-echo -e "${BLUE}[6/8]${NC} Verifying installation..."
+echo -e "${BLUE}[7/10]${NC} Verifying installation..."
 
 VERIFY_ERRORS=0
 
@@ -266,11 +306,11 @@ else
 fi
 
 # ═══════════════════════════════════════════════════
-# Step 7: Build and deploy Plugin (Phase D: new architecture)
+# Step 8: Build and deploy Plugin (Phase D: new architecture)
 # ═══════════════════════════════════════════════════
 PLUGIN_SRC="$SKILL_SRC/plugin"
 if [ -d "$PLUGIN_SRC" ] && command -v bun &>/dev/null; then
-  echo -e "${BLUE}[7/8]${NC} Building Plugin..."
+  echo -e "${BLUE}[8/10]${NC} Building Plugin..."
   cd "$SKILL_SRC" && bun install \
     && bun run --filter '@opencode-ai/core' build \
     && bun run --filter '@opencode-ai/reflection' build \
@@ -283,16 +323,16 @@ if [ -d "$PLUGIN_SRC" ] && command -v bun &>/dev/null; then
     echo -e "${YELLOW}⚠${NC} Plugin build failed — skipping deployment. Check bun output above."
   fi
 elif [ -d "$PLUGIN_SRC" ]; then
-  echo -e "${YELLOW}[7/8]${NC} Skipping Plugin (bun not found). Install bun to enable async reflection."
+  echo -e "${YELLOW}[8/10]${NC} Skipping Plugin (bun not found). Install bun to enable async reflection."
 else
-  echo -e "${BLUE}[7/8]${NC} Skipping Plugin (source not found)."
+  echo -e "${BLUE}[8/10]${NC} Skipping Plugin (source not found)."
 fi
 
 # ═══════════════════════════════════════════════════
-# Step 8: Write configuration file
+# Step 9: Write configuration file
 # ═══════════════════════════════════════════════════
 if [ ! -f "$CONFIG_FILE" ]; then
-  echo -e "${BLUE}[8/8]${NC} Writing configuration to $CONFIG_FILE..."
+  echo -e "${BLUE}[9/10]${NC} Writing configuration to $CONFIG_FILE..."
   cat > "$CONFIG_FILE" << EOF
 {
   "mcp_dir": "$MCP_DEST",
@@ -301,13 +341,13 @@ if [ ! -f "$CONFIG_FILE" ]; then
 EOF
   echo -e "${GREEN}✓${NC} Configuration written."
 else
-  echo -e "${BLUE}[8/8]${NC} Configuration already exists at $CONFIG_FILE — preserving."
+  echo -e "${BLUE}[9/10]${NC} Configuration already exists at $CONFIG_FILE — preserving."
 fi
 
 # ═══════════════════════════════════════════════════
-# Step 9: Initialize the aristotle-repo
+# Step 10: Initialize the aristotle-repo
 # ═══════════════════════════════════════════════════
-echo -e "${BLUE}[9/9]${NC} Initializing rule repository..."
+echo -e "${BLUE}[10/10]${NC} Initializing rule repository..."
 if command -v uv &>/dev/null; then
   uv run --project "$MCP_DEST" python -c "from aristotle_mcp.server import init_repo_tool; print(init_repo_tool())"
   echo -e "${GREEN}✓${NC} Rule repository initialized."

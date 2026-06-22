@@ -18,7 +18,7 @@ Write-Host ""
 
 # Step 1: Install skill files to ~/.claude/skills/ (reliable auto-discovery path)
 $SkillDest = Join-Path $ClaudeBase 'skills\aristotle'
-Write-Host "[1/4] Installing Aristotle skill to $SkillDest..." -ForegroundColor Cyan
+Write-Host "[1/5] Installing Aristotle skill to $SkillDest..." -ForegroundColor Cyan
 
 New-Item -ItemType Directory -Path $SkillDest -Force | Out-Null
 Copy-Item (Join-Path $SkillSrc 'SKILL.md') (Join-Path $SkillDest 'SKILL.md') -Force
@@ -28,10 +28,46 @@ Copy-Item (Join-Path $SkillSrc 'REVIEW.md') (Join-Path $SkillDest 'REVIEW.md') -
 Copy-Item (Join-Path $SkillSrc 'CHECKER.md') (Join-Path $SkillDest 'CHECKER.md') -Force
 Write-Host "✓ Skill files installed." -ForegroundColor Green
 
-# Step 2: Initialize learnings file
+# Step 2: Detect and optionally install tdd-pipeline skill
+$TddDest = if ($env:TDD_DEST) { $env:TDD_DEST } else { Join-Path $OpenCodeConfig 'skills\tdd-pipeline' }
+
+if (Test-Path $TddDest) {
+    Write-Host "✓ tdd-pipeline skill detected." -ForegroundColor Green
+} else {
+    Write-Host "⚠ tdd-pipeline skill not detected." -ForegroundColor Yellow
+    Write-Host "The tdd-pipeline skill provides a 7-phase TDD development workflow (Product Design → Technical Solution → Test Plan → Test Code → Business Code → Pre-Release Testing → Acceptance Testing). Aristotle's Watchdog-Intervention Bridge integrates with it to enforce Red-Green-Refactor discipline at each phase boundary."
+
+    $reply = Read-Host "Install tdd-pipeline skill now? [y/N]"
+    if ($reply -eq 'y' -or $reply -eq 'Y') {
+        New-Item -ItemType Directory -Path $TddDest -Force | Out-Null
+        $TddFiles = @('SKILL.md', 'phase-1.md', 'phase-2.md', 'phase-3.md', 'phase-4.md', 'phase-5.md', 'phase-6.md', 'phase-7.md', 'ralph-review-loop.md', 'dual-pass-review.md')
+        $TddUrl = 'https://raw.githubusercontent.com/opencode-ai/opencode/main/skills/tdd-pipeline'
+        $TddDownloaded = 0
+
+        foreach ($file in $TddFiles) {
+            try {
+                $response = Invoke-WebRequest -Uri "$TddUrl/$file" -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
+                $response.Content | Set-Content (Join-Path $TddDest $file) -Encoding UTF8
+                $TddDownloaded++
+            } catch {
+                Write-Host "⚠ Failed to download $file" -ForegroundColor Yellow
+            }
+        }
+
+        if (Test-Path (Join-Path $TddDest 'SKILL.md')) {
+            Write-Host "✓ tdd-pipeline skill installed ($TddDownloaded files downloaded)." -ForegroundColor Green
+        } else {
+            Write-Host "✗ tdd-pipeline skill installation failed — SKILL.md not found." -ForegroundColor Red
+        }
+    } else {
+        Write-Host "⏭ Skipping tdd-pipeline skill. You can install it later via skills.urls in opencode.json."
+    }
+}
+
+# Step 3: Initialize learnings file
 $LearningsFile = Join-Path $OpenCodeConfig 'aristotle-learnings.md'
 if (-not (Test-Path $LearningsFile)) {
-    Write-Host "[2/4] Initializing learnings file at $LearningsFile..." -ForegroundColor Cyan
+    Write-Host "[3/5] Initializing learnings file at $LearningsFile..." -ForegroundColor Cyan
     @"
 # Aristotle Learnings (User-Level)
 
@@ -41,11 +77,11 @@ if (-not (Test-Path $LearningsFile)) {
 "@ | Set-Content $LearningsFile -Encoding UTF8
     Write-Host "✓ Learnings file created." -ForegroundColor Green
 } else {
-    Write-Host "[2/4] Learnings file already exists — preserving." -ForegroundColor Cyan
+    Write-Host "[3/5] Learnings file already exists — preserving." -ForegroundColor Cyan
 }
 
-# Step 3: Verify
-Write-Host "[3/4] Verifying installation..." -ForegroundColor Cyan
+# Step 4: Verify
+Write-Host "[4/5] Verifying installation..." -ForegroundColor Cyan
 $errors = 0
 
 if (-not (Test-Path (Join-Path $SkillDest 'SKILL.md'))) { $errors++; Write-Host "✗ SKILL.md not found" -ForegroundColor Red }
@@ -59,8 +95,8 @@ if ($errors -eq 0) {
     Write-Host "✓ All files verified." -ForegroundColor Green
 }
 
-# Step 4: Initialize the aristotle-repo
-Write-Host "[4/4] Initializing rule repository..." -ForegroundColor Cyan
+# Step 5: Initialize the aristotle-repo
+Write-Host "[5/5] Initializing rule repository..." -ForegroundColor Cyan
 if (Get-Command uv -ErrorAction SilentlyContinue) {
     uv run --project $ScriptDir python -c "from aristotle_mcp.server import init_repo_tool; print(init_repo_tool())"
     Write-Host "✓ Rule repository initialized." -ForegroundColor Green

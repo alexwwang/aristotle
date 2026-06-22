@@ -550,7 +550,7 @@ The full protocol specification — state machine, frontmatter schema, Δ decisi
 │   └── _orch_review.py   # orchestrate_review_action tool
 │   ├── _intervention_bridge.py   # TS→Python intervention subprocess bridge
 │   └── tests/              # MCP server unit tests
-├── intervention/           # Watchdog Intervention System v0.2.0 (574 tests)
+├── intervention/           # Watchdog Intervention System v1.6.0 (581 tests)
 │   ├── src/
 │   │   ├── intervention_coordinator.py  # Central hub: intervene(), batch, assessment, signal dispatch
 │   │   ├── intervention_types.py        # Dataclasses, VIOLATION_PRIORITY, PipelineContext
