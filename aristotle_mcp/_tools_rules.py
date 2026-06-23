@@ -437,7 +437,7 @@ def list_rules(
             if not fm:
                 continue
             metadata = from_frontmatter_dict(fm)
-            items.append({
+            item = {
                 "path": str(path.relative_to(repo_dir)),
                 "id": metadata.id,
                 "status": metadata.status,
@@ -446,7 +446,11 @@ def list_rules(
                 "confidence": metadata.confidence,
                 "rule_summary": metadata.rule_summary,
                 "intent_tags": metadata.intent_tags,
-            })
+            }
+            if hasattr(metadata, "reflection_sequence"):
+                item["reflection_sequence"] = metadata.reflection_sequence
+            item["metadata"] = {k: str(v) if hasattr(v, "isoformat") else v for k, v in fm.items()}
+            items.append(item)
         except Exception:
             continue
 

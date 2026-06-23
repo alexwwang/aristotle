@@ -209,7 +209,7 @@ def _enrich_rules_metadata(
 
     for r in rules:
         meta = r.get("metadata", {})
-        status = meta.get("status", "")
+        status = meta.get("status", "") or r.get("status", "")
         if status == "staging":
             staging_rules.append(r)
         elif status == "verified":

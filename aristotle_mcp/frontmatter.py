@@ -135,6 +135,9 @@ def stream_filter_rules(
 
 
 def load_rule_file(path: Path) -> dict:
+    if not path.is_absolute():
+        from aristotle_mcp.config import resolve_repo_dir
+        path = resolve_repo_dir() / path
     post = frontmatter.load(str(path))
     return {"metadata": dict(post.metadata), "content": post.content}
 
