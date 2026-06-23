@@ -44,3 +44,8 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 test/logs/
+
+# Local-only files (never push)
+R34-batch-B-verification-report.md
+phase3-progress.png
+scripts/dp-save.sh
