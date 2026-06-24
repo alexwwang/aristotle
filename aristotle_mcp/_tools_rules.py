@@ -212,6 +212,13 @@ def read_rules(
                     "failed_skill": metadata.failed_skill,
                     "error_summary": metadata.error_summary,
                     "rule_summary": metadata.rule_summary,
+                    "success_rate": metadata.success_rate,
+                    "failure_rate": metadata.failure_rate,
+                    "sample_size": metadata.sample_size,
+                    "feedback_count": metadata.feedback_count,
+                    "reflection_sequence": metadata.reflection_sequence,
+                    "source_session": metadata.source_session,
+                    "conflicts_with": metadata.conflicts_with,
                 },
                 "content_preview": body[:200] + "..." if len(body) > 200 else body,
             })
@@ -277,6 +284,22 @@ def commit_rule(
         fm["status"] = "verified"
         fm["verified_at"] = _now_iso()
         fm["verified_by"] = "auto"
+
+        conflict_ids = detect_conflicts(file_path)
+        if conflict_ids:
+            existing_cw = fm.get("conflicts_with", [])
+            if isinstance(existing_cw, str):
+                import json as _json
+                try:
+                    existing_cw = _json.loads(existing_cw)
+                except (ValueError, TypeError):
+                    existing_cw = []
+            if not isinstance(existing_cw, list):
+                existing_cw = []
+            merged = list(set(existing_cw) | set(conflict_ids))
+            fm["conflicts_with"] = merged
+            for cid in conflict_ids:
+                _annotate_conflict_reverse(repo_dir, cid, fm.get("id", ""))
 
         new_fm = "---\n"
         for k, v in fm.items():
@@ -457,6 +480,43 @@ def list_rules(
     return {"success": True, "count": len(items), "rules": items}
 
 
+def _annotate_conflict_reverse(repo_dir: Path, target_rule_id: str, source_rule_id: str) -> None:
+    """Add source_rule_id to target rule's conflicts_with (bidirectional annotation)."""
+    import yaml
+    for md_path in repo_dir.rglob("*.md"):
+        if md_path.name.startswith("_") or md_path.name == ".gitignore":
+            continue
+        try:
+            text = md_path.read_text(encoding="utf-8")
+            m = re.match(r"^---\s*\n(.*?)\n---", text, re.DOTALL)
+            if not m:
+                continue
+            fm = yaml.safe_load(m.group(1))
+            if not fm or fm.get("id") != target_rule_id:
+                continue
+            existing = fm.get("conflicts_with", [])
+            if isinstance(existing, str):
+                import json as _json
+                try:
+                    existing = _json.loads(existing)
+                except (ValueError, TypeError):
+                    existing = []
+            if not isinstance(existing, list):
+                existing = []
+            if source_rule_id not in existing:
+                existing.append(source_rule_id)
+                fm["conflicts_with"] = existing
+                new_fm = "---\n"
+                for k, v in fm.items():
+                    if v is not None:
+                        new_fm += f"{k}: {v}\n"
+                new_fm += "---\n"
+                md_path.write_text(new_fm + text[m.end():], encoding="utf-8")
+            return
+        except (OSError, UnicodeDecodeError, Exception):
+            continue
+
+
 def detect_conflicts(file_path: str) -> list[str]:
     repo_dir = resolve_repo_dir()
     full_path = repo_dir / file_path
@@ -501,7 +561,7 @@ def detect_conflicts(file_path: str) -> list[str]:
                 r_skill = rmeta.failed_skill
 
                 if r_domain == new_domain and r_task == new_task and r_skill == new_skill:
-                    conflicts.append(str(path.relative_to(repo_dir)))
+                    conflicts.append(rmeta.id)
             except Exception:
                 continue
 
