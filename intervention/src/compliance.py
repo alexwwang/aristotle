@@ -346,7 +346,7 @@ class KiDocManager:
             sig = self.compute_signature(v)
             sigs = sig if isinstance(sig, list) else [sig]
             for s in sigs:
-                key = f"{s[0]}:{s[1]}" if isinstance(s, tuple) else str(s)
+                key = f"{s[0].value}:{s[1]}" if isinstance(s, tuple) else str(s)
                 if key not in existing_sigs and s not in existing_sigs:
                     return True
         return False
