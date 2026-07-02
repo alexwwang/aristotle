@@ -1,6 +1,86 @@
 # Changelog
 
-## [1.5.0] — 2025-05-28 — Watchdog Intervention System v0.1.0
+## [1.6.0] — 2026-06-22 — Watchdog-Intervention Bridge v0.2.0
+
+> **TDD Pipeline compatibility**: tdd-pipeline ≥ v0.17.0 (8-phase protocol).
+>
+> Built through TDD Pipeline Phase 1–8 with multi-round Ralph Loop review.
+> All package versions unified to 1.6.0.
+
+### Added — Watchdog-Intervention Bridge (runtime TS↔Python integration)
+
+Wired the TypeScript TDD Watchdog to the Python Intervention engine via a subprocess bridge:
+
+- `packages/watchdog/src/intervention-bridge.ts` ↔ `aristotle_mcp/_intervention_bridge.py`
+- `checkpoint.ts` §10b boundary now calls intervention batch
+- `_cli.py` added `intervene_batch` subcommand
+- Full detection-signal → violation-type → MCP enforcement chain now operational.
+
+### Added — MCP Tool Set Expansion (10 → 25 tools)
+
+- **Rule lifecycle**: `stage_rule`, `commit_rule`, `reject_rule`, `restore_rule`, `detect_conflicts`, `check_sync_status`, `sync_rules`, `get_audit_decision`
+- **Reflection / orchestration**: `persist_draft`, `create_reflection_record`, `complete_reflection_record`, `orchestrate_start`, `orchestrate_on_event`, `orchestrate_review_action`, `on_undo`
+- **Feedback**: `report_feedback`
+- **KI doc + rollback**: KI document lifecycle and rollback checkpoint tools
+
+### Enhanced — Intervention Subsystem (`intervention/`)
+
+Evolved from v0.1.0 to v1.6.0:
+
+- **581 tests** (up from 243 in v1.5.0)
+- New/expanded modules: 12 violation handlers, signal mapper (21 signals), priority pipeline, quarantine engine, compliance batch, GPAV validator, RPS scanner, subagent retry handler, main-agent failure tracker, pending subagent tracker, pattern cycle detector, bounded counter
+- Multi-round dual-pass review convergence (`pn`, `rt`, `st` review rounds)
+
+### Changed — Version Unification
+
+All Aristotle components now share version **1.6.0**:
+
+| Component | Previous | Now |
+|---|---|---|
+| `aristotle-mcp` | 1.5.0 | 1.6.0 |
+| `packages/core` | 0.1.0 | 1.6.0 |
+| `packages/reflection` | 1.2.0 | 1.6.0 |
+| `packages/watchdog` | 0.2.0 | 1.6.0 |
+| `plugin` | — | 1.6.0 |
+
+### Changed — Installer & Setup
+
+- `install.sh`: added tdd-pipeline skill detection + auto-download of SKILL.md and protocol files
+- Fixed `SKILL_SRC` path resolution (`scripts/` → repo root)
+- `init_repo` now idempotent: skips commit on already-initialized repositories
+
+### Fixed — Docs & CI
+
+- README (EN/ZH) updated for 25 MCP tools, Bridge wiring, test counts, project structure
+- CI test paths corrected; `tsc src-only` check split out
+- Removed local-only files from git tracking
+
+### Compatibility
+
+- **tdd-pipeline**: ≥ v0.17.0
+- **Python**: ≥ 3.10
+- **No breaking changes** to existing MCP tool interfaces or GEAR protocol
+
+### Test Counts
+
+| Suite | Count |
+|---|---|
+| Static | 103 |
+| Python MCP + Intervention | 986 |
+| Watchdog TypeScript | 1,262 |
+| Core TypeScript | 150 |
+| Aristotle TypeScript | 115 |
+| Legacy Bridge | 162 |
+| E2E Integration | 9 |
+| Regression | 64 |
+
+### Known Issues
+
+17 KIs documented in `intervention/docs/KnownIssues.md`, all L/I/P severity, zero production risk. Carried forward from v1.5.0; deferred to v2 backlog.
+
+---
+
+## [1.5.0] — 2026-05-28 — Watchdog Intervention System v0.1.0
 
 > **TDD Pipeline compatibility**: tdd-pipeline ≥ v0.17.0 (8-phase protocol with Phase 6 Pre-Release Testing, Phase 7 System Quality Audit, Phase 8 Functional Acceptance).
 >
