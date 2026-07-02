@@ -20,6 +20,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [ -f "$SCRIPT_DIR/skill/SKILL.md" ]; then
     ARISTOTLE_DIR="$SCRIPT_DIR/skill"
     REPO_DIR="$SCRIPT_DIR"
+elif [ -f "$SCRIPT_DIR/../skill/SKILL.md" ]; then
+    ARISTOTLE_DIR="$(cd "$SCRIPT_DIR/../skill" && pwd)"
+    REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 else
     ARISTOTLE_DIR="$HOME/.claude/skills/aristotle"
     REPO_DIR="$ARISTOTLE_DIR"
@@ -73,8 +76,8 @@ assert_exists "$ARISTOTLE_DIR/REFLECT.md"
 assert_exists "$ARISTOTLE_DIR/REVIEW.md"
 assert_exists "$ARISTOTLE_DIR/CHECKER.md"
 assert_exists "$REPO_DIR/aristotle_mcp/evolution.py"
-assert_exists "$REPO_DIR/install.sh"
-assert_exists "$REPO_DIR/install.ps1"
+assert_exists "$REPO_DIR/scripts/install.sh"
+assert_exists "$REPO_DIR/scripts/install.ps1"
 sep
 
 # ═══ T2: SKILL.md Content (Dispatcher) ═══
@@ -193,7 +196,7 @@ sep
 
 # ═══ T5: Install Script Syntax ═══
 info "T5: Install Script Syntax"; sep
-bash -n "$REPO_DIR/install.sh" 2>/dev/null && pass "install.sh syntax valid" || fail "install.sh syntax error"
+bash -n "$REPO_DIR/scripts/install.sh" 2>/dev/null && pass "install.sh syntax valid" || fail "install.sh syntax error"
 sep
 
 # ═══ T6: Architecture Guarantees ═══
