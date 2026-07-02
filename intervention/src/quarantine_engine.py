@@ -810,6 +810,14 @@ class QuarantineEngine:
 
     def _git_commit_quarantine(self, elapsed: float) -> tuple:
         """Stage + commit quarantine dir. Returns (success, elapsed)."""
+        subprocess.run(
+            ["git", "config", "user.email", "aristotle@localhost"],
+            cwd=self.repo_root, capture_output=True, text=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "Aristotle"],
+            cwd=self.repo_root, capture_output=True, text=True,
+        )
         try:
             # git add -f to bypass .gitignore
             r = subprocess.run(
