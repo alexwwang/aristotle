@@ -15,6 +15,14 @@ from prompt_validator import PromptValidator
 from rollback_engine import RollbackEngine
 from ki_doc_manager import KiDocManager
 from commit_guard import CommitGuard
+from handlers import Handlers as _Handlers
+from signal_mapper import (
+    SignalMapper,
+    SIGNAL_TO_TYPE as _SIGNAL_TO_TYPE,
+    SPECIAL_SIGNAL_TO_TYPE as _SPECIAL_SIGNAL_TO_TYPE,
+    PROTOCOL_SIGNALS as _PROTOCOL_SIGNALS,
+)
+from special_handler import SpecialHandler as _SpecialHandler
 
 logger = logging.getLogger(__name__)
 
@@ -131,16 +139,6 @@ _PLAN_MAP = {
 }
 
 
-from handlers import Handlers as _Handlers
-from signal_mapper import (
-    SignalMapper,
-    SIGNAL_TO_TYPE as _SIGNAL_TO_TYPE,
-    SPECIAL_SIGNAL_TO_TYPE as _SPECIAL_SIGNAL_TO_TYPE,
-    PROTOCOL_SIGNALS as _PROTOCOL_SIGNALS,
-)
-from special_handler import SpecialHandler as _SpecialHandler
-
-
 class InterventionCoordinator:
     def __init__(self, context: PipelineContext) -> None:
         self.context = context
@@ -174,11 +172,9 @@ class InterventionCoordinator:
     def _should_return_result(self):
         """Check if current test expects InterventionResult instead of TDDViolationError."""
         import os
+
         current_test = os.environ.get("PYTEST_CURRENT_TEST", "")
-        return (
-            "test_vh_coordinator" in current_test
-            or "test_violation_handling" in current_test
-        )
+        return "test_vh_coordinator" in current_test or "test_violation_handling" in current_test
 
     def _intervene_via_handler(self, event: ViolationEvent) -> Optional[InterventionResult]:
         vtype = event.violation_type
@@ -235,10 +231,15 @@ class InterventionCoordinator:
         if not getattr(handler_result, "violation_type", ""):
             handler_result.violation_type = vtype
 
-        if is_registered and handler_result.success and handler_result.action not in (
-            "blocked",
-            "paused",
-            "spawn_subagent",
+        if (
+            is_registered
+            and handler_result.success
+            and handler_result.action
+            not in (
+                "blocked",
+                "paused",
+                "spawn_subagent",
+            )
         ):
             event.rectified = True
 
@@ -301,7 +302,6 @@ class InterventionCoordinator:
         raise ValueError(f"Unknown detection signal: {signal}")
 
     def _build_event_from_signal(self, vtype: str, context: dict, signal: str = None) -> ViolationEvent:
-        run_id = context.get("run_id") or context.get("runId") or context.get("req_number", "")
         phase = context.get("phase", self.context.current_phase)
         files = context.get("files", [])
         event = ViolationEvent(
@@ -407,7 +407,9 @@ class InterventionCoordinator:
             pre_commit_ok = pre_commit_result.success if pre_commit_result else True
         return pre_commit_ok
 
-    def _execute_intervention(self, event: ViolationEvent, plan: InterventionPlan, pre_commit_ok: bool) -> InterventionResult:
+    def _execute_intervention(
+        self, event: ViolationEvent, plan: InterventionPlan, pre_commit_ok: bool
+    ) -> InterventionResult:
         rollback_result = None
         if plan.auto_fix and plan.needs_rollback:
             rollback_result = self.rollback_engine.rollback(event, plan, self.context)
@@ -462,7 +464,9 @@ class InterventionCoordinator:
             return False
         if "phase" not in event.context:
             return False
-        if event.violation_type in BEHAVIORAL_VIOLATIONS and not (event.affected_file_path or event.affected_file_paths):
+        if event.violation_type in BEHAVIORAL_VIOLATIONS and not (
+            event.affected_file_path or event.affected_file_paths
+        ):
             return False
         return True
 

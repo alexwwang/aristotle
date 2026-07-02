@@ -87,9 +87,7 @@ def _build_context(context_in: Dict[str, Any]):
         req_number = context_in.get("req_number", "")
     ki_doc_path = context_in.get("ki_doc_path")
     if not ki_doc_path:
-        ki_doc_path = os.path.join(
-            os.path.dirname(_INTERVENTION_SRC), ".ki-docs"
-        )
+        ki_doc_path = os.path.join(os.path.dirname(_INTERVENTION_SRC), ".ki-docs")
 
     return PipelineContext(
         current_phase=current_phase,
@@ -179,27 +177,31 @@ def run_intervene_batch(data_json: str) -> Dict[str, Any]:
 
     for idx, violation in enumerate(violations):
         if not isinstance(violation, dict):
-            results.append({
-                "violation_type": "",
-                "action": "skipped",
-                "success": False,
-                "user_message": f"Violation #{idx} is not an object",
-                "files_affected": [],
-                "pipeline_action": None,
-            })
+            results.append(
+                {
+                    "violation_type": "",
+                    "action": "skipped",
+                    "success": False,
+                    "user_message": f"Violation #{idx} is not an object",
+                    "files_affected": [],
+                    "pipeline_action": None,
+                }
+            )
             failed += 1
             continue
 
         signal = violation.get("signal")
         if not signal or not isinstance(signal, str):
-            results.append({
-                "violation_type": "",
-                "action": "skipped",
-                "success": False,
-                "user_message": f"Violation #{idx} missing 'signal' field",
-                "files_affected": [],
-                "pipeline_action": None,
-            })
+            results.append(
+                {
+                    "violation_type": "",
+                    "action": "skipped",
+                    "success": False,
+                    "user_message": f"Violation #{idx} missing 'signal' field",
+                    "files_affected": [],
+                    "pipeline_action": None,
+                }
+            )
             failed += 1
             continue
 
@@ -267,26 +269,30 @@ def run_intervene_batch(data_json: str) -> Dict[str, Any]:
                 failed += 1
         except ValueError as e:
             # Unknown signal or invalid context — record but continue
-            results.append({
-                "violation_type": signal,
-                "action": "skipped",
-                "success": False,
-                "user_message": f"ValueError: {e}",
-                "files_affected": [],
-                "pipeline_action": None,
-            })
+            results.append(
+                {
+                    "violation_type": signal,
+                    "action": "skipped",
+                    "success": False,
+                    "user_message": f"ValueError: {e}",
+                    "files_affected": [],
+                    "pipeline_action": None,
+                }
+            )
             failed += 1
             errors.append(f"#{idx}: {e}")
         except Exception as e:
             # Catch-all: never let one violation break the batch
-            results.append({
-                "violation_type": signal,
-                "action": "error",
-                "success": False,
-                "user_message": f"{type(e).__name__}: {e}",
-                "files_affected": [],
-                "pipeline_action": None,
-            })
+            results.append(
+                {
+                    "violation_type": signal,
+                    "action": "error",
+                    "success": False,
+                    "user_message": f"{type(e).__name__}: {e}",
+                    "files_affected": [],
+                    "pipeline_action": None,
+                }
+            )
             failed += 1
             errors.append(f"#{idx}: {type(e).__name__}: {e}")
 

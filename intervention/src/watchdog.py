@@ -1,9 +1,11 @@
 """Violation filter for TDD pipeline behavioral violations."""
+
 from typing import Optional
 from intervention_types import ViolationEvent, BEHAVIORAL_VIOLATIONS
 
 TDD_PHASES = {4, 5}
 VALID_OPERATIONS = {"create", "modify", "delete"}
+
 
 class ViolationFilter:
     def filter(self, event: ViolationEvent) -> Optional[ViolationEvent]:

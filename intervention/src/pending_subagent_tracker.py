@@ -1,4 +1,5 @@
 """PendingSubagentTracker — tracks pending subagent lifecycle."""
+
 from dataclasses import dataclass, field
 from typing import Optional, Any, Dict
 

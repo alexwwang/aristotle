@@ -8,16 +8,19 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_CONFIDENCE = 0.85
 
+
 @dataclass
 class RuleContent:
     frontmatter: Dict[str, Any]
     body: str
+
 
 VIOLATION_TO_CATEGORY = {
     "SKIP_RED_PHASE": "PATTERN_VIOLATION",
     "MODIFIED_TEST": "PATTERN_VIOLATION",
     "MISSING_TEST": "PATTERN_VIOLATION",
 }
+
 
 class RuleGenerator:
     def build_frontmatter(self, event: ViolationEvent) -> Dict[str, Any]:
@@ -28,11 +31,8 @@ class RuleGenerator:
             "error_summary": f"LLM {event.violation_type} in {event.affected_file_path}",
             "auto_reflection": True,
             "source": "tdd-pipeline",
-            "intent_tags": {
-                "domain": "tdd_pipeline",
-                "task_goal": event.violation_type.lower()
-            },
-            "failed_skill": "tdd_pipeline"
+            "intent_tags": {"domain": "tdd_pipeline", "task_goal": event.violation_type.lower()},
+            "failed_skill": "tdd_pipeline",
         }
 
     _VIOLATION_TEMPLATES: Dict[str, str] = {
@@ -96,7 +96,4 @@ class RuleGenerator:
 
     def generate(self, event: ViolationEvent) -> RuleContent:
         """Produce a complete RuleContent (frontmatter + body) from a violation event."""
-        return RuleContent(
-            frontmatter=self.build_frontmatter(event),
-            body=self.build_body(event)
-        )
+        return RuleContent(frontmatter=self.build_frontmatter(event), body=self.build_body(event))

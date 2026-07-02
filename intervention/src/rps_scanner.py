@@ -1,5 +1,5 @@
 """RPSScanner — detects risky prompt suggestions via 12 regex patterns (6 EN + 6 CN)."""
-import re
+
 from dataclasses import dataclass
 from typing import List
 
@@ -39,11 +39,13 @@ class RPSScanner:
                     continue
                 idx = source_text.lower().find(pattern_text.lower())
                 if idx >= 0:
-                    matches.append(RPSMatch(
-                        pattern_id=pattern_id,
-                        pattern=pattern_text,
-                        location=idx,
-                        severity_tier=tier,
-                    ))
+                    matches.append(
+                        RPSMatch(
+                            pattern_id=pattern_id,
+                            pattern=pattern_text,
+                            location=idx,
+                            severity_tier=tier,
+                        )
+                    )
                     break
         return matches

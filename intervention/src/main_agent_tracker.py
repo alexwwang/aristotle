@@ -1,4 +1,5 @@
 """MainAgentTracker — tracks consecutive main-agent failures after subagent degradation."""
+
 from dataclasses import dataclass
 from typing import Optional
 

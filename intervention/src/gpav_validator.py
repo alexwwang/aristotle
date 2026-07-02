@@ -1,4 +1,5 @@
 """GPAVValidator — validates GPAV submissions in 5 ordered steps."""
+
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict
 
@@ -42,9 +43,7 @@ class GPAVValidator:
             return GPAVValidationResult(
                 valid=False,
                 rejection_step=1,
-                rejection_reason=(
-                    f"Round {round_num} is not strictly greater than last recorded round {last}"
-                ),
+                rejection_reason=(f"Round {round_num} is not strictly greater than last recorded round {last}"),
                 steps_executed=[0, 1],
             )
 
@@ -60,8 +59,7 @@ class GPAVValidator:
                     valid=False,
                     rejection_step=3,
                     rejection_reason=(
-                        f"Duplicate finding (severity={key[0]}, description='{key[1]}') "
-                        "— all-or-nothing dedup"
+                        f"Duplicate finding (severity={key[0]}, description='{key[1]}') — all-or-nothing dedup"
                     ),
                     truncated_findings=truncated,
                     steps_executed=[0, 1, 2, 3],

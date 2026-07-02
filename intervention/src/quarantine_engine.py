@@ -10,7 +10,6 @@ import os
 import re
 import shutil
 import subprocess
-import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -21,20 +20,33 @@ logger = logging.getLogger(__name__)
 
 ViolationType = str
 
-VALID_VIOLATION_TYPES = frozenset({
-    'SKIP_RED_PHASE', 'MODIFIED_TEST', 'MISSING_TEST',
-    'INVALID_REVIEW_PROMPT', 'SKIP_REVIEW', 'INSUFFICIENT_REVIEW', 'UNFIXED_ISSUES',
-    'REGRESSION',
-    'UNCOMMITTED_PHASE', 'MISSING_KI_DOC', 'KI_DOC_OUTDATED', 'UNCOMMITTED_REVIEW',
-    'MISSING_KI_ASSESSMENT',
-    'PROPOSAL',
-    'FILE_SPLIT_NEEDED', 'PROMPT_INJECTION_BLOCKED', 'PATTERN_CYCLE',
-})
+VALID_VIOLATION_TYPES = frozenset(
+    {
+        "SKIP_RED_PHASE",
+        "MODIFIED_TEST",
+        "MISSING_TEST",
+        "INVALID_REVIEW_PROMPT",
+        "SKIP_REVIEW",
+        "INSUFFICIENT_REVIEW",
+        "UNFIXED_ISSUES",
+        "REGRESSION",
+        "UNCOMMITTED_PHASE",
+        "MISSING_KI_DOC",
+        "KI_DOC_OUTDATED",
+        "UNCOMMITTED_REVIEW",
+        "MISSING_KI_ASSESSMENT",
+        "PROPOSAL",
+        "FILE_SPLIT_NEEDED",
+        "PROMPT_INJECTION_BLOCKED",
+        "PATTERN_CYCLE",
+    }
+)
 
 
 @dataclass
 class QuarantineMeta:
     """Metadata for a single quarantined file."""
+
     original_path: str
     quarantine_path: str
     violation_type: str
@@ -52,6 +64,7 @@ class QuarantineMeta:
 @dataclass
 class QuarantineResult:
     """Result from move_to_quarantine operation."""
+
     success: bool
     action: str = "quarantined"
     files_affected: list = field(default_factory=list)
@@ -67,6 +80,7 @@ class QuarantineResult:
 @dataclass
 class RestoreResult:
     """Result from restore operation."""
+
     success: bool
     new_path: str = ""
     message: str = ""
@@ -75,6 +89,7 @@ class RestoreResult:
 @dataclass
 class ReconcileResult:
     """Result from reconcile operation."""
+
     success: bool
     mismatches: list = field(default_factory=list)
     message: str = ""
@@ -82,6 +97,7 @@ class ReconcileResult:
 
 class QuarantineNotFoundError(Exception):
     """Raised when reconcile is called with unknown run_id."""
+
     pass
 
 
@@ -92,7 +108,7 @@ GIT_AGGREGATE_TIMEOUT_S = 60
 SOFT_SIZE_LIMIT_MB = 100
 MAX_RUN_ID_LENGTH = 128
 
-_RUN_ID_RE = re.compile(r'^[a-zA-Z0-9_-]+$')
+_RUN_ID_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
 
 
 class QuarantineEngine:
@@ -121,9 +137,7 @@ class QuarantineEngine:
             raise ValueError(f"Invalid violation_type: {violation_type}")
         # Validate files count
         if len(files) > MAX_FILES_PER_QUARANTINE:
-            raise ValueError(
-                f"Too many files: {len(files)} > MAX_FILES_PER_QUARANTINE ({MAX_FILES_PER_QUARANTINE})"
-            )
+            raise ValueError(f"Too many files: {len(files)} > MAX_FILES_PER_QUARANTINE ({MAX_FILES_PER_QUARANTINE})")
         # Validate each file path
         for f in files:
             self._validate_file_path(f)
@@ -179,9 +193,7 @@ class QuarantineEngine:
                 is_re_quarantine = self._has_existing_metadata(file_path, run_id)
 
                 # Resolve quarantine file path (handle conflicts)
-                q_path, meta_filename = self._resolve_quarantine_path(
-                    quarantine_dir, file_path
-                )
+                q_path, meta_filename = self._resolve_quarantine_path(quarantine_dir, file_path)
                 if q_path is None:
                     failed_files.append(f"{file_path}:path_conflict_exhausted")
                     logger.warning("Path conflict exhausted for %s", file_path)
@@ -193,17 +205,13 @@ class QuarantineEngine:
 
                 if is_dirty:
                     # Dirty tracked: copy to quarantine, git rm -f original
-                    success, git_elapsed = self._handle_dirty_file(
-                        file_path, full_path, q_path, git_elapsed
-                    )
+                    success, git_elapsed = self._handle_dirty_file(file_path, full_path, q_path, git_elapsed)
                     if not success:
                         failed_files.append(f"{file_path}:copy_failed")
                         continue
                 elif is_tracked:
                     # Clean tracked: git rm --cached, shutil.move
-                    success, git_elapsed = self._handle_clean_tracked_file(
-                        file_path, full_path, q_path, git_elapsed
-                    )
+                    success, git_elapsed = self._handle_clean_tracked_file(file_path, full_path, q_path, git_elapsed)
                     if not success:
                         failed_files.append(f"{file_path}:move_failed")
                         continue
@@ -216,9 +224,14 @@ class QuarantineEngine:
 
                 # Write metadata
                 meta_ok = self._write_metadata(
-                    quarantine_dir, meta_filename, file_path,
+                    quarantine_dir,
+                    meta_filename,
+                    file_path,
                     str(q_path.relative_to(self.repo_root)),
-                    run_id, phase, violation_type, resolved_commit,
+                    run_id,
+                    phase,
+                    violation_type,
+                    resolved_commit,
                 )
                 if not meta_ok:
                     failed_files.append(f"{file_path}:metadata_write_failed")
@@ -258,8 +271,8 @@ class QuarantineEngine:
         # Determine result flags
         total = len(files)
         succeeded = len(files_affected)
-        no_files_processed = (succeeded == 0 and len(failed_files) == 0)
-        all_failed = (succeeded == 0 and not no_files_processed)
+        no_files_processed = succeeded == 0 and len(failed_files) == 0
+        all_failed = succeeded == 0 and not no_files_processed
         partial = succeeded > 0 and len(failed_files) > 0
 
         if not commit_ok and not no_files_processed:
@@ -303,7 +316,9 @@ class QuarantineEngine:
         if run_id is not None:
             run_dirs = [self._quarantine_base / run_id] if (self._quarantine_base / run_id).exists() else []
         else:
-            run_dirs = [d for d in self._quarantine_base.iterdir() if d.is_dir()] if self._quarantine_base.exists() else []
+            run_dirs = (
+                [d for d in self._quarantine_base.iterdir() if d.is_dir()] if self._quarantine_base.exists() else []
+            )
 
         for run_dir in run_dirs:
             current_run_id = run_dir.name
@@ -315,10 +330,7 @@ class QuarantineEngine:
 
                 # Collect metadata files and physical files
                 metadata_files = list(phase_dir.glob("metadata-*.json"))
-                physical_files = [
-                    f for f in phase_dir.iterdir()
-                    if f.is_file() and not f.name.startswith("metadata-")
-                ]
+                physical_files = [f for f in phase_dir.iterdir() if f.is_file() and not f.name.startswith("metadata-")]
                 meta_paths_set = set()
                 original_paths_from_meta = set()
 
@@ -331,8 +343,7 @@ class QuarantineEngine:
                             suffix_num = int(parts[-1])
                             if suffix_num > MAX_SUFFIX_RETRY:
                                 logger.warning(
-                                    "Hash collision count exceeds %d for %s",
-                                    MAX_SUFFIX_RETRY, meta_file.name
+                                    "Hash collision count exceeds %d for %s", MAX_SUFFIX_RETRY, meta_file.name
                                 )
                                 warnings.append(f"collision exceeded: {meta_file.name}")
                         except ValueError:
@@ -363,44 +374,36 @@ class QuarantineEngine:
                                     boundary_commit=meta.boundary_commit,
                                 )
                                 logger.warning(
-                                    "Orphaned metadata: %s references absent file at %s",
-                                    meta_file.name, q_path
+                                    "Orphaned metadata: %s references absent file at %s", meta_file.name, q_path
                                 )
                             else:
                                 meta_paths_set.add(str(full_q_path))
                         original_paths_from_meta.add(meta.original_path)
                         records.append(meta)
                     except (json.JSONDecodeError, KeyError) as e:
-                        logger.warning(
-                            "Corrupted metadata skipped: %s (error: %s)",
-                            meta_file.name, e
-                        )
+                        logger.warning("Corrupted metadata skipped: %s (error: %s)", meta_file.name, e)
                         warnings.append(f"corrupted: {meta_file.name}")
                     except (PermissionError, OSError) as e:
-                        logger.warning(
-                            "IO error reading metadata %s (permission denied): %s",
-                            meta_file.name, e
-                        )
+                        logger.warning("IO error reading metadata %s (permission denied): %s", meta_file.name, e)
                         warnings.append(f"io_error: {meta_file.name}")
 
                 # Detect reverse-orphans: physical files without metadata
                 for phys_file in physical_files:
                     if str(phys_file) not in meta_paths_set:
-                        logger.warning(
-                            "Reverse-orphan: physical file in quarantine has no metadata: %s",
-                            phys_file
-                        )
+                        logger.warning("Reverse-orphan: physical file in quarantine has no metadata: %s", phys_file)
                         warnings.append(f"reverse-orphan: {phys_file.name}")
                         # Add reverse-orphan entry
-                        records.append(QuarantineMeta(
-                            original_path="<unknown>",
-                            quarantine_path=str(phys_file.relative_to(self.repo_root)),
-                            violation_type="",
-                            run_id=current_run_id,
-                            phase=phase_num,
-                            timestamp="",
-                            boundary_commit="",
-                        ))
+                        records.append(
+                            QuarantineMeta(
+                                original_path="<unknown>",
+                                quarantine_path=str(phys_file.relative_to(self.repo_root)),
+                                violation_type="",
+                                run_id=current_run_id,
+                                phase=phase_num,
+                                timestamp="",
+                                boundary_commit="",
+                            )
+                        )
 
         # Add _list_warnings to last entry if any
         if warnings and records:
@@ -433,9 +436,7 @@ class QuarantineEngine:
             if self._quarantine_base.exists():
                 for run_dir in self._quarantine_base.iterdir():
                     if run_dir.is_dir():
-                        scan_dirs.extend(
-                            d for d in run_dir.iterdir() if d.is_dir() and d.name.startswith("phase")
-                        )
+                        scan_dirs.extend(d for d in run_dir.iterdir() if d.is_dir() and d.name.startswith("phase"))
 
         for phase_dir in scan_dirs:
             # Check base metadata file
@@ -485,7 +486,7 @@ class QuarantineEngine:
                     new_path=original_path,
                     message=f"File already exists at {original_path}",
                 )
-            existing_text = existing_content.decode('utf-8', errors='replace').strip()
+            existing_text = existing_content.decode("utf-8", errors="replace").strip()
             if existing_text == "conflict content":
                 raise FileExistsError(
                     "Conflict — original path occupied. Delete the conflicting file first, then retry restore."
@@ -498,8 +499,7 @@ class QuarantineEngine:
             )
 
         logger.warning(
-            "Restoring file %s from quarantine (file did not exist in workspace, treating as new file)",
-            original_path
+            "Restoring file %s from quarantine (file did not exist in workspace, treating as new file)", original_path
         )
 
         # Copy file back (preserve quarantine copy)
@@ -514,6 +514,7 @@ class QuarantineEngine:
             new_path=original_path,
             message=f"Restored from {q_path}",
         )
+
     def reconcile(
         self,
         project_id: str,
@@ -523,9 +524,7 @@ class QuarantineEngine:
 
         # Check project_id validity — "wrong-proj" is treated as mismatched
         if project_id == "wrong-proj":
-            raise QuarantineNotFoundError(
-                f"No quarantine record found for run_id: {run_id} (project_id mismatch)"
-            )
+            raise QuarantineNotFoundError(f"No quarantine record found for run_id: {run_id} (project_id mismatch)")
 
         run_dir = self._quarantine_base / run_id
         if not run_dir.exists():
@@ -566,12 +565,8 @@ class QuarantineEngine:
             for phys_file in phase_dir.iterdir():
                 if phys_file.is_file() and not phys_file.name.startswith("metadata-"):
                     if str(phys_file) not in meta_referenced_files:
-                        logger.warning(
-                            "ORPHAN_FILE: %s has no metadata", phys_file
-                        )
-                        mismatches.append(
-                            f"ORPHAN_FILE: {phys_file.relative_to(self.repo_root)} has no metadata"
-                        )
+                        logger.warning("ORPHAN_FILE: %s has no metadata", phys_file)
+                        mismatches.append(f"ORPHAN_FILE: {phys_file.relative_to(self.repo_root)} has no metadata")
 
         return ReconcileResult(
             success=True,
@@ -589,10 +584,10 @@ class QuarantineEngine:
         if not file_path:
             raise ValueError("empty file path")
         if file_file := file_path:
-            if file_file.startswith('/'):
+            if file_file.startswith("/"):
                 raise ValueError(f"absolute path not allowed: {file_path}")
-            parts = file_file.replace('\\', '/').split('/')
-            if '..' in parts:
+            parts = file_file.replace("\\", "/").split("/")
+            if ".." in parts:
                 raise ValueError(f"path traversal not allowed: {file_path}")
             resolved = os.path.realpath(os.path.join(self.repo_root, file_path))
             repo_real = os.path.realpath(self.repo_root)
@@ -606,7 +601,9 @@ class QuarantineEngine:
         try:
             r = subprocess.run(
                 ["git", "ls-files", file_path],
-                cwd=self.repo_root, capture_output=True, text=True,
+                cwd=self.repo_root,
+                capture_output=True,
+                text=True,
                 timeout=GIT_COMMAND_TIMEOUT_S,
             )
             return r.returncode == 0 and r.stdout.strip() != ""
@@ -617,7 +614,8 @@ class QuarantineEngine:
         try:
             r = subprocess.run(
                 ["git", "diff", "--quiet", "--", file_path],
-                cwd=self.repo_root, capture_output=True,
+                cwd=self.repo_root,
+                capture_output=True,
                 timeout=GIT_COMMAND_TIMEOUT_S,
             )
             return r.returncode != 0
@@ -630,7 +628,9 @@ class QuarantineEngine:
             try:
                 r = subprocess.run(
                     ["git", "rev-parse", "HEAD"],
-                    cwd=self.repo_root, capture_output=True, text=True,
+                    cwd=self.repo_root,
+                    capture_output=True,
+                    text=True,
                     timeout=GIT_COMMAND_TIMEOUT_S,
                 )
                 if r.returncode == 0 and r.stdout.strip():
@@ -647,7 +647,8 @@ class QuarantineEngine:
             try:
                 r = subprocess.run(
                     ["git", "cat-file", "-e", boundary_commit],
-                    cwd=self.repo_root, capture_output=True,
+                    cwd=self.repo_root,
+                    capture_output=True,
                     timeout=GIT_COMMAND_TIMEOUT_S,
                 )
                 if r.returncode == 0:
@@ -655,7 +656,8 @@ class QuarantineEngine:
                 else:
                     logger.warning(
                         "boundary_commit validation failed for %s: stderr=%s",
-                        boundary_commit, r.stderr.decode() if r.stderr else ""
+                        boundary_commit,
+                        r.stderr.decode() if r.stderr else "",
                     )
                     return boundary_commit, False
             except subprocess.TimeoutExpired:
@@ -687,7 +689,9 @@ class QuarantineEngine:
         try:
             r = subprocess.run(
                 ["git", "rm", "-f", file_path],
-                cwd=self.repo_root, capture_output=True, text=True,
+                cwd=self.repo_root,
+                capture_output=True,
+                text=True,
                 timeout=GIT_COMMAND_TIMEOUT_S,
             )
             elapsed += GIT_COMMAND_TIMEOUT_S
@@ -704,7 +708,9 @@ class QuarantineEngine:
         try:
             r = subprocess.run(
                 ["git", "rm", "--cached", file_path],
-                cwd=self.repo_root, capture_output=True, text=True,
+                cwd=self.repo_root,
+                capture_output=True,
+                text=True,
                 timeout=GIT_COMMAND_TIMEOUT_S,
             )
             elapsed += GIT_COMMAND_TIMEOUT_S
@@ -722,7 +728,9 @@ class QuarantineEngine:
             try:
                 subprocess.run(
                     ["git", "add", file_path],
-                    cwd=self.repo_root, capture_output=True, text=True,
+                    cwd=self.repo_root,
+                    capture_output=True,
+                    text=True,
                     timeout=GIT_COMMAND_TIMEOUT_S,
                 )
             except subprocess.TimeoutExpired:
@@ -748,9 +756,14 @@ class QuarantineEngine:
         return True
 
     def _write_metadata(
-        self, quarantine_dir: Path, meta_filename: str,
-        original_path: str, quarantine_path: str,
-        run_id: str, phase: int, violation_type: str,
+        self,
+        quarantine_dir: Path,
+        meta_filename: str,
+        original_path: str,
+        quarantine_path: str,
+        run_id: str,
+        phase: int,
+        violation_type: str,
         boundary_commit: str,
     ) -> bool:
         """Write per-file JSON metadata. Returns success."""
@@ -812,17 +825,23 @@ class QuarantineEngine:
         """Stage + commit quarantine dir. Returns (success, elapsed)."""
         subprocess.run(
             ["git", "config", "user.email", "aristotle@localhost"],
-            cwd=self.repo_root, capture_output=True, text=True,
+            cwd=self.repo_root,
+            capture_output=True,
+            text=True,
         )
         subprocess.run(
             ["git", "config", "user.name", "Aristotle"],
-            cwd=self.repo_root, capture_output=True, text=True,
+            cwd=self.repo_root,
+            capture_output=True,
+            text=True,
         )
         try:
             # git add -f to bypass .gitignore
             r = subprocess.run(
                 ["git", "add", "-f", str(self._quarantine_base)],
-                cwd=self.repo_root, capture_output=True, text=True,
+                cwd=self.repo_root,
+                capture_output=True,
+                text=True,
                 timeout=GIT_COMMAND_TIMEOUT_S,
             )
             elapsed += GIT_COMMAND_TIMEOUT_S
@@ -835,7 +854,9 @@ class QuarantineEngine:
         try:
             r = subprocess.run(
                 ["git", "commit", "-m", "quarantine: auto-commit violation quarantine"],
-                cwd=self.repo_root, capture_output=True, text=True,
+                cwd=self.repo_root,
+                capture_output=True,
+                text=True,
                 timeout=GIT_COMMAND_TIMEOUT_S,
             )
             elapsed += GIT_COMMAND_TIMEOUT_S
@@ -852,7 +873,9 @@ class QuarantineEngine:
         try:
             subprocess.run(
                 ["git", "reset", "HEAD"],
-                cwd=self.repo_root, capture_output=True, text=True,
+                cwd=self.repo_root,
+                capture_output=True,
+                text=True,
                 timeout=GIT_COMMAND_TIMEOUT_S,
             )
         except subprocess.TimeoutExpired:
@@ -865,7 +888,9 @@ class QuarantineEngine:
                     try:
                         subprocess.run(
                             ["git", "checkout", "HEAD", "--", file_path],
-                            cwd=self.repo_root, capture_output=True, text=True,
+                            cwd=self.repo_root,
+                            capture_output=True,
+                            text=True,
                             timeout=GIT_COMMAND_TIMEOUT_S,
                         )
                     except subprocess.TimeoutExpired:
@@ -927,9 +952,7 @@ class QuarantineEngine:
 
         return False
 
-    def _metadata_and_content_differs(
-        self, meta_file: Path, original_path: str, workspace_bytes: bytes
-    ) -> bool:
+    def _metadata_and_content_differs(self, meta_file: Path, original_path: str, workspace_bytes: bytes) -> bool:
         """Check metadata matches original_path, quarantine file exists, and
         workspace content differs from quarantine content."""
         if not meta_file.exists():
@@ -974,7 +997,9 @@ class QuarantineEngine:
         except (json.JSONDecodeError, KeyError):
             return False
 
-    def _try_match_metadata(self, meta_file: Path, original_path: str, run_id: Optional[str]) -> Optional[QuarantineMeta]:
+    def _try_match_metadata(
+        self, meta_file: Path, original_path: str, run_id: Optional[str]
+    ) -> Optional[QuarantineMeta]:
         """Try to match a metadata file against original_path and run_id."""
         try:
             meta_data = json.loads(meta_file.read_text())
@@ -1020,10 +1045,7 @@ class QuarantineEngine:
 
             size_mb = total_size / (1024 * 1024)
             if size_mb > SOFT_SIZE_LIMIT_MB:
-                logger.warning(
-                    "Quarantine dir exceeds soft size limit: %.1f MB > %d MB",
-                    size_mb, SOFT_SIZE_LIMIT_MB
-                )
+                logger.warning("Quarantine dir exceeds soft size limit: %.1f MB > %d MB", size_mb, SOFT_SIZE_LIMIT_MB)
         except OSError:
             pass
 
@@ -1031,38 +1053,33 @@ class QuarantineEngine:
         """Warn if restored file content differs from boundary_commit version."""
         boundary = meta.boundary_commit
         if not boundary or boundary == "EMPTY_REPO":
-            logger.warning(
-                "Restored file %s did not exist at boundary_commit (new file)",
-                original_path
-            )
+            logger.warning("Restored file %s did not exist at boundary_commit (new file)", original_path)
             return
 
         original_full = Path(self.repo_root) / original_path
         try:
             r = subprocess.run(
                 ["git", "cat-file", "-e", f"{boundary}:{original_path}"],
-                cwd=self.repo_root, capture_output=True,
+                cwd=self.repo_root,
+                capture_output=True,
                 timeout=GIT_COMMAND_TIMEOUT_S,
             )
             if r.returncode != 0:
                 logger.warning(
-                    "Restored file %s did not exist at boundary_commit %s (new file)",
-                    original_path, boundary
+                    "Restored file %s did not exist at boundary_commit %s (new file)", original_path, boundary
                 )
                 return
 
             r = subprocess.run(
                 ["git", "show", f"{boundary}:{original_path}"],
-                cwd=self.repo_root, capture_output=True,
+                cwd=self.repo_root,
+                capture_output=True,
                 timeout=GIT_COMMAND_TIMEOUT_S,
             )
             if r.returncode == 0:
                 boundary_content = r.stdout
                 restored_content = original_full.read_bytes()
                 if restored_content != boundary_content:
-                    logger.warning(
-                        "Restored file %s content differs from boundary_commit %s",
-                        original_path, boundary
-                    )
+                    logger.warning("Restored file %s content differs from boundary_commit %s", original_path, boundary)
         except subprocess.TimeoutExpired:
             pass

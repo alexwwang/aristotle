@@ -1,4 +1,5 @@
 """PatternCycleDetector — sliding-window cycle detection (10 checkpoint events)."""
+
 from collections import deque
 from typing import Dict, Tuple
 

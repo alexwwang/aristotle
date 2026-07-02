@@ -1,13 +1,10 @@
 """Compliance batch handling."""
+
 from dataclasses import dataclass, field
 from typing import List, Optional, Any
 
 from compliance import (
-    ViolationEvent,
-    ViolationType,
-    VIOLATION_PRIORITY,
     InterventionResult,
-    compute_assessment_from_violations,
     _handle_merged,
 )
 
@@ -64,12 +61,14 @@ def intervene_batch(events: list, context: Any) -> BatchInterventionResult:
             succeeded += 1
         else:
             failed += 1
-        items.append({
-            "violation_type": str(ev.violation_type),
-            "success": success,
-            "action": "auto-committed" if success else "blocked",
-            "committed": merged_result.committed if success else False,
-        })
+        items.append(
+            {
+                "violation_type": str(ev.violation_type),
+                "success": success,
+                "action": "auto-committed" if success else "blocked",
+                "committed": merged_result.committed if success else False,
+            }
+        )
 
     action = "blocked" if post_batch_commit_failed else "auto_committed"
 

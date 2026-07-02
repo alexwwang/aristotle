@@ -1,4 +1,5 @@
 """Handlers for violation types."""
+
 from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional
 
@@ -226,13 +227,13 @@ class Handlers:
                 violation_code="UNFIXED_ISSUES",
             )
         else:
-            raise ValueError(f"UNFIXED_ISSUES requires signal ralph-rounds-exceeded or violation-gate-block (got: {signal})")
+            raise ValueError(
+                f"UNFIXED_ISSUES requires signal ralph-rounds-exceeded or violation-gate-block (got: {signal})"
+            )
 
     def handle_invalid_review_prompt(self, event: Any, context: Any) -> InterventionResult:
-        prompt = ""
         regen_attempt = 0
         if hasattr(event, "context") and isinstance(event.context, dict):
-            prompt = event.context.get("prompt", "")
             regen_attempt = event.context.get("regeneration_attempt", 0)
 
         if regen_attempt == 1:
@@ -311,10 +312,12 @@ class Handlers:
             if handler is not None:
                 results.append(handler(event, context))
             else:
-                results.append(InterventionResult(
-                    success=True,
-                    action="auto-committed",
-                    violation_type=vtype,
-                    violation_code=vtype,
-                ))
+                results.append(
+                    InterventionResult(
+                        success=True,
+                        action="auto-committed",
+                        violation_type=vtype,
+                        violation_code=vtype,
+                    )
+                )
         return results

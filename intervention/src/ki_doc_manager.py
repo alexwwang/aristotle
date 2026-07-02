@@ -103,7 +103,13 @@ class KiDocManager:
 
     # ── Formatting helpers ──────────────────────────────────────
 
-    def _format_intervention_entry(self, event: ViolationEvent, plan: InterventionPlan, rollback_result: Optional[RollbackResult], validation_result: Optional[ValidationResult] = None) -> str:
+    def _format_intervention_entry(
+        self,
+        event: ViolationEvent,
+        plan: InterventionPlan,
+        rollback_result: Optional[RollbackResult],
+        validation_result: Optional[ValidationResult] = None,
+    ) -> str:
         lines = [
             "## Intervention\n",
             f"**Violation**: {event.violation_type}\n",
@@ -123,7 +129,9 @@ class KiDocManager:
         lines.append("\n")
         return "".join(lines)
 
-    def _format_assessment_entry(self, phase: int, next_phase: int, status: str, issues: List[str], priority_counts: Optional[dict] = None) -> str:
+    def _format_assessment_entry(
+        self, phase: int, next_phase: int, status: str, issues: List[str], priority_counts: Optional[dict] = None
+    ) -> str:
         lines = [
             "## Assessment\n",
             f"**Phase**: {phase} → {next_phase}\n",

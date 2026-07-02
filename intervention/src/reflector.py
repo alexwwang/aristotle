@@ -16,6 +16,7 @@ class ReflectionResult:
     success: bool
     error: Optional[str] = None
 
+
 class AutoReflector:
     def __init__(self, mcp_available: bool = True) -> None:
         self.mcp_available = mcp_available
@@ -36,12 +37,12 @@ Generate a preventive rule for this violation."""
         """Reflect on a violation event and produce a rule result via MCP (or return None if MCP unavailable)."""
         if not self.mcp_available:
             return None
-        
-        prompt = self.build_reflection_prompt(event)
+
+        _ = self.build_reflection_prompt(event)
         # In a real implementation, this would call MCP write_rule
         # For now, return a mock successful result
         return ReflectionResult(
             rule_id=f"rule_{event.violation_type}_{hash(event.affected_file_path) % _HASH_MODULO}",
             rule_path=f"rules/{event.violation_type}.md",
-            success=True
+            success=True,
         )

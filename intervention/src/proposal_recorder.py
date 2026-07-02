@@ -1,13 +1,38 @@
 """ProposalRecorder — records GPAV proposals and parses locations."""
+
 import re
 from typing import List, Optional, Tuple
 
 
 _SOURCE_EXTENSIONS = (
-    ".ts", ".py", ".js", ".tsx", ".jsx", ".go", ".rs", ".java", ".rb",
-    ".c", ".cpp", ".h", ".cs", ".swift", ".kt", ".scala", ".php", ".vue",
-    ".svelte", ".lua", ".css", ".scss", ".yaml", ".yml", ".json", ".sh",
-    ".sql", ".md",
+    ".ts",
+    ".py",
+    ".js",
+    ".tsx",
+    ".jsx",
+    ".go",
+    ".rs",
+    ".java",
+    ".rb",
+    ".c",
+    ".cpp",
+    ".h",
+    ".cs",
+    ".swift",
+    ".kt",
+    ".scala",
+    ".php",
+    ".vue",
+    ".svelte",
+    ".lua",
+    ".css",
+    ".scss",
+    ".yaml",
+    ".yml",
+    ".json",
+    ".sh",
+    ".sql",
+    ".md",
 )
 
 # Ordered longest-first for greedy match
@@ -33,14 +58,16 @@ class ProposalRecorder:
             if finding.get("severity") != "P":
                 continue
             files, _, _ = self.parse_location(finding.get("location", "")) or ([], 0, 0)
-            proposals.append({
-                "id": finding.get("id"),
-                "description": finding.get("description"),
-                "location": finding.get("location"),
-                "files": files,
-                "round": submission.get("round"),
-                "run_id": submission.get("run_id"),
-            })
+            proposals.append(
+                {
+                    "id": finding.get("id"),
+                    "description": finding.get("description"),
+                    "location": finding.get("location"),
+                    "files": files,
+                    "round": submission.get("round"),
+                    "run_id": submission.get("run_id"),
+                }
+            )
         return proposals
 
     def parse_location(self, location: str) -> Optional[Tuple[List[str], int, int]]:

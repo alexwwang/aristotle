@@ -4,7 +4,7 @@ import subprocess
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Optional, Dict, List, Any
+from typing import Dict, List, Any
 
 
 class ViolationType(str, Enum):
@@ -61,9 +61,7 @@ class CommitResult:
 @dataclass
 class AssessmentResult:
     assessment_result: str = "PASS"
-    priority_counts: Dict[str, int] = field(
-        default_factory=lambda: {"P1": 0, "P2": 0, "P3": 0, "P4": 0, "P5": 0}
-    )
+    priority_counts: Dict[str, int] = field(default_factory=lambda: {"P1": 0, "P2": 0, "P3": 0, "P4": 0, "P5": 0})
     phase: int = 4
     run_id: str = ""
     unrectified_total: int = 0
@@ -102,7 +100,6 @@ _GLOBAL_KI_DOC = None
 
 
 class CommitGuard:
-
     def __init__(self, project_root: str = ""):
         self.project_root = project_root
         self._commit_failures: Dict[str, int] = {}
@@ -353,7 +350,6 @@ class KiDocManager:
 
 
 class InterventionCoordinator:
-
     def __init__(self, context=None):
         self._phase_violations: Dict[tuple, List[ViolationEvent]] = {}
         self.context = context
@@ -440,8 +436,16 @@ def _handle_merged(events, context):
     has_missing_ki_doc = any(e.violation_type == ViolationType.MISSING_KI_DOC for e in events)
     has_ki_doc_outdated = any(e.violation_type == ViolationType.KI_DOC_OUTDATED for e in events)
     if has_missing_ki_doc and has_ki_doc_outdated:
-        skipped = [e for e in events if e.violation_type in (ViolationType.KI_DOC_OUTDATED, ViolationType.MISSING_KI_ASSESSMENT)]
-        active = [e for e in events if e.violation_type not in (ViolationType.KI_DOC_OUTDATED, ViolationType.MISSING_KI_ASSESSMENT)]
+        skipped = [
+            e
+            for e in events
+            if e.violation_type in (ViolationType.KI_DOC_OUTDATED, ViolationType.MISSING_KI_ASSESSMENT)
+        ]
+        active = [
+            e
+            for e in events
+            if e.violation_type not in (ViolationType.KI_DOC_OUTDATED, ViolationType.MISSING_KI_ASSESSMENT)
+        ]
     else:
         skipped = []
         active = list(events)
@@ -566,8 +570,16 @@ def intervene_batch(events):
     )
 
     if any(e.violation_type == ViolationType.MISSING_KI_DOC for e in sorted_events):
-        skipped = [e for e in sorted_events if e.violation_type in (ViolationType.KI_DOC_OUTDATED, ViolationType.MISSING_KI_ASSESSMENT)]
-        active = [e for e in sorted_events if e.violation_type not in (ViolationType.KI_DOC_OUTDATED, ViolationType.MISSING_KI_ASSESSMENT)]
+        skipped = [
+            e
+            for e in sorted_events
+            if e.violation_type in (ViolationType.KI_DOC_OUTDATED, ViolationType.MISSING_KI_ASSESSMENT)
+        ]
+        active = [
+            e
+            for e in sorted_events
+            if e.violation_type not in (ViolationType.KI_DOC_OUTDATED, ViolationType.MISSING_KI_ASSESSMENT)
+        ]
     else:
         skipped = []
         active = list(sorted_events)

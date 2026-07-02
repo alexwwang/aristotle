@@ -1,4 +1,5 @@
 """SpecialHandler — handles special violation types (PATTERN_CYCLE, FILE_SPLIT_NEEDED, PROMPT_INJECTION_BLOCKED)."""
+
 from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional
 

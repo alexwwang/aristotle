@@ -1,4 +1,5 @@
 """SubagentRetryHandler — manages subagent retry attempts and degradation."""
+
 from typing import Dict, Any, Optional
 
 
@@ -6,9 +7,15 @@ _MAX_ATTEMPTS = 4
 
 
 class SubagentRetryHandler:
-    def build_spawn_request(self, template_id: str, params: Dict[str, Any], run_id: str,
-                            violation_type: str, attempt: int,
-                            last_error: Optional[str] = None) -> Dict[str, Any]:
+    def build_spawn_request(
+        self,
+        template_id: str,
+        params: Dict[str, Any],
+        run_id: str,
+        violation_type: str,
+        attempt: int,
+        last_error: Optional[str] = None,
+    ) -> Dict[str, Any]:
         if attempt < 1 or attempt > _MAX_ATTEMPTS:
             raise ValueError(f"Invalid attempt {attempt} (must be 1..{_MAX_ATTEMPTS})")
 
@@ -39,8 +46,7 @@ class SubagentRetryHandler:
             )
         return f"Failed {prev_failures} {times_word}. Retry with adjusted context.{error_part}"
 
-    def report_subagent_degradation(self, template_id: str, run_id: str,
-                                     violation_type: str, errors: list) -> None:
+    def report_subagent_degradation(self, template_id: str, run_id: str, violation_type: str, errors: list) -> None:
         raise ValueError(
             f"Subagent {template_id} degraded after {len(errors)} failed attempt(s) "
             f"(run_id={run_id}, violation_type={violation_type}). "

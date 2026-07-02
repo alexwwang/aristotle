@@ -1,4 +1,5 @@
 """PriorityPipeline — sorts and processes violations by priority with validity elimination."""
+
 from collections import deque
 from typing import List, Any
 
@@ -13,8 +14,9 @@ class ValidityEliminator:
     def eliminate(self, pending: List[ViolationEvent], applied: ViolationEvent) -> List[ViolationEvent]:
         return self.eliminate_with_result(pending, applied, None)
 
-    def eliminate_with_result(self, pending: List[ViolationEvent], applied_event: ViolationEvent,
-                              applied_result: Any = None) -> List[ViolationEvent]:
+    def eliminate_with_result(
+        self, pending: List[ViolationEvent], applied_event: ViolationEvent, applied_result: Any = None
+    ) -> List[ViolationEvent]:
         if not pending:
             return []
 
@@ -32,10 +34,7 @@ class ValidityEliminator:
 
         result = []
         for ev in pending:
-            ev_files = set(
-                ev.affected_file_paths
-                or ([ev.affected_file_path] if ev.affected_file_path else [])
-            )
+            ev_files = set(ev.affected_file_paths or ([ev.affected_file_path] if ev.affected_file_path else []))
             if triggers_suspend and ev.violation_type in _P2_TYPES:
                 continue
             if applied_files and ev_files and applied_files & ev_files:
@@ -55,9 +54,7 @@ class PriorityPipeline:
 
         for ev in events:
             if ev.violation_type not in VIOLATION_PRIORITY:
-                raise ValueError(
-                    f"Unknown violation type '{ev.violation_type}' — not in VIOLATION_PRIORITY"
-                )
+                raise ValueError(f"Unknown violation type '{ev.violation_type}' — not in VIOLATION_PRIORITY")
 
         indexed = list(enumerate(events))
         indexed.sort(
@@ -75,23 +72,17 @@ class PriorityPipeline:
             results.append(result)
 
             is_suspend_trigger = current.violation_type in _SUSPEND_TRIGGER_TYPES
-            effective_suspend = (
-                is_suspend_trigger and first_event and not suspend_elimination_done
-            )
+            effective_suspend = is_suspend_trigger and first_event and not suspend_elimination_done
             if effective_suspend:
                 suspend_elimination_done = True
             first_event = False
 
             new_remaining = []
             applied_files = set(
-                current.affected_file_paths
-                or ([current.affected_file_path] if current.affected_file_path else [])
+                current.affected_file_paths or ([current.affected_file_path] if current.affected_file_path else [])
             )
             for ev in list(remaining):
-                ev_files = set(
-                    ev.affected_file_paths
-                    or ([ev.affected_file_path] if ev.affected_file_path else [])
-                )
+                ev_files = set(ev.affected_file_paths or ([ev.affected_file_path] if ev.affected_file_path else []))
                 if effective_suspend and ev.violation_type in _P2_TYPES:
                     continue
                 if applied_files and ev_files and applied_files & ev_files:
