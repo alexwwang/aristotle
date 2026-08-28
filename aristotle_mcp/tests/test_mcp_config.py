@@ -38,12 +38,12 @@ class TestConfig:
         monkeypatch.delenv("ARISTOTLE_SKILL_DIR", raising=False)
         importlib.reload(cfg)
 
-    def test_resolve_state_file(self):
-        from aristotle_mcp.config import resolve_state_file
+    def test_resolve_state_file(self, tmp_repo):
+        from aristotle_mcp.config import resolve_repo_dir, resolve_state_file
 
         p = resolve_state_file()
         assert p.name == "aristotle-state.json"
-        assert "opencode" in str(p)
+        assert p == resolve_repo_dir().parent / "aristotle-state.json"
 
     def test_resolve_learnings_user(self):
         from aristotle_mcp.config import resolve_learnings_file

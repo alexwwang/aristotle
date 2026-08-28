@@ -10,6 +10,7 @@ from aristotle_mcp.config import (
 from aristotle_mcp.frontmatter import (
     load_rule_file,
     stream_filter_rules,
+    update_frontmatter_field,
 )
 from aristotle_mcp.git_ops import git_show_exists
 
@@ -50,14 +51,16 @@ def check_sync_status(scope: str = "all", project_path: str | None = None) -> di
         dirs.append(repo_path / "user")
         if project_path:
             dirs.append(repo_path / "projects" / project_hash(project_path))
-
     unsynced: list[dict] = []
     total_verified = 0
+    sync_statuses = ("verified", "needs_sync")
 
     for base_dir in dirs:
         if not base_dir.exists():
             continue
-        paths = stream_filter_rules(base_dir, status_filter="verified", limit=1000)
+        paths: list[Path] = []
+        for st in sync_statuses:
+            paths.extend(stream_filter_rules(base_dir, status_filter=st, limit=1000))
         total_verified += len(paths)
 
         for p in paths:
@@ -66,14 +69,21 @@ def check_sync_status(scope: str = "all", project_path: str | None = None) -> di
             except ValueError:
                 continue
             if not git_show_exists(repo_path, rel_path):
+                # Anomaly state per GEAR.md: file on disk but not in git HEAD.
+                # Mark the rule's lifecycle status as `needs_sync`.
+                try:
+                    update_frontmatter_field(p, "status", "needs_sync")
+                except Exception:
+                    pass
                 data = load_rule_file(p)
                 rule_id = data.get("metadata", {}).get("id", "unknown")
-                unsynced.append({"path": rel_path, "rule_id": rule_id})
+                unsynced.append({"path": rel_path, "rule_id": rule_id, "status": "needs_sync"})
 
     return {
         "success": True,
         "total_verified": total_verified,
         "unsynced_count": len(unsynced),
+        "needs_sync_count": len(unsynced),
         "unsynced_files": unsynced,
     }
 
@@ -150,6 +160,12 @@ def sync_rules(file_paths: list[str] | None = None) -> dict:
 
     rev = _git_run(repo_path, ["rev-parse", "--short=7", "HEAD"])
     commit_hash = rev.stdout.strip() if rev.returncode == 0 else None
+    # Clear the needs_sync anomaly now that the rule is committed.
+    for rel_path in targets:
+        try:
+            update_frontmatter_field(rel_path, "status", "verified")
+        except Exception:
+            pass
 
     return {
         "success": True,

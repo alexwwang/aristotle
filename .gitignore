@@ -18,6 +18,7 @@ Thumbs.db
 design_plan/
 
 # Local tooling (not pushed to remote)
+.aristotle/
 
 # Protocol drafts (moved to design_plan/, kept for reference)
 protocol_draft/

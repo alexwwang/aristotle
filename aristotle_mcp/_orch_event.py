@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import re
 
-from aristotle_mcp.config import resolve_repo_dir
+from aristotle_mcp.config import resolve_repo_dir, resolve_state_file
 from aristotle_mcp.frontmatter import read_frontmatter_raw, update_frontmatter_field
 from aristotle_mcp._orch_prompts import _build_checker_prompt
 from aristotle_mcp._orch_state import _load_workflow, _save_workflow
@@ -223,7 +223,7 @@ def orchestrate_on_event(event_type: str, data_json: str) -> dict:
 
             rr_count = workflow.get("re_reflect_count", 0)
             if rr_count > 0:
-                state_path = resolve_repo_dir().parent / "aristotle-state.json"
+                state_path = resolve_state_file()
                 if state_path.exists():
                     records = json.loads(state_path.read_text(encoding="utf-8"))
                     if records:

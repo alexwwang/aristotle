@@ -108,9 +108,9 @@ def _fire_c_done_event(workflow_id: str, result: str = "Committed: 2, Staged: 0"
 
 
 def _setup_reflection_record(sequence: int = 1, status: str = "auto_committed", **extra) -> None:
-    from aristotle_mcp.config import resolve_repo_dir
+    from aristotle_mcp.config import resolve_repo_dir, resolve_state_file
 
-    state_path = resolve_repo_dir().parent / "aristotle-state.json"
+    state_path = resolve_state_file()
     state_path.parent.mkdir(parents=True, exist_ok=True)
 
     if state_path.exists():

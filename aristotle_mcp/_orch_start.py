@@ -4,7 +4,7 @@ import json
 import uuid
 from pathlib import Path
 
-from aristotle_mcp.config import resolve_repo_dir, resolve_sessions_dir
+from aristotle_mcp.config import resolve_repo_dir, resolve_sessions_dir, resolve_state_file
 from aristotle_mcp._orch_prompts import (
     _build_intent_extraction_prompt,
     _build_reflector_prompt,
@@ -157,7 +157,7 @@ def orchestrate_start(command: str, args_json: str = "{}") -> dict:
         if not sequence:
             return {"action": "notify", "message": "🦉 Usage: /aristotle review N"}
 
-        state_path = resolve_repo_dir().parent / "aristotle-state.json"
+        state_path = resolve_state_file()
         if not state_path.exists():
             return {
                 "action": "notify",
@@ -229,7 +229,7 @@ def orchestrate_start(command: str, args_json: str = "{}") -> dict:
         }
 
     elif command == "sessions":
-        state_path = resolve_repo_dir().parent / "aristotle-state.json"
+        state_path = resolve_state_file()
         if not state_path.exists():
             return {"action": "notify", "message": "🦉 No reflection records yet."}
 

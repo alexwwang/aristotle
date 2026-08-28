@@ -417,9 +417,9 @@ class TestSearchParamMapping:
 # ═══════════════════════════════════════════════════════
 class TestOrchestrateStartSessions:
     def _setup_reflection_record_with_status(self, status: str = "auto_committed", sequence: int = 1):
-        from aristotle_mcp.config import resolve_repo_dir
+        from aristotle_mcp.config import resolve_repo_dir, resolve_state_file
 
-        state_path = resolve_repo_dir().parent / "aristotle-state.json"
+        state_path = resolve_state_file()
         records = [
             {
                 "id": f"rec_{sequence}",
@@ -445,9 +445,9 @@ class TestOrchestrateStartSessions:
 
     @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="New APIs not yet implemented")
     def test_sessions_empty_state(self):
-        from aristotle_mcp.config import resolve_repo_dir
+        from aristotle_mcp.config import resolve_repo_dir, resolve_state_file
 
-        state_path = resolve_repo_dir().parent / "aristotle-state.json"
+        state_path = resolve_state_file()
         if state_path.exists():
             state_path.unlink()
         result = orchestrate_start("sessions", "{}")
@@ -485,9 +485,9 @@ class TestOrchestrateStartSessions:
 class TestHelperFunctions:
     @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="New APIs not yet implemented")
     def test_next_sequence_increments(self):
-        from aristotle_mcp.config import resolve_repo_dir
+        from aristotle_mcp.config import resolve_repo_dir, resolve_state_file
 
-        state_path = resolve_repo_dir().parent / "aristotle-state.json"
+        state_path = resolve_state_file()
         state_path.parent.mkdir(parents=True, exist_ok=True)
         state_path.write_text(json.dumps([]), encoding="utf-8")
 
@@ -499,9 +499,9 @@ class TestHelperFunctions:
 
     @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="New APIs not yet implemented")
     def test_next_sequence_first(self):
-        from aristotle_mcp.config import resolve_repo_dir
+        from aristotle_mcp.config import resolve_repo_dir, resolve_state_file
 
-        state_path = resolve_repo_dir().parent / "aristotle-state.json"
+        state_path = resolve_state_file()
         state_path.parent.mkdir(parents=True, exist_ok=True)
         state_path.write_text(json.dumps([]), encoding="utf-8")
         assert _next_sequence() == 1

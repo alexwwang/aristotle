@@ -14,7 +14,7 @@ def resolve_repo_dir() -> Path:
 
 
 def resolve_state_file() -> Path:
-    return Path.home() / ".config" / "opencode" / "aristotle-state.json"
+    return resolve_repo_dir().parent / "aristotle-state.json"
 
 
 def resolve_learnings_file(scope: str, project_path: str | None = None) -> Path:

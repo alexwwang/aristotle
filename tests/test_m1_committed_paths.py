@@ -96,9 +96,9 @@ class TestCommittedPathsCollection:
         _fire_c_done_event(wf_id, "Committed: 1, Staged: 0")
 
         # 验证 reflection record 包含 committed_rule_paths
-        from aristotle_mcp.config import resolve_repo_dir
+        from aristotle_mcp.config import resolve_repo_dir, resolve_state_file
 
-        state_path = resolve_repo_dir().parent / "aristotle-state.json"
+        state_path = resolve_state_file()
         records = json.loads(state_path.read_text(encoding="utf-8"))
         record = records[seq - 1] if seq <= len(records) else {}
         assert "committed_rule_paths" in record

@@ -4,7 +4,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from aristotle_mcp.config import resolve_repo_dir, WORKFLOW_DIR_NAME
+from aristotle_mcp.config import resolve_repo_dir, WORKFLOW_DIR_NAME, resolve_state_file
 from aristotle_mcp._utils import _now_iso
 
 
@@ -39,7 +39,7 @@ def _load_workflow(workflow_id: str) -> dict | None:
 
 
 def _next_sequence() -> int:
-    state_path = resolve_repo_dir().parent / "aristotle-state.json"
+    state_path = resolve_state_file()
     if not state_path.exists():
         return 1
     try:

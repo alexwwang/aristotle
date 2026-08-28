@@ -53,9 +53,9 @@ class TestReReflectCountPropagation:
 
         r_done = _fire_r_done_event(new_wf_id, "ses_r2")
 
-        from aristotle_mcp.config import resolve_repo_dir
+        from aristotle_mcp.config import resolve_repo_dir, resolve_state_file
 
-        state_path = resolve_repo_dir().parent / "aristotle-state.json"
+        state_path = resolve_state_file()
         records = json.loads(state_path.read_text(encoding="utf-8"))
         assert records[-1]["re_reflect_count"] == 1
         assert r_done["action"] == "fire_sub"
@@ -145,9 +145,9 @@ class TestReReflectCountPropagation:
     @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_re_reflect_count_inherited_from_record(self):
         init_repo_tool()
-        from aristotle_mcp.config import resolve_repo_dir
+        from aristotle_mcp.config import resolve_repo_dir, resolve_state_file
 
-        state_path = resolve_repo_dir().parent / "aristotle-state.json"
+        state_path = resolve_state_file()
         state_path.parent.mkdir(parents=True, exist_ok=True)
         records = [
             {
@@ -193,9 +193,9 @@ class TestReReflectCountPropagation:
 
         _fire_r_done_event(wf_id, "ses_r_first")
 
-        from aristotle_mcp.config import resolve_repo_dir
+        from aristotle_mcp.config import resolve_repo_dir, resolve_state_file
 
-        state_path = resolve_repo_dir().parent / "aristotle-state.json"
+        state_path = resolve_state_file()
         records = json.loads(state_path.read_text(encoding="utf-8"))
 
         latest = records[-1]

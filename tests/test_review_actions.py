@@ -61,9 +61,9 @@ class TestOrchestrateReviewAction:
         wf = _load_workflow(wf_id)
         assert wf["phase"] == "done"
 
-        from aristotle_mcp.config import resolve_repo_dir
+        from aristotle_mcp.config import resolve_repo_dir, resolve_state_file
 
-        state_path = resolve_repo_dir().parent / "aristotle-state.json"
+        state_path = resolve_state_file()
         records = json.loads(state_path.read_text(encoding="utf-8"))
         assert records[0]["status"] == "auto_committed"
 
@@ -99,7 +99,7 @@ class TestOrchestrateReviewAction:
         assert "rejected" in result["message"].lower()
         assert "#1" in result["message"]
 
-        from aristotle_mcp.config import resolve_repo_dir
+        from aristotle_mcp.config import resolve_repo_dir, resolve_state_file
 
         rejected_path = resolve_repo_dir() / "rejected" / "user" / Path(rule_path).name
         assert rejected_path.exists() and not Path(rule_path).exists()
@@ -107,7 +107,7 @@ class TestOrchestrateReviewAction:
         wf = _load_workflow(wf_id)
         assert wf["phase"] == "done"
 
-        state_path = resolve_repo_dir().parent / "aristotle-state.json"
+        state_path = resolve_state_file()
         records = json.loads(state_path.read_text(encoding="utf-8"))
         assert records[0]["status"] == "rejected"
 
@@ -563,9 +563,9 @@ class TestIntegrationReview:
         fm = read_frontmatter_raw(Path(rule_path))
         assert fm.get("status") == "verified"
 
-        from aristotle_mcp.config import resolve_repo_dir
+        from aristotle_mcp.config import resolve_repo_dir, resolve_state_file
 
-        state_path = resolve_repo_dir().parent / "aristotle-state.json"
+        state_path = resolve_state_file()
         records = json.loads(state_path.read_text(encoding="utf-8"))
         assert records[0]["status"] == "auto_committed"
 

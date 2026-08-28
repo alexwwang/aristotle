@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from aristotle_mcp.config import resolve_repo_dir
+from aristotle_mcp.config import resolve_repo_dir, resolve_state_file
 from aristotle_mcp._utils import _now_iso
 
 
@@ -43,7 +43,7 @@ def create_reflection_record(
 
     Returns dict with success, id, draft_file_path.
     """
-    state_path = resolve_repo_dir().parent / "aristotle-state.json"
+    state_path = resolve_state_file()
     state_path.parent.mkdir(parents=True, exist_ok=True)
 
     if state_path.exists():
@@ -127,7 +127,7 @@ def complete_reflection_record(
 
     Returns dict with success, message.
     """
-    state_path = resolve_repo_dir().parent / "aristotle-state.json"
+    state_path = resolve_state_file()
     if not state_path.exists():
         return {"success": False, "message": "State file not found"}
 
@@ -160,9 +160,9 @@ def complete_reflection_record(
 
 def _update_record_field(sequence: int, field: str, value) -> None:
     """Update a specific field in the reflection record."""
-    from aristotle_mcp.config import resolve_repo_dir
+    from aristotle_mcp.config import resolve_repo_dir, resolve_state_file
 
-    state_path = resolve_repo_dir().parent / "aristotle-state.json"
+    state_path = resolve_state_file()
     if not state_path.exists():
         return
     records = json.loads(state_path.read_text(encoding="utf-8"))

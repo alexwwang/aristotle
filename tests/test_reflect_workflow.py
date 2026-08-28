@@ -88,7 +88,7 @@ class TestOrchestrateStartReflect:
 
     @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_reflect_auto_init(self):
-        from aristotle_mcp.config import resolve_repo_dir
+        from aristotle_mcp.config import resolve_repo_dir, resolve_state_file
         import shutil
 
         repo = resolve_repo_dir()
@@ -119,7 +119,7 @@ class TestOrchestrateStartReflect:
         result = _start_reflect_workflow("ses_state_check")
         assert result["action"] == "fire_sub"
 
-        from aristotle_mcp.config import resolve_repo_dir
+        from aristotle_mcp.config import resolve_repo_dir, resolve_state_file
 
         wf_dir = resolve_repo_dir() / ".workflows"
         wf_id = result["workflow_id"]
@@ -191,9 +191,9 @@ class TestOrchestrateOnEventReflect:
         wf_after = _load_workflow(wf_id)
         assert wf_after["record_created"] is True
 
-        from aristotle_mcp.config import resolve_repo_dir
+        from aristotle_mcp.config import resolve_repo_dir, resolve_state_file
 
-        state_path = resolve_repo_dir().parent / "aristotle-state.json"
+        state_path = resolve_state_file()
         assert state_path.exists()
         records = json.loads(state_path.read_text(encoding="utf-8"))
         assert len(records) >= 1
@@ -212,7 +212,7 @@ class TestOrchestrateOnEventReflect:
 
         result = _fire_r_done_event(wf_id, "ses_r1")
 
-        from aristotle_mcp.config import resolve_repo_dir
+        from aristotle_mcp.config import resolve_repo_dir, resolve_state_file
 
         expected_draft = str(resolve_repo_dir().parent / "aristotle-drafts" / f"rec_{sequence}.md")
         assert expected_draft in result["sub_prompt"]
@@ -238,9 +238,9 @@ class TestOrchestrateOnEventReflect:
         assert "1 rules committed" in result["message"]
         assert "2 staged" in result["message"]
 
-        from aristotle_mcp.config import resolve_repo_dir
+        from aristotle_mcp.config import resolve_repo_dir, resolve_state_file
 
-        state_path = resolve_repo_dir().parent / "aristotle-state.json"
+        state_path = resolve_state_file()
         records = json.loads(state_path.read_text(encoding="utf-8"))
         assert records[-1]["status"] == "partial_commit"
         assert records[-1]["rules_count"] == 3
@@ -256,7 +256,7 @@ class TestOrchestrateOnEventReflect:
         sequence = wf["sequence"]
 
         # Ensure no DRAFT file exists (delete if auto-created by any prior step)
-        from aristotle_mcp.config import resolve_repo_dir
+        from aristotle_mcp.config import resolve_repo_dir, resolve_state_file
 
         draft_path = resolve_repo_dir().parent / "aristotle-drafts" / f"rec_{sequence}.md"
         draft_path.unlink(missing_ok=True)
@@ -282,7 +282,7 @@ class TestOrchestrateOnEventReflect:
         wf = _load_workflow(wf_id)
         sequence = wf["sequence"]
 
-        from aristotle_mcp.config import resolve_repo_dir
+        from aristotle_mcp.config import resolve_repo_dir, resolve_state_file
 
         draft_path = resolve_repo_dir().parent / "aristotle-drafts" / f"rec_{sequence}.md"
         draft_path.unlink(missing_ok=True)
@@ -343,10 +343,10 @@ class TestExceptionStart:
     @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_review_state_file_corrupted(self):
         """aristotle-state.json 损坏 → action=notify 含 "corrupted"。"""
-        from aristotle_mcp.config import resolve_repo_dir
+        from aristotle_mcp.config import resolve_repo_dir, resolve_state_file
 
         init_repo_tool()
-        state_path = resolve_repo_dir().parent / "aristotle-state.json"
+        state_path = resolve_state_file()
         state_path.parent.mkdir(parents=True, exist_ok=True)
         state_path.write_text("{not valid json!!!", encoding="utf-8")
 
@@ -366,9 +366,9 @@ class TestExceptionStart:
     @pytest.mark.skipif(not _NEW_APIS_AVAILABLE, reason="M1 reflect/review APIs not yet implemented")
     def test_sessions_state_file_corrupted(self):
         """sessions 的 aristotle-state.json 损坏 → action=notify 含 "corrupted"。"""
-        from aristotle_mcp.config import resolve_repo_dir
+        from aristotle_mcp.config import resolve_repo_dir, resolve_state_file
 
-        state_path = resolve_repo_dir().parent / "aristotle-state.json"
+        state_path = resolve_state_file()
         state_path.parent.mkdir(parents=True, exist_ok=True)
         state_path.write_text("BROKEN{{{}}}", encoding="utf-8")
 
