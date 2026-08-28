@@ -5,6 +5,7 @@ Rule lifecycle tools — init, write, read, stage, commit, reject, restore, list
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -15,6 +16,51 @@ from aristotle_mcp.git_ops import git_init, git_add_and_commit, git_show_exists,
 from aristotle_mcp.models import RuleMetadata, RuleFile, to_frontmatter_string, from_frontmatter_dict
 from aristotle_mcp.frontmatter import stream_filter_rules
 from aristotle_mcp.migration import init_repo as _init_repo
+from aristotle_mcp._audit_log import append_audit_entry
+
+
+def _validate_rule_for_commit(fm: dict) -> str | None:
+    status = fm.get("status")
+    if status != "staging":
+        return f"Rule must be in 'staging' status before commit (current: {status})"
+    category = fm.get("category")
+    if not category or not str(category).strip():
+        return "Rule category is required"
+    confidence = fm.get("confidence")
+    if isinstance(confidence, bool) or not isinstance(confidence, (int, float)):
+        return "Rule confidence must be a number between 0.0 and 1.0"
+    if confidence < 0.0 or confidence > 1.0:
+        return "Rule confidence must be between 0.0 and 1.0"
+    error_summary = fm.get("error_summary")
+    if error_summary is not None and len(str(error_summary)) > 200:
+        return "Rule error_summary must be 200 characters or fewer"
+    return None
+
+
+def _commit_guard_block(file_path: str, message: str) -> dict:
+    append_audit_entry(
+        {
+            "tool": "commit_rule",
+            "runId": str(file_path),
+            "result": "error",
+            "params": {"file_path": str(file_path), "action": "guard_block"},
+            "action": "guard_block",
+            "error": message,
+        }
+    )
+    return {"success": False, "message": message, "commit_hash": None}
+
+
+def _commit_audit_pass(file_path: str, action: str) -> None:
+    append_audit_entry(
+        {
+            "tool": "commit_rule",
+            "runId": str(file_path),
+            "result": "success",
+            "params": {"file_path": str(file_path), "action": action},
+            "action": action,
+        }
+    )
 
 
 def _now_iso() -> str:
@@ -35,30 +81,53 @@ def _resolve_scope_dir(scope: str, project_path: str | None, repo_dir: Path) -> 
     raise ValueError(f"Invalid scope: {scope}")
 
 
+def _safe_path(repo_dir: Path, file_path: str | Path) -> Path | None:
+    """Resolve a rule path inside repo_dir; return None if it escapes the repo."""
+    p = Path(file_path)
+    if not p.is_absolute():
+        p = repo_dir / p
+    try:
+        p = p.resolve()
+    except (OSError, RuntimeError):
+        return None
+    repo_root = repo_dir.resolve()
+    if p == repo_root or repo_root in p.parents:
+        return p
+    return None
+
+
 def _generate_rule_id(repo_dir: Path, scope: str, project_path: str | None) -> str:
     import time
+
+    return f"rec_{int(time.time() * 1000)}"
+
+
+def _generate_rule_id(repo_dir: Path, scope: str, project_path: str | None) -> str:
+    import time
+
     return f"rec_{int(time.time() * 1000)}"
 
 
 def get_audit_decision(file_path: str) -> dict:
     repo_dir = resolve_repo_dir()
-    full_path = repo_dir / file_path
-
+    full_path = _safe_path(repo_dir, file_path)
+    if full_path is None:
+        return {"success": False, "message": f"Path escapes repo: {file_path}"}
     if not full_path.exists():
-        from aristotle_mcp.frontmatter import _parse_frontmatter
-        return {"error": f"File not found: {file_path}"}
+        return {"success": False, "message": f"File not found: {file_path}"}
 
     try:
         import yaml
+
         text = full_path.read_text(encoding="utf-8")
         m = re.match(r"^---\s*\n(.*?)\n---", text, re.DOTALL)
         if not m:
-            return {"error": "No frontmatter found"}
+            return {"success": False, "message": "No frontmatter found"}
         fm = yaml.safe_load(m.group(1))
         if not fm:
-            return {"error": "Empty frontmatter"}
+            return {"success": False, "message": "Empty frontmatter"}
     except Exception as e:
-        return {"error": f"Failed to parse frontmatter: {e}"}
+        return {"success": False, "message": f"Failed to parse frontmatter: {e}"}
 
     metadata = from_frontmatter_dict(fm)
     risk_level = RISK_MAP.get(metadata.category, "low")
@@ -72,18 +141,30 @@ def get_audit_decision(file_path: str) -> dict:
         level = "manual"
 
     return {
+        "success": True,
         "rule_id": metadata.id,
         "delta": round(delta, 4),
         "audit_level": level,
         "confidence": metadata.confidence,
         "risk_level": risk_level,
         "status": metadata.status,
+        "thresholds": {
+            "auto": AUDIT_THRESHOLDS["auto"],
+            "semi": AUDIT_THRESHOLDS["semi"],
+        },
     }
+
+
+def _init_repo_tool_result(repo_dir: Path) -> dict:
+    result = _init_repo(repo_dir)
+    if result.get("success"):
+        result["repo_path"] = str(repo_dir)
+    return result
 
 
 def init_repo_tool() -> dict:
     repo_dir = resolve_repo_dir()
-    return _init_repo(repo_dir)
+    return _init_repo_tool_result(repo_dir)
 
 
 def write_rule(
@@ -102,7 +183,13 @@ def write_rule(
     reflection_sequence: int | None = None,
 ) -> dict:
     repo_dir = resolve_repo_dir()
-    target_dir = _resolve_scope_dir(scope, project_path, repo_dir)
+    init_result = _init_repo(repo_dir)
+    if not init_result.get("success"):
+        return init_result
+    try:
+        target_dir = _resolve_scope_dir(scope, project_path, repo_dir)
+    except ValueError as e:
+        return {"success": False, "message": str(e)}
     target_dir.mkdir(parents=True, exist_ok=True)
 
     rule_id = _generate_rule_id(repo_dir, scope, project_path)
@@ -152,7 +239,7 @@ def write_rule(
 
     return {
         "success": True,
-        "file_path": str(file_path.relative_to(repo_dir)),
+        "file_path": str(file_path),
         "rule_id": rule_id,
         "status": "pending",
     }
@@ -194,34 +281,38 @@ def read_rules(
             if not m:
                 continue
             import yaml
+
             fm = yaml.safe_load(m.group(1))
             if not fm:
                 continue
             metadata = from_frontmatter_dict(fm)
-            body = text[m.end():].strip()
-            rules.append({
-                "path": str(path.relative_to(repo_dir)),
-                "metadata": {
-                    "id": metadata.id,
-                    "status": metadata.status,
-                    "scope": metadata.scope,
-                    "category": metadata.category,
-                    "confidence": metadata.confidence,
-                    "risk_level": metadata.risk_level,
-                    "intent_tags": metadata.intent_tags,
-                    "failed_skill": metadata.failed_skill,
-                    "error_summary": metadata.error_summary,
-                    "rule_summary": metadata.rule_summary,
-                    "success_rate": metadata.success_rate,
-                    "failure_rate": metadata.failure_rate,
-                    "sample_size": metadata.sample_size,
-                    "feedback_count": metadata.feedback_count,
-                    "reflection_sequence": metadata.reflection_sequence,
-                    "source_session": metadata.source_session,
-                    "conflicts_with": metadata.conflicts_with,
-                },
-                "content_preview": body[:200] + "..." if len(body) > 200 else body,
-            })
+            body = text[m.end() :].strip()
+            rules.append(
+                {
+                    "path": str(path.relative_to(repo_dir)),
+                    "metadata": {
+                        "id": metadata.id,
+                        "status": metadata.status,
+                        "scope": metadata.scope,
+                        "category": metadata.category,
+                        "confidence": metadata.confidence,
+                        "risk_level": metadata.risk_level,
+                        "intent_tags": metadata.intent_tags,
+                        "failed_skill": metadata.failed_skill,
+                        "error_summary": metadata.error_summary,
+                        "rule_summary": metadata.rule_summary,
+                        "success_rate": metadata.success_rate,
+                        "failure_rate": metadata.failure_rate,
+                        "sample_size": metadata.sample_size,
+                        "feedback_count": metadata.feedback_count,
+                        "reflection_sequence": metadata.reflection_sequence,
+                        "source_session": metadata.source_session,
+                        "conflicts_with": metadata.conflicts_with,
+                    },
+                    "content": body,
+                    "content_preview": body[:200] + "..." if len(body) > 200 else body,
+                }
+            )
         except Exception:
             continue
 
@@ -230,13 +321,15 @@ def read_rules(
 
 def stage_rule(file_path: str) -> dict:
     repo_dir = resolve_repo_dir()
-    full_path = repo_dir / file_path
-
+    full_path = _safe_path(repo_dir, file_path)
+    if full_path is None:
+        return {"success": False, "message": f"Path escapes repo: {file_path}"}
     if not full_path.exists():
         return {"success": False, "message": f"File not found: {file_path}"}
 
     try:
         import yaml
+
         text = full_path.read_text(encoding="utf-8")
         m = re.match(r"^---\s*\n(.*?)\n---", text, re.DOTALL)
         if not m:
@@ -251,7 +344,7 @@ def stage_rule(file_path: str) -> dict:
             if v is not None:
                 new_fm += f"{k}: {v}\n"
         new_fm += "---\n"
-        body = text[m.end():]
+        body = text[m.end() :]
         full_path.write_text(new_fm + body, encoding="utf-8")
     except Exception as e:
         return {"success": False, "message": f"Failed to update frontmatter: {e}"}
@@ -266,30 +359,44 @@ def commit_rule(
     enable_guard: bool = False,
 ) -> dict:
     repo_dir = resolve_repo_dir()
-    full_path = repo_dir / file_path
-
+    full_path = _safe_path(repo_dir, file_path)
+    if full_path is None:
+        return {"success": False, "message": f"Path escapes repo: {file_path}", "commit_hash": None}
     if not full_path.exists():
-        return {"success": False, "message": f"File not found: {file_path}"}
+        return {"success": False, "message": f"File not found: {file_path}", "commit_hash": None}
 
     try:
         import yaml
+
         text = full_path.read_text(encoding="utf-8")
         m = re.match(r"^---\s*\n(.*?)\n---", text, re.DOTALL)
         if not m:
-            return {"success": False, "message": "No frontmatter found"}
+            return _commit_guard_block(str(full_path), "No frontmatter found")
         fm = yaml.safe_load(m.group(1))
         if not fm:
-            return {"success": False, "message": "Empty frontmatter"}
+            return _commit_guard_block(str(full_path), "Empty frontmatter")
+    except Exception as e:
+        return _commit_guard_block(str(full_path), f"Failed to parse frontmatter: {e}")
 
+    ci_mode = os.environ.get("ARISTOTLE_CI", "").strip() == "true"
+    guard_active = ci_mode or (enable_guard and not skip_guard)
+
+    if guard_active:
+        error = _validate_rule_for_commit(fm)
+        if error:
+            return _commit_guard_block(str(full_path), error)
+
+    try:
         fm["status"] = "verified"
         fm["verified_at"] = _now_iso()
         fm["verified_by"] = "auto"
 
-        conflict_ids = detect_conflicts(file_path)
+        conflict_ids = detect_conflicts(str(full_path.relative_to(repo_dir)))
         if conflict_ids:
             existing_cw = fm.get("conflicts_with", [])
             if isinstance(existing_cw, str):
                 import json as _json
+
                 try:
                     existing_cw = _json.loads(existing_cw)
                 except (ValueError, TypeError):
@@ -306,17 +413,19 @@ def commit_rule(
             if v is not None:
                 new_fm += f"{k}: {v}\n"
         new_fm += "---\n"
-        body = text[m.end():]
+        body = text[m.end() :]
         full_path.write_text(new_fm + body, encoding="utf-8")
     except Exception as e:
         return {"success": False, "message": f"Failed to update frontmatter: {e}"}
 
+    action = "guard_pass" if guard_active else ("guard_bypass" if skip_guard else "commit")
     commit_msg = message or f"verify: {file_path}"
-    result = git_add_and_commit(repo_dir, file_path, commit_msg)
+    result = git_add_and_commit(repo_dir, str(full_path.relative_to(repo_dir)), commit_msg)
+    _commit_audit_pass(str(full_path), action)
 
     return {
         "success": result["success"],
-        "file_path": file_path,
+        "file_path": str(full_path),
         "status": "verified",
         "commit_hash": result.get("commit_hash"),
         "message": result.get("message", ""),
@@ -325,13 +434,15 @@ def commit_rule(
 
 def reject_rule(file_path: str, reason: str = "") -> dict:
     repo_dir = resolve_repo_dir()
-    full_path = repo_dir / file_path
-
+    full_path = _safe_path(repo_dir, file_path)
+    if full_path is None:
+        return {"success": False, "message": f"Path escapes repo: {file_path}"}
     if not full_path.exists():
         return {"success": False, "message": f"File not found: {file_path}"}
 
     try:
         import yaml
+
         text = full_path.read_text(encoding="utf-8")
         m = re.match(r"^---\s*\n(.*?)\n---", text, re.DOTALL)
         if not m:
@@ -351,36 +462,46 @@ def reject_rule(file_path: str, reason: str = "") -> dict:
             if v is not None:
                 new_fm += f"{k}: {v}\n"
         new_fm += "---\n"
-        body = text[m.end():]
+        body = text[m.end() :]
 
         scope_dir = "user" if scope == "user" else f"projects/{fm.get('project_hash', 'unknown')}"
         rejected_dir = repo_dir / "rejected" / scope_dir
         rejected_dir.mkdir(parents=True, exist_ok=True)
-        rejected_path = rejected_dir / Path(file_path).name
+        rejected_path = rejected_dir / full_path.name
 
         rejected_path.write_text(new_fm + body, encoding="utf-8")
         full_path.unlink()
 
         git_add_and_commit(repo_dir, str(rejected_path.relative_to(repo_dir)), f"reject: {rule_id} — {reason}")
         try:
-            git_add_and_commit(repo_dir, file_path, f"reject: remove {rule_id}")
+            git_add_and_commit(repo_dir, str(full_path.relative_to(repo_dir)), f"reject: remove {rule_id}")
         except Exception:
             pass
     except Exception as e:
         return {"success": False, "message": f"Failed: {e}"}
 
-    return {"success": True, "file_path": str(rejected_path.relative_to(repo_dir)), "status": "rejected"}
+    return {
+        "success": True,
+        "file_path": str(rejected_path.relative_to(repo_dir)),
+        "new_path": str(rejected_path),
+        "status": "rejected",
+    }
 
 
 def restore_rule(file_path: str, new_status: str = "pending") -> dict:
     repo_dir = resolve_repo_dir()
-    full_path = repo_dir / file_path
-
+    full_path = _safe_path(repo_dir, file_path)
+    if full_path is None:
+        return {"success": False, "message": f"Path escapes repo: {file_path}"}
     if not full_path.exists():
         return {"success": False, "message": f"File not found: {file_path}"}
 
+    if "rejected" not in full_path.resolve().parts:
+        return {"success": False, "message": f"File is not in the rejected directory: {file_path}"}
+
     try:
         import yaml
+
         text = full_path.read_text(encoding="utf-8")
         m = re.match(r"^---\s*\n(.*?)\n---", text, re.DOTALL)
         if not m:
@@ -396,28 +517,37 @@ def restore_rule(file_path: str, new_status: str = "pending") -> dict:
 
         new_fm = "---\n"
         for k, v in fm.items():
-            if v is not None:
+            if v is None:
+                new_fm += f"{k}:\n"
+            else:
                 new_fm += f"{k}: {v}\n"
         new_fm += "---\n"
-        body = text[m.end():]
+        body = text[m.end() :]
 
         scope_dir = "user" if scope == "user" else f"projects/{fm.get('project_hash', 'unknown')}"
         restore_dir = repo_dir / scope_dir
         restore_dir.mkdir(parents=True, exist_ok=True)
-        restore_path = restore_dir / Path(file_path).name
+        restore_path = restore_dir / full_path.name
 
         restore_path.write_text(new_fm + body, encoding="utf-8")
         full_path.unlink()
 
-        git_add_and_commit(repo_dir, str(restore_path.relative_to(repo_dir)), f"restore: {Path(file_path).name} as {new_status}")
+        git_add_and_commit(
+            repo_dir, str(restore_path.relative_to(repo_dir)), f"restore: {full_path.name} as {new_status}"
+        )
         try:
-            git_add_and_commit(repo_dir, file_path, f"restore: remove from rejected")
+            git_add_and_commit(repo_dir, str(full_path.relative_to(repo_dir)), f"restore: remove from rejected")
         except Exception:
             pass
     except Exception as e:
         return {"success": False, "message": f"Failed: {e}"}
 
-    return {"success": True, "file_path": str(restore_path.relative_to(repo_dir)), "status": new_status}
+    return {
+        "success": True,
+        "file_path": str(restore_path.relative_to(repo_dir)),
+        "new_path": str(restore_path),
+        "status": new_status,
+    }
 
 
 def list_rules(
@@ -456,6 +586,7 @@ def list_rules(
             if not m:
                 continue
             import yaml
+
             fm = yaml.safe_load(m.group(1))
             if not fm:
                 continue
@@ -483,6 +614,7 @@ def list_rules(
 def _annotate_conflict_reverse(repo_dir: Path, target_rule_id: str, source_rule_id: str) -> None:
     """Add source_rule_id to target rule's conflicts_with (bidirectional annotation)."""
     import yaml
+
     for md_path in repo_dir.rglob("*.md"):
         if md_path.name.startswith("_") or md_path.name == ".gitignore":
             continue
@@ -497,6 +629,7 @@ def _annotate_conflict_reverse(repo_dir: Path, target_rule_id: str, source_rule_
             existing = fm.get("conflicts_with", [])
             if isinstance(existing, str):
                 import json as _json
+
                 try:
                     existing = _json.loads(existing)
                 except (ValueError, TypeError):
@@ -511,7 +644,7 @@ def _annotate_conflict_reverse(repo_dir: Path, target_rule_id: str, source_rule_
                     if v is not None:
                         new_fm += f"{k}: {v}\n"
                 new_fm += "---\n"
-                md_path.write_text(new_fm + text[m.end():], encoding="utf-8")
+                md_path.write_text(new_fm + text[m.end() :], encoding="utf-8")
             return
         except (OSError, UnicodeDecodeError, Exception):
             continue
@@ -526,6 +659,7 @@ def detect_conflicts(file_path: str) -> list[str]:
 
     try:
         import yaml
+
         text = full_path.read_text(encoding="utf-8")
         m = re.match(r"^---\s*\n(.*?)\n---", text, re.DOTALL)
         if not m:

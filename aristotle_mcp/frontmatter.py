@@ -190,6 +190,8 @@ def _serialize(val: object) -> str:
 
 
 def read_frontmatter_raw(path: Path) -> dict | None:
+    if not path.is_absolute():
+        path = resolve_repo_dir() / path
     try:
         with path.open("r", encoding="utf-8") as f:
             head = ""
