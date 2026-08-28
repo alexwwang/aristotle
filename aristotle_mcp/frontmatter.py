@@ -5,6 +5,7 @@ import re
 from pathlib import Path
 
 import frontmatter
+from aristotle_mcp.config import resolve_repo_dir
 import yaml
 
 _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---", re.DOTALL)
@@ -137,6 +138,7 @@ def stream_filter_rules(
 def load_rule_file(path: Path) -> dict:
     if not path.is_absolute():
         from aristotle_mcp.config import resolve_repo_dir
+
         path = resolve_repo_dir() / path
     post = frontmatter.load(str(path))
     return {"metadata": dict(post.metadata), "content": post.content}
@@ -218,4 +220,5 @@ def update_frontmatter_field(path: Path, field: str, value: str | None) -> dict:
     data = load_rule_file(path)
     metadata = data["metadata"]
     metadata[field] = value
-    return write_rule_file(path, metadata, data["content"])
+    abs_path = path if path.is_absolute() else resolve_repo_dir() / path
+    return write_rule_file(abs_path, metadata, data["content"])
