@@ -36,7 +36,7 @@ class TestCommitGuardDirtyCommit:
     def test_should_commit_when_repo_dirty(self, guard, pipeline_context_factory):
         ctx = pipeline_context_factory()
         with patch.object(guard, "_is_clean", return_value=False), \
-             patch("aristotle_mcp.intervention.aristotle_mcp.intervention.commit_guard.subprocess.run") as mock_run:
+             patch("commit_guard.subprocess.run") as mock_run:
             mock_run.side_effect = [
                 MagicMock(returncode=0),
                 MagicMock(returncode=0),
@@ -52,7 +52,7 @@ class TestCommitGuardCommitFailure:
     def test_should_return_failure_when_git_commit_fails(self, guard, pipeline_context_factory):
         ctx = pipeline_context_factory()
         with patch.object(guard, "_is_clean", return_value=False), \
-             patch("aristotle_mcp.intervention.aristotle_mcp.intervention.commit_guard.subprocess.run") as mock_run:
+             patch("commit_guard.subprocess.run") as mock_run:
             mock_run.side_effect = [
                 MagicMock(returncode=0),
                 MagicMock(returncode=1, stderr="index.lock exists"),
@@ -66,7 +66,7 @@ class TestCommitGuardRevParseFailure:
     def test_should_return_success_with_empty_hash_when_rev_parse_fails(self, guard, pipeline_context_factory):
         ctx = pipeline_context_factory()
         with patch.object(guard, "_is_clean", return_value=False), \
-             patch("aristotle_mcp.intervention.aristotle_mcp.intervention.commit_guard.subprocess.run") as mock_run:
+             patch("commit_guard.subprocess.run") as mock_run:
             mock_run.side_effect = [
                 MagicMock(returncode=0),
                 MagicMock(returncode=0),
@@ -101,7 +101,7 @@ class TestCommitGuardPhaseCommit:
     def test_should_auto_commit_phase_completion_with_non_empty_diff(self, guard, pipeline_context_factory):
         ctx = pipeline_context_factory(current_phase=5)
         with patch.object(guard, "_is_clean", return_value=False), \
-             patch("aristotle_mcp.intervention.aristotle_mcp.intervention.commit_guard.subprocess.run") as mock_run:
+             patch("commit_guard.subprocess.run") as mock_run:
             mock_run.side_effect = [
                 MagicMock(returncode=0),
                 MagicMock(returncode=0),
@@ -119,7 +119,7 @@ class TestCommitGuardLoopCommit:
     def test_should_auto_commit_loop_round_with_non_empty_diff(self, guard, pipeline_context_factory):
         ctx = pipeline_context_factory(current_phase=4, loop_round=2)
         with patch.object(guard, "_is_clean", return_value=False), \
-             patch("aristotle_mcp.intervention.aristotle_mcp.intervention.commit_guard.subprocess.run") as mock_run:
+             patch("commit_guard.subprocess.run") as mock_run:
             mock_run.side_effect = [
                 MagicMock(returncode=0),
                 MagicMock(returncode=0),
@@ -133,7 +133,7 @@ class TestCommitGuardLoopCommit:
 
 class TestCommitGuardIsCleanStaged:
     def test_should_detect_staged_changes_as_dirty(self, guard):
-        with patch("aristotle_mcp.intervention.aristotle_mcp.intervention.commit_guard.subprocess.run") as mock_run:
+        with patch("commit_guard.subprocess.run") as mock_run:
             mock_run.side_effect = [MagicMock(returncode=0), MagicMock(returncode=1)]
             result = guard._is_clean()
         assert result is False
@@ -145,7 +145,7 @@ class TestCommitGuardIsCleanStaged:
 
 class TestCommitGuardIsCleanUnstaged:
     def test_should_detect_unstaged_changes_as_dirty(self, guard):
-        with patch("aristotle_mcp.intervention.aristotle_mcp.intervention.commit_guard.subprocess.run") as mock_run:
+        with patch("commit_guard.subprocess.run") as mock_run:
             mock_run.side_effect = [MagicMock(returncode=1), MagicMock(returncode=0)]
             result = guard._is_clean()
         assert result is False
@@ -157,7 +157,7 @@ class TestCommitGuardIsCleanUnstaged:
 
 class TestCommitGuardIsCleanBothDirty:
     def test_should_return_false_when_both_staged_and_unstaged_changes(self, guard):
-        with patch("aristotle_mcp.intervention.aristotle_mcp.intervention.commit_guard.subprocess.run") as mock_run:
+        with patch("commit_guard.subprocess.run") as mock_run:
             mock_run.side_effect = [MagicMock(returncode=1), MagicMock(returncode=1)]
             result = guard._is_clean()
         assert result is False
@@ -165,7 +165,7 @@ class TestCommitGuardIsCleanBothDirty:
 
 class TestCommitGuardIsCleanTrue:
     def test_should_return_true_when_both_diffs_clean(self, guard):
-        with patch("aristotle_mcp.intervention.aristotle_mcp.intervention.commit_guard.subprocess.run") as mock_run:
+        with patch("commit_guard.subprocess.run") as mock_run:
             mock_run.side_effect = [MagicMock(returncode=0), MagicMock(returncode=0)]
             result = guard._is_clean()
         assert result is True
@@ -173,7 +173,7 @@ class TestCommitGuardIsCleanTrue:
 
 class TestCommitGuardIsCleanGitFailure:
     def test_should_return_false_when_git_command_fails(self, guard):
-        with patch("aristotle_mcp.intervention.aristotle_mcp.intervention.commit_guard.subprocess.run") as mock_run:
+        with patch("commit_guard.subprocess.run") as mock_run:
             mock_run.side_effect = [MagicMock(returncode=128), MagicMock(returncode=0)]
             result = guard._is_clean()
         assert result is False
@@ -181,7 +181,7 @@ class TestCommitGuardIsCleanGitFailure:
 
 class TestCommitGuardIsCleanSubprocessException:
     def test_should_propagate_exception_when_git_not_found(self, guard):
-        with patch("aristotle_mcp.intervention.aristotle_mcp.intervention.commit_guard.subprocess.run", side_effect=FileNotFoundError("git not found")):
+        with patch("commit_guard.subprocess.run", side_effect=FileNotFoundError("git not found")):
             with pytest.raises(FileNotFoundError):
                 guard._is_clean()
 
@@ -190,7 +190,7 @@ class TestCommitGuardBoundaryCommit:
     def test_should_auto_commit_all_uncommitted_at_boundary(self, guard, pipeline_context_factory):
         ctx = pipeline_context_factory()
         with patch.object(guard, "_is_clean", return_value=False), \
-             patch("aristotle_mcp.intervention.aristotle_mcp.intervention.commit_guard.subprocess.run") as mock_run:
+             patch("commit_guard.subprocess.run") as mock_run:
             mock_run.side_effect = [
                 MagicMock(returncode=0),
                 MagicMock(returncode=0),
@@ -206,7 +206,7 @@ class TestCommitGuardIndexLocked:
     def test_should_handle_git_index_locked_gracefully(self, guard, pipeline_context_factory):
         ctx = pipeline_context_factory()
         with patch.object(guard, "_is_clean", return_value=False), \
-             patch("aristotle_mcp.intervention.aristotle_mcp.intervention.commit_guard.subprocess.run") as mock_run:
+             patch("commit_guard.subprocess.run") as mock_run:
             mock_run.side_effect = [
                 MagicMock(returncode=1, stderr="fatal: Unable to create index.lock"),
             ]

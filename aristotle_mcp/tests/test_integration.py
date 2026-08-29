@@ -53,15 +53,15 @@ NEW_TOOLS = [
 ALL_TOOLS = EXISTING_TOOLS + NEW_TOOLS
 
 INTERVENTION_DELETED_FILES = [
-    "intervention/src/aristotle_mcp.intervention.rollback_engine.py",
-    "intervention/src/aristotle_mcp.intervention.ki_doc_manager.py",
-    "intervention/src/aristotle_mcp.intervention.committer.py",
-    "intervention/src/aristotle_mcp.intervention.prompt_validator.py",
-    "intervention/src/aristotle_mcp.intervention.watchdog.py",
-    "intervention/src/aristotle_mcp.intervention.intervention_coordinator.py",
-    "intervention/src/aristotle_mcp.intervention.reflector.py",
-    "intervention/src/aristotle_mcp.intervention.rule_generator.py",
-    "intervention/src/aristotle_mcp.intervention.intervention_types.py",
+    "intervention/src/rollback_engine.py",
+    "intervention/src/ki_doc_manager.py",
+    "intervention/src/committer.py",
+    "intervention/src/prompt_validator.py",
+    "intervention/src/watchdog.py",
+    "intervention/src/intervention_coordinator.py",
+    "intervention/src/reflector.py",
+    "intervention/src/rule_generator.py",
+    "intervention/src/intervention_types.py",
     "intervention/src/__init__.py",
 ]
 
@@ -355,13 +355,13 @@ class TestIntegration:
         assert found_zh, "Chinese bilingual pattern not found in reviewer prompts"
 
     # ---------------------------------------------------------------
-    # 13. aristotle_mcp.intervention.prompt_validator.py deleted
+    # 13. prompt_validator.py deleted
     # ---------------------------------------------------------------
     def test_should_confirm_prompt_validator_module_deleted(self) -> None:
-        """intervention/src/aristotle_mcp.intervention.prompt_validator.py must not exist."""
+        """intervention/src/prompt_validator.py must not exist."""
         project_root = Path(__file__).parent.parent.parent
-        pv_path = project_root / "intervention" / "src" / "aristotle_mcp.intervention.prompt_validator.py"
-        assert not pv_path.exists(), "aristotle_mcp.intervention.prompt_validator.py still exists"
+        pv_path = project_root / "intervention" / "src" / "prompt_validator.py"
+        assert not pv_path.exists(), "prompt_validator.py still exists"
 
     # ---------------------------------------------------------------
     # 14. Preserved modules have interface docs
