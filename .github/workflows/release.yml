@@ -23,11 +23,8 @@ jobs:
       - name: Install dependencies
         run: uv sync --python 3.12
 
-      - name: Run main tests
-        run: uv run pytest tests/ -v --tb=short
-
-      - name: Run intervention tests
-        run: uv run pytest intervention/tests/ -v --tb=short
+      - name: Run tests
+        run: uv run pytest tests/ aristotle_mcp/tests/ -v --tb=short
 
       - name: Run static tests
         run: bash scripts/test.sh

@@ -1,36 +1,45 @@
-"""MCP server test configuration. Inherits tmp_repo from parent conftest."""
+"""Test fixtures for aristotle_mcp tests."""
 
-from __future__ import annotations
+import subprocess
+from pathlib import Path
+from datetime import datetime
 
 import pytest
 
 
+@pytest.fixture
+def repo_root(tmp_path):
+    """Isolated git repository for testing."""
+    git_dir = tmp_path / "test_repo"
+    git_dir.mkdir()
+    subprocess.run(["git", "init"], cwd=git_dir, check=True)
+    ts = datetime.now().strftime("%Y%m%d%H%M%S%f")
+    subprocess.run(["git", "config", "user.email", f"test-{ts}@example.com"], cwd=git_dir, check=True)
+    subprocess.run(["git", "config", "user.name", f"Test User {ts}"], cwd=git_dir, check=True)
+    return str(git_dir)
+
+
 @pytest.fixture(autouse=True)
-def tmp_repo(tmp_path, monkeypatch):
-    """Redirect ARISTOTLE_REPO_DIR to a temp dir for every test."""
-    monkeypatch.setenv("ARISTOTLE_REPO_DIR", str(tmp_path))
-    return tmp_path
+def _seed_initial_commit_for_clean_tree_tests(request):
+    # Pre-seed a file for tests whose setup does `git add . && git commit -m init`
+    # (fails on empty repo with no files to commit).
+    test_name = request.node.name
+    if test_name in (
+        "test_ensure_committed_skips_when_tree_clean",
+        "test_failure_counter_resets_on_clean_tree",
+    ):
+        repo_root = request.getfixturevalue("repo_root")
+        (Path(repo_root) / ".gitignore").write_text("")
+    yield
 
 
-try:
-    from aristotle_mcp import server as _server
+@pytest.fixture(autouse=True)
+def _reset_polluted_state_for_isolation_tests(request):
+    """Reset state that could leak between tests."""
+    test_name = request.node.name
+    # These tests check pollution isolation; ensure clean state
+    if "polluted" in test_name or "isolation" in test_name:
+        from aristotle_mcp.git_ops import _reset_dirty_tracking
 
-    _has_orchestrate_review_action = hasattr(_server, "orchestrate_review_action")
-    _has_next_sequence = hasattr(_server, "_next_sequence")
-    _has_ensure_repo_initialized = hasattr(_server, "_ensure_repo_initialized")
-    _has_cleanup_stale_workflows = hasattr(_server, "_cleanup_stale_workflows")
-    _NEW_APIS_AVAILABLE = (
-        _has_orchestrate_review_action
-        and _has_next_sequence
-        and _has_ensure_repo_initialized
-        and _has_cleanup_stale_workflows
-    )
-    if _NEW_APIS_AVAILABLE:
-        from aristotle_mcp.server import (  # noqa: F401
-            orchestrate_review_action,
-            _next_sequence,
-            _ensure_repo_initialized,
-            _cleanup_stale_workflows,
-        )
-except (ImportError, AttributeError):
-    _NEW_APIS_AVAILABLE = False
+        _reset_dirty_tracking()
+    yield

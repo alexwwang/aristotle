@@ -50,11 +50,10 @@ from __future__ import annotations
 
 import json
 import os
-import sys
-from typing import Any, Dict, List
 
 # Intervention logic now lives in aristotle_mcp.intervention (relocated
 # from the legacy root-level intervention/ package).
+from typing import Any, Dict, List
 
 
 def _empty_result(error: Any = None) -> Dict[str, Any]:
@@ -147,8 +146,8 @@ def run_intervene_batch(data_json: str) -> Dict[str, Any]:
             "error": None,
         }
 
-    # Lazy import — keeps aristotle_mcp importable when intervention/src
-    # is not on the path
+    # Lazy import — keeps aristotle_mcp importable without loading the
+    # intervention package at module import time.
     try:
         from aristotle_mcp.intervention.intervention_coordinator import (
             InterventionCoordinator,
