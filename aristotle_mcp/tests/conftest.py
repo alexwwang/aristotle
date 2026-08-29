@@ -1,3 +1,52 @@
+import pytest
+
+
+@pytest.fixture
+def tmp_repo(tmp_path, monkeypatch):
+    """Redirect ARISTOTLE_REPO_DIR to a temp dir for every test."""
+    monkeypatch.setenv("ARISTOTLE_REPO_DIR", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+    # Clean the shared state file to prevent cross-test sequence leakage
+    state_path = tmp_path.parent / "aristotle-state.json"
+    if state_path.exists():
+        state_path.unlink()
+    return tmp_path
+
+
+@pytest.fixture(autouse=True)
+def _reset_mcp_state(request):
+    """Reset MCP module-level state between tests."""
+    yield
+    # Clear any cached state from MCP modules
+    import importlib
+    import aristotle_mcp.config
+
+    importlib.reload(aristotle_mcp.config)
+
+
+@pytest.fixture
+def tmp_repo(tmp_path, monkeypatch):
+    """Redirect ARISTOTLE_REPO_DIR to a temp dir for every test."""
+    monkeypatch.setenv("ARISTOTLE_REPO_DIR", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+    # Clean the shared state file to prevent cross-test sequence leakage
+    state_path = tmp_path.parent / "aristotle-state.json"
+    if state_path.exists():
+        state_path.unlink()
+    return tmp_path
+
+
+@pytest.fixture(autouse=True)
+def _reset_mcp_state(request):
+    """Reset MCP module-level state between tests."""
+    yield
+    # Clear any cached state from MCP modules
+    import importlib
+    import aristotle_mcp.config
+
+    importlib.reload(aristotle_mcp.config)
+
+
 """Test fixtures for aristotle_mcp tests."""
 
 import subprocess
