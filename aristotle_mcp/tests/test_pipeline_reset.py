@@ -564,7 +564,7 @@ class TestPipelineReset:
     # ------------------------------------------------------------------
 
     def test_should_trigger_layer2_integration_reset(self, tmp_repo: Path) -> None:
-        """Layer 2 path: actual file operations with mocked watchdog."""
+        """Layer 2 path: actual file operations with mocked aristotle_mcp.intervention.watchdog."""
         _write_pipeline_state(tmp_repo, DIRTY_STATE)
 
         with patch(
