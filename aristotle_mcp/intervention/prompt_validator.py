@@ -3,7 +3,7 @@
 import logging
 import re
 from typing import Dict, List
-from intervention_types import ValidationResult, PatternMatch
+from .intervention_types import ValidationResult, PatternMatch
 
 logger = logging.getLogger(__name__)
 

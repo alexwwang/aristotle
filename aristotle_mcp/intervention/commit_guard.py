@@ -2,7 +2,7 @@
 
 import logging
 import subprocess
-from intervention_types import CommitResult, PipelineContext
+from .intervention_types import CommitResult, PipelineContext
 
 logger = logging.getLogger(__name__)
 

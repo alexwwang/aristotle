@@ -53,15 +53,8 @@ import os
 import sys
 from typing import Any, Dict, List
 
-# Make intervention/src/ importable as bare module names
-# (intervention_coordinator, intervention_types, signal_mapper, etc.)
-_INTERVENTION_SRC = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "intervention",
-    "src",
-)
-if _INTERVENTION_SRC not in sys.path:
-    sys.path.append(_INTERVENTION_SRC)
+# Intervention logic now lives in aristotle_mcp.intervention (relocated
+# from the legacy root-level intervention/ package).
 
 
 def _empty_result(error: Any = None) -> Dict[str, Any]:
@@ -76,9 +69,10 @@ def _empty_result(error: Any = None) -> Dict[str, Any]:
 
 def _build_context(context_in: Dict[str, Any]):
     """Build a PipelineContext from the input context dict."""
-    from intervention_types import PipelineContext
+    from aristotle_mcp.intervention.intervention_types import PipelineContext
 
     current_phase = context_in.get("current_phase", context_in.get("phase", 0))
+
     if not isinstance(current_phase, int) or isinstance(current_phase, bool):
         current_phase = 0
 
@@ -87,8 +81,7 @@ def _build_context(context_in: Dict[str, Any]):
         req_number = context_in.get("req_number", "")
     ki_doc_path = context_in.get("ki_doc_path")
     if not ki_doc_path:
-        ki_doc_path = os.path.join(os.path.dirname(_INTERVENTION_SRC), ".ki-docs")
-
+        ki_doc_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".ki-docs")
     return PipelineContext(
         current_phase=current_phase,
         req_number=str(req_number),
@@ -157,12 +150,12 @@ def run_intervene_batch(data_json: str) -> Dict[str, Any]:
     # Lazy import — keeps aristotle_mcp importable when intervention/src
     # is not on the path
     try:
-        from intervention_coordinator import (
+        from aristotle_mcp.intervention.intervention_coordinator import (
             InterventionCoordinator,
             TDDViolationError,
         )
     except Exception as e:
-        return _empty_result(f"Failed to import intervention_coordinator: {e}")
+        return _empty_result(f"Failed to load intervention coordinator: {e}")
 
     try:
         ctx = _build_context(context_in)

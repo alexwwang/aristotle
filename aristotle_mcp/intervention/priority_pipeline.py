@@ -3,7 +3,7 @@
 from collections import deque
 from typing import List, Any
 
-from intervention_types import ViolationEvent, InterventionResult, VIOLATION_PRIORITY
+from .intervention_types import ViolationEvent, InterventionResult, VIOLATION_PRIORITY
 
 
 _P2_TYPES = {"REGRESSION", "UNFIXED_ISSUES", "SKIP_REVIEW", "INSUFFICIENT_REVIEW", "INVALID_REVIEW_PROMPT"}

@@ -900,7 +900,10 @@ class TestReviseAction:
             data_json=json.dumps({"rule_index": 1}),
         )
         assert result["action"] == "fire_o"
-        assert rule_path in result["o_prompt"]
+        # write_rule now returns an absolute path; the workflow stores the
+        # relative form, which is what appears in the prompt.
+        rel_rule_path = Path(rule_path).relative_to(Path(rule_path).parents[1])
+        assert str(rel_rule_path) in result["o_prompt"]
 
 
 # ═══════════════════════════════════════════════════════

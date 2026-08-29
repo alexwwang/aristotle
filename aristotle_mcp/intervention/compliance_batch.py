@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 from typing import List, Optional, Any
 
-from compliance import (
+from .compliance import (
     InterventionResult,
     _handle_merged,
 )

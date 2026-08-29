@@ -3,7 +3,7 @@
 import logging
 import subprocess
 from typing import Dict, List, Optional, Tuple
-from intervention_types import (
+from .intervention_types import (
     InterventionResult,
     InterventionPlan,
     ViolationEvent,
@@ -11,18 +11,18 @@ from intervention_types import (
     VIOLATION_PRIORITY,
     BEHAVIORAL_VIOLATIONS,
 )
-from prompt_validator import PromptValidator
-from rollback_engine import RollbackEngine
-from ki_doc_manager import KiDocManager
-from commit_guard import CommitGuard
-from handlers import Handlers as _Handlers
-from signal_mapper import (
+from .prompt_validator import PromptValidator
+from .rollback_engine import RollbackEngine
+from .ki_doc_manager import KiDocManager
+from .commit_guard import CommitGuard
+from .handlers import Handlers as _Handlers
+from .signal_mapper import (
     SignalMapper,
     SIGNAL_TO_TYPE as _SIGNAL_TO_TYPE,
     SPECIAL_SIGNAL_TO_TYPE as _SPECIAL_SIGNAL_TO_TYPE,
     PROTOCOL_SIGNALS as _PROTOCOL_SIGNALS,
 )
-from special_handler import SpecialHandler as _SpecialHandler
+from .special_handler import SpecialHandler as _SpecialHandler
 
 logger = logging.getLogger(__name__)
 
