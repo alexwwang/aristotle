@@ -275,6 +275,45 @@ class Handlers:
                 f"UNFIXED_ISSUES requires signal ralph-rounds-exceeded or violation-gate-block (got: {signal})"
             )
 
+    def handle_checkpoint_create(self, event: Any, context: Any) -> InterventionResult:
+        """Create a rollback checkpoint for the current phase."""
+        phase = 0
+        run_id = ""
+        if hasattr(event, "context") and isinstance(event.context, dict):
+            phase = event.context.get("phase", 0)
+            run_id = event.context.get("run_id", "")
+
+        checkpoint_name = f"phase-{phase}-start"
+        try:
+            from aristotle_mcp._tools_rollback import create_rollback_point
+
+            result = create_rollback_point(checkpoint_name, run_id=run_id)
+            if result.get("success"):
+                return InterventionResult(
+                    success=True,
+                    action="checkpoint_created",
+                    pipeline_action="continue",
+                    user_message=f"Checkpoint {checkpoint_name} created.",
+                    violation_type="CHECKPOINT_CREATE",
+                    violation_code="CHECKPOINT_CREATE",
+                )
+            else:
+                return InterventionResult(
+                    success=False,
+                    action="skipped",
+                    user_message=f"Checkpoint creation failed: {result.get('error', 'unknown')}",
+                    violation_type="CHECKPOINT_CREATE",
+                    violation_code="CHECKPOINT_CREATE",
+                )
+        except Exception as e:
+            return InterventionResult(
+                success=False,
+                action="skipped",
+                user_message=f"Checkpoint creation error: {e}",
+                violation_type="CHECKPOINT_CREATE",
+                violation_code="CHECKPOINT_CREATE",
+            )
+
     def handle_invalid_review_prompt(self, event: Any, context: Any) -> InterventionResult:
         regen_attempt = 0
         if hasattr(event, "context") and isinstance(event.context, dict):
@@ -353,6 +392,8 @@ class Handlers:
                 handler = self.handle_unfixed_issues
             elif vtype == "INVALID_REVIEW_PROMPT":
                 handler = self.handle_invalid_review_prompt
+            elif vtype == "CHECKPOINT_CREATE":
+                handler = self.handle_checkpoint_create
             if handler is not None:
                 results.append(handler(event, context))
             else:

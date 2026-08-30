@@ -23,6 +23,7 @@ SIGNAL_TO_TYPE: Dict[str, str] = {
     "phase-complete-no-assessment": "MISSING_KI_ASSESSMENT",
     "review-uncommitted": "UNCOMMITTED_REVIEW",
     "review-prompt-matches-forbidden-pattern": "INVALID_REVIEW_PROMPT",
+    "phase-enter-checkpoint": "CHECKPOINT_CREATE",
 }
 
 # Special detection signals → SpecialViolationType
