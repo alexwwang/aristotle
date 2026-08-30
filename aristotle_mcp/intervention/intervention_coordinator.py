@@ -206,6 +206,8 @@ class InterventionCoordinator:
             handler_method = self._handlers.handle_unfixed_issues
         elif vtype == "UNCOMMITTED_PHASE":
             handler_method = self._handlers.handle_compliance
+        elif vtype == "CHECKPOINT_CREATE":
+            handler_method = self._handlers.handle_checkpoint_create
 
         if handler_method is None:
             return None
