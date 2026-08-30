@@ -608,7 +608,19 @@ export class CheckpointHandler {
       }
     }
 
-    // ── 11. Apply transition (M3: defensive try/catch) ─────────────────
+    // ── 11. Block transition if intervention says so ─────────────────
+    if (interventionResult?.results.some(r => r.action === 'blocked')) {
+      const blocked = interventionResult.results.filter(r => r.action === 'blocked')
+      const message = blocked[0]?.user_message || 'Violation gate blocked phase advance.'
+      return JSON.stringify({
+        ok: false,
+        violation: message,
+        guidance: 'Resolve issues before continuing.',
+        intervention_result: interventionResult,
+      } satisfies CheckpointViolation)
+    }
+
+    // ── 11a. Apply transition (M3: defensive try/catch) ─────────────────
     let newState: PipelineState
     try {
       newState = this._applyTransition(event, payload, currentState)
@@ -622,7 +634,7 @@ export class CheckpointHandler {
     }
     const runId = newState.runId
 
-    // ── 11a. Reset articulation counters (after successful transition) ──
+    // ── 11b. Reset articulation counters (after successful transition) ──
     if (event === 'phase_enter' && typeof payload.phase === 'number') {
       this.articulationFailures.delete(payload.phase)
 

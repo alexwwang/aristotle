@@ -187,4 +187,23 @@ def resolve_timeout(repo_dir: str) -> dict:
             "params": {},
         }
     )
-    return {"success": True, "corrected": True}
+
+
+def register_reset_tools(mcp):
+    """Register pipeline reset tools to MCP server."""
+    from aristotle_mcp.config import resolve_repo_dir
+
+    @mcp.tool()
+    def reset_pipeline_state() -> dict:
+        """Reset pipeline state to CLEAN_STATE."""
+        return pipeline_reset(str(resolve_repo_dir()))
+
+    @mcp.tool()
+    def mark_violation_resolved(timestamp: str, reason: str) -> dict:
+        """Manually mark a detected violation as resolved."""
+        return force_resolve_violation(timestamp, reason, str(resolve_repo_dir()))
+
+    @mcp.tool()
+    def auto_resolve_timeout() -> dict:
+        """Auto-correct pipeline state when the audit log shows a resolved violation."""
+        return resolve_timeout(str(resolve_repo_dir()))

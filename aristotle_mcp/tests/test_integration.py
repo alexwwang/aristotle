@@ -218,19 +218,19 @@ class TestIntegration:
             assert not fpath.exists(), f"Deleted file still present: {rel_path}"
 
     # ---------------------------------------------------------------
-    # 8. Total MCP tool count == 25
+    # 8. Total MCP tool count == 28 (25 existing + 3 reset tools)
     # ---------------------------------------------------------------
-    def test_should_assert_mcp_tool_count_equals_25(self) -> None:
-        """The MCP server must register exactly 25 tools."""
+    def test_should_assert_mcp_tool_count_equals_28(self) -> None:
+        """The MCP server must register exactly 28 tools."""
         from aristotle_mcp.server import mcp
 
-        assert len(mcp._tool_manager._tools) == 25
+        assert len(mcp._tool_manager._tools) == 28
 
     # ---------------------------------------------------------------
-    # 9. All 25 tools available after init_repo
+    # 9. All 28 tools available after init_repo
     # ---------------------------------------------------------------
     def test_should_register_tools_after_init_repo(self, tmp_repo: Path) -> None:
-        """After init_repo_tool(), all 25 tools must be available."""
+        """After init_repo_tool(), all 28 tools must be available."""
         from aristotle_mcp.server import init_repo_tool as aristotle_init_repo_tool
         from aristotle_mcp.server import mcp
 

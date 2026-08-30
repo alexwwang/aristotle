@@ -14,6 +14,7 @@ from aristotle_mcp._orch_review import register_orch_review_tools
 from aristotle_mcp._tools_undo import register_undo_tools
 from aristotle_mcp._tools_rollback import register_rollback_tools
 from aristotle_mcp._tools_ki_doc import register_ki_doc_tools
+from aristotle_mcp._tools_reset import register_reset_tools
 
 # Re-export all public symbols for backward compatibility (used by tests)
 from aristotle_mcp._utils import (  # noqa: F401
@@ -97,6 +98,7 @@ register_orch_review_tools(mcp)
 register_undo_tools(mcp)
 register_rollback_tools(mcp)
 register_ki_doc_tools(mcp)
+register_reset_tools(mcp)
 
 
 if __name__ == "__main__":
