@@ -64,6 +64,8 @@ class CommitResult:
     success: bool = False
     action: str = ""
     hash: Optional[str] = None
+    committed: bool = False
+    reason: str = ""
 
 
 @dataclass

@@ -34,7 +34,8 @@ def _make_dirty_tree(repo_root):
 def test_ensure_committed_stages_and_commits_dirty_tree(repo_root, guard):
     _make_dirty_tree(repo_root)
     result = guard.ensure_committed(phase=4, run_id="INT-abc123")
-    assert result == CommitResult(success=True, committed=True)
+    assert result.success is True
+    assert result.committed is True
 
 
 # C-02
@@ -43,7 +44,9 @@ def test_ensure_committed_skips_when_tree_clean(repo_root, guard):
     subprocess.run(["git", "add", "."], cwd=repo_root, check=True, capture_output=True)
     subprocess.run(["git", "commit", "-m", "init"], cwd=repo_root, check=True, capture_output=True)
     result = guard.ensure_committed(phase=4, run_id="INT-abc123")
-    assert result == CommitResult(success=True, committed=False, reason="clean_tree")
+    assert result.success is True
+    assert result.committed is False
+    assert result.reason == "clean_tree"
 
 
 # C-03
@@ -64,7 +67,8 @@ def test_ensure_committed_handles_precommit_hook_rejection(repo_root, guard):
 # C-04
 def test_ensure_committed_handles_git_add_failure(guard):
     result = guard.ensure_committed(phase=4, run_id="INT-abc123")
-    assert result == CommitResult(success=False, committed=False)
+    assert result.success is False
+    assert result.committed is False
 
 
 # C-05
@@ -94,19 +98,19 @@ def test_ensure_committed_commits_zero_issue_finding(repo_root, guard):
 # C-32
 def test_build_message_formats_phase_commit_message(guard):
     msg = guard._build_message(phase=4, run_id="INT-abc123")
-    assert msg == "INT-abc123: PHASE-4 auto-commit"
+    assert msg == "test(INT-abc123): PHASE-4-RED"
 
 
 # C-33
 def test_build_message_formats_review_commit_message(guard):
     msg = guard._build_message(run_id="INT-abc123", review_round=2)
-    assert msg == "INT-abc123: REVIEW-R2 auto-commit"
+    assert msg == "chore(INT-abc123): REVIEW-R2"
 
 
 # C-34
 def test_build_message_fallback_to_legacy_format(guard):
     msg = guard._build_message(phase=4, run_id="")
-    assert msg == "PHASE-4 auto-commit"
+    assert msg == "test: PHASE-4-RED"
 
 
 # C-46

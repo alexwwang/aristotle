@@ -38,9 +38,10 @@ class TestCommitGuardDirtyCommit:
         with patch.object(guard, "_is_clean", return_value=False), \
              patch("aristotle_mcp.intervention.commit_guard.subprocess.run") as mock_run:
             mock_run.side_effect = [
-                MagicMock(returncode=0),
-                MagicMock(returncode=0),
-                MagicMock(returncode=0, stdout="abc1234\n"),
+                MagicMock(returncode=0),  # git add -A
+                MagicMock(returncode=0, stdout="1\t1\tfoo.py\n"),  # numstat
+                MagicMock(returncode=0),  # git commit
+                MagicMock(returncode=0, stdout="abc1234\n"),  # rev-parse
             ]
             result = guard.ensure_committed(ctx)
         assert result.success is True
@@ -54,8 +55,9 @@ class TestCommitGuardCommitFailure:
         with patch.object(guard, "_is_clean", return_value=False), \
              patch("aristotle_mcp.intervention.commit_guard.subprocess.run") as mock_run:
             mock_run.side_effect = [
-                MagicMock(returncode=0),
-                MagicMock(returncode=1, stderr="index.lock exists"),
+                MagicMock(returncode=0),  # git add -A
+                MagicMock(returncode=0, stdout="1\t1\tfoo.py\n"),  # numstat
+                MagicMock(returncode=1, stderr="index.lock exists"),  # git commit
             ]
             result = guard.ensure_committed(ctx)
         assert result.success is False
@@ -68,9 +70,10 @@ class TestCommitGuardRevParseFailure:
         with patch.object(guard, "_is_clean", return_value=False), \
              patch("aristotle_mcp.intervention.commit_guard.subprocess.run") as mock_run:
             mock_run.side_effect = [
-                MagicMock(returncode=0),
-                MagicMock(returncode=0),
-                MagicMock(returncode=1, stdout="", stderr="unknown revision"),
+                MagicMock(returncode=0),  # git add -A
+                MagicMock(returncode=0, stdout="1\t1\tfoo.py\n"),  # numstat
+                MagicMock(returncode=0),  # git commit
+                MagicMock(returncode=1, stdout="", stderr="unknown revision"),  # rev-parse
             ]
             result = guard.ensure_committed(ctx)
         assert result.success is True
@@ -94,7 +97,7 @@ class TestCommitGuardReqNumber:
     def test_should_include_req_number_in_commit_message(self, guard, pipeline_context_factory):
         ctx = pipeline_context_factory(req_number="INT-042")
         msg = guard._build_message(ctx)
-        assert msg.startswith("INT-042")
+        assert msg.startswith("test(INT-042):")
 
 
 class TestCommitGuardPhaseCommit:
@@ -103,14 +106,15 @@ class TestCommitGuardPhaseCommit:
         with patch.object(guard, "_is_clean", return_value=False), \
              patch("aristotle_mcp.intervention.commit_guard.subprocess.run") as mock_run:
             mock_run.side_effect = [
-                MagicMock(returncode=0),
-                MagicMock(returncode=0),
-                MagicMock(returncode=0, stdout="deadbeef\n"),
+                MagicMock(returncode=0),  # git add -A
+                MagicMock(returncode=0, stdout="1\t1\tfoo.py\n"),  # numstat
+                MagicMock(returncode=0),  # git commit
+                MagicMock(returncode=0, stdout="deadbeef\n"),  # rev-parse
             ]
             result = guard.ensure_committed(ctx)
         assert result.success is True
         calls = mock_run.call_args_list
-        commit_call = calls[1]
+        commit_call = calls[2]
         commit_args = commit_call[0][0]
         assert any("PHASE-5-GREEN" in str(arg) for arg in commit_args)
 
@@ -121,52 +125,30 @@ class TestCommitGuardLoopCommit:
         with patch.object(guard, "_is_clean", return_value=False), \
              patch("aristotle_mcp.intervention.commit_guard.subprocess.run") as mock_run:
             mock_run.side_effect = [
-                MagicMock(returncode=0),
-                MagicMock(returncode=0),
-                MagicMock(returncode=0, stdout="feedface\n"),
+                MagicMock(returncode=0),  # git add -A
+                MagicMock(returncode=0, stdout="1\t1\tfoo.py\n"),  # numstat
+                MagicMock(returncode=0),  # git commit
+                MagicMock(returncode=0, stdout="feedface\n"),  # rev-parse
             ]
             result = guard.ensure_committed(ctx)
         assert result.success is True
-        commit_args = mock_run.call_args_list[1][0][0]
+        commit_args = mock_run.call_args_list[2][0][0]
         assert any("[Loop 2]" in str(arg) for arg in commit_args)
 
 
-class TestCommitGuardIsCleanStaged:
-    def test_should_detect_staged_changes_as_dirty(self, guard):
+class TestCommitGuardIsCleanDirty:
+    def test_should_detect_changes_as_dirty(self, guard):
         with patch("aristotle_mcp.intervention.commit_guard.subprocess.run") as mock_run:
-            mock_run.side_effect = [MagicMock(returncode=0), MagicMock(returncode=1)]
+            mock_run.return_value = MagicMock(returncode=0, stdout=" M src/foo.py\n")
             result = guard._is_clean()
         assert result is False
-        # Verify call order: first git diff --quiet, then git diff --cached --quiet
-        calls = mock_run.call_args_list
-        assert calls[0][0][0] == ["git", "diff", "--quiet"]
-        assert calls[1][0][0] == ["git", "diff", "--cached", "--quiet"]
-
-
-class TestCommitGuardIsCleanUnstaged:
-    def test_should_detect_unstaged_changes_as_dirty(self, guard):
-        with patch("aristotle_mcp.intervention.commit_guard.subprocess.run") as mock_run:
-            mock_run.side_effect = [MagicMock(returncode=1), MagicMock(returncode=0)]
-            result = guard._is_clean()
-        assert result is False
-        # Verify call order: first git diff --quiet, then git diff --cached --quiet
-        calls = mock_run.call_args_list
-        assert calls[0][0][0] == ["git", "diff", "--quiet"]
-        assert calls[1][0][0] == ["git", "diff", "--cached", "--quiet"]
-
-
-class TestCommitGuardIsCleanBothDirty:
-    def test_should_return_false_when_both_staged_and_unstaged_changes(self, guard):
-        with patch("aristotle_mcp.intervention.commit_guard.subprocess.run") as mock_run:
-            mock_run.side_effect = [MagicMock(returncode=1), MagicMock(returncode=1)]
-            result = guard._is_clean()
-        assert result is False
+        assert mock_run.call_args_list[0][0][0] == ["git", "status", "--porcelain"]
 
 
 class TestCommitGuardIsCleanTrue:
-    def test_should_return_true_when_both_diffs_clean(self, guard):
+    def test_should_return_true_when_porcelain_output_empty(self, guard):
         with patch("aristotle_mcp.intervention.commit_guard.subprocess.run") as mock_run:
-            mock_run.side_effect = [MagicMock(returncode=0), MagicMock(returncode=0)]
+            mock_run.return_value = MagicMock(returncode=0, stdout="")
             result = guard._is_clean()
         assert result is True
 
@@ -174,16 +156,16 @@ class TestCommitGuardIsCleanTrue:
 class TestCommitGuardIsCleanGitFailure:
     def test_should_return_false_when_git_command_fails(self, guard):
         with patch("aristotle_mcp.intervention.commit_guard.subprocess.run") as mock_run:
-            mock_run.side_effect = [MagicMock(returncode=128), MagicMock(returncode=0)]
+            mock_run.return_value = MagicMock(returncode=128, stdout="")
             result = guard._is_clean()
         assert result is False
 
 
 class TestCommitGuardIsCleanSubprocessException:
-    def test_should_propagate_exception_when_git_not_found(self, guard):
+    def test_should_return_false_when_git_not_found(self, guard):
         with patch("aristotle_mcp.intervention.commit_guard.subprocess.run", side_effect=FileNotFoundError("git not found")):
-            with pytest.raises(FileNotFoundError):
-                guard._is_clean()
+            result = guard._is_clean()
+        assert result is False
 
 
 class TestCommitGuardBoundaryCommit:
@@ -192,9 +174,10 @@ class TestCommitGuardBoundaryCommit:
         with patch.object(guard, "_is_clean", return_value=False), \
              patch("aristotle_mcp.intervention.commit_guard.subprocess.run") as mock_run:
             mock_run.side_effect = [
-                MagicMock(returncode=0),
-                MagicMock(returncode=0),
-                MagicMock(returncode=0, stdout="baddcafe\n"),
+                MagicMock(returncode=0),  # git add -A
+                MagicMock(returncode=0, stdout="1\t1\tfoo.py\n"),  # numstat
+                MagicMock(returncode=0),  # git commit
+                MagicMock(returncode=0, stdout="baddcafe\n"),  # rev-parse
             ]
             result = guard.ensure_committed(ctx)
         assert result.success is True

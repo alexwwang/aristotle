@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Any
+from .commit_guard import CommitGuard as _CoreCommitGuard
+from .intervention_types import CommitResult
 
 
 class ViolationType(str, Enum):
@@ -52,13 +54,6 @@ class ViolationEvent:
 
 
 @dataclass
-class CommitResult:
-    success: bool = False
-    committed: bool = False
-    reason: str = ""
-
-
-@dataclass
 class AssessmentResult:
     assessment_result: str = "PASS"
     priority_counts: Dict[str, int] = field(default_factory=lambda: {"P1": 0, "P2": 0, "P3": 0, "P4": 0, "P5": 0})
@@ -99,133 +94,14 @@ _GLOBAL_COORDINATOR = None
 _GLOBAL_KI_DOC = None
 
 
-class CommitGuard:
+class CommitGuard(_CoreCommitGuard):
+    """Compliance-side CommitGuard: registers itself as the module-level global guard."""
+
     def __init__(self, project_root: str = ""):
-        self.project_root = project_root
-        self._commit_failures: Dict[str, int] = {}
+        super().__init__(project_root=project_root)
         global _GLOBAL_GUARD
         _GLOBAL_GUARD = self
 
-    def _key(self, run_id: str, phase: int) -> str:
-        return f"{run_id}:{phase}"
-
-    def _is_clean(self) -> bool:
-        if not self.project_root or not Path(self.project_root).exists():
-            return False
-        try:
-            r = subprocess.run(
-                ["git", "status", "--porcelain"],
-                cwd=self.project_root,
-                capture_output=True,
-                text=True,
-            )
-            return r.returncode == 0 and r.stdout.strip() == ""
-        except (subprocess.SubprocessError, FileNotFoundError, OSError):
-            return False
-
-    def _has_commits(self) -> bool:
-        try:
-            r = subprocess.run(
-                ["git", "rev-parse", "--verify", "HEAD"],
-                cwd=self.project_root,
-                capture_output=True,
-            )
-            return r.returncode == 0
-        except (subprocess.SubprocessError, FileNotFoundError, OSError):
-            return False
-
-    def ensure_committed(self, phase=None, run_id="", review_round=None, context=None):
-        key = self._key(run_id, phase if phase is not None else 0)
-
-        if not self.project_root or not Path(self.project_root).exists():
-            self._commit_failures[key] = self._commit_failures.get(key, 0) + 1
-            return CommitResult(success=False, committed=False)
-
-        has_commits = self._has_commits()
-
-        if self._is_clean():
-            if review_round is not None:
-                msg = self._build_message(phase=phase, run_id=run_id, review_round=review_round)
-                try:
-                    commit_result = subprocess.run(
-                        ["git", "commit", "--allow-empty", "-m", msg],
-                        cwd=self.project_root,
-                        capture_output=True,
-                        text=True,
-                    )
-                except (subprocess.SubprocessError, FileNotFoundError, OSError):
-                    self._commit_failures[key] = self._commit_failures.get(key, 0) + 1
-                    return CommitResult(success=False, committed=False)
-
-                if commit_result.returncode != 0:
-                    self._commit_failures[key] = self._commit_failures.get(key, 0) + 1
-                    return CommitResult(success=False, committed=False)
-
-                self._commit_failures[key] = 0
-                return CommitResult(success=True, committed=True)
-            elif not has_commits:
-                self._commit_failures[key] = self._commit_failures.get(key, 0) + 1
-                return CommitResult(success=False, committed=False)
-            else:
-                self._commit_failures[key] = 0
-                return CommitResult(success=True, committed=False, reason="clean_tree")
-
-        msg = self._build_message(phase=phase, run_id=run_id, review_round=review_round)
-
-        try:
-            add_result = subprocess.run(
-                ["git", "add", "."],
-                cwd=self.project_root,
-                capture_output=True,
-                text=True,
-            )
-        except (subprocess.SubprocessError, FileNotFoundError, OSError):
-            self._commit_failures[key] = self._commit_failures.get(key, 0) + 1
-            return CommitResult(success=False, committed=False, reason="add subprocess failed")
-
-        if add_result.returncode != 0:
-            self._commit_failures[key] = self._commit_failures.get(key, 0) + 1
-            return CommitResult(
-                success=False,
-                committed=False,
-                reason=f"add failed: {add_result.stderr}",
-            )
-
-        try:
-            commit_result = subprocess.run(
-                ["git", "commit", "-m", msg],
-                cwd=self.project_root,
-                capture_output=True,
-                text=True,
-            )
-        except (subprocess.SubprocessError, FileNotFoundError, OSError):
-            self._commit_failures[key] = self._commit_failures.get(key, 0) + 1
-            return CommitResult(success=False, committed=False, reason="commit subprocess failed")
-
-        if commit_result.returncode != 0:
-            self._commit_failures[key] = self._commit_failures.get(key, 0) + 1
-            return CommitResult(
-                success=False,
-                committed=False,
-                reason=f"commit failed: {commit_result.stderr}",
-            )
-
-        self._commit_failures[key] = 0
-        return CommitResult(success=True, committed=True)
-
-    def _build_message(self, phase=None, run_id="", review_round=None):
-        if review_round is not None:
-            if run_id:
-                return f"{run_id}: REVIEW-R{review_round} auto-commit"
-            return f"REVIEW-R{review_round} auto-commit"
-        if phase is not None:
-            if run_id:
-                return f"{run_id}: PHASE-{phase} auto-commit"
-            return f"PHASE-{phase} auto-commit"
-        return "auto-commit"
-
-    def failure_count(self, run_id: str, phase: int) -> int:
-        return self._commit_failures.get(self._key(run_id, phase), 0)
 
 
 def compute_assessment_from_violations(violations, phase=4):
