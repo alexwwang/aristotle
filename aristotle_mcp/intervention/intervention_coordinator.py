@@ -304,11 +304,15 @@ class InterventionCoordinator:
     def _build_event_from_signal(self, vtype: str, context: dict, signal: str = None) -> ViolationEvent:
         phase = context.get("phase", self.context.current_phase)
         files = context.get("files", [])
+        # Ensure signal is always present in context so handlers can dispatch on it
+        ctx = {**context, "phase": phase}
+        if signal is not None:
+            ctx["signal"] = signal
         event = ViolationEvent(
             violation_type=vtype,
             affected_file_path=files[0] if files else "",
             timestamp=__import__("datetime").datetime.now().isoformat(),
-            context={**context, "phase": phase, "signal": signal} if signal else {**context, "phase": phase},
+            context=ctx,
             affected_file_paths=files,
             rectified=False,
         )

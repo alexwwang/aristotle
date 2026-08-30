@@ -218,11 +218,55 @@ class Handlers:
                 cumulative_rounds=cumulative,
             )
         elif signal == "violation-gate-block":
+            phase = 0
+            run_id = ""
+            if hasattr(event, "context") and isinstance(event.context, dict):
+                phase = event.context.get("phase", 0)
+                run_id = event.context.get("run_id", "")
+
+            checkpoint_name = f"phase-{phase}-start"
+            rollback_result: Dict[str, Any] = {}
+            reset_result: Dict[str, Any] = {}
+            files_affected: List[str] = []
+
+            # 1. Rollback to phase checkpoint (if exists)
+            try:
+                from aristotle_mcp._tools_rollback import rollback_to_checkpoint
+
+                rollback_result = rollback_to_checkpoint(checkpoint_name, run_id=run_id)
+                if rollback_result.get("success"):
+                    files_affected.append("git-stash")
+            except Exception as e:
+                rollback_result = {"success": False, "error": str(e)}
+
+            # 2. Reset pipeline state
+            try:
+                from aristotle_mcp._tools_reset import pipeline_reset
+                from aristotle_mcp.config import resolve_repo_dir
+
+                reset_result = pipeline_reset(str(resolve_repo_dir()))
+                if reset_result.get("success"):
+                    files_affected.append("pipeline-state")
+            except Exception as e:
+                reset_result = {"success": False, "error": str(e)}
+
+            # 3. Build message with evidence
+            parts = ["Violation gate blocked phase advance."]
+            if rollback_result.get("success"):
+                parts.append(f"Rolled back to {checkpoint_name}.")
+            else:
+                parts.append(f"Rollback to {checkpoint_name} failed: {rollback_result.get('error', 'unknown')}")
+            if reset_result.get("success"):
+                parts.append("Pipeline state reset.")
+            else:
+                parts.append(f"Reset failed: {reset_result.get('error', 'unknown')}")
+
             return InterventionResult(
                 success=True,
                 action="blocked",
-                pipeline_action="continue",
-                user_message="Violation gate blocked phase advance. Resolve issues before continuing.",
+                pipeline_action="blocked",
+                user_message=" ".join(parts),
+                files_affected=files_affected,
                 violation_type="UNFIXED_ISSUES",
                 violation_code="UNFIXED_ISSUES",
             )
