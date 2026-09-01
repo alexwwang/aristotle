@@ -11,7 +11,6 @@ from aristotle_mcp.intervention.compliance import (
     _handle_compliance,
     _handle_merged,
     CommitGuard,
-    CommitResult,
     InterventionCoordinator,
     InterventionResult,
     ViolationEvent,
@@ -20,6 +19,7 @@ from aristotle_mcp.intervention.compliance import (
     pipeline_resume,
     intervene_batch,
 )
+from aristotle_mcp.intervention.intervention_types import CommitResult
 
 
 @pytest.fixture(autouse=True)

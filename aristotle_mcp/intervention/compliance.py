@@ -1,12 +1,10 @@
 """Compliance auto-fix module — phase boundary auto-commit, KI doc lifecycle, assessment."""
 
-import subprocess
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Any
 from .commit_guard import CommitGuard as _CoreCommitGuard
-from .intervention_types import CommitResult
 
 
 class ViolationType(str, Enum):
@@ -101,7 +99,6 @@ class CommitGuard(_CoreCommitGuard):
         super().__init__(project_root=project_root)
         global _GLOBAL_GUARD
         _GLOBAL_GUARD = self
-
 
 
 def compute_assessment_from_violations(violations, phase=4):

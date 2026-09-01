@@ -638,17 +638,19 @@ export class CheckpointHandler {
     if (event === 'phase_enter' && typeof payload.phase === 'number') {
       this.articulationFailures.delete(payload.phase)
 
-      // Auto-create rollback checkpoint for this phase
-      try {
-        await callIntervention({
-          context: { run_id: runId, phase: payload.phase },
-          violations: [{
-            signal: 'phase-enter-checkpoint',
-            context: { phase: payload.phase, run_id: runId },
-          }],
-        }, this.mcpProjectDir, this.logger)
-      } catch (e) {
-        this.logger?.debug('auto-checkpoint creation failed: %s', String(e))
+      // Auto-create rollback checkpoint for this phase (mcpProjectDir required)
+      if (this.mcpProjectDir) {
+        try {
+          await callIntervention({
+            context: { run_id: runId, phase: payload.phase },
+            violations: [{
+              signal: 'phase-enter-checkpoint',
+              context: { phase: payload.phase, run_id: runId },
+            }],
+          }, this.mcpProjectDir)
+        } catch (e) {
+          this.logger?.debug('auto-checkpoint creation failed: %s', String(e))
+        }
       }
     }
     if (event === 'pipeline_start') {

@@ -1,4 +1,5 @@
 """Compliance CommitGuard tests — TDD Phase 4 Red."""
+
 import pytest
 import subprocess
 from datetime import datetime
@@ -6,8 +7,8 @@ from pathlib import Path
 
 from aristotle_mcp.intervention.compliance import (
     CommitGuard,
-    CommitResult,
 )
+from aristotle_mcp.intervention.intervention_types import CommitResult
 
 
 @pytest.fixture

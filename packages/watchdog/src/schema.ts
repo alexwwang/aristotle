@@ -198,6 +198,7 @@ export interface CheckpointViolation {
   ok: false
   violation: string
   guidance: string
+  intervention_result?: unknown
 }
 
 export interface CheckpointRecovery {
