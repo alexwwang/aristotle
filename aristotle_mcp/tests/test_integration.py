@@ -150,7 +150,7 @@ class TestIntegration:
             capture_output=True,
             text=True,
             env=env,
-            cwd="/Users/alex/aristotle",
+            cwd=str(Path(__file__).resolve().parent.parent.parent),
         )
         assert result.returncode == 0, f"Existing tests failed:\n{result.stdout}\n{result.stderr}"
 
